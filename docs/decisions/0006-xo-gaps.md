@@ -35,21 +35,22 @@ first prototypes will test before anything is asked of the Xo owners.
    exact forms (Go's `strconv.Quote` rules for JSON, shortest float text)
    would let generated code stream. **verify** first whether `json.Value`
    `Num` encoding of floats matches the shortest form AWS expects.
-4. **CRC64/NVME** (S3's newest checksum algorithm). std has crc32 IEEE and
-   Castagnoli but no crc64. Workaround: implement it in the core
-   (`checksum/`, slicing by 8, tested against AWS's published vectors). A
-   `std/crc64` (Go's `hash/crc64` plus the NVME polynomial) would be the
-   natural home.
+4. **CRC64/NVME** (S3's newest checksum algorithm). std/crc64 exists
+   (std.md 51, on Xo main since 2026-11-03) with the ISO and ECMA
+   polynomials only. Ask: a `Poly.Nvme` variant (routed to the std owner
+   by the lead, 2026-11-04). The SDK does not write its own.
 5. **ECDSA private key from a raw scalar** (SigV4a). std/crypto loads keys
    only from DER. Workaround: build SEC 1 `ECPrivateKey` DER around the
    derived scalar and call `crypto.parse_private_key`. A
    `crypto.ecdsa_private_key(alg, d: Bytes)` would be cleaner.
-6. **CBOR codec** for Smithy RPC v2 CBOR. Required for full coverage:
-   3 services speak only CBOR and 22 more (CloudWatch among them) list it
-   next to JSON or query (docs/reports/service-names-2026-11-04.md).
-   Workaround: a CBOR encoder and decoder in the core, written before the
-   generator reaches those 3 services. A `std/cbor` would serve other
-   users too.
+6. **CBOR for Smithy RPC v2 CBOR.** Required for full coverage: 3
+   services speak only CBOR and 22 more (CloudWatch among them) list it
+   (docs/reports/service-names-2026-11-04.md). std/cbor exists (std.md
+   50, decision 0468 of Xo): a `Value` tree with tags (timestamps are tag
+   1, big numbers tags 2 to 4), indefinite lengths decoded, preferred
+   float widths, limits. The SDK uses it. Asks, if any, come from running
+   the rpcv2Cbor protocol tests (0005); none known yet (a typed derive
+   and streaming are not needed: generated code builds `Value` trees).
 7. **Iteration protocol for user types.** `for x in` works on builtin
    collections, channels and ranges; a paginator cannot be iterated with
    `for page in pages`. Workaround: `has_more_pages()`/`next_page()`, as

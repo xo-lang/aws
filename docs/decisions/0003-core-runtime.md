@@ -116,8 +116,9 @@ headers with list and timestamp formats, prefix headers, payload members,
 `Error/Code`, query's `ErrorResponse`, EC2's `Response/Errors/Error`, S3's
 200 response with an error body), and `awsQueryCompatible` (SQS,
 CloudWatch: JSON or CBOR bodies with the query error code taken from the
-`x-amzn-query-error` header). Smithy RPC v2 CBOR is needed too: 3 services
-speak only CBOR and 22 list it beside another protocol (0006 item 6); a
+`x-amzn-query-error` header). Smithy RPC v2 CBOR is needed too, on std/cbor: 3
+services speak only CBOR and 22 list it beside another protocol (0006
+item 6); a
 service listing several protocols uses the first the core supports, in the
 order rpcv2Cbor, awsJson1_0, awsJson1_1, restJson1, restXml, awsQuery,
 ec2Query (to confirm against aws-sdk-go-v2's choice before it is fixed).
@@ -136,8 +137,8 @@ duplex, which std/http has (decision 0433 of Xo).
 ### Checksums (`checksum`)
 
 Flexible checksums for S3 and others: CRC32 and CRC32C (std/crc32), SHA1
-and SHA256 (std/crypto), CRC64NVME (written here in Xo until std has
-it, 0006 item 4), the `aws-chunked` content encoding with a trailing
+and SHA256 (std/crypto), CRC64NVME (std/crc64 once it has the NVME
+polynomial, 0006 item 4), the `aws-chunked` content encoding with a trailing
 checksum, and response validation, with the request and response
 settings defaulting to `when_supported` as current AWS SDKs do.
 

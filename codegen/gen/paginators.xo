@@ -1,0 +1,131 @@
+// Paginators (smithy.api#paginated), in the shape of aws-sdk-go-v2's:
+// a `<Operation>Paginator` per paginated operation with `has_more_pages`
+// and `next_page`, which copies each page's output token into the next
+// request's input token and stops when the token is absent, empty, or the
+// same as the one just sent (aws-sdk-go-v2's StopOnDuplicateToken).
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+/// An operation's paginated trait merged over the service's defaults.
+fn paginated(g: G, op: model.Shape) -> (Str, Str)? {
+  let own = model.trait_of(op.traits, "smithy.api#paginated") ?? return None
+  let svc = shape_of(g, g.m.service)
+  let base = model.trait_of(svc.traits, "smithy.api#paginated") ?? json.Value.Object([])
+  let pick = fn(k: Str) -> Str {
+    match own.get(k) {
+      Some(json.Value.Str(v)) => v
+      _ => match base.get(k) {
+        Some(json.Value.Str(v)) => v
+        _ => ""
+      }
+    }
+  }
+  let input_token = pick("inputToken")
+  let output_token = pick("outputToken")
+  if input_token == "" || output_token == "" {
+    return None
+  }
+  Some((input_token, output_token))
+}
+
+/// Statements setting `next` (declared by the caller) from the output
+/// path `path` ("A.B") of `out` (shape `shape_id`); None when a part of
+/// the path is unset. Returns the token's member, or None when the path
+/// does not resolve.
+fn token_read(g: G, shape_id: Str, path: Str, var out: List[Str]) -> model.Member? {
+  let parts = path.split(".")
+  var shape = shape_of(g, shape_id)
+  var expr = "out"
+  var opened = 0
+  for (i, part) in parts.indexed() {
+    let m = shape.members.find(fn(x: model.Member) -> Bool { x.name == part }) ?? return None
+    let field = "${expr}.${field_name(m.name)}"
+    if i + 1 == parts.len() {
+      out.push("${"  ".repeat(opened + 1)}next = ${field}")
+      for k in 0..opened {
+        out.push("${"  ".repeat(opened - k)}}")
+      }
+      return Some(m)
+    }
+    let v = "x${i}"
+    out.push("${"  ".repeat(opened + 1)}if let Some(${v}) = ${field} {")
+    opened += 1
+    expr = v
+    shape = shape_of(g, m.target)
+  }
+  None
+}
+
+pub fn emit_paginators(g: G) -> Str {
+  var out: List[Str] = []
+  for op in model.operations(g.m) {
+    if !supported(g, op) {
+      continue
+    }
+    let s = shape_of(g, op)
+    let (input_token, output_token) = paginated(g, s) ?? continue
+    if s.input == "smithy.api#Unit" || s.output == "smithy.api#Unit" {
+      continue
+    }
+    let input = shape_of(g, s.input)
+    let tm = input.members.find(fn(x: model.Member) -> Bool { x.name == input_token }) ?? continue
+    var read: List[Str] = []
+    let om = token_read(g, s.output, output_token, read) ?? continue
+    let tt = xo_type(g, tm.target)
+    if xo_type(g, om.target) != tt {
+      continue
+    }
+    let name = model.name_of(op)
+    let pn = "${name}Paginator"
+    let in_t = xo_type(g, s.input)
+    let out_t = xo_type(g, s.output)
+    let fname = op_name(op)
+    let tf = field_name(tm.name)
+    let is_str = shape_of(g, tm.target).kind is model.Kind.String
+    out.push("/// The pages of ${name}. Each `next_page` sends the input with")
+    out.push("/// the previous page's ${output_token} as its")
+    out.push("/// ${input_token}.")
+    out.push("pub struct ${pn} {")
+    out.push("  client: Client")
+    out.push("  input: ${in_t}")
+    out.push("  first: Bool = true")
+    out.push("  more: Bool = true")
+    out.push("}")
+    out.push("")
+    out.push("pub fn new_${fname}_paginator(c: Client, input: ${in_t}) -> ${pn} {")
+    out.push("  ${pn}{client: c, input: input}")
+    out.push("}")
+    out.push("")
+    out.push("/// Whether `next_page` has a page to fetch: before the first page, or")
+    out.push("/// while the last page carried a new token.")
+    out.push("pub fn (p: ${pn}) has_more_pages() -> Bool {")
+    out.push("  p.first || p.more")
+    out.push("}")
+    out.push("")
+    out.push("pub fn (var p: ${pn}) next_page() -> ${out_t} ! ${op_err(op)} uses (net.dial, clock, rand) {")
+    out.push("  let prev = p.input.${tf}")
+    out.push("  let out = p.client.${fname}(p.input)?")
+    out.push("  p.first = false")
+    out.push("  var next: ${tt}? = None")
+    for l in read {
+      out.push(l)
+    }
+    if is_str {
+      out.push("  p.more = match next {")
+      out.push("    Some(t) => t != \"\" && Some(t) != prev")
+      out.push("    None => false")
+      out.push("  }")
+    } else {
+      out.push("  p.more = match next {")
+      out.push("    Some(t) => !t.is_empty() && \"\${next:?}\" != \"\${prev:?}\"")
+      out.push("    None => false")
+      out.push("  }")
+    }
+    out.push("  p.input.${tf} = next")
+    out.push("  Ok(out)")
+    out.push("}")
+    out.push("")
+  }
+  out.join("\n")
+}

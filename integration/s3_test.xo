@@ -33,6 +33,25 @@ test "s3 round trip against MinIO" uses net, env, clock {
     Err(s3.HeadObjectErr.NotFound(_)) => {}
     other => expect("${other:?}") == "NotFound"
   }
+  // three more objects, listed one per page
+  for k in ["p/1", "p/2", "p/3"] {
+    c.put_object(s3.PutObjectRequest{bucket: bucket, key: k, body: b"x"})?
+  }
+  var pages = s3.new_list_objects_v2_paginator(c, s3.ListObjectsV2Request{bucket: bucket, prefix: "p/", max_keys: 1})
+  var seen: List[Str] = []
+  var n = 0
+  while pages.has_more_pages() {
+    let page = pages.next_page()?
+    n += 1
+    for o in page.contents ?? [] {
+      seen.push(o.key ?? "")
+    }
+  }
+  expect(seen) == ["p/1", "p/2", "p/3"]
+  expect(n) == 3
+  for k in ["p/1", "p/2", "p/3"] {
+    c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: k})?
+  }
   c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?
   c.delete_bucket(s3.DeleteBucketRequest{bucket: bucket})?
 }

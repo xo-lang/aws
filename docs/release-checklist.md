@@ -18,4 +18,12 @@ current as work finds new ones.
    `scripts/check-public.sh`, and gitleaks over the full history
    (decision 0005, 0007).
 5. **Integration.** `scripts/integration-localstack.sh` against
-   LocalStack. Real AWS only with the owner's permission.
+   LocalStack.
+6. **Real AWS (owner, 2026-11-04).** After the generator is feature
+   complete (paginators, waiters, event streams, SigV4a, docs pass), the
+   owner sets up a real AWS account for testing. Before any run, a test
+   plan goes to the owner: services and operations, every resource created
+   and deleted, a cost estimate, and cleanup on failure. No real AWS
+   endpoint, credential or profile is used before that.
+7. **Public.** The repository is made public after the real AWS tests
+   pass. Until then every push already runs check-public and gitleaks.

@@ -38,5 +38,24 @@ test "dynamodb round trip against LocalStack" uses net, env, clock {
     Err(dynamodb.GetItemErr.ResourceNotFoundException(_)) => {}
     other => expect("${other:?}") == "ResourceNotFoundException"
   }
+  // two more items, scanned one per page (DynamoDB's map token)
+  for k in ["user#2", "user#3"] {
+    c.put_item(dynamodb.PutItemInput{table_name: table, item: {"pk": dynamodb.AttributeValue.S(k)}})?
+  }
+  var pages = dynamodb.new_scan_paginator(c, dynamodb.ScanInput{table_name: table, limit: 1})
+  var keys: List[Str] = []
+  var n = 0
+  while pages.has_more_pages() && n < 10 {
+    let page = pages.next_page()?
+    n += 1
+    for it in page.items ?? [] {
+      match it.get("pk") {
+        Some(dynamodb.AttributeValue.S(v)) => keys.push(v)
+        _ => {}
+      }
+    }
+  }
+  expect(keys.sort()) == ["user#1", "user#2", "user#3"]
+  expect(n >= 3 && n <= 4) == true
   c.delete_table(dynamodb.DeleteTableInput{table_name: table})?
 }

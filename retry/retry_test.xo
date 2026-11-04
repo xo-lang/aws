@@ -1,0 +1,76 @@
+test "classify" {
+  expect(classify_response(400, "ThrottlingException")) == Failure.Throttle
+  expect(classify_response(503, "SlowDown")) == Failure.Throttle
+  expect(classify_response(429, None)) == Failure.Throttle
+  expect(classify_response(500, "InternalFailure")) == Failure.Transient
+  expect(classify_response(400, "RequestTimeout")) == Failure.Transient
+  expect(classify_response(501, None)) == Failure.Permanent
+  expect(classify_response(400, "ValidationException")) == Failure.Permanent
+  expect(classify_response(400, "Custom", modeled_retryable: true)) == Failure.Transient
+  expect(classify_response(400, "Custom", modeled_throttling: true)) == Failure.Throttle
+}
+
+test "retries a transient failure then succeeds" {
+  let s = standard()
+  let calls = Atomic[Int].new(0)
+  let r = run(s, os.clock, os.rand, fn(attempt: Int) -> Int ! Str {
+    calls.add(1)
+    if attempt < 3 { Err("503") } else { Ok(attempt) }
+  }, fn(_e: Str) -> Failure { Failure.Transient })
+  expect(r.ok()) == Some(3)
+  expect(calls.get()) == 3
+  expect(os.clock.sleeps().len()) == 2
+  // the second retry's cost (5) is given back on success
+  expect(quota(s)) == 495
+}
+
+test "stops at max attempts" {
+  let s = standard(max_attempts: 2)
+  let r = run(s, os.clock, os.rand, fn(_a: Int) -> Int ! Str { Err("boom") }, fn(_e: Str) -> Failure { Failure.Throttle })
+  match r {
+    Err(a) => {
+      expect(a.attempts) == 2
+      expect(a.err) == "boom"
+      expect(a.quota_exceeded) == false
+    }
+    Ok(_) => expect(false)
+  }
+}
+
+test "permanent failures are not retried" {
+  let s = standard()
+  let r = run(s, os.clock, os.rand, fn(_a: Int) -> Int ! Str { Err("bad") }, fn(_e: Str) -> Failure { Failure.Permanent })
+  expect(r.err().map(fn(a) { a.attempts })) == Some(1)
+  expect(os.clock.sleeps()) == []
+}
+
+test "an empty quota stops retries" {
+  let s = standard(max_attempts: 10, costs: Costs{initial: 12})
+  let r = run(s, os.clock, os.rand, fn(_a: Int) -> Int ! Str { Err("t") }, fn(_e: Str) -> Failure { Failure.Timeout })
+  match r {
+    Err(a) => {
+      // 12 tokens pay for one timeout retry (10), not a second
+      expect(a.attempts) == 2
+      expect(a.quota_exceeded) == true
+    }
+    Ok(_) => expect(false)
+  }
+  expect(quota(s)) == 2
+}
+
+test "first attempt success refills slowly, never past the start" {
+  let s = standard()
+  let r = run(s, os.clock, os.rand, fn(_a: Int) -> Int ! Str { Ok(1) }, fn(_e: Str) -> Failure { Failure.Permanent })
+  expect(r.ok()) == Some(1)
+  expect(quota(s)) == 500
+}
+
+test "delays grow, stay under the cap" for seed: Int {
+  let s = standard()
+  for retry in 0..30 {
+    let d = delay(s, retry, os.rand)
+    expect(d.millis() >= 0)
+    let cap = if retry < 5 { 1000 * (1 << retry) } else { 20000 }
+    expect(d.millis() <= cap)
+  }
+}

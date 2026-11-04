@@ -1,0 +1,157 @@
+// Package retry is the SDKs' standard retry mode (decision 0003): which
+// failures are retried, exponential backoff with full jitter capped at
+// 20 s, and a retry quota (token bucket) shared by a client's calls so
+// an outage does not multiply the load. Sleeps use the Clock and jitter
+// the Rand passed in, so tests run on virtual time with a seeded Rand.
+
+/// How a failed attempt is treated.
+pub enum Failure {
+  /// Throttling: a retry costs the normal amount.
+  Throttle
+  /// A transient service or network error.
+  Transient
+  /// The attempt timed out: a retry costs more.
+  Timeout
+  /// Not retryable.
+  Permanent
+}
+
+/// Error codes that mean throttling (the SDKs' shared list).
+pub const THROTTLE_CODES: List[Str] = [
+  "Throttling", "ThrottlingException", "ThrottledException", "RequestThrottledException",
+  "TooManyRequestsException", "ProvisionedThroughputExceededException",
+  "TransactionInProgressException", "RequestLimitExceeded", "BandwidthLimitExceeded",
+  "LimitExceededException", "RequestThrottled", "SlowDown", "PriorRequestNotComplete",
+  "EC2ThrottledException",
+]
+
+/// Error codes that mean a transient failure.
+pub const TRANSIENT_CODES: List[Str] = [
+  "RequestTimeout", "RequestTimeoutException", "InternalError", "IDPCommunicationError",
+]
+
+/// Codes that mean the signing clock is off: retried once the client
+/// has corrected its clock offset from the response's `Date`.
+pub const CLOCK_SKEW_CODES: List[Str] = [
+  "RequestTimeTooSkewed", "RequestExpired", "InvalidSignatureException", "SignatureDoesNotMatch",
+  "AuthFailure", "RequestInTheFuture",
+]
+
+/// Classifies a service response: its HTTP status and AWS error code.
+/// `modeled_retryable` is the model's `@retryable` trait on the error
+/// (`throttling` true gives Throttle).
+pub fn classify_response(status: Int, code: Str?, modeled_retryable: Bool = false, modeled_throttling: Bool = false) -> Failure {
+  if modeled_throttling {
+    return Failure.Throttle
+  }
+  if let Some(c) = code {
+    if THROTTLE_CODES.contains(c) {
+      return Failure.Throttle
+    }
+    if TRANSIENT_CODES.contains(c) {
+      return Failure.Transient
+    }
+  }
+  if modeled_retryable {
+    return Failure.Transient
+  }
+  if status == 429 {
+    return Failure.Throttle
+  }
+  if status == 500 || status == 502 || status == 503 || status == 504 {
+    return Failure.Transient
+  }
+  Failure.Permanent
+}
+
+/// The retry quota's costs (the SDKs' standard values).
+pub struct Costs {
+  pub initial: Int = 500
+  pub retry: Int = 5
+  pub timeout: Int = 10
+  /// Added back after a call that succeeded on its first attempt.
+  pub no_retry_increment: Int = 1
+}
+
+/// The standard retryer. One per client: its quota is shared by every
+/// call the client makes.
+pub struct Standard {
+  pub max_attempts: Int = 3
+  pub max_backoff: Duration = 20s
+  pub costs: Costs = Costs{}
+  quota: Mutex[Int]
+}
+
+pub fn standard(max_attempts: Int = 3, max_backoff: Duration = 20s, costs: Costs = Costs{}) -> Standard {
+  Standard{max_attempts: max_attempts, max_backoff: max_backoff, costs: costs, quota: Mutex.new(costs.initial)}
+}
+
+/// Tokens left in the quota.
+pub fn quota(s: Standard) -> Int {
+  s.quota.with_read(fn(q: Int) -> Int { q })
+}
+
+/// The delay before retry number `retry` (0 for the first): a random
+/// fraction of 2^retry seconds, at most `max_backoff`.
+pub fn delay(s: Standard, retry: Int, rand: Rand) -> Duration uses rand {
+  let r = rand.float()
+  let cap_ms = s.max_backoff.millis()
+  // 2^retry seconds, without overflow for large retry numbers
+  let base_ms = if retry >= 20 { cap_ms } else { 1000 * (1 << retry) }
+  let ms = Int(r * Float(if base_ms < cap_ms { base_ms } else { cap_ms }))
+  Duration.from_millis(ms)
+}
+
+/// Takes the cost of one retry from the quota; None when it is too low.
+fn acquire(s: Standard, f: Failure) -> Int? {
+  let cost = if f is Failure.Timeout { s.costs.timeout } else { s.costs.retry }
+  s.quota.with(fn(var q: Int) -> Int? {
+    if q < cost {
+      return None
+    }
+    q -= cost
+    Some(cost)
+  })
+}
+
+fn release(s: Standard, amount: Int) {
+  let cap = s.costs.initial
+  s.quota.with(fn(var q: Int) {
+    q = if q + amount > cap { cap } else { q + amount }
+  })
+}
+
+/// The last error of a call and how it ended.
+pub struct Attempted[E] {
+  pub err: E
+  pub attempts: Int
+  /// True when the quota stopped a retry the failure allowed.
+  pub quota_exceeded: Bool = false
+}
+
+/// Calls `op(attempt)` (1 for the first) until it succeeds, its failure
+/// is Permanent, `max_attempts` calls were made, or the quota is empty;
+/// sleeps `delay` on `clock` between attempts.
+pub fn run[T, E, fx: Effects](s: Standard, clock: Clock, rand: Rand, op: fn(Int) -> T ! E uses fx, failure: fn(E) -> Failure) -> T ! Attempted[E] uses (clock, rand, fx) {
+  var attempt = 1
+  var held = 0
+  while true {
+    match op(attempt) {
+      Ok(v) => {
+        release(s, if held > 0 { held } else { s.costs.no_retry_increment })
+        return Ok(v)
+      }
+      Err(e) => {
+        let f = failure(e)
+        if f is Failure.Permanent || attempt >= s.max_attempts {
+          return Err(Attempted{err: e, attempts: attempt})
+        }
+        let cost = acquire(s, f) ?? return Err(Attempted{err: e, attempts: attempt, quota_exceeded: true})
+        held = cost
+        clock.sleep(delay(s, attempt - 1, rand))
+        attempt += 1
+      }
+    }
+  }
+  fault("unreachable")
+}

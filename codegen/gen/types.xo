@@ -17,12 +17,19 @@ pub struct G {
   pub rpc: Str = ""
   /// awsQuery: form encoded requests, XML responses (xml is set too).
   pub query: Bool = false
+  /// ec2Query: awsQuery with EC2's key names, flat lists, no result
+  /// wrapper and `<Response><Errors>` errors (query and xml are set too).
+  pub ec2: Bool = false
 }
 
 pub fn new_g(m: model.Model) -> G {
   let ids = model.closure(m)
   let svc = model.shape(m, m.service)
-  let query = match svc {
+  let ec2 = match svc {
+    Some(x) => model.has_trait(x.traits, "aws.protocols#ec2Query")
+    None => false
+  }
+  let query = ec2 || match svc {
     Some(x) => model.has_trait(x.traits, "aws.protocols#awsQuery")
     None => false
   }
@@ -41,7 +48,7 @@ pub fn new_g(m: model.Model) -> G {
     Some(x) => if model.has_trait(x.traits, "aws.protocols#awsJson1_0") { "1.0" } else if model.has_trait(x.traits, "aws.protocols#awsJson1_1") { "1.1" } else { "" }
     None => ""
   }
-  G{m: m, names: plan_names(m, ids), ids: ids, xml: xml, s3: s3, rpc: rpc, query: query}
+  G{m: m, names: plan_names(m, ids), ids: ids, xml: xml, s3: s3, rpc: rpc, query: query, ec2: ec2}
 }
 
 pub fn shape_of(g: G, id: Str) -> model.Shape {

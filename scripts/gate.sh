@@ -20,7 +20,7 @@ for d in $dirs; do
   # packages listed in XO_GATE_LLVM build with the LLVM backend (a native
   # backend bug: docs/reports/xo-issues.md entry 5)
   flags=""
-  for p in ${XO_GATE_LLVM-}; do [ "$p" = "$d" ] && flags=--backend=llvm; done
+  for p in ${XO_GATE_LLVM-internal/protocoltest/restjson internal/protocoltest/restxml}; do [ "$p" = "$d" ] && flags=--backend=llvm; done
   (cd "$mod" && "$xo" test $flags "./$rel") || fail=1
 done
 [ $fail -eq 0 ] && echo "gate: ok" || echo "gate: FAILED"

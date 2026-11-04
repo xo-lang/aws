@@ -140,7 +140,7 @@ Workaround (removed): the generated tests passed map literals through
 `protocoltest.map_of`. Status: FIXED on xo main 0e4fa349e (golden
 optional_coll_lit).
 
-## 5. arm64: an inlined cross-module call fails as "runtime call"
+## 5. arm64: an inlined cross-module call fails as "runtime call" (cache order dependent)
 
 Found 2026-11-04 (xo at 97c8b271b). `xo test ./internal/protocoltest/restjson`
 (generated RestJson client) stops in the arm64 backend:
@@ -160,8 +160,21 @@ similar generated code, build. Status: reported to the lead 2026-11-04.
 Lang 1 could not reproduce it on the pushed tree (9e80ea7) with any cache
 state; later the same day it no longer reproduced here either, on the
 shared cache or a fresh one (233/233 on arm64, after the package was
-regenerated with more response tests). Not reproducible; the gate's
-LLVM override (XO_GATE_LLVM) stays available and is empty by default.
+regenerated with more response tests).
+
+**Reproduced deterministically, 2026-11-04 16:50**, from an empty backend
+cache (`d=$(mktemp -d)`, `XO_BACKEND_CACHE_DIR=$d` for both commands):
+`xo test ./internal/protocoltest/jsonrpc10` (ok) then `xo test
+./internal/protocoltest/restjson` fails as above. restjson alone, or
+after awsquery or ec2query, passes; after jsonprotocol it fails. Both
+awsJson suites inline `restjson.error_code` into generated
+`deserialize_*_error` functions, so an entry recorded by the first build
+is reused by the second and cannot be lowered there. The restxml variant
+(`restxml.error_code` inlined, "runtime call restxml.error_element") hit
+the shared cache after `error_element` was edited. Status: with Lang 1
+(repro handed over 2026-11-04); the gate builds internal/protocoltest/
+restjson and restxml with `--backend=llvm` until it is fixed
+(XO_GATE_LLVM).
 
 ## 6. Go backend: `field = (x ?? return Err(..))` into an optional field
 

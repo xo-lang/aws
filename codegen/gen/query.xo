@@ -6,9 +6,25 @@
 use std/json
 use github.com/xo-lang/aws/codegen/model
 
-/// The awsQuery key of member `m`.
-fn query_name(m: model.Member) -> Str {
+/// The query key of member `m`: awsQuery's xmlName or name; ec2Query's
+/// ec2QueryName, else the xmlName or name with its first letter upper
+/// cased.
+fn query_name(g: G, m: model.Member) -> Str {
+  if g.ec2 {
+    if let Some(n) = model.trait_str(m.traits, "aws.protocols#ec2QueryName") {
+      return n
+    }
+    return upper_first(model.trait_str(m.traits, "xmlName") ?? m.name)
+  }
   model.trait_str(m.traits, "xmlName") ?? m.name
+}
+
+fn upper_first(s: Str) -> Str {
+  let b = s.bytes()
+  if b.is_empty() {
+    return s
+  }
+  "${(b[0..1].to_str() ?? "").to_upper()}${b[1..b.len()].to_str() ?? ""}"
 }
 
 /// A statement writing `v` (of `target`) under key expression `key`;
@@ -27,7 +43,7 @@ fn query_put(g: G, traits: List[(Str, json.Value)], target: Str, v: Str, key: St
 /// the idempotency token to use for an unset token member ("" for none).
 pub fn query_members(g: G, s: model.Shape, v: Str, prefix: Str, token: Str, indent: Str, var out: List[Str]) {
   for m in s.members {
-    let key = "query.key(${prefix}, ${lit_str(query_name(m))})"
+    let key = "query.key(${prefix}, ${lit_str(query_name(g, m))})"
     out.push("${indent}if let Some(x) = ${v}.${field_name(m.name)} {")
     out.push("${indent}  ${query_put(g, m.traits, m.target, "x", key, has(m.traits, "xmlFlattened"))}")
     if token != "" && has(m.traits, "idempotencyToken") {
@@ -58,7 +74,7 @@ pub fn emit_query_fns(g: G, var out: List[Str]) {
         out.push("fn query_put_${key}(var f: query.Form, prefix: Str, v: ${t}) {")
         out.push("  match v {")
         for (i, m) in s.members.indexed() {
-          let k = "query.key(prefix, ${lit_str(query_name(m))})"
+          let k = "query.key(prefix, ${lit_str(query_name(g, m))})"
           if m.target == "smithy.api#Unit" {
             out.push("    ${vs[i]} => query.add(f, ${k}, \"\")")
           } else {
@@ -74,12 +90,21 @@ pub fn emit_query_fns(g: G, var out: List[Str]) {
         let em = s.members[0]
         let item = model.trait_str(em.traits, "xmlName") ?? "member"
         out.push("fn query_put_${key}(var f: query.Form, prefix: Str, v: ${t}, flat: Bool) {")
-        out.push("  if v.is_empty() {")
-        out.push("    query.add(f, prefix, \"\")")
-        out.push("    return")
-        out.push("  }")
+        if g.ec2 {
+          // ec2Query: lists are always flat, and an empty one is not sent
+          out.push("  let _ = flat")
+        } else {
+          out.push("  if v.is_empty() {")
+          out.push("    query.add(f, prefix, \"\")")
+          out.push("    return")
+          out.push("  }")
+        }
         out.push("  for (i, x) in v.indexed() {")
-        out.push("    let k = if flat { \"\${prefix}.\${i + 1}\" } else { \"\${prefix}.${item}.\${i + 1}\" }")
+        if g.ec2 {
+          out.push("    let k = \"\${prefix}.\${i + 1}\"")
+        } else {
+          out.push("    let k = if flat { \"\${prefix}.\${i + 1}\" } else { \"\${prefix}.${item}.\${i + 1}\" }")
+        }
         out.push("    ${query_put(g, em.traits, em.target, "x", "k", false)}")
         out.push("  }")
         out.push("}")

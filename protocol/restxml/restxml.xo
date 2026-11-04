@@ -13,6 +13,10 @@ pub fn error_element(body: Bytes) -> xml.Element? {
   if root.name.local == "Error" {
     return Some(root)
   }
+  // ec2Query: <Response><Errors><Error>
+  if let Some(errs) = root.child("Errors") {
+    return errs.child("Error")
+  }
   root.child("Error")
 }
 
@@ -46,7 +50,7 @@ pub fn api_error(resp: http.Response) -> aws.ApiError {
   }
   let root = xmlv.parse_body(resp.body).ok()
   let body_id = match root {
-    Some(r) => xmlv.child_text(r, "RequestId") ?? ""
+    Some(r) => xmlv.child_text(r, "RequestId") ?? xmlv.child_text(r, "RequestID") ?? ""
     None => ""
   }
   let request_id = if body_id != "" { body_id } else { resp.header("X-Amz-Request-Id") ?? resp.header("X-Amzn-Requestid") ?? "" }

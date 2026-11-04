@@ -1,0 +1,34 @@
+// EC2 (ec2Query) against LocalStack (decision 0005, emulator tests): run
+// by scripts/integration-localstack.sh, with invented credentials. The
+// client gets a Net that reaches only the loopback host.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/ec2
+
+test "ec2 vpc round trip against LocalStack" uses net, env, clock {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = ec2.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, ec2.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let regions = c.describe_regions(ec2.DescribeRegionsRequest{})?
+  expect((regions.regions ?? []).map(fn(r: ec2.Region) -> Str { r.region_name ?? "" }).contains("us-east-1")) == true
+  let made = c.create_vpc(ec2.CreateVpcRequest{
+    cidr_block: "10.0.0.0/16",
+    tag_specifications: [ec2.TagSpecification{resource_type: ec2.ResourceType.Vpc, tags: [ec2.Tag{key: "Name", value: "xo-lang-aws-it"}]}],
+  })?
+  let vpc_id = made.vpc?.vpc_id ?? ""
+  expect(vpc_id.starts_with("vpc-")) == true
+  // a list member and a filter (ec2Query's flat list keys)
+  let found = c.describe_vpcs(ec2.DescribeVpcsRequest{vpc_ids: [vpc_id], filters: [ec2.Filter{name: "tag:Name", values: ["xo-lang-aws-it"]}]})?
+  let vpcs = found.vpcs ?? []
+  expect(vpcs.map(fn(v: ec2.Vpc) -> Str { v.cidr_block ?? "" })) == ["10.0.0.0/16"]
+  expect((vpcs[0].tags ?? []).map(fn(t: ec2.Tag) -> Str { "${t.key ?? ""}=${t.value ?? ""}" })) == ["Name=xo-lang-aws-it"]
+  c.delete_vpc(ec2.DeleteVpcRequest{vpc_id: vpc_id})?
+  match c.delete_vpc(ec2.DeleteVpcRequest{vpc_id: vpc_id}) {
+    Err(ec2.DeleteVpcErr.Api(e)) => expect(e.code) == "InvalidVpcID.NotFound"
+    other => expect("${other:?}") == "InvalidVpcID.NotFound"
+  }
+}

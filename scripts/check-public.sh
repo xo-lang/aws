@@ -3,14 +3,22 @@
 # account ids other than the documented example, real looking access keys,
 # local home paths, IP addresses outside loopback and the documentation
 # ranges, and email addresses. Then runs gitleaks over the whole history and the working tree.
-# Usage: scripts/check-public.sh
+# Usage: scripts/check-public.sh             tracked files, history, working tree
+#        scripts/check-public.sh <dir>...    those directories only, such as
+#                                            .gencheck output before a
+#                                            service from it is committed
 set -u
 cd "$(dirname "$0")/.."
 fail=0
 files=$(git ls-files | grep -v -E '^(codegen/models\.lock|LICENSE|codegen/LICENSE-models|sigv4a?/testdata/LICENSE-aws-c-auth)$')
+dirs_only=0
+if [ $# -gt 0 ]; then
+  files=$(find "$@" -type f)
+  dirs_only=1
+fi
 
 report() {
-  echo "check-public: $1" >&2
+  echo "check-public: $1 ($(echo "$2" | grep -c .) lines)" >&2
   echo "$2" | head -20 >&2
   fail=1
 }
@@ -27,7 +35,31 @@ report() {
 #   555566667777  models/s3: PutBucketAcl docs
 #   999999999999  smithy-aws-protocol-tests model/awsJson1_1/kitchen-sink.smithy:
 #                 a Long member's test value (not an account id)
-ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777|999999999999'
+#   012345678910  models/ec2: KmsKeyId docs (CopyImage, CopySnapshot,
+#                 CreateVolume, ImportImage, ImportSnapshot,
+#                 ModifyEbsDefaultKmsKeyId) example key ARNs
+ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777|999999999999|012345678910'
+# AWS's documentation example addresses, all private (RFC 1918) or
+# shared (RFC 6598) ranges, allowed as exact values like the placeholders
+# above (decision 0007):
+#   10.0.0.0      models/ec2: CreateVpc, CreateSubnet, CreateIpamPool,
+#                 ModifyIpamPool, IpamPool CIDR docs
+#   10.1.0.0, 10.2.0.0, 10.3.0.0  models/ec2: IpamPrefixListResolverTargetState docs
+#   100.68.0.0, 100.68.0.18  models/ec2: CreateVpc, CreateSubnet,
+#                 CreateRoute, CreateNetworkAclEntry,
+#                 AuthorizeSecurityGroupIngress, IpRange CIDR docs
+#   172.16.0.0    models/ec2: CreateNetworkAclEntry, ReplaceNetworkAclEntry docs
+#   10.0.1.0      models/ec2: ExportTransitGatewayRoutes, SearchLocalGatewayRoutes,
+#                 SearchTransitGatewayRoutes filter docs
+#   10.24.34.0    models/ec2: IpamPoolAllocation, IpamPoolCidr,
+#                 IpamPrefixListResolverRule docs
+#   169.254.0.0, 169.254.1.0, 169.254.2.0, 169.254.3.0, 169.254.4.0,
+#   169.254.5.0   (link local) models/ec2: VpnTunnelOptionsSpecification,
+#                 CreateTransitGatewayConnectPeer, TransitGatewayNatRule docs
+#   169.254.169.252  (link local) models/ec2: VpnTunnelOptionsSpecification docs
+#   224.0.0.0     (multicast) models/ec2: TransitGatewayNatRule docs
+#   169.254.169.253  (the Amazon DNS server) models/ec2: ModifyVpcAttribute docs
+ALLOW_IPS='10\.0\.0\.0|10\.0\.1\.0|10\.1\.0\.0|10\.2\.0\.0|10\.3\.0\.0|10\.24\.34\.0|100\.68\.0\.0|100\.68\.0\.18|169\.254\.0\.0|169\.254\.1\.0|169\.254\.2\.0|169\.254\.3\.0|169\.254\.4\.0|169\.254\.5\.0|169\.254\.169\.252|169\.254\.169\.253|172\.16\.0\.0|224\.0\.0\.0'
 #   Grantees@email.com  models/s3: PutBucketAcl, PutBucketLogging, PutObjectAcl docs
 #   xyz@amazon.com, abc@amazon.com  models/s3: PutObjectAcl docs
 #   @example.com/.org/.net  reserved documentation domains (RFC 2606)
@@ -47,24 +79,38 @@ hits=$(echo "$files" | xargs grep -n -I -E '\b(AKIA|ASIA)[A-Z0-9]{16}\b' 2>/dev/
 hits=$(echo "$files" | xargs grep -n -I -E '/(Users|home)/[A-Za-z0-9._-]+' 2>/dev/null)
 [ -n "$hits" ] && report "home directory paths" "$hits"
 
-hits=$(echo "$files" | xargs grep -n -I -o -E '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 2>/dev/null | grep -v -E ':(127\.|0\.0\.0\.0|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|169\.254\.169\.254|169\.254\.170\.2)')
+hits=$(echo "$files" | xargs grep -n -I -o -E '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 2>/dev/null | grep -v -E ':(127\.|0\.0\.0\.0|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|169\.254\.169\.254|169\.254\.170\.2)' | grep -v -E ":($ALLOW_IPS)$")
 [ -n "$hits" ] && report "IP addresses outside loopback, metadata and documentation ranges" "$hits"
 
 hits=$(echo "$files" | xargs grep -n -I -E '@' 2>/dev/null | strip_allowed "$ALLOW_EMAILS" | grep -E '^[^:]*:[0-9]+:.*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 [ -n "$hits" ] && report "email addresses" "$hits"
 
 if command -v gitleaks >/dev/null; then
-  cfg=""
-  [ -f ../xo-publish-tools/gitleaks.toml ] && cfg="--config ../xo-publish-tools/gitleaks.toml"
-  gitleaks git $cfg --no-banner . >/dev/null 2>&1 || { gitleaks git $cfg --no-banner . 2>&1 | tail -20 >&2; report "gitleaks found leaks" ""; }
-  # the working tree too: history alone misses what the next commit adds
-  # (tracked and new files only: a copy, so ignored model downloads are skipped)
-  tree=$(mktemp -d)
-  git ls-files -co --exclude-standard | rsync -a --files-from=- . "$tree/"
-  cfgabs=""
-  [ -f ../xo-publish-tools/gitleaks.toml ] && cfgabs="--config $(cd .. && pwd)/xo-publish-tools/gitleaks.toml"
-  (cd "$tree" && gitleaks dir $cfgabs --no-banner . >/dev/null 2>&1) || { (cd "$tree" && gitleaks dir $cfgabs --no-banner . 2>&1 | tail -20 >&2); report "gitleaks found leaks in the working tree" ""; }
-  rm -r "$tree"
+  # the shared configuration (or gitleaks' defaults) extended with this
+  # repository's exact-value allowlist (scripts/gitleaks-extra.toml)
+  gdir=$(mktemp -d); gcfg="$gdir/gitleaks.toml"
+  if [ -f ../xo-publish-tools/gitleaks.toml ]; then
+    printf '[extend]\npath = "%s"\n\n' "$(cd .. && pwd)/xo-publish-tools/gitleaks.toml" > "$gcfg"
+  else
+    printf '[extend]\nuseDefault = true\n\n' > "$gcfg"
+  fi
+  cat scripts/gitleaks-extra.toml >> "$gcfg"
+  cfg="--config $gcfg"
+  if [ $dirs_only = 1 ]; then
+    for d in "$@"; do
+      gitleaks dir $cfg --no-banner "$d" >/dev/null 2>&1 || { gitleaks dir $cfg --no-banner --verbose --redact "$d" 2>&1 | grep 'RuleID\|File:\|Line:' | head -20 >&2; report "gitleaks found leaks in $d" ""; }
+    done
+  else
+    gitleaks git $cfg --no-banner . >/dev/null 2>&1 || { gitleaks git $cfg --no-banner . 2>&1 | tail -20 >&2; report "gitleaks found leaks" ""; }
+    # the working tree too: history alone misses what the next commit adds
+    # (tracked and new files only: a copy, so ignored model downloads are skipped)
+    tree=$(mktemp -d)
+    git ls-files -co --exclude-standard | rsync -a --files-from=- . "$tree/"
+    cfgabs="$cfg"
+    (cd "$tree" && gitleaks dir $cfgabs --no-banner . >/dev/null 2>&1) || { (cd "$tree" && gitleaks dir $cfgabs --no-banner . 2>&1 | tail -20 >&2); report "gitleaks found leaks in the working tree" ""; }
+    rm -r "$tree"
+  fi
+  rm -r "$gdir"
 else
   report "gitleaks is not installed" ""
 fi

@@ -201,3 +201,19 @@ says what happened, not a general opinion. Bugs with repros go in
 - Disliked: `List.sorted()` vs `sort()`, and no `Byte(n)` conversion: two
   more guesses that failed. std.md's method index answers it, but a
   "did you mean `sort`" hint would save the lookup.
+
+## 2026-11-04: ec2Query, EC2, and the build cache
+
+- Liked: a 270k line generated module (EC2) type checks in about two
+  seconds warm and 2.5 GB, and compiles into a test binary that runs a
+  LocalStack round trip; Xo held up at AWS's largest model.
+- Liked: `--backend=llvm` as an escape hatch, and XO_BACKEND_CACHE_DIR to
+  give a run a private cache: together they turned a flaky failure into a
+  two step repro (issue 5) without disturbing anyone else's cache.
+- Disliked: the native backend's result depends on what was built before
+  in the same cache (issue 5): the worst kind of bug for a user, since a
+  clean CI passes and a developer's laptop fails. A cache key that misses
+  an inlined callee's body is the likely cause.
+- Disliked: `xo mod tidy` removing a require the module needs (issue 7);
+  a tool that rewrites xo.mod should never make the module unbuildable
+  for its users.

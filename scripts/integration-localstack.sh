@@ -11,7 +11,7 @@ image=${LOCALSTACK_IMAGE:-localstack/localstack:3}
 port=${LOCALSTACK_PORT:-14566}
 up=${DOCKER_UP:-$HOME/xo-lead/agents/docker-up.sh}
 "$up" || exit 1
-id=$(docker run -d -p "127.0.0.1:$port:4566" -e SERVICES=s3,sts,sqs,dynamodb,secretsmanager,sns,lambda "$image")
+id=$(docker run -d -p "127.0.0.1:$port:4566" -e SERVICES=s3,sts,sqs,dynamodb,secretsmanager,sns,lambda,ec2 "$image")
 status=1
 if [ -n "$id" ]; then
   i=0

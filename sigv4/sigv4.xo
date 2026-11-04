@@ -1,0 +1,273 @@
+// Package sigv4 signs HTTP requests with AWS Signature Version 4
+// (decision 0003). It works on a small request model (method, escaped
+// path, raw query, ordered headers) so it is pure: the signing time is an
+// argument, and the caller's transport turns the result into a request.
+
+use std/crypto
+use std/url
+
+/// Credentials for signing. The secret and the session token are
+/// `Secret`, so they never appear in Debug output or logs.
+pub struct Credentials {
+  pub access_key_id: Str
+  pub secret_access_key: Secret[Str]
+  pub session_token: Secret[Str]? = None
+}
+
+/// The parts of an HTTP request that SigV4 signs.
+pub struct Request {
+  pub method: Str
+  /// The path as sent on the wire (may hold percent escapes, or raw
+  /// characters that `canonical_uri` escapes).
+  pub path: Str
+  /// The raw query as sent, without `?` ("" for none).
+  pub query: Str = ""
+  /// Header fields in order; a name may repeat.
+  pub headers: List[(Str, Str)] = []
+}
+
+/// Where and how to sign.
+pub struct Options {
+  pub service: Str
+  pub region: Str
+  /// Hex SHA-256 of the body, or `UNSIGNED-PAYLOAD`, or a streaming
+  /// marker; `payload_hash(body)` computes the first.
+  pub payload_hash: Str
+  /// Remove `.` and `..` segments and merge repeated slashes (every
+  /// service but S3).
+  pub normalize_path: Bool = true
+  /// Escape the path a second time (every service but S3).
+  pub double_escape_path: Bool = true
+  /// Add `X-Amz-Content-Sha256` with the payload hash (S3 needs it).
+  pub add_content_sha256_header: Bool = false
+  /// Leave the session token out of the signature and add it after
+  /// (a few older services want this).
+  pub sign_session_token: Bool = true
+}
+
+/// A signed request: the headers to send (the input's plus the ones the
+/// signer added) and the intermediate texts, which tests compare.
+pub struct Signed {
+  pub headers: List[(Str, Str)]
+  pub query: Str
+  pub canonical_request: Str
+  pub string_to_sign: Str
+  pub signature: Str
+}
+
+pub const ALGORITHM: Str = "AWS4-HMAC-SHA256"
+pub const UNSIGNED_PAYLOAD: Str = "UNSIGNED-PAYLOAD"
+pub const EMPTY_PAYLOAD_HASH: Str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+const UPPER_HEX: Str = "0123456789ABCDEF"
+
+/// Hex SHA-256 of a body, for `Options.payload_hash`.
+pub fn payload_hash(body: Bytes) -> Str {
+  crypto.sha256(body).to_hex()
+}
+
+/// `20150830T123600Z`: the `X-Amz-Date` form of t, to the second.
+pub fn amz_date(t: Time) -> Str {
+  Time.from_unix(t.unix()).format_rfc3339().replace("-", "").replace(":", "")
+}
+
+/// Signs `req` with an `Authorization` header (and `X-Amz-Date`,
+/// `X-Amz-Security-Token`, and optionally `X-Amz-Content-Sha256`).
+pub fn sign_header(req: Request, creds: Credentials, opts: Options, now: Time) -> Signed {
+  let date = amz_date(now)
+  let cscope = credential_scope(date, opts)
+  var headers = req.headers
+  headers.push(("X-Amz-Date", date))
+  if opts.add_content_sha256_header {
+    headers.push(("X-Amz-Content-Sha256", opts.payload_hash))
+  }
+  var late: List[(Str, Str)] = []
+  if let Some(tok) = creds.session_token {
+    if opts.sign_session_token {
+      headers.push(("X-Amz-Security-Token", tok.reveal()))
+    } else {
+      late.push(("X-Amz-Security-Token", tok.reveal()))
+    }
+  }
+  let (canon_headers, signed_names) = canonical_headers(headers)
+  let creq = canonical_request(req.method, canonical_uri(req.path, opts), canonical_query(req.query), canon_headers, signed_names, opts.payload_hash)
+  let sts = string_to_sign(date, cscope, creq)
+  let sig = signature(creds, date, opts, sts)
+  var out = req.headers
+  for h in late {
+    out.push(h)
+  }
+  for h in headers[req.headers.len()..] {
+    out.push(h)
+  }
+  out.push(("Authorization", "${ALGORITHM} Credential=${creds.access_key_id}/${cscope}, SignedHeaders=${signed_names}, Signature=${sig}"))
+  Signed{headers: out, query: req.query, canonical_request: creq, string_to_sign: sts, signature: sig}
+}
+
+/// Presigns `req` in its query (`X-Amz-Algorithm` ... `X-Amz-Signature`),
+/// valid for `expires` from `now`.
+pub fn sign_query(req: Request, creds: Credentials, opts: Options, now: Time, expires: Duration) -> Signed {
+  let date = amz_date(now)
+  let cscope = credential_scope(date, opts)
+  let (canon_headers, signed_names) = canonical_headers(req.headers)
+  var params: List[(Str, Str)] = [
+    ("X-Amz-Algorithm", ALGORITHM),
+    ("X-Amz-Credential", "${creds.access_key_id}/${cscope}"),
+    ("X-Amz-Date", date),
+    ("X-Amz-SignedHeaders", signed_names),
+    ("X-Amz-Expires", "${expires.millis() / 1000}"),
+  ]
+  var late: List[(Str, Str)] = []
+  if let Some(tok) = creds.session_token {
+    if opts.sign_session_token {
+      params.push(("X-Amz-Security-Token", tok.reveal()))
+    } else {
+      late.push(("X-Amz-Security-Token", tok.reveal()))
+    }
+  }
+  var added = StrBuilder.new()
+  for (k, v) in params {
+    if added.len() > 0 {
+      added.write("&")
+    }
+    added.write("${uri_encode(k, false)}=${uri_encode(v, false)}")
+  }
+  let signed_query = if req.query == "" { added.freeze() } else { "${req.query}&${added.freeze()}" }
+  let creq = canonical_request(req.method, canonical_uri(req.path, opts), canonical_query(signed_query), canon_headers, signed_names, opts.payload_hash)
+  let sts = string_to_sign(date, cscope, creq)
+  let sig = signature(creds, date, opts, sts)
+  var q = StrBuilder.new()
+  q.write(signed_query)
+  for (k, v) in late {
+    q.write("&${uri_encode(k, false)}=${uri_encode(v, false)}")
+  }
+  q.write("&X-Amz-Signature=${sig}")
+  Signed{headers: req.headers, query: q.freeze(), canonical_request: creq, string_to_sign: sts, signature: sig}
+}
+
+fn credential_scope(date: Str, opts: Options) -> Str {
+  "${date[0..8]}/${opts.region}/${opts.service}/aws4_request"
+}
+
+fn canonical_request(method: Str, uri: Str, query: Str, headers: Str, signed: Str, payload: Str) -> Str {
+  "${method}\n${uri}\n${query}\n${headers}\n${signed}\n${payload}"
+}
+
+fn string_to_sign(date: Str, cscope: Str, creq: Str) -> Str {
+  "${ALGORITHM}\n${date}\n${cscope}\n${crypto.sha256(creq.bytes()).to_hex()}"
+}
+
+/// The signing key for a day, region and service (cacheable per day).
+pub fn signing_key(secret: Secret[Str], day: Str, region: Str, service: Str) -> Bytes {
+  let k_date = crypto.hmac_sha256("AWS4${secret.reveal()}".bytes(), day.bytes())
+  let k_region = crypto.hmac_sha256(k_date, region.bytes())
+  let k_service = crypto.hmac_sha256(k_region, service.bytes())
+  crypto.hmac_sha256(k_service, "aws4_request".bytes())
+}
+
+fn signature(creds: Credentials, date: Str, opts: Options, sts: Str) -> Str {
+  let key = signing_key(creds.secret_access_key, date[0..8], opts.region, opts.service)
+  crypto.hmac_sha256(key, sts.bytes()).to_hex()
+}
+
+/// The canonical URI from the path as sent on the wire: normalized and
+/// escaped once more (every service but S3), or as sent (S3, where
+/// `double_escape_path` is false). A wire path is already escaped once,
+/// so the default is the specification's "encode twice".
+pub fn canonical_uri(path: Str, opts: Options) -> Str {
+  let p0 = if path == "" { "/" } else { path }
+  let p = if opts.normalize_path { normalize(p0) } else { p0 }
+  if opts.double_escape_path { uri_encode(p, true) } else { p }
+}
+
+/// Removes `.` and `..` segments and empty segments, keeping a leading
+/// and a trailing slash (RFC 3986 5.2.4 plus merged slashes).
+fn normalize(path: Str) -> Str {
+  var out: List[Str] = []
+  for seg in path.split("/") {
+    if seg == "" || seg == "." {
+      continue
+    }
+    if seg == ".." {
+      out.pop()
+      continue
+    }
+    out.push(seg)
+  }
+  let trailing = (path.ends_with("/") || path.ends_with("/.") || path.ends_with("/..")) && out.len() > 0
+  let joined = "/" + out.join("/")
+  if trailing { joined + "/" } else { joined }
+}
+
+/// SigV4's URI encoding: letters, digits, `-`, `.`, `_`, `~` as they are,
+/// `/` kept when `keep_slash`, every other byte as `%XX` (upper case).
+pub fn uri_encode(s: Str, keep_slash: Bool) -> Str {
+  let b = s.bytes()
+  let hex = UPPER_HEX.bytes()
+  var out = BytesBuilder.with_capacity(b.len())
+  for c in b {
+    if is_unreserved(c) || (keep_slash && c == 47) {
+      out.write_byte(c)
+    } else {
+      out.write_byte(37)
+      out.write_byte(hex[Int(c) >> 4])
+      out.write_byte(hex[Int(c) & 15])
+    }
+  }
+  out.freeze().to_str() ?? s
+}
+
+fn is_unreserved(c: UInt8) -> Bool {
+  (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c == 45 || c == 46 || c == 95 || c == 126
+}
+
+/// The canonical query: each name and value decoded then escaped,
+/// sorted by name then value, joined with `&`.
+pub fn canonical_query(raw: Str) -> Str {
+  if raw == "" {
+    return ""
+  }
+  var pairs: List[(Str, Str)] = []
+  for part in raw.split("&") {
+    if part == "" {
+      continue
+    }
+    let (k, v) = part.cut("=") ?? (part, "")
+    pairs.push((uri_encode(unescape(k), false), uri_encode(unescape(v), false)))
+  }
+  pairs.sort_in_place()
+  pairs.map(fn(p) { "${p.0}=${p.1}" }).join("&")
+}
+
+fn unescape(s: Str) -> Str {
+  match url.path_unescape(s) {
+    Ok(v) => v
+    Err(_) => s
+  }
+}
+
+/// The canonical headers block (each `name:value\n`, names lower cased
+/// and sorted, a name's values in order joined with `,`, runs of spaces
+/// collapsed) and the signed header list (`a;b;c`).
+pub fn canonical_headers(headers: List[(Str, Str)]) -> (Str, Str) {
+  var by_name: Map[Str, List[Str]] = {}
+  for (name, value) in headers {
+    let n = name.to_lower()
+    if n == "authorization" || n == "user-agent" || n == "x-amzn-trace-id" || n == "expect" || n == "transfer-encoding" {
+      continue
+    }
+    let v = collapse_spaces(value)
+    by_name.update(n, [], fn(var vs) { vs.push(v) })
+  }
+  let names = by_name.keys().sort()
+  var block = StrBuilder.new()
+  for n in names {
+    let vs = by_name.get(n) ?? []
+    block.write("${n}:${vs.join(",")}\n")
+  }
+  (block.freeze(), names.join(";"))
+}
+
+fn collapse_spaces(s: Str) -> Str {
+  s.fields().join(" ")
+}

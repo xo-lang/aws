@@ -1,0 +1,189 @@
+// Package naming turns Smithy names into Xo names (decision 0002,
+// "Splitting member names into snake case", owner 2026-11-04): every
+// acronym run is its own word, so `SSEKMSKeyId` is `sse_kms_key_id`.
+
+/// Acronyms that may stand next to each other in one upper case run
+/// (`SSEKMS`, `CIDRIP`, `JDBCURL`). A run is split only when these
+/// cover it entirely; otherwise it stays one word and is reported.
+pub const ACRONYMS: List[Str] = [
+  "ACL",
+  "ARN",
+  "AWS",
+  "CIDR",
+  "DB",
+  "DSSE",
+  "HTTP",
+  "HTTPS",
+  "IAM",
+  "ID",
+  "IP",
+  "JDBC",
+  "JSON",
+  "KMS",
+  "MFA",
+  "SMB",
+  "SSE",
+  "TLS",
+  "URL",
+  "VPC",
+]
+
+/// The result of splitting one name: its words, and the upper case
+/// runs that were kept whole because the acronym list could not split
+/// them (listed in RENAMES.md for review).
+pub struct Split {
+  pub words: List[Str]
+  pub unsplit: List[Str] = []
+}
+
+/// `BucketName` -> `bucket_name`, `SSEKMSKeyId` -> `sse_kms_key_id`.
+/// `exceptions` maps a whole Smithy name to the name to use instead.
+pub fn snake(name: Str, exceptions: Map[Str, Str] = {}) -> Str {
+  if let Some(n) = exceptions.get(name) {
+    return n
+  }
+  split_words(name).words.map(fn(w) { w.to_lower() }).join("_")
+}
+
+/// `bucket_name` style words -> `BucketName` style (types, variants).
+pub fn upper_camel(name: Str, exceptions: Map[Str, Str] = {}) -> Str {
+  if let Some(n) = exceptions.get(name) {
+    return n
+  }
+  var out = StrBuilder.new()
+  for w in split_words(name).words {
+    let lw = w.to_lower()
+    out.write(lw[0..1].to_upper())
+    out.write(lw[1..])
+  }
+  out.freeze()
+}
+
+fn is_upper(c: UInt8) -> Bool { c >= 65 && c <= 90 }
+fn is_lower(c: UInt8) -> Bool { c >= 97 && c <= 122 }
+fn is_digit(c: UInt8) -> Bool { c >= 48 && c <= 57 }
+
+/// Splits a Smithy name (ASCII letters, digits, `_`, and other
+/// separators) into words, keeping each word's letters as written.
+pub fn split_words(name: Str) -> Split {
+  let b = name.bytes()
+  let n = b.len()
+  var words: List[Str] = []
+  var unsplit: List[Str] = []
+  var i = 0
+  while i < n {
+    let c = b[i]
+    if !is_upper(c) && !is_lower(c) && !is_digit(c) {
+      i += 1
+      continue
+    }
+    var j = i
+    if is_upper(c) {
+      while j < n && is_upper(b[j]) {
+        j += 1
+      }
+      let run_len = j - i
+      if j < n && b[j] == 118 && j + 1 < n && is_digit(b[j + 1]) && run_len > 1 {
+        // IPv6, DBv3: the run, `v` and the digits are one word.
+        j += 1
+        while j < n && is_digit(b[j]) {
+          j += 1
+        }
+        words.push(name[i..j])
+        i = j
+        continue
+      }
+      if j < n && b[j] == 115 && run_len > 1 && (j + 1 == n || !is_lower(b[j + 1])) {
+        // ARNs, IDs, GBs: a plural acronym.
+        j += 1
+        words.push(name[i..j])
+        i = j
+        continue
+      }
+      if j < n && is_lower(b[j]) {
+        if run_len > 1 {
+          // DBInstance: the run's last letter starts the next word.
+          let run = name[i..j - 1]
+          push_run(words, unsplit, run)
+          i = j - 1
+        }
+        j = i + 1
+        while j < n && is_lower(b[j]) {
+          j += 1
+        }
+      } else {
+        let run = name[i..j]
+        if j < n && is_digit(b[j]) {
+          // S3, EC2: digits stay with the word before them.
+          while j < n && is_digit(b[j]) {
+            j += 1
+          }
+          words.push(name[i..j])
+        } else {
+          push_run(words, unsplit, run)
+        }
+        i = j
+        continue
+      }
+    } else {
+      while j < n && (is_lower(b[j]) || (is_digit(b[j]) && is_digit(c))) {
+        j += 1
+      }
+    }
+    while j < n && is_digit(b[j]) {
+      j += 1
+    }
+    words.push(name[i..j])
+    i = j
+  }
+  Split{words: words, unsplit: unsplit}
+}
+
+fn push_run(var words: List[Str], var unsplit: List[Str], run: Str) {
+  if run.len() <= 2 {
+    words.push(run)
+    return
+  }
+  match cover(run) {
+    Some(parts) => {
+      for p in parts {
+        words.push(p)
+      }
+    }
+    None => {
+      if !ACRONYMS.contains(run) {
+        unsplit.push(run)
+      }
+      words.push(run)
+    }
+  }
+}
+
+/// The run as two or more acronyms from ACRONYMS, longest first, or
+/// None when they do not cover it.
+fn cover(run: Str) -> List[Str]? {
+  if ACRONYMS.contains(run) {
+    return None
+  }
+  let parts = cover_from(run, 0)?
+  if parts.len() >= 2 { Some(parts) } else { None }
+}
+
+fn cover_from(run: Str, at: Int) -> List[Str]? {
+  if at == run.len() {
+    return Some([])
+  }
+  let by_len = ACRONYMS.sort_by(fn(a) { -a.len() })
+  for a in by_len {
+    if run[at..].starts_with(a) {
+      if let Some(rest) = cover_from(run, at + a.len()) {
+        var out = [a]
+        for r in rest {
+          out.push(r)
+        }
+        return Some(out)
+      }
+    }
+  }
+  None
+}

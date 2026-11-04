@@ -1,0 +1,132 @@
+// The AWS signing test suite (awslabs/aws-c-auth tests/aws-signing-test-suite/v4,
+// Apache-2.0, see testdata/LICENSE-aws-c-auth): every case's canonical
+// request, string to sign and signature, for header and query signing.
+
+use std/embed
+use std/json
+
+const SUITE: embed.Dir = embed("testdata/v4")
+
+struct CaseCreds {
+  access_key_id: Str
+  secret_access_key: Str
+  token: Str? = None
+} derive Json
+
+struct Context {
+  credentials: CaseCreds
+  expiration_in_seconds: Int
+  normalize: Bool
+  region: Str
+  service: Str
+  sign_body: Bool
+  timestamp: Str
+  omit_session_token: Bool = false
+} derive Json
+
+struct Parsed {
+  req: Request
+  body: Bytes
+}
+
+fn parse_request(text: Str) -> Parsed? {
+  let (head, body) = text.cut("\n\n") ?? (text.trim_end_chars("\n"), "")
+  let lines = head.split("\n")
+  let first = lines.first()?
+  let parts = first.split(" ")
+  let method = parts.get(0)?
+  // The request target is everything between the method and the version.
+  let target = first[method.len() + 1..first.len() - " HTTP/1.1".len()]
+  let (path, query) = target.cut("?") ?? (target, "")
+  var headers: List[(Str, Str)] = []
+  for line in lines[1..] {
+    if line.starts_with(" ") || line.starts_with("\t") {
+      let (n, v) = headers.pop()?
+      headers.push((n, "${v} ${line.trim()}"))
+      continue
+    }
+    let (n, v) = line.cut(":")?
+    headers.push((n, v))
+  }
+  Some(Parsed{req: Request{method: method, path: path, query: query, headers: headers}, body: body.bytes()})
+}
+
+fn case_names() -> List[Str] {
+  var names: List[Str] = []
+  for p in SUITE.paths() {
+    if let Some(n) = p.cut_suffix("/request.txt") {
+      names.push(n)
+    }
+  }
+  names
+}
+
+fn read(name: Str, file: Str) -> Str {
+  (SUITE.read_text("${name}/${file}") ?? "").trim_end_chars("\n")
+}
+
+fn setup(name: Str) -> (Parsed, Context, Credentials, Options, Time) ! Error {
+  let ctx: Context = json.decode_str(read(name, "context.json"))?
+  let parsed = parse_request(SUITE.read_text("${name}/request.txt") ?? "").or_err("bad request.txt in ${name}")?
+  let creds = Credentials{
+    access_key_id: ctx.credentials.access_key_id,
+    secret_access_key: Secret.new(ctx.credentials.secret_access_key),
+    session_token: ctx.credentials.token.map(fn(t) { Secret.new(t) }),
+  }
+  let opts = Options{
+    service: ctx.service,
+    region: ctx.region,
+    payload_hash: payload_hash(parsed.body),
+    normalize_path: ctx.normalize,
+    add_content_sha256_header: ctx.sign_body,
+    sign_session_token: !ctx.omit_session_token,
+  }
+  let now = Time.parse_rfc3339(ctx.timestamp).or_err("bad timestamp in ${name}")?
+  Ok((parsed, ctx, creds, opts, now))
+}
+
+test "suite has every case" {
+  expect(case_names().len()) == 38
+}
+
+test "header signing matches the suite" {
+  var failed: List[Str] = []
+  for name in case_names() {
+    let (parsed, _, creds, opts, now) = setup(name)?
+    let s = sign_header(parsed.req, creds, opts, now)
+    if s.canonical_request != read(name, "header-canonical-request.txt") {
+      failed.push("${name}: canonical request\n--- got\n${s.canonical_request}\n--- want\n${read(name, "header-canonical-request.txt")}")
+    } else if s.string_to_sign != read(name, "header-string-to-sign.txt") {
+      failed.push("${name}: string to sign")
+    } else if s.signature != read(name, "header-signature.txt") {
+      failed.push("${name}: signature")
+    }
+  }
+  expect(failed.join("\n\n")) == ""
+}
+
+test "query signing matches the suite" {
+  var failed: List[Str] = []
+  for name in case_names() {
+    let (parsed, ctx, creds, opts, now) = setup(name)?
+    let qopts = opts with {add_content_sha256_header: false}
+    let s = sign_query(parsed.req, creds, qopts, now, 1s * ctx.expiration_in_seconds)
+    if s.canonical_request != read(name, "query-canonical-request.txt") {
+      failed.push("${name}: canonical request\n--- got\n${s.canonical_request}\n--- want\n${read(name, "query-canonical-request.txt")}")
+    } else if s.string_to_sign != read(name, "query-string-to-sign.txt") {
+      failed.push("${name}: string to sign")
+    } else if s.signature != read(name, "query-signature.txt") {
+      failed.push("${name}: signature")
+    }
+  }
+  expect(failed.join("\n\n")) == ""
+}
+
+test "amz date" {
+  expect(amz_date(Time.from_unix(1440938160))) == "20150830T123600Z"
+}
+
+test "secrets stay out of debug output" {
+  let c = Credentials{access_key_id: "AKIDEXAMPLE", secret_access_key: Secret.new("not-shown")}
+  expect("${c:?}".contains("not-shown")) == false
+}

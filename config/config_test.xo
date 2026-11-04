@@ -184,7 +184,7 @@ test "configured endpoint precedence" {
   expect(aws.endpoint_for(cfg3.endpoints, "S3")) == None
 }
 
-const ROLE_OK: Str = "<AssumeRoleResponse><AssumeRoleResult><Credentials><AccessKeyId>ASIAEXAMPLEROLE00001</AccessKeyId><SecretAccessKey>invented-role-secret</SecretAccessKey><SessionToken>invented-role-token</SessionToken><Expiration>2026-01-01T01:00:00Z</Expiration></Credentials></AssumeRoleResult></AssumeRoleResponse>"
+const ROLE_OK: Str = "<AssumeRoleResponse><AssumeRoleResult><Credentials><AccessKeyId>ROLEKEYEXAMPLE00001</AccessKeyId><SecretAccessKey>invented-role-secret</SecretAccessKey><SessionToken>invented-role-token</SessionToken><Expiration>2026-01-01T01:00:00Z</Expiration></Credentials></AssumeRoleResult></AssumeRoleResponse>"
 
 const ROLE_CONFIG: Str = r"""[profile base]
 region = us-west-2
@@ -251,7 +251,7 @@ test "a role profile assumes the role with its source profile's keys" {
   })
   let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
   let creds = cfg.credentials?.retrieve()?
-  expect(creds.access_key_id) == "ASIAEXAMPLEROLE00001"
+  expect(creds.access_key_id) == "ROLEKEYEXAMPLE00001"
   expect(creds.source) == "AssumeRoleProvider"
   // cached: a second retrieve sends nothing
   cfg.credentials?.retrieve()?
@@ -273,7 +273,7 @@ test "chained roles sign with the previous role's credentials" {
   let sent = auths.with_read(fn(xs: List[Str]) -> List[Str] { xs })
   expect(sent.len()) == 2
   expect(sent[0].contains("Credential=AKIDTEST0000000001/")) == true
-  expect(sent[1].contains("Credential=ASIAEXAMPLEROLE00001/")) == true
+  expect(sent[1].contains("Credential=ROLEKEYEXAMPLE00001/")) == true
 }
 
 test "a profile may source itself when it has static keys" {
@@ -283,7 +283,7 @@ test "a profile may source itself when it has static keys" {
     if (req.header("Authorization") ?? "").contains("AKIDTEST0000000002") { http.text(200, ROLE_OK) } else { http.empty(403) }
   })
   let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
-  expect(cfg.credentials?.retrieve()?.access_key_id) == "ASIAEXAMPLEROLE00001"
+  expect(cfg.credentials?.retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
 }
 
 test "role loops and bad sources are config errors" {
@@ -305,5 +305,5 @@ test "credential_source Environment and a configured STS endpoint" {
   os.env.set("AWS_PROFILE", "local")
   os.net.handle("POST http://localhost:4566/", fn(_req: http.Request) -> http.Response { http.text(200, ROLE_OK) })
   let local = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
-  expect(local.credentials?.retrieve()?.access_key_id) == "ASIAEXAMPLEROLE00001"
+  expect(local.credentials?.retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
 }

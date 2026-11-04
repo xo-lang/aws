@@ -2,7 +2,7 @@
 # Fails when tracked files hold data that must not be public (decision 0007):
 # account ids other than the documented example, real looking access keys,
 # local home paths, IP addresses outside loopback and the documentation
-# ranges, and email addresses. Then runs gitleaks over the whole history.
+# ranges, and email addresses. Then runs gitleaks over the whole history and the working tree.
 # Usage: scripts/check-public.sh
 set -u
 cd "$(dirname "$0")/.."
@@ -34,6 +34,14 @@ if command -v gitleaks >/dev/null; then
   cfg=""
   [ -f ../xo-publish-tools/gitleaks.toml ] && cfg="--config ../xo-publish-tools/gitleaks.toml"
   gitleaks git $cfg --no-banner . >/dev/null 2>&1 || { gitleaks git $cfg --no-banner . 2>&1 | tail -20 >&2; report "gitleaks found leaks" ""; }
+  # the working tree too: history alone misses what the next commit adds
+  # (tracked and new files only: a copy, so ignored model downloads are skipped)
+  tree=$(mktemp -d)
+  git ls-files -co --exclude-standard | rsync -a --files-from=- . "$tree/"
+  cfgabs=""
+  [ -f ../xo-publish-tools/gitleaks.toml ] && cfgabs="--config $(cd .. && pwd)/xo-publish-tools/gitleaks.toml"
+  (cd "$tree" && gitleaks dir $cfgabs --no-banner . >/dev/null 2>&1) || { (cd "$tree" && gitleaks dir $cfgabs --no-banner . 2>&1 | tail -20 >&2); report "gitleaks found leaks in the working tree" ""; }
+  rm -r "$tree"
 else
   report "gitleaks is not installed" ""
 fi

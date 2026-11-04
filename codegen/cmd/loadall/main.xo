@@ -1,0 +1,31 @@
+// Loads every model under a directory (codegen/.models/models after
+// fetch-models.sh) and prints the totals; codegen/scripts compare them
+// with an independent count.
+
+use github.com/xo-lang/aws/codegen/model
+
+fn main(os: Os) -> () ! Error {
+  let args = os.env.args()
+  let dir = if args.len() > 1 { args[1] } else { ".models/models" }
+  let files = os.fs.glob("${dir}/*/service/*/*.json")?.sort()
+  var shapes = 0
+  var ops = 0
+  var reach = 0
+  var failed = 0
+  let start = os.clock.now()
+  for f in files {
+    match model.load(os.fs.read_text(f)?) {
+      Ok(m) => {
+        shapes += m.order.len()
+        ops += model.operations(m).len()
+        reach += model.closure(m).len()
+      }
+      Err(e) => {
+        failed += 1
+        os.stdio.println("FAIL ${f}: ${e.display()}")
+      }
+    }
+  }
+  os.stdio.println("models ${files.len()} failed ${failed} shapes ${shapes} operations ${ops} reachable ${reach} ms ${(os.clock.now() - start).millis()}")
+  Ok(())
+}

@@ -1,0 +1,59 @@
+// The STS model (api-models-aws at the pinned commit; Apache-2.0, see
+// codegen/LICENSE-models) as a fixed input, with its documentation,
+// examples and smoke test traits removed (their sample account ids,
+// keys and addresses trip the repository's public checks).
+const STS: Str = embed("testdata/sts.json")
+
+const SVC: Str = "com.amazonaws.sts#AWSSecurityTokenServiceV20110615"
+
+test "loads the STS model" {
+  let m = load(STS)?
+  expect(m.smithy) == "2.0"
+  expect(m.service) == SVC
+  expect(m.order.len()) == 113
+  expect(m.shapes.get(SVC)?.version) == "2011-06-15"
+  expect(operations(m).len()) == 11
+}
+
+test "operations, members in model order, traits" {
+  let m = load(STS)?
+  let op = m.shapes.get("com.amazonaws.sts#AssumeRole")?
+  expect(op.kind) == Kind.Operation
+  expect(op.input) == "com.amazonaws.sts#AssumeRoleRequest"
+  expect(op.output) == "com.amazonaws.sts#AssumeRoleResponse"
+  expect(op.errors.len()) == 4
+  let input = m.shapes.get(op.input)?
+  let names = input.members.map(fn(x: Member) -> Str { x.name })
+  expect(names[0..4]) == ["RoleArn", "RoleSessionName", "PolicyArns", "Policy"]
+  let arn = member(input, "RoleArn")?
+  expect(has_trait(arn.traits, "required")) == true
+  expect(has_trait(arn.traits, "smithy.api#documentation")) == false
+  let session = member(input, "RoleSessionName")?
+  expect(has_trait(session.traits, "required")) == true
+  let svc = m.shapes.get(SVC)?
+  expect(trait_str(svc.traits, "title")) == Some("AWS Security Token Service")
+}
+
+test "closure reaches every used shape" {
+  let m = load(STS)?
+  let c = closure(m)
+  expect(c.len()) == 112
+  expect(c.contains("com.amazonaws.sts#Credentials")) == true
+}
+
+test "prelude and names" {
+  expect(prelude("smithy.api#PrimitiveLong")?.kind) == Kind.Long
+  expect(has_trait(prelude("smithy.api#Unit")?.traits, "unitType")) == true
+  expect(prelude("smithy.api#Nope").is_none()) == true
+  expect(name_of("com.amazonaws.s3#PutObjectRequest$Bucket")) == "PutObjectRequest"
+  expect(namespace_of("com.amazonaws.s3#PutObjectRequest")) == "com.amazonaws.s3"
+}
+
+test "bad models are refused" {
+  expect(load("{") is Err(LoadErr.Json(_))) == true
+  expect(load("{\"smithy\":\"2.0\",\"shapes\":{}}") is Err(LoadErr.Ast(..))) == true
+  let dangling = "{\"smithy\":\"2.0\",\"shapes\":{\"a#S\":{\"type\":\"service\",\"version\":\"1\",\"operations\":[{\"target\":\"a#Missing\"}]}}}"
+  expect(load(dangling) is Err(LoadErr.Target(..))) == true
+  let odd = "{\"smithy\":\"2.0\",\"shapes\":{\"a#S\":{\"type\":\"sprocket\"}}}"
+  expect(load(odd) is Err(LoadErr.Ast(..))) == true
+}

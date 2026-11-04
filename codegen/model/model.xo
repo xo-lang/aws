@@ -1,0 +1,426 @@
+// Package model loads a Smithy JSON AST (the api-models-aws files) into
+// an in-memory model (decision 0002, step "load"): every shape with its
+// members in model order, its traits as JSON values, and the prelude
+// shapes the models target (smithy.api#String and the rest).
+
+use std/json
+
+/// A shape's type, as the AST's `type` names it.
+pub enum Kind {
+  Blob
+  Boolean
+  String
+  Enum
+  Timestamp
+  Byte
+  Short
+  Integer
+  IntEnum
+  Long
+  Float
+  Double
+  BigInteger
+  BigDecimal
+  Document
+  List
+  Map
+  Structure
+  Union
+  Operation
+  Service
+  Resource
+}
+
+pub fn kind_of(name: Str) -> Kind? {
+  match name {
+    "blob" => Some(Kind.Blob)
+    "boolean" => Some(Kind.Boolean)
+    "string" => Some(Kind.String)
+    "enum" => Some(Kind.Enum)
+    "timestamp" => Some(Kind.Timestamp)
+    "byte" => Some(Kind.Byte)
+    "short" => Some(Kind.Short)
+    "integer" => Some(Kind.Integer)
+    "intEnum" => Some(Kind.IntEnum)
+    "long" => Some(Kind.Long)
+    "float" => Some(Kind.Float)
+    "double" => Some(Kind.Double)
+    "bigInteger" => Some(Kind.BigInteger)
+    "bigDecimal" => Some(Kind.BigDecimal)
+    "document" => Some(Kind.Document)
+    "list" => Some(Kind.List)
+    "map" => Some(Kind.Map)
+    "structure" => Some(Kind.Structure)
+    "union" => Some(Kind.Union)
+    "operation" => Some(Kind.Operation)
+    "service" => Some(Kind.Service)
+    "resource" => Some(Kind.Resource)
+    _ => None
+  }
+}
+
+/// A member: of a structure, union or enum, or a list's `member`, or a
+/// map's `key` and `value`.
+pub struct Member {
+  pub name: Str
+  pub target: Str
+  pub traits: List[(Str, json.Value)] = []
+}
+
+pub struct Shape {
+  /// The absolute shape id, `namespace#Name`.
+  pub id: Str
+  pub kind: Kind
+  /// In model order (the AST's object order).
+  pub members: List[Member] = []
+  pub traits: List[(Str, json.Value)] = []
+  /// Operations: their input, output and errors (`smithy.api#Unit` when
+  /// the AST names none, as Smithy defines).
+  pub input: Str = "smithy.api#Unit"
+  pub output: Str = "smithy.api#Unit"
+  pub errors: List[Str] = []
+  /// Services and resources: their operations and resources; a
+  /// resource's lifecycle operations are in `lifecycle`.
+  pub operations: List[Str] = []
+  pub resources: List[Str] = []
+  pub lifecycle: List[(Str, Str)] = []
+  pub identifiers: List[(Str, Str)] = []
+  /// Services: the API version.
+  pub version: Str = ""
+}
+
+pub struct Model {
+  pub smithy: Str
+  pub shapes: Map[Str, Shape]
+  /// Shape ids in file order.
+  pub order: List[Str]
+  /// The service shape's id (each api-models-aws file has exactly one).
+  pub service: Str
+  pub metadata: json.Value = json.Value.Null
+}
+
+pub enum LoadErr {
+  Json(msg: Str)
+  /// The AST is not the shape Smithy's JSON AST specification gives.
+  Ast(at: Str, msg: Str)
+  /// A member, input, output, error, operation or resource names a shape
+  /// the model does not have.
+  Target(at: Str, target: Str)
+}
+
+pub fn (e: LoadErr) display() -> Str {
+  match e {
+    Json(msg) => "model is not JSON: ${msg}"
+    Ast(at, msg) => "${at}: ${msg}"
+    Target(at, target) => "${at}: ${target} is not in the model"
+  }
+}
+
+pub const PRELUDE: Str = "smithy.api#"
+
+/// The prelude shapes api-models-aws targets, by id.
+pub fn prelude(id: Str) -> Shape? {
+  let name = id.cut_prefix(PRELUDE) ?? return None
+  let kind = match name {
+    "Unit" => Kind.Structure
+    "String" => Kind.String
+    "Blob" => Kind.Blob
+    "Boolean" | "PrimitiveBoolean" => Kind.Boolean
+    "Timestamp" => Kind.Timestamp
+    "Byte" | "PrimitiveByte" => Kind.Byte
+    "Short" | "PrimitiveShort" => Kind.Short
+    "Integer" | "PrimitiveInteger" => Kind.Integer
+    "Long" | "PrimitiveLong" => Kind.Long
+    "Float" | "PrimitiveFloat" => Kind.Float
+    "Double" | "PrimitiveDouble" => Kind.Double
+    "BigInteger" => Kind.BigInteger
+    "BigDecimal" => Kind.BigDecimal
+    "Document" => Kind.Document
+    _ => return None
+  }
+  var traits: List[(Str, json.Value)] = []
+  if name == "Unit" {
+    traits.push(("smithy.api#unitType", json.Value.Object([])))
+  }
+  if name == "PrimitiveBoolean" {
+    traits.push(("smithy.api#default", json.Value.Bool(false)))
+  } else if name.starts_with("Primitive") {
+    traits.push(("smithy.api#default", json.Value.Int(0)))
+  }
+  Some(Shape{id: id, kind: kind, traits: traits})
+}
+
+/// The shape `id` names, from the model or the prelude.
+pub fn shape(m: Model, id: Str) -> Shape? {
+  match m.shapes.get(id) {
+    Some(s) => Some(s)
+    None => prelude(id)
+  }
+}
+
+/// The name part of a shape or member id: `Name` of `ns#Name$member`.
+pub fn name_of(id: Str) -> Str {
+  let after = (id.cut("#") ?? ("", id)).1
+  (after.cut("$") ?? (after, "")).0
+}
+
+/// The namespace of a shape id.
+pub fn namespace_of(id: Str) -> Str {
+  (id.cut("#") ?? ("", id)).0
+}
+
+/// A trait's value, by its full id or a prelude trait's short name
+/// (`required` means `smithy.api#required`).
+pub fn trait_of(traits: List[(Str, json.Value)], name: Str) -> json.Value? {
+  let full = if name.contains("#") { name } else { "${PRELUDE}${name}" }
+  for (k, v) in traits {
+    if k == full {
+      return Some(v)
+    }
+  }
+  None
+}
+
+pub fn has_trait(traits: List[(Str, json.Value)], name: Str) -> Bool {
+  trait_of(traits, name).is_some()
+}
+
+/// A trait's value when it is a string (documentation, jsonName, ...).
+pub fn trait_str(traits: List[(Str, json.Value)], name: Str) -> Str? {
+  match trait_of(traits, name) {
+    Some(json.Value.Str(s)) => Some(s)
+    _ => None
+  }
+}
+
+/// A member by name.
+pub fn member(s: Shape, name: Str) -> Member? {
+  for m in s.members {
+    if m.name == name {
+      return Some(m)
+    }
+  }
+  None
+}
+
+/// Parses and checks a model: every target resolves (in the model or the
+/// prelude) and there is one service shape.
+pub fn load(text: Str) -> Model ! LoadErr {
+  let root = match json.parse_value(text) {
+    Ok(v) => v
+    Err(e) => return Err(LoadErr.Json(e.display()))
+  }
+  let smithy = str_field(root, "smithy", "$")?
+  let fields = match root.get("shapes") {
+    Some(json.Value.Object(fs)) => fs
+    _ => return Err(LoadErr.Ast(at: "$", msg: "no shapes object"))
+  }
+  var shapes: Map[Str, Shape] = {}
+  var order: List[Str] = []
+  var services: List[Str] = []
+  for (id, v) in fields {
+    let s = read_shape(id, v)?
+    if s.kind is Kind.Service {
+      services.push(id)
+    }
+    order.push(id)
+    shapes.put(id, s)
+  }
+  if services.len() != 1 {
+    return Err(LoadErr.Ast(at: "$.shapes", msg: "want one service shape, found ${services.len()}"))
+  }
+  let m = Model{smithy: smithy, shapes: shapes, order: order, service: services[0], metadata: root.get("metadata") ?? json.Value.Null}
+  check_targets(m)?
+  Ok(m)
+}
+
+fn check_targets(m: Model) -> () ! LoadErr {
+  for id in m.order {
+    let s = m.shapes.get(id) ?? continue
+    for mem in s.members {
+      need(m, "${id}$${mem.name}", mem.target)?
+    }
+    if s.kind is Kind.Operation {
+      need(m, "${id} input", s.input)?
+      need(m, "${id} output", s.output)?
+    }
+    for t in s.errors {
+      need(m, "${id} errors", t)?
+    }
+    for t in s.operations {
+      need(m, "${id} operations", t)?
+    }
+    for t in s.resources {
+      need(m, "${id} resources", t)?
+    }
+    for (_, t) in s.lifecycle {
+      need(m, "${id} lifecycle", t)?
+    }
+  }
+  Ok(())
+}
+
+fn need(m: Model, at: Str, target: Str) -> () ! LoadErr {
+  if shape(m, target).is_none() {
+    return Err(LoadErr.Target(at: at, target: target))
+  }
+  Ok(())
+}
+
+fn str_field(v: json.Value, key: Str, at: Str) -> Str ! LoadErr {
+  match v.get(key) {
+    Some(json.Value.Str(s)) => Ok(s)
+    _ => Err(LoadErr.Ast(at: at, msg: "no string field ${key}"))
+  }
+}
+
+fn target_of(v: json.Value, at: Str) -> Str ! LoadErr {
+  str_field(v, "target", at)
+}
+
+fn targets(v: json.Value, key: Str, at: Str) -> List[Str] ! LoadErr {
+  match v.get(key) {
+    None => Ok([])
+    Some(json.Value.List(items)) => {
+      var out: List[Str] = []
+      for it in items {
+        out.push(target_of(it, "${at}.${key}")?)
+      }
+      Ok(out)
+    }
+    Some(_) => Err(LoadErr.Ast(at: at, msg: "${key} is not a list"))
+  }
+}
+
+fn traits_of(v: json.Value) -> List[(Str, json.Value)] {
+  match v.get("traits") {
+    Some(json.Value.Object(fs)) => fs
+    _ => []
+  }
+}
+
+fn read_member(name: Str, v: json.Value, at: Str) -> Member ! LoadErr {
+  Ok(Member{name: name, target: target_of(v, "${at}$${name}")?, traits: traits_of(v)})
+}
+
+fn read_shape(id: Str, v: json.Value) -> Shape ! LoadErr {
+  let type_name = str_field(v, "type", id)?
+  let kind = kind_of(type_name) ?? return Err(LoadErr.Ast(at: id, msg: "unknown shape type ${type_name}"))
+  var members: List[Member] = []
+  match v.get("members") {
+    Some(json.Value.Object(fs)) => {
+      for (name, mv) in fs {
+        members.push(read_member(name, mv, id)?)
+      }
+    }
+    _ => {}
+  }
+  for key in ["member", "key", "value"] {
+    if let Some(mv) = v.get(key) {
+      members.push(read_member(key, mv, id)?)
+    }
+  }
+  var lifecycle: List[(Str, Str)] = []
+  for key in ["create", "put", "read", "update", "delete", "list"] {
+    if let Some(lv) = v.get(key) {
+      lifecycle.push((key, target_of(lv, "${id}.${key}")?))
+    }
+  }
+  for t in targets(v, "collectionOperations", id)? {
+    lifecycle.push(("collection", t))
+  }
+  var identifiers: List[(Str, Str)] = []
+  match v.get("identifiers") {
+    Some(json.Value.Object(fs)) => {
+      for (name, iv) in fs {
+        identifiers.push((name, target_of(iv, "${id}.identifiers")?))
+      }
+    }
+    _ => {}
+  }
+  Ok(Shape{
+    id: id,
+    kind: kind,
+    members: members,
+    traits: traits_of(v),
+    input: match v.get("input") {
+      Some(iv) => target_of(iv, "${id}.input")?
+      None => "smithy.api#Unit"
+    },
+    output: match v.get("output") {
+      Some(ov) => target_of(ov, "${id}.output")?
+      None => "smithy.api#Unit"
+    },
+    errors: targets(v, "errors", id)?,
+    operations: targets(v, "operations", id)?,
+    resources: targets(v, "resources", id)?,
+    lifecycle: lifecycle,
+    identifiers: identifiers,
+    version: match v.get("version") {
+      Some(json.Value.Str(s)) => s
+      _ => ""
+    },
+  })
+}
+
+/// The operations of the service, through its resources too (Smithy's
+/// TopDownIndex), sorted by id; generated clients have one method each.
+pub fn operations(m: Model) -> List[Str] {
+  var seen: Set[Str] = [].to_set()
+  let svc = m.shapes.get(m.service) ?? return []
+  var stack: List[Str] = [m.service]
+  var ops: List[Str] = []
+  while let Some(id) = stack.pop() {
+    let s = shape(m, id) ?? continue
+    for o in s.operations {
+      if !seen.contains(o) {
+        seen.add(o)
+        ops.push(o)
+      }
+    }
+    for (_, o) in s.lifecycle {
+      if !seen.contains(o) {
+        seen.add(o)
+        ops.push(o)
+      }
+    }
+    for r in s.resources {
+      stack.push(r)
+    }
+  }
+  let _ = svc
+  ops.sort()
+}
+
+/// Every shape reachable from the service: operations, their inputs,
+/// outputs and errors, the service's errors, and member targets; prelude
+/// shapes included. Sorted by id.
+pub fn closure(m: Model) -> List[Str] {
+  var seen: Set[Str] = [].to_set()
+  var stack: List[Str] = operations(m)
+  if let Some(svc) = m.shapes.get(m.service) {
+    for e in svc.errors {
+      stack.push(e)
+    }
+  }
+  var out: List[Str] = []
+  while let Some(id) = stack.pop() {
+    if seen.contains(id) {
+      continue
+    }
+    seen.add(id)
+    out.push(id)
+    let s = shape(m, id) ?? continue
+    for mem in s.members {
+      stack.push(mem.target)
+    }
+    if s.kind is Kind.Operation {
+      stack.push(s.input)
+      stack.push(s.output)
+      for e in s.errors {
+        stack.push(e)
+      }
+    }
+  }
+  out.sort()
+}

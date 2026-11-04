@@ -43,8 +43,19 @@ says what happened, not a general opinion. Bugs with repros go in
   retries with jitter, so it needs `rand`, and the compiler refused it
   until the interface said so. In Go that dependency would be invisible.
 
+- **json.Value keeps object order (2026-11-04).** `Object(fields:
+  List[(Str, Value)])` preserves the AST's member order, which Smithy
+  needs (structure members serialize in model order). The loader reads
+  all 435 models (180 MB of JSON, 141,582 shapes) in 0.8 s.
+- **Diagnostics teach the std names (2026-11-04).** `insert` → "Xo's is
+  `.add`"; `.slice(a, b)` → "Xo slices with a range"; a discarded
+  `sort()` → "values are not changed in place, assign it back".
+
 ## Didn't like, or cost time
 
+- **No way to make an empty Set by name (2026-11-04).** No `Set.new()`
+  and no Set literal I could find; `[].to_set()` works. A `Set[T]` with
+  `= {}` or `Set.new()` would be the obvious spelling.
 - **Another module's function is not a value on native (2026-11-04).**
   `transport.send(..., query.classify)` is XO1201 (issue 3); every
   cross-module callback needs a local wrapper for now.

@@ -64,6 +64,18 @@ says what happened, not a general opinion. Bugs with repros go in
 - **Generated code type checks fast (2026-11-04).** A first generated
   restJson1 client of about 6,000 lines failed only on unused variables;
   `xo check` named each one.
+- **json.Value keeps object order and compares structurally (2026-11-04).**
+  The whole endpoint rules interpreter (rules, templates, 12 functions,
+  partitions) is about 500 lines over json.Value, and it passed all 14,106
+  endpointTests of the 435 AWS models on its first full run. `==` on
+  values and `get` returning an option made the evaluator read like the
+  spec.
+- **Generated code at scale type checks quickly (2026-11-04).** IoT's
+  generated client is 69,000 lines, Lambda's 28,600; `xo check` on Lambda
+  took under a second and 680 MB. Promising for EC2.
+- **Catch-all enums (0493) fit the generator exactly (2026-11-04).** One
+  emitted form covers known values, unknown values from newer services,
+  and `E.from(s)`, with no hand-written helpers.
 
 ## Didn't like, or cost time
 
@@ -131,3 +143,19 @@ says what happened, not a general opinion. Bugs with repros go in
   days behind main, so I reported std/cbor and std/crc64 missing when they
   existed. `xo doc std` or a `xo version --std-modules` listing from the
   binary in use would make "does std have X" a one command question.
+- **Unused imports are errors, which bites generated code (2026-11-04).**
+  A generator has to know exactly which packages each file uses; I ended
+  up scanning the emitted code for `pkg.` outside strings and comments.
+  An `xo fmt --fix-imports` (or a generated-file pragma that makes unused
+  imports warnings) would remove that step.
+- **List lacks `index_where` / `position`, Bytes lacks `all`/`any`, Str
+  lacks `trim_end_matches` (2026-11-04).** Each cost a compile round; I
+  used `map(..).index_of`, a loop, and `cut_suffix`. Small, but they are
+  the first names one reaches for.
+- **Exhaustiveness warnings on `_ =>` in generated matches (2026-11-04).**
+  XO0305 "this arm hides ..." fires on every intentional catch-all in the
+  generator; there is no per-match way to say "the rest, on purpose".
+- **Front end cache replay warnings (2026-11-04).** After editing
+  transport.xo, xo reported cache entries "recorded by xo X did not replay
+  in xo X" (same build) and rebuilt. Harmless but alarming; reported to
+  the lead.

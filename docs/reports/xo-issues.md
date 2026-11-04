@@ -107,9 +107,8 @@ Why it matters: generated clients pass protocol functions
 (`query.classify`, a serializer) to the transport; every one needs a
 local wrapper today.
 
-Workaround: a local function that calls it
-(credentials/stscreds/stscreds.xo `classify`). Status: reported to the
-lead 2026-11-04.
+Workaround (removed): a local `classify` in stscreds. Status: FIXED on xo
+main c65d92cb8 (golden fn_value_qualified).
 
 ## 4. A map literal where a `Map?` is expected is XO1201 on native
 

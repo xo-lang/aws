@@ -1,0 +1,118 @@
+// Loading the shared config and credentials files and reading a
+// profile's static keys (decision 0003). Files come from the `Fs` and
+// variables from the `Env` passed in, so tests use MemFs and FakeEnv.
+
+use github.com/xo-lang/aws
+
+/// Both files merged: a credentials file property wins over the config
+/// file's for the same profile.
+pub struct SharedConfig {
+  pub profiles: Map[Str, Section] = {}
+  pub sso_sessions: Map[Str, Section] = {}
+  pub services: Map[Str, Section] = {}
+  /// The files read (for error messages), in order.
+  pub files: List[Str] = []
+}
+
+pub enum LoadErr {
+  /// A file exists but could not be read.
+  Read(path: Str, msg: Str)
+  /// The home directory is needed and unknown.
+  NoHome(msg: Str)
+}
+
+fn (e: LoadErr) display() -> Str {
+  match e {
+    Read(path, msg) => "reading ${path}: ${msg}"
+    NoHome(msg) => "finding the home directory: ${msg}"
+  }
+}
+
+/// The profile to use: `AWS_PROFILE`, else `default`.
+pub fn profile_name(env: Env) -> Str uses env {
+  match env.get("AWS_PROFILE") {
+    Some(p) => if p == "" { "default" } else { p }
+    None => "default"
+  }
+}
+
+/// `AWS_CONFIG_FILE` or `~/.aws/config`, and `AWS_SHARED_CREDENTIALS_FILE`
+/// or `~/.aws/credentials`, with a leading `~/` expanded.
+pub fn file_paths(env: Env) -> (Str, Str) ! LoadErr uses env {
+  let cfg = env.get("AWS_CONFIG_FILE") ?? "~/.aws/config"
+  let creds = env.get("AWS_SHARED_CREDENTIALS_FILE") ?? "~/.aws/credentials"
+  Ok((expand_home(env, cfg)?, expand_home(env, creds)?))
+}
+
+fn expand_home(env: Env, p: Str) -> Str ! LoadErr uses env {
+  if p == "~" || p.starts_with("~/") {
+    let home = match env.home() {
+      Ok(h) => h
+      Err(e) => return Err(LoadErr.NoHome(e.display()))
+    }
+    return Ok(home + p[1..])
+  }
+  Ok(p)
+}
+
+/// Reads both files; a missing file is the same as an empty one.
+pub fn load_shared(env: Env, fs: Fs) -> SharedConfig ! LoadErr uses (env, fs.read) {
+  let (cfg_path, creds_path) = file_paths(env)?
+  var out = SharedConfig{}
+  let cfg = parse(read_optional(fs, cfg_path, out)?, FileKind.Config)
+  let creds = parse(read_optional(fs, creds_path, out)?, FileKind.Credentials)
+  out.profiles = cfg.profiles
+  out.sso_sessions = cfg.sso_sessions
+  out.services = cfg.services
+  for (name, s) in creds.profiles.entries() {
+    var merged = out.profiles.get(name) ?? Section{}
+    for (k, v) in s.props.entries() {
+      merged.props.put(k, v)
+    }
+    for (k, v) in s.sub.entries() {
+      merged.sub.put(k, v)
+    }
+    out.profiles.put(name, merged)
+  }
+  Ok(out)
+}
+
+fn read_optional(fs: Fs, path: Str, var out: SharedConfig) -> Str ! LoadErr uses fs.read {
+  let exists = match fs.exists(path) {
+    Ok(b) => b
+    Err(e) => return Err(LoadErr.Read(path: path, msg: e.display()))
+  }
+  if !exists {
+    return Ok("")
+  }
+  out.files.push(path)
+  match fs.read_text(path) {
+    Ok(t) => Ok(t)
+    Err(e) => Err(LoadErr.Read(path: path, msg: e.display()))
+  }
+}
+
+/// A profile's static keys (`aws_access_key_id`, `aws_secret_access_key`,
+/// `aws_session_token`). NotFound when the profile or the keys are
+/// absent; Invalid when only one key is set.
+pub fn profile_static_credentials(sc: SharedConfig, profile: Str) -> aws.Credentials ! aws.CredentialsErr {
+  let p = sc.profiles.get(profile) ?? return Err(aws.CredentialsErr.NotFound("profile ${profile} is not in the shared config files"))
+  let id = p.props.get("aws_access_key_id") ?? ""
+  let secret = p.props.get("aws_secret_access_key") ?? ""
+  if id == "" && secret == "" {
+    return Err(aws.CredentialsErr.NotFound("profile ${profile} has no static keys"))
+  }
+  if id == "" || secret == "" {
+    return Err(aws.CredentialsErr.Invalid("profile ${profile} sets only one of aws_access_key_id and aws_secret_access_key"))
+  }
+  let token = p.props.get("aws_session_token")
+  Ok(aws.Credentials{
+    access_key_id: id,
+    secret_access_key: Secret.new(secret),
+    session_token: match token {
+      Some(t) => if t == "" { None } else { Some(Secret.new(t)) }
+      None => None
+    },
+    source: "SharedConfigCredentials: ${profile}",
+  })
+}

@@ -1,0 +1,166 @@
+// The shared config and credentials file format (the AWS SDKs and Tools
+// Reference Guide, "Configuration file format"): sections, properties,
+// sub-properties, continuation lines and comments.
+
+/// One profile, SSO session or services section after merging every
+/// section of that name in a file.
+pub struct Section {
+  /// Properties, keys lower cased; a sub-property block's own key has
+  /// the value "".
+  pub props: Map[Str, Str] = {}
+  /// Sub-properties: `s3 =` followed by indented `key = value` lines.
+  pub sub: Map[Str, Map[Str, Str]] = {}
+}
+
+/// What a file holds, by section kind and name.
+pub struct Parsed {
+  pub profiles: Map[Str, Section] = {}
+  pub sso_sessions: Map[Str, Section] = {}
+  pub services: Map[Str, Section] = {}
+}
+
+/// Which file is parsed: the config file names profiles `[profile x]`
+/// (and `[default]`), the credentials file names them `[x]`.
+pub enum FileKind { Config, Credentials }
+
+enum Target { Profile(name: Str), SsoSession(name: Str), Services(name: Str), Skip }
+
+/// Parses a config or credentials file. Malformed lines are skipped, as
+/// the SDKs do; the result never fails.
+pub fn parse(text: Str, kind: FileKind) -> Parsed {
+  var out = Parsed{}
+  var target = Target.Skip
+  // `[profile default]` wins over `[default]` in the config file.
+  var saw_profile_default = false
+  var last_key = ""
+  var last_has_value = false
+  for raw in text.lines() {
+    let line = raw.trim_end_chars("\r")
+    let t = line.trim()
+    if t == "" || t.starts_with("#") || t.starts_with(";") {
+      continue
+    }
+    if t.starts_with("[") {
+      last_key = ""
+      let close = t.find("]") ?? -1
+      if close < 0 {
+        target = Target.Skip
+        continue
+      }
+      let name = t[1..close].trim()
+      target = section_target(name, kind)
+      if kind is FileKind.Config {
+        match target {
+          Profile(n) => {
+            if n == "default" {
+              let explicit = name.starts_with("profile")
+              if explicit && !saw_profile_default {
+                // drop what a plain [default] set before
+                out.profiles.remove("default")
+                saw_profile_default = true
+              } else if !explicit && saw_profile_default {
+                target = Target.Skip
+              }
+            }
+          }
+          SsoSession(_) | Services(_) | Skip => {}
+        }
+      }
+      continue
+    }
+    if target is Target.Skip {
+      continue
+    }
+    let indented = line.starts_with(" ") || line.starts_with("\t")
+    if indented && last_key != "" {
+      if last_has_value {
+        // a continuation of the previous value
+        let prev = get_prop(out, target, last_key)
+        put_prop(out, target, last_key, "${prev}\n${strip_comment(t)}")
+      } else if let Some((k, v)) = t.cut("=") {
+        put_sub(out, target, last_key, k.trim().to_lower(), strip_comment(v.trim()))
+      }
+      continue
+    }
+    let (k, v) = t.cut("=") ?? continue
+    let key = k.trim().to_lower()
+    if key == "" {
+      continue
+    }
+    let value = strip_comment(v.trim())
+    put_prop(out, target, key, value)
+    last_key = key
+    last_has_value = value != ""
+  }
+  out
+}
+
+fn section_target(name: Str, kind: FileKind) -> Target {
+  let words = name.fields()
+  match kind {
+    Credentials => if words.len() == 1 { Target.Profile(words[0]) } else { Target.Skip }
+    Config => {
+      if words.len() == 1 {
+        return if words[0] == "default" { Target.Profile("default") } else { Target.Skip }
+      }
+      if words.len() != 2 {
+        return Target.Skip
+      }
+      match words[0] {
+        "profile" => Target.Profile(words[1])
+        "sso-session" => Target.SsoSession(words[1])
+        "services" => Target.Services(words[1])
+        _ => Target.Skip
+      }
+    }
+  }
+}
+
+/// Drops a comment that starts with whitespace then `#` or `;`.
+fn strip_comment(v: Str) -> Str {
+  var i = 0
+  let b = v.bytes()
+  while i < b.len() {
+    if (b[i] == 35 || b[i] == 59) && i > 0 && (b[i - 1] == 32 || b[i - 1] == 9) {
+      return v[0..i].trim_end()
+    }
+    i += 1
+  }
+  v
+}
+
+fn section_of(out: Parsed, target: Target) -> Section {
+  match target {
+    Profile(n) => out.profiles.get(n) ?? Section{}
+    SsoSession(n) => out.sso_sessions.get(n) ?? Section{}
+    Services(n) => out.services.get(n) ?? Section{}
+    Skip => Section{}
+  }
+}
+
+fn store(var out: Parsed, target: Target, s: Section) {
+  match target {
+    Profile(n) => out.profiles.put(n, s)
+    SsoSession(n) => out.sso_sessions.put(n, s)
+    Services(n) => out.services.put(n, s)
+    Skip => {}
+  }
+}
+
+fn get_prop(out: Parsed, target: Target, key: Str) -> Str {
+  section_of(out, target).props.get(key) ?? ""
+}
+
+fn put_prop(var out: Parsed, target: Target, key: Str, value: Str) {
+  var s = section_of(out, target)
+  s.props.put(key, value)
+  store(out, target, s)
+}
+
+fn put_sub(var out: Parsed, target: Target, key: Str, sub_key: Str, value: Str) {
+  var s = section_of(out, target)
+  var m = s.sub.get(key) ?? {}
+  m.put(sub_key, value)
+  s.sub.put(key, m)
+  store(out, target, s)
+}

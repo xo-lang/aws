@@ -1,0 +1,48 @@
+// Package aws holds the types every part of the SDK shares (decision
+// 0003): credentials, the provider interface, and their errors.
+
+/// AWS credentials. The secret and the session token are `Secret`, so
+/// they never appear in Debug output or logs.
+pub struct Credentials {
+  pub access_key_id: Str
+  pub secret_access_key: Secret[Str]
+  pub session_token: Secret[Str]? = None
+  /// When the credentials stop working; None for long term keys.
+  pub expires: Time? = None
+  /// Which provider gave them (`EnvironmentVariables`, `SharedConfigCredentials: default`, ...).
+  pub source: Str = ""
+}
+
+/// Why credentials could not be had.
+pub enum CredentialsErr {
+  /// The provider has nothing to give (variables not set, no profile):
+  /// a chain moves on to its next provider.
+  NotFound(msg: Str)
+  /// The provider found configuration but it is wrong: a chain stops.
+  Invalid(msg: Str)
+  /// Fetching them failed (network, service error).
+  Fetch(msg: Str)
+}
+
+fn (e: CredentialsErr) display() -> Str {
+  match e {
+    NotFound(msg) => "credentials not found: ${msg}"
+    Invalid(msg) => "invalid credentials configuration: ${msg}"
+    Fetch(msg) => "fetching credentials failed: ${msg}"
+  }
+}
+
+/// Anything that gives credentials: static keys, the environment, a
+/// profile, a role, a metadata endpoint. Providers that call a service
+/// do it at retrieve time, hence the network and clock effects.
+pub interface CredentialsProvider {
+  fn retrieve(self) -> Credentials ! CredentialsErr uses (net.dial, clock)
+}
+
+/// True when `c` expires within `window` of `now` (or already has).
+pub fn expires_within(c: Credentials, now: Time, window: Duration) -> Bool {
+  match c.expires {
+    Some(t) => t.unix_millis() - now.unix_millis() <= window.millis()
+    None => false
+  }
+}

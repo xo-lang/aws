@@ -1,0 +1,121 @@
+use github.com/xo-lang/aws
+
+const CONFIG: Str = r"""
+# comment
+; another comment
+[default]
+region = us-west-2
+output = json   # inline comment
+
+[profile dev]
+region=eu-west-1
+s3 =
+  max_concurrent_requests = 20
+  addressing_style = path
+role_arn = arn:aws:iam::123456789012:role/Dev
+source_profile = default
+
+[profile multi]
+note = first line
+  second line
+
+[dev]
+region = ignored-no-profile-prefix
+
+[sso-session corp]
+sso_start_url = https://example.awsapps.test/start
+sso_region = us-east-1
+
+[services local]
+s3 =
+  endpoint_url = http://127.0.0.1:9000
+"""
+
+const CREDS: Str = r"""
+[default]
+aws_access_key_id = AKIDTEST0000000000
+aws_secret_access_key = invented-secret
+
+[dev]
+aws_access_key_id = AKIDTEST0000000001
+aws_secret_access_key = invented-secret-2
+aws_session_token = invented-token
+region = from-credentials-file
+
+[profile ignored]
+aws_access_key_id = AKIDTEST0000000002
+"""
+
+test "config file sections and properties" {
+  let p = parse(CONFIG, FileKind.Config)
+  let d = p.profiles.get("default")?
+  expect(d.props.get("region")) == Some("us-west-2")
+  expect(d.props.get("output")) == Some("json")
+  let dev = p.profiles.get("dev")?
+  expect(dev.props.get("region")) == Some("eu-west-1")
+  expect(dev.props.get("role_arn")) == Some("arn:aws:iam::123456789012:role/Dev")
+  expect(dev.sub.get("s3")?.get("max_concurrent_requests")) == Some("20")
+  expect(dev.sub.get("s3")?.get("addressing_style")) == Some("path")
+  expect(p.profiles.get("multi")?.props.get("note")) == Some("first line\nsecond line")
+  expect(p.sso_sessions.get("corp")?.props.get("sso_region")) == Some("us-east-1")
+  expect(p.services.get("local")?.sub.get("s3")?.get("endpoint_url")) == Some("http://127.0.0.1:9000")
+  expect(p.profiles.len()) == 3
+}
+
+test "profile default wins over default in the config file" {
+  let text = "[profile default]\nregion = a\n[default]\nregion = b\n"
+  expect(parse(text, FileKind.Config).profiles.get("default")?.props.get("region")) == Some("a")
+  let text2 = "[default]\nregion = b\noutput = text\n[profile default]\nregion = a\n"
+  let d = parse(text2, FileKind.Config).profiles.get("default")?
+  expect(d.props.get("region")) == Some("a")
+  expect(d.props.get("output")) == None
+}
+
+test "credentials file names profiles without a prefix" {
+  let p = parse(CREDS, FileKind.Credentials)
+  expect(p.profiles.get("dev")?.props.get("aws_session_token")) == Some("invented-token")
+  expect(p.profiles.contains("ignored")) == false
+  expect(p.profiles.contains("profile ignored")) == false
+}
+
+test "load and merge both files" {
+  os.env.set("AWS_CONFIG_FILE", "/cfg/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/cfg/credentials")
+  os.fs.write("/cfg/config", CONFIG.bytes())?
+  os.fs.write("/cfg/credentials", CREDS.bytes())?
+  let sc = load_shared(os.env, os.fs)?
+  expect(sc.files) == ["/cfg/config", "/cfg/credentials"]
+  let dev = sc.profiles.get("dev")?
+  expect(dev.props.get("region")) == Some("from-credentials-file")
+  expect(dev.props.get("role_arn")) == Some("arn:aws:iam::123456789012:role/Dev")
+  let c = profile_static_credentials(sc, "dev")?
+  expect(c.access_key_id) == "AKIDTEST0000000001"
+  expect(c.session_token.map(fn(t) { t.reveal() })) == Some("invented-token")
+  expect(c.source) == "SharedConfigCredentials: dev"
+}
+
+test "missing files are empty" {
+  os.env.set("AWS_CONFIG_FILE", "/none/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/none/credentials")
+  let sc = load_shared(os.env, os.fs)?
+  expect(sc.profiles.len()) == 0
+  expect(profile_static_credentials(sc, "default") is Err(aws.CredentialsErr.NotFound(_))) == true
+}
+
+test "home expansion" {
+  os.env.set("HOME", "/h")
+  let (cfg, creds) = file_paths(os.env)?
+  expect(cfg) == "/h/.aws/config"
+  expect(creds) == "/h/.aws/credentials"
+}
+
+test "profile name" {
+  expect(profile_name(os.env)) == "default"
+  os.env.set("AWS_PROFILE", "dev")
+  expect(profile_name(os.env)) == "dev"
+}
+
+test "one key only is invalid" {
+  let sc = SharedConfig{profiles: {"p": Section{props: {"aws_access_key_id": "AKIDTEST0000000000"}}}}
+  expect(profile_static_credentials(sc, "p") is Err(aws.CredentialsErr.Invalid(_))) == true
+}

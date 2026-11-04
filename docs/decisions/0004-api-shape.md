@@ -91,6 +91,14 @@ fn main(os: Os) ! {
   enums (`enum E: Str`) are not used: they refuse unknown values by design
   (spec 2.3), which breaks when AWS adds a value (0006 item 2). `intEnum`
   maps the same way over `Int`.
+  - Target shape (Xo decision 0493, accepted by the owner 2026-11-04):
+    a valued enum with a catch-all, `enum StorageClass: Str { Standard =
+    "STANDARD", ..., Unknown(Str) }`, where `StorageClass.from(v)` always
+    gives a value (unknown text lands in `Unknown`) and `known(v)` gives
+    `E?`. The generator emits this form once Xo implements 0493; until
+    then it emits the plain enum above with generated `value`/`parse`,
+    which have the same meaning, so the switch changes no call site
+    except `parse` becoming `from`.
 - Unions: an enum with one variant per member plus `Unknown(tag: Str)`.
 - Timestamps are `Time`; blobs `Bytes`; documents `json.Value`; `Long` and
   `Integer` both `Int` (Go uses `int64`/`int32`; Xo's `Int` is 64 bit),

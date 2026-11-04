@@ -149,6 +149,12 @@ settings defaulting to `when_supported` as current AWS SDKs do.
   `has_more_pages()` and `next_page() -> Output ! Err`, stopping when the
   token is absent or repeats (Go's duplicate token check). Optional
   `limit` per page.
+  Target shape (Xo decision 0494, accepted by the owner 2026-11-04): the
+  paginator's `next() -> Output? ! Err` makes `for page? in
+  s3.ListObjectsV2Paginator.new(client, input) { ... }` work, the `?`
+  propagating a failed page. Paginators are generated with `next()` from
+  the start; `has_more_pages()`/`next_page()` stay as the explicit form
+  and are what code uses until Xo implements 0494.
 - Waiters from `smithy.waiters#waitable`: a generated `<Name>Waiter` with
   `wait(input, max_wait)`, acceptors evaluated by a small JMESPath subset
   evaluator in the core (the subset AWS waiters use: fields, indexes,

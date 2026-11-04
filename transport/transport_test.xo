@@ -1,0 +1,144 @@
+use std/http
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/retry
+
+fn test_client(net: Net, clock: Clock, rand: Rand) -> Client {
+  new_client(net, clock, rand, credentials.static_provider("AKIDTEST0000000000", "invented-secret"), retry.standard())
+}
+
+fn sts_request() -> Request {
+  Request{
+    method: "POST",
+    host: "sts.test",
+    path: "/",
+    headers: [("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")],
+    body: b"Action=GetCallerIdentity&Version=2011-06-15",
+  }
+}
+
+fn status_failure(resp: http.Response) -> retry.Failure {
+  retry.classify_response(resp.status, None)
+}
+
+const SIGNING: Signing = Signing{service: "sts", region: "us-east-1"}
+
+test "signs and sends" {
+  let seen = Mutex[List[http.Request]].new([])
+  os.net.handle("POST https://sts.test/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[http.Request]) { xs.push(req) })
+    http.text(200, "<ok/>")
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let resp = send(c, sts_request(), SIGNING, status_failure)?
+  expect(resp.status) == 200
+  let reqs = seen.with_read(fn(xs: List[http.Request]) -> List[http.Request] { xs })
+  expect(reqs.len()) == 1
+  let auth = reqs[0].header("Authorization") ?? ""
+  expect(auth.starts_with("AWS4-HMAC-SHA256 Credential=AKIDTEST0000000000/20260101/us-east-1/sts/aws4_request")) == true
+  expect(auth.contains("SignedHeaders=amz-sdk-request;content-type;host;x-amz-date")) == true
+  expect(reqs[0].header("X-Amz-Date")) == Some("20260101T000000Z")
+  expect(reqs[0].header("Amz-Sdk-Request")) == Some("attempt=1; max=3")
+  expect(reqs[0].header("Accept-Encoding")) == Some("identity")
+}
+
+test "retries 503 then succeeds" {
+  let calls = Atomic[Int].new(0)
+  os.net.handle("POST https://sts.test/", fn(req: http.Request) -> http.Response {
+    let n = calls.add(1)
+    if n < 3 { http.empty(503) } else { http.text(200, req.header("Amz-Sdk-Request") ?? "") }
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let resp = send(c, sts_request(), SIGNING, status_failure)?
+  expect(resp.text()) == Some("attempt=3; max=3")
+  expect(os.clock.sleeps().len()) == 2
+}
+
+test "a non retryable error response is returned" {
+  let calls = Atomic[Int].new(0)
+  os.net.handle("POST https://sts.test/", fn(_req: http.Request) -> http.Response {
+    calls.add(1)
+    http.text(400, "<ErrorResponse/>")
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let resp = send(c, sts_request(), SIGNING, status_failure)?
+  expect(resp.status) == 400
+  expect(calls.get()) == 1
+}
+
+test "connection failures retry, then fail" {
+  os.net.fail("POST https://sts.test/", http.ClientErr.Connect("refused"))
+  let c = test_client(os.net, os.clock, os.rand)
+  match send(c, sts_request(), SIGNING, status_failure) {
+    Err(SendErr.Http(http.ClientErr.Connect(_))) => {}
+    other => expect("${other:?}") == "Http(Connect)"
+  }
+  expect(os.net.requests().len()) == 3
+}
+
+test "clock skew is corrected and retried" {
+  let calls = Atomic[Int].new(0)
+  os.net.handle("POST https://sts.test/", fn(req: http.Request) -> http.Response {
+    let n = calls.add(1)
+    if n == 1 {
+      // the server is one hour ahead of the client's clock
+      http.text(403, "<Error><Code>RequestTimeTooSkewed</Code></Error>").with_header("Date", "Thu, 01 Jan 2026 01:00:00 GMT")
+    } else {
+      http.text(200, req.header("X-Amz-Date") ?? "")
+    }
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let resp = send(c, sts_request(), SIGNING, status_failure)?
+  expect(skew(c)) == 1h
+  expect(resp.text()) == Some("20260101T010000Z")
+}
+
+test "missing credentials fail without sending" {
+  let c = new_client(os.net, os.clock, os.rand, credentials.FixedResult{result: Err(aws.CredentialsErr.NotFound("none"))}, retry.standard())
+  expect(send(c, sts_request(), SIGNING, status_failure) is Err(SendErr.Credentials(_))) == true
+  expect(os.net.requests().len()) == 0
+}
+
+test "host header and url" {
+  let r = Request{host: "localhost", port: 9000, scheme: "http", path: "/b/a%20b", query: "x=1"}
+  expect(host_header(r)) == "localhost:9000"
+  expect(url_of(r)) == "http://localhost:9000/b/a%20b?x=1"
+  expect(host_header(Request{host: "s3.test", port: 443})) == "s3.test"
+}
+
+test "the wire keeps the escaped path and raw query (decision 0006 item 8)" {
+  let l = os.net.listen("objects.test:8080")?
+  let got = Mutex[List[Str]].new([])
+  var r = http.router()
+  r.handle("/{rest...}", fn(req: http.Request) -> http.Response {
+    got.with(fn(var xs: List[Str]) { xs.push("${req.escaped_path()}?${req.raw_query()}") })
+    http.text(200, "ok")
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  scope s {
+    s.spawn_background(fn() { http.server(l, r).serve() })
+    let req = Request{method: "PUT", scheme: "http", host: "objects.test", port: 8080, path: "/bucket/a%20b%2Bc/%E1%88%B4//x", query: "versionId=a%2Fb&x-id=PutObject"}
+    let resp = send(c, req, Signing{service: "s3", region: "us-east-1", s3: true}, status_failure)?
+    expect(resp.status) == 200
+  }
+  // std/http re-escapes the path (xo-issues entry 2): `%2B` goes out as
+  // `+`. The transport signs that same form, so the signature holds.
+  expect(got.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["/bucket/a%20b+c/%E1%88%B4//x?versionId=a%2Fb&x-id=PutObject"]
+  expect(wire_path("/bucket/a%20b%2Bc/%E1%88%B4//x")) == "/bucket/a%20b+c/%E1%88%B4//x"
+}
+
+test "gzip bodies come back as stored (decision 0006 item 9)" {
+  let l = os.net.listen("objects.test:8080")?
+  let stored = b"\x1f\x8b\x08\x00not really gzip"
+  var r = http.router()
+  r.handle("/{rest...}", fn(_req: http.Request) -> http.Response {
+    http.Response{status: 200, headers: {"Content-Encoding": "gzip"}, body: stored}
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  scope s {
+    s.spawn_background(fn() { http.server(l, r).serve() })
+    let resp = send(c, Request{scheme: "http", host: "objects.test", port: 8080, path: "/b/k"}, Signing{service: "s3", region: "us-east-1", s3: true}, status_failure)?
+    expect(resp.body) == stored
+    expect(resp.header("Content-Encoding")) == Some("gzip")
+  }
+}

@@ -1,0 +1,236 @@
+// Package transport sends one signed AWS request with retries (decision
+// 0003): credentials, SigV4, the standard retry loop, clock skew
+// correction, and the SDK headers, over std/http. Protocol packages
+// build the request and read the response; generated clients call them.
+
+use std/http
+use std/time
+use std/url
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/retry
+use github.com/xo-lang/aws/sigv4
+
+/// An HTTP request as the SDK builds it, before signing.
+pub struct Request {
+  pub method: Str = "GET"
+  pub scheme: Str = "https"
+  pub host: Str
+  pub port: Int? = None
+  /// The path as sent: already escaped by the protocol serializer.
+  pub path: Str = "/"
+  /// The raw query as sent ("" for none).
+  pub query: Str = ""
+  pub headers: List[(Str, Str)] = []
+  pub body: Bytes = b""
+}
+
+/// The `Host` value: the host, with the port when it is not the scheme's.
+pub fn host_header(r: Request) -> Str {
+  match r.port {
+    Some(p) => {
+      let default = (r.scheme == "https" && p == 443) || (r.scheme == "http" && p == 80)
+      if default { r.host } else { "${r.host}:${p}" }
+    }
+    None => r.host
+  }
+}
+
+/// The request's URL, with the path as std/http will send it.
+pub fn url_of(r: Request) -> Str {
+  let q = if r.query == "" { "" } else { "?${r.query}" }
+  "${r.scheme}://${host_header(r)}${wire_path(r.path)}${q}"
+}
+
+/// The path std/http's client puts on the wire for `path`: it keeps only
+/// the decoded path and escapes it again as Go's URL.EscapedPath does
+/// (`$&+,/:;=@` and the unreserved characters kept). The signer must
+/// sign these exact bytes, so the transport sends and signs this form.
+/// Workaround for docs/reports/xo-issues.md entry 2 (the client drops
+/// a request's raw path); when std/http keeps it, this becomes `path`.
+pub fn wire_path(path: Str) -> Str {
+  let decoded = match url.path_unescape(path) {
+    Ok(p) => p
+    Err(_) => return path
+  }
+  let b = decoded.bytes()
+  let hex = "0123456789ABCDEF".bytes()
+  var out = BytesBuilder.with_capacity(b.len())
+  for c in b {
+    let keep = (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) ||
+      c == 45 || c == 46 || c == 95 || c == 126 ||
+      c == 36 || c == 38 || c == 43 || c == 44 || c == 47 || c == 58 || c == 59 || c == 61 || c == 64
+    if keep {
+      out.write_byte(c)
+    } else {
+      out.write_byte(37)
+      out.write_byte(hex[Int(c) >> 4])
+      out.write_byte(hex[Int(c) & 15])
+    }
+  }
+  out.freeze().to_str() ?? path
+}
+
+/// How to sign for one service.
+pub struct Signing {
+  pub service: Str
+  pub region: Str
+  /// S3's rules: the path escaped once and not normalized, and
+  /// `X-Amz-Content-Sha256` sent.
+  pub s3: Bool = false
+  /// Send `UNSIGNED-PAYLOAD` instead of the body's hash.
+  pub unsigned_payload: Bool = false
+}
+
+pub enum SendErr {
+  Credentials(e: aws.CredentialsErr)
+  Http(e: http.ClientErr)
+  /// The retry quota stopped a retry; `last` is the last failure's text.
+  QuotaExceeded(last: Str, attempts: Int)
+}
+
+pub fn (e: SendErr) display() -> Str {
+  match e {
+    Credentials(ce) => ce.display()
+    Http(he) => "http: ${he.display()}"
+    QuotaExceeded(last, n) => "retry quota exceeded after ${n} attempts: ${last}"
+  }
+}
+
+enum AttemptErr {
+  Creds(e: aws.CredentialsErr)
+  Net(e: http.ClientErr)
+  Status(resp: http.Response, f: retry.Failure)
+}
+
+/// A client's transport: one per service client, shared by its calls
+/// (its retry quota and clock offset are shared too).
+pub struct Client {
+  pub http: http.Client
+  pub clock: Clock
+  pub rand: Rand
+  pub retryer: retry.Standard
+  pub credentials: aws.CredentialsProvider
+  pub user_agent: Str = "xo-lang-aws/0.1"
+  /// Local clock correction, from a skewed response's `Date`.
+  skew_ms: Atomic[Int]
+}
+
+pub fn new_client(net: Net, clock: Clock, rand: Rand, credentials: aws.CredentialsProvider, retryer: retry.Standard, timeout: Duration = 60s) -> Client {
+  Client{
+    http: http.client(net, timeout),
+    clock: clock,
+    rand: rand,
+    retryer: retryer,
+    credentials: credentials,
+    skew_ms: Atomic.new(0),
+  }
+}
+
+/// The clock offset in use (tests and diagnostics).
+pub fn skew(c: Client) -> Duration {
+  Duration.from_millis(c.skew_ms.get())
+}
+
+/// Sends `req` with retries. A response is `Ok` whatever its status
+/// once it is final (a success, a non retryable error, or the last
+/// attempt), so the protocol layer turns it into the modeled error.
+/// `classify` reads an error response (status >= 300) into a retry
+/// decision; it is the protocol's, since error codes live in the body.
+pub fn send(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure) -> http.Response ! SendErr uses (net.dial, clock, rand) {
+  let max = c.retryer.max_attempts
+  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock) {
+    attempt_once(c, req, signing, classify, attempt, max)
+  }, fn(e: AttemptErr) -> retry.Failure {
+    match e {
+      Creds(_) => retry.Failure.Permanent
+      Net(he) => match he {
+        Connect(_) => retry.Failure.Transient
+        Timeout => retry.Failure.Timeout
+        Protocol(_) => retry.Failure.Transient
+        InvalidUrl(_) | Canceled => retry.Failure.Permanent
+      }
+      Status(_, f) => f
+    }
+  })
+  match r {
+    Ok(resp) => Ok(resp)
+    Err(a) => match a.err {
+      Status(resp, _) => if a.quota_exceeded { Err(SendErr.QuotaExceeded(last: "HTTP ${resp.status}", attempts: a.attempts)) } else { Ok(resp) }
+      Creds(ce) => Err(SendErr.Credentials(ce))
+      Net(he) => if a.quota_exceeded { Err(SendErr.QuotaExceeded(last: he.display(), attempts: a.attempts)) } else { Err(SendErr.Http(he)) }
+    }
+  }
+}
+
+fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock) {
+  let creds = match c.credentials.retrieve() {
+    Ok(v) => v
+    Err(e) => return Err(AttemptErr.Creds(e))
+  }
+  let now = Time.from_unix_millis(c.clock.now().unix_millis() + c.skew_ms.get())
+  var headers = req.headers
+  headers.push(("Host", host_header(req)))
+  headers.push(("Amz-Sdk-Request", "attempt=${attempt}; max=${max}"))
+  let payload = if signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
+  let signed = sigv4.sign_header(
+    sigv4.Request{method: req.method, path: wire_path(req.path), query: req.query, headers: headers},
+    sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token},
+    sigv4.Options{
+      service: signing.service,
+      region: signing.region,
+      payload_hash: payload,
+      normalize_path: !signing.s3,
+      double_escape_path: !signing.s3,
+      add_content_sha256_header: signing.s3,
+    },
+    now,
+  )
+  var hreq = http.new_request(req.method, url_of(req), {}, req.body)
+  for (name, value) in signed.headers {
+    if name != "Host" {
+      hreq = hreq.add_header(name, value)
+    }
+  }
+  hreq = hreq.with_header("User-Agent", c.user_agent)
+  // The SDK reads bodies as stored (an S3 object saved gzip must come
+  // back gzip); setting the header turns off std/http's decoding.
+  if hreq.header("Accept-Encoding").is_none() {
+    hreq = hreq.with_header("Accept-Encoding", "identity")
+  }
+  let resp = match c.http.send(hreq) {
+    Ok(r) => r
+    Err(e) => return Err(AttemptErr.Net(e))
+  }
+  if resp.status < 300 {
+    return Ok(resp)
+  }
+  if note_skew(c, resp) {
+    return Err(AttemptErr.Status(resp: resp, f: retry.Failure.Transient))
+  }
+  let f = classify(resp)
+  if f is retry.Failure.Permanent {
+    return Ok(resp)
+  }
+  Err(AttemptErr.Status(resp: resp, f: f))
+}
+
+/// When an error response's `Date` is more than 4 minutes from the
+/// local clock, records the offset and answers true (retry with it).
+fn note_skew(c: Client, resp: http.Response) -> Bool uses clock {
+  if resp.status != 400 && resp.status != 403 {
+    return false
+  }
+  let date = resp.header("Date") ?? return false
+  let server = match time.parse(date, time.RFC1123, time.utc()) {
+    Ok(t) => t
+    Err(_) => return false
+  }
+  let offset = server.unix_millis() - c.clock.now().unix_millis()
+  let previous = c.skew_ms.get()
+  let diff = offset - previous
+  if diff > 240000 || diff < -240000 {
+    c.skew_ms.set(offset)
+    return true
+  }
+  false
+}

@@ -1,0 +1,316 @@
+// Waiters (smithy.waiters#waitable): a `wait_until_<waiter>` function per
+// waiter that calls the operation until an acceptor reaches success or
+// failure, with Smithy's jittered exponential delay between attempts.
+// Matcher paths are JMESPath over the input and output as JSON keyed by
+// member name (the jmes_of_* functions here, independent of the
+// protocol's wire names).
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+struct Acceptor {
+  state: Str
+  kind: Str
+  path: Str = ""
+  comparator: Str = ""
+  expected: Str = ""
+}
+
+fn acceptors_of(w: json.Value) -> List[Acceptor] {
+  var out: List[Acceptor] = []
+  let xs = match w.get("acceptors") {
+    Some(json.Value.List(xs)) => xs
+    _ => []
+  }
+  for a in xs {
+    let state = match a.get("state") {
+      Some(json.Value.Str(s)) => s
+      _ => continue
+    }
+    let m = a.get("matcher") ?? continue
+    let fs = match m {
+      json.Value.Object(fs) => fs
+      _ => continue
+    }
+    if fs.is_empty() {
+      continue
+    }
+    let (kind, body) = fs[0]
+    match body {
+      json.Value.Str(s) => out.push(Acceptor{state: state, kind: kind, expected: s})
+      json.Value.Bool(b) => out.push(Acceptor{state: state, kind: kind, expected: "${b}"})
+      json.Value.Object(_) => {
+        let get = fn(k: Str) -> Str {
+          match body.get(k) {
+            Some(json.Value.Str(s)) => s
+            _ => ""
+          }
+        }
+        out.push(Acceptor{state: state, kind: kind, path: get("path"), comparator: get("comparator"), expected: get("expected")})
+      }
+      _ => {}
+    }
+  }
+  out
+}
+
+fn delay_of(w: json.Value, k: Str, d: Int) -> Int {
+  match w.get(k) {
+    Some(json.Value.Int(n)) => n
+    _ => d
+  }
+}
+
+/// Aggregate shapes reachable from `id`, `id` first.
+fn reach(g: G, id: Str, var seen: List[Str]) {
+  if seen.contains(id) || id.starts_with(model.PRELUDE) {
+    return
+  }
+  let s = shape_of(g, id)
+  match s.kind {
+    Structure | Union | List | Map => {}
+    _ => return
+  }
+  seen.push(id)
+  for m in s.members {
+    reach(g, m.target, seen)
+  }
+}
+
+/// The JMESPath view of value `v` of shape `target`.
+fn jmes_expr(g: G, target: Str, v: Str) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String => "json.Value.Str(${v})"
+    Enum => "json.Value.Str(${v}.value())"
+    IntEnum => "json.Value.Int(${v}.value())"
+    Byte | Short | Integer | Long => "json.Value.Int(${v})"
+    Float | Double => "jsonv.float(${v})"
+    Boolean => "json.Value.Bool(${v})"
+    Timestamp => "jsonv.time(${v}, \"epoch-seconds\")"
+    Blob => "jsonv.blob(${v})"
+    BigInteger | BigDecimal => "json.Value.Str(${v})"
+    Document => v
+    _ => "jmes_of_${fn_key(g, target)}(${v})"
+  }
+}
+
+fn emit_jmes_fns(g: G, ids: List[Str], var out: List[Str]) {
+  for id in ids {
+    let s = shape_of(g, id)
+    let key = fn_key(g, id)
+    let t = xo_type(g, id)
+    out.push("fn jmes_of_${key}(v: ${t}) -> json.Value {")
+    match s.kind {
+      Structure => {
+        out.push("  var fs: List[(Str, json.Value)] = []")
+        for m in s.members {
+          out.push("  if let Some(x) = v.${field_name(m.name)} {")
+          out.push("    fs.push((${lit_str(m.name)}, ${jmes_expr(g, m.target, "x")}))")
+          out.push("  }")
+        }
+        if s.members.is_empty() {
+          out.push("  let _ = v")
+        }
+        out.push("  json.Value.Object(fs)")
+      }
+      Union => {
+        let (vs, catch_all) = union_variants(s)
+        out.push("  match v {")
+        for (i, m) in s.members.indexed() {
+          if m.target == "smithy.api#Unit" {
+            out.push("    ${vs[i]} => json.Value.Object([(${lit_str(m.name)}, json.Value.Object([]))])")
+          } else {
+            out.push("    ${vs[i]}(x) => json.Value.Object([(${lit_str(m.name)}, ${jmes_expr(g, m.target, "x")})])")
+          }
+        }
+        out.push("    ${catch_all}(_) => json.Value.Object([])")
+        out.push("  }")
+      }
+      List => {
+        let m = s.members[0]
+        let et = xo_type(g, m.target)
+        if has(s.traits, "sparse") {
+          out.push("  json.Value.List(v.map(fn(e: ${et}?) -> json.Value {")
+          out.push("    match e {")
+          out.push("      Some(x) => ${jmes_expr(g, m.target, "x")}")
+          out.push("      None => json.Value.Null")
+          out.push("    }")
+          out.push("  }))")
+        } else {
+          out.push("  json.Value.List(v.map(fn(x: ${et}) -> json.Value { ${jmes_expr(g, m.target, "x")} }))")
+        }
+      }
+      Map => {
+        let m = s.members[1]
+        let vt = xo_type(g, m.target)
+        if has(s.traits, "sparse") {
+          out.push("  json.Value.Object(v.entries().map(fn(e: (Str, ${vt}?)) -> (Str, json.Value) {")
+          out.push("    (e.0, match e.1 {")
+          out.push("      Some(x) => ${jmes_expr(g, m.target, "x")}")
+          out.push("      None => json.Value.Null")
+          out.push("    })")
+          out.push("  }))")
+        } else {
+          out.push("  json.Value.Object(v.entries().map(fn(e: (Str, ${vt})) -> (Str, json.Value) { (e.0, ${jmes_expr(g, m.target, "e.1")}) }))")
+        }
+      }
+      _ => {}
+    }
+    out.push("}")
+    out.push("")
+  }
+}
+
+/// The condition text of acceptor `a`; `o` and `io` name the output and
+/// the {input, output} JSON values.
+fn acceptor_cond(a: Acceptor) -> Str {
+  match a.kind {
+    "output" => "waiter.path_matches(o, ${lit_str(a.path)}, ${lit_str(a.comparator)}, ${lit_str(a.expected)})"
+    "inputOutput" => "waiter.path_matches(io, ${lit_str(a.path)}, ${lit_str(a.comparator)}, ${lit_str(a.expected)})"
+    "success" => if a.expected == "true" { "true" } else { "false" }
+    _ => "false"
+  }
+}
+
+pub fn emit_waiters(g: G) -> Str {
+  var out: List[Str] = []
+  var jmes_ids: List[Str] = []
+  var err_ops: List[Str] = []
+  var body: List[Str] = []
+  for op in model.operations(g.m) {
+    if !supported(g, op) {
+      continue
+    }
+    let s = shape_of(g, op)
+    let waiters = match model.trait_of(s.traits, "smithy.waiters#waitable") {
+      Some(json.Value.Object(fs)) => fs
+      _ => continue
+    }
+    if s.input == "smithy.api#Unit" {
+      continue
+    }
+    let name = op_name(op)
+    let en = op_err(op)
+    let in_t = xo_type(g, s.input)
+    let has_out = s.output != "smithy.api#Unit"
+    for (wn, w) in waiters.sort_by(fn(p: (Str, json.Value)) -> Str { p.0 }) {
+      let accs = acceptors_of(w)
+      if accs.is_empty() {
+        continue
+      }
+      let uses_o = accs.any(fn(a: Acceptor) -> Bool { a.kind == "output" })
+      let uses_io = accs.any(fn(a: Acceptor) -> Bool { a.kind == "inputOutput" })
+      if (uses_o || uses_io) && !has_out {
+        continue
+      }
+      if uses_o || uses_io {
+        reach(g, s.output, jmes_ids)
+      }
+      if uses_io {
+        reach(g, s.input, jmes_ids)
+      }
+      let uses_err = accs.any(fn(a: Acceptor) -> Bool { a.kind == "errorType" })
+      if uses_err && !err_ops.contains(op) {
+        err_ops.push(op)
+      }
+      let min = delay_of(w, "minDelay", 2)
+      let max = delay_of(w, "maxDelay", 120)
+      let fname = "wait_until_${field_name(wn)}"
+      let before = body.len()
+      doc_lines(body, w.get("documentation").map(fn(d: json.Value) -> List[(Str, json.Value)] { [("smithy.api#documentation", d)] }) ?? [], "")
+      if body.len() > before {
+        body.push("///")
+      }
+      body.push("/// Calls ${model.name_of(op)} until the ${wn} acceptors reach success")
+      body.push("/// or failure, or `max_wait` passes. The delay between calls is")
+      body.push("/// Smithy's, from `min_delay` (${min}s) to `max_delay` (${max}s).")
+      body.push("pub fn ${fname}(c: Client, input: ${in_t}, max_wait: Duration, min_delay: Duration = ${min}s, max_delay: Duration = ${max}s) -> () ! waiter.WaitErr[${en}] uses (net.dial, clock, rand) {")
+      body.push("  let start = c.transport.clock.now()")
+      body.push("  var attempt = 0")
+      body.push("  while true {")
+      body.push("    attempt += 1")
+      body.push("    var state = \"\"")
+      body.push("    match c.${name}(input) {")
+      body.push(if has_out && (uses_o || uses_io) { "      Ok(out) => {" } else { "      Ok(_) => {" })
+      if uses_o || uses_io {
+        body.push("        let o = jmes_of_${fn_key(g, s.output)}(out)")
+      }
+      if uses_io {
+        body.push("        let io = json.Value.Object([(\"input\", jmes_of_${fn_key(g, s.input)}(input)), (\"output\", o)])")
+      }
+      var any_ok = false
+      for a in accs {
+        if a.kind == "errorType" || (a.kind == "success" && a.expected != "true") {
+          continue
+        }
+        any_ok = true
+        body.push("        if state == \"\" && ${acceptor_cond(a)} {")
+        body.push("          state = ${lit_str(a.state)}")
+        body.push("        }")
+      }
+      if !any_ok {
+        body.push("        state = \"\"")
+      }
+      body.push("      }")
+      body.push("      Err(e) => {")
+      if uses_err {
+        body.push("        let names = waiter_error_names_${name}(e)")
+      }
+      for a in accs {
+        if a.kind == "errorType" {
+          body.push("        if state == \"\" && waiter.error_is(names, ${lit_str(a.expected)}) {")
+        } else if a.kind == "success" && a.expected != "true" {
+          body.push("        if state == \"\" {")
+        } else {
+          continue
+        }
+        body.push("          state = ${lit_str(a.state)}")
+        body.push("        }")
+      }
+      body.push("        if state == \"\" {")
+      body.push("          return Err(waiter.WaitErr.Failed(e))")
+      body.push("        }")
+      body.push("      }")
+      body.push("    }")
+      body.push("    if state == \"success\" {")
+      body.push("      return Ok(())")
+      body.push("    }")
+      body.push("    if state == \"failure\" {")
+      body.push("      return Err(waiter.WaitErr.Failure(${lit_str("${wn}: an acceptor matched the failure state")}))")
+      body.push("    }")
+      body.push("    let left = max_wait - c.transport.clock.since(start)")
+      body.push("    if left <= min_delay {")
+      body.push("      return Err(waiter.WaitErr.TimedOut(attempt))")
+      body.push("    }")
+      body.push("    c.transport.clock.sleep(waiter.delay(attempt + 1, min_delay, max_delay, left, c.transport.rand.float()))")
+      body.push("  }")
+      body.push("  Err(waiter.WaitErr.TimedOut(attempt))")
+      body.push("}")
+      body.push("")
+    }
+  }
+  if body.is_empty() {
+    return ""
+  }
+  for op in err_ops {
+    let en = op_err(op)
+    out.push("/// The names an errorType acceptor can match: the shape name and the")
+    out.push("/// error code.")
+    out.push("fn waiter_error_names_${op_name(op)}(e: ${en}) -> List[Str] {")
+    out.push("  match e {")
+    for (e, v) in err_variants(g, op) {
+      out.push("    ${v}(_) => [${lit_str(model.name_of(e))}, ${lit_str(error_code_of(g, e))}]")
+    }
+    out.push("    Api(x) => [x.code]")
+    out.push("    Send(_) | InvalidInput(_) | Deserialize(_) => []")
+    out.push("  }")
+    out.push("}")
+    out.push("")
+  }
+  emit_jmes_fns(g, jmes_ids, out)
+  for l in body {
+    out.push(l)
+  }
+  out.join("\n")
+}

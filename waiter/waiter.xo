@@ -1,0 +1,75 @@
+// Waiters (smithy.waiters#waitable): the delay between attempts and the
+// acceptor matchers that generated `wait_until_*` functions call.
+
+use std/json
+use github.com/xo-lang/aws/jmespath
+
+/// Why a wait ended without reaching the success state.
+pub enum WaitErr[E] {
+  /// An acceptor matched the failure state.
+  Failure(msg: Str)
+  /// The maximum wait time passed first.
+  TimedOut(attempts: Int)
+  /// The operation failed with an error no acceptor matched.
+  Failed(e: E)
+} derive Display
+
+/// Smithy's delay before attempt `attempt` (2 for the first retry):
+/// exponential from `min` up to `max`, jittered between `min` and that,
+/// and cut so that at least `min` of `remaining` is left for the last
+/// attempt. `r` is a random number in [0, 1).
+pub fn delay(attempt: Int, min: Duration, max: Duration, remaining: Duration, r: Float) -> Duration {
+  let lo = min.millis()
+  let hi = max.millis()
+  // min * 2^(attempt - 1), without overflow
+  var cap = lo
+  var k = 1
+  while k < attempt - 1 && cap < hi {
+    cap *= 2
+    k += 1
+  }
+  if attempt > 1 && cap < hi {
+    cap *= 2
+  }
+  if cap > hi {
+    cap = hi
+  }
+  var ms = lo + Int(r * Float(cap - lo))
+  let left = remaining.millis()
+  if left - ms <= lo {
+    ms = left - lo
+  }
+  Duration.from_millis(if ms < 0 { 0 } else { ms })
+}
+
+/// Whether path `path` of `v` gives what `comparator` wants of
+/// `expected`: stringEquals, booleanEquals, allStringEquals (a non-empty
+/// list of all equal strings) or anyStringEquals.
+pub fn path_matches(v: json.Value, path: Str, comparator: Str, expected: Str) -> Bool {
+  let got = match jmespath.search(path, v) {
+    Ok(x) => x
+    Err(_) => return false
+  }
+  match comparator {
+    "stringEquals" => got == json.Value.Str(expected)
+    "booleanEquals" => got == json.Value.Bool(expected == "true")
+    "allStringEquals" => match got {
+      json.Value.List(xs) => !xs.is_empty() && xs.all(fn(x: json.Value) -> Bool { x == json.Value.Str(expected) })
+      _ => false
+    }
+    "anyStringEquals" => match got {
+      json.Value.List(xs) => xs.any(fn(x: json.Value) -> Bool { x == json.Value.Str(expected) })
+      _ => false
+    }
+    _ => false
+  }
+}
+
+/// Whether an error with names `names` (its shape name and wire code)
+/// is the `errorType` matcher's `expected`, a name or an absolute shape
+/// id.
+pub fn error_is(names: List[Str], expected: Str) -> Bool {
+  let parts = expected.split("#")
+  let short = parts[parts.len() - 1]
+  names.contains(short)
+}

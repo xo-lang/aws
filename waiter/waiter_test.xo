@@ -1,0 +1,24 @@
+use std/json
+
+test "delay" {
+  let r = 0.999999
+  // the first retry is at most 2 * min, the cap is max
+  expect(delay(2, 2s, 120s, 600s, 0.0).millis()) == 2000
+  expect(delay(2, 2s, 120s, 600s, r).millis() <= 4000) == true
+  expect(delay(30, 2s, 120s, 600s, r).millis() <= 120000) == true
+  expect(delay(30, 2s, 120s, 600s, r).millis() > 119000) == true
+  // the last attempt keeps min of the remaining time
+  expect(delay(10, 2s, 120s, 5s, r).millis()) == 3000
+  expect(delay(10, 2s, 120s, 1s, r).millis()) == 0
+}
+
+test "matchers" {
+  let v = json.parse_value("{\"Table\":{\"TableStatus\":\"ACTIVE\"},\"Xs\":[{\"S\":\"a\"},{\"S\":\"a\"}],\"Ok\":true}").ok() ?? json.Value.Null
+  expect(path_matches(v, "Table.TableStatus", "stringEquals", "ACTIVE")) == true
+  expect(path_matches(v, "Ok", "booleanEquals", "true")) == true
+  expect(path_matches(v, "Xs[].S", "allStringEquals", "a")) == true
+  expect(path_matches(v, "Xs[].S", "anyStringEquals", "b")) == false
+  expect(path_matches(v, "Missing[].S", "allStringEquals", "a")) == false
+  expect(error_is(["ResourceNotFoundException"], "ResourceNotFoundException")) == true
+  expect(error_is(["NoSuchBucket", "NoSuchBucket"], "com.amazonaws.s3#NoSuchBucket")) == true
+}

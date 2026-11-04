@@ -1,0 +1,956 @@
+// Package idl parses Smithy IDL (versions 1.0 and 2.0) into Smithy's JSON
+// AST, so the protocol test models (which are published as IDL only) load
+// through codegen/model like the AWS models. It covers what those models
+// use: namespaces, `use`, `apply`, metadata, control statements (the
+// operation input and output suffixes), traits with node values, text
+// blocks, mixins (flattened here), elided members, enum values, member
+// defaults, and inline operation input and output (`:=`).
+
+use std/json
+
+/// One IDL file.
+pub struct Source {
+  pub name: Str
+  pub text: Str
+}
+
+pub struct ParseErr {
+  pub file: Str
+  pub line: Int
+  pub msg: Str
+}
+
+pub fn (e: ParseErr) display() -> Str {
+  "${e.file}:${e.line}: ${e.msg}"
+}
+
+const SIMPLE: List[Str] = ["blob", "boolean", "document", "string", "byte", "short", "integer", "long", "float", "double", "bigInteger", "bigDecimal", "timestamp"]
+
+/// A file's naming context: its namespace and `use` statements.
+struct Ctx {
+  file: Str
+  ns: Str
+  imports: Map[Str, Str]
+}
+
+struct RawMember {
+  name: Str
+  /// None when elided (`$name`): the target comes from a mixin.
+  target: Str?
+  traits: List[(Str, json.Value)]
+}
+
+enum Prop {
+  Ref(name: Str)
+  Refs(names: List[Str])
+  Pairs(items: List[(Str, Str)])
+  Node(v: json.Value)
+}
+
+struct RawShape {
+  ctx: Int
+  id: Str
+  kind: Str
+  traits: List[(Str, json.Value)]
+  members: List[RawMember]
+  mixins: List[Str]
+  props: List[(Str, Prop)]
+}
+
+struct RawApply {
+  ctx: Int
+  target: Str
+  traits: List[(Str, json.Value)]
+}
+
+/// Everything parsed from all files, before names are resolved.
+struct Raw {
+  ctxs: List[Ctx]
+  shapes: List[RawShape]
+  applies: List[RawApply]
+  metadata: List[(Str, json.Value)]
+}
+
+struct P {
+  src: Bytes
+  pos: Int
+  file: Str
+  ctx: Int
+  ns: Str
+  imports: Map[Str, Str]
+  input_suffix: Str
+  output_suffix: Str
+}
+
+fn new_parser(s: Source, ctx: Int) -> P {
+  P{src: s.text.bytes(), pos: 0, file: s.name, ctx: ctx, ns: "", imports: {}, input_suffix: "Input", output_suffix: "Output"}
+}
+
+fn (p: P) fail[T](msg: Str) -> T ! ParseErr {
+  var line = 1
+  var i = 0
+  while i < p.pos && i < p.src.len() {
+    if Int(p.src[i]) == 10 {
+      line += 1
+    }
+    i += 1
+  }
+  Err(ParseErr{file: p.file, line: line, msg: msg})
+}
+
+fn (p: P) peek() -> Int {
+  if p.pos < p.src.len() { Int(p.src[p.pos]) } else { -1 }
+}
+
+fn (p: P) peek_at(k: Int) -> Int {
+  if p.pos + k < p.src.len() { Int(p.src[p.pos + k]) } else { -1 }
+}
+
+fn (p: P) at_end() -> Bool {
+  p.pos >= p.src.len()
+}
+
+/// Skips white space, commas and comments (doc comments too).
+fn (var p: P) ws() {
+  while !p.at_end() {
+    let c = p.peek()
+    if c == 32 || c == 9 || c == 10 || c == 13 || c == 44 {
+      p.pos += 1
+    } else if c == 47 && p.peek_at(1) == 47 {
+      while !p.at_end() && p.peek() != 10 {
+        p.pos += 1
+      }
+    } else {
+      return
+    }
+  }
+}
+
+/// Skips spaces and tabs only (statements end at a newline in places).
+fn (var p: P) sp() {
+  while p.peek() == 32 || p.peek() == 9 {
+    p.pos += 1
+  }
+}
+
+fn (var p: P) expect(c: Int, what: Str) -> () ! ParseErr {
+  p.ws()
+  if p.peek() != c {
+    return p.fail("want ${what}")
+  }
+  p.pos += 1
+  Ok(())
+}
+
+fn (var p: P) accept(c: Int) -> Bool {
+  p.ws()
+  if p.peek() == c {
+    p.pos += 1
+    return true
+  }
+  false
+}
+
+fn is_ident_start(c: Int) -> Bool {
+  (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95
+}
+
+fn is_ident_char(c: Int) -> Bool {
+  is_ident_start(c) || (c >= 48 && c <= 57) || c == 46 || c == 35 || c == 36
+}
+
+/// An identifier or shape id (`a.b#C$m`).
+fn (var p: P) ident() -> Str ! ParseErr {
+  p.ws()
+  let start = p.pos
+  if !is_ident_start(p.peek()) {
+    return p.fail("want an identifier")
+  }
+  while is_ident_char(p.peek()) {
+    p.pos += 1
+  }
+  Ok(p.src[start..p.pos].to_str() ?? "")
+}
+
+fn (p: P) looking_at(word: Str) -> Bool {
+  let w = word.bytes()
+  if p.pos + w.len() > p.src.len() {
+    return false
+  }
+  if p.src[p.pos..p.pos + w.len()] != w {
+    return false
+  }
+  !is_ident_char(p.peek_at(w.len()))
+}
+
+fn utf8(var out: BytesBuilder, cp: Int) {
+  if cp < 128 {
+    out.write_byte(UInt8(cp))
+  } else if cp < 2048 {
+    out.write_byte(UInt8(192 | (cp >> 6)))
+    out.write_byte(UInt8(128 | (cp & 63)))
+  } else if cp < 65536 {
+    out.write_byte(UInt8(224 | (cp >> 12)))
+    out.write_byte(UInt8(128 | ((cp >> 6) & 63)))
+    out.write_byte(UInt8(128 | (cp & 63)))
+  } else {
+    out.write_byte(UInt8(240 | (cp >> 18)))
+    out.write_byte(UInt8(128 | ((cp >> 12) & 63)))
+    out.write_byte(UInt8(128 | ((cp >> 6) & 63)))
+    out.write_byte(UInt8(128 | (cp & 63)))
+  }
+}
+
+fn hex_val(c: Int) -> Int {
+  if c >= 48 && c <= 57 {
+    c - 48
+  } else if c >= 97 && c <= 102 {
+    c - 87
+  } else if c >= 65 && c <= 70 {
+    c - 55
+  } else {
+    -1
+  }
+}
+
+/// Interprets Smithy's escapes in `raw` (a string's or text block's
+/// content): \" \\ \/ \b \f \n \r \t \uXXXX (surrogate pairs joined), and
+/// a backslash before a newline removes both.
+fn unescape(raw: Bytes) -> Str ? {
+  var out = BytesBuilder.with_capacity(raw.len())
+  var i = 0
+  while i < raw.len() {
+    let c = Int(raw[i])
+    if c != 92 {
+      out.write_byte(raw[i])
+      i += 1
+      continue
+    }
+    if i + 1 >= raw.len() {
+      return None
+    }
+    let e = Int(raw[i + 1])
+    i += 2
+    match e {
+      34 => out.write_byte(UInt8(34))
+      39 => out.write_byte(UInt8(39))
+      92 => out.write_byte(UInt8(92))
+      47 => out.write_byte(UInt8(47))
+      98 => out.write_byte(UInt8(8))
+      102 => out.write_byte(UInt8(12))
+      110 => out.write_byte(UInt8(10))
+      114 => out.write_byte(UInt8(13))
+      116 => out.write_byte(UInt8(9))
+      10 => {}
+      117 => {
+        var cp = 0
+        for k in 0..4 {
+          if i + k >= raw.len() {
+            return None
+          }
+          let h = hex_val(Int(raw[i + k]))
+          if h < 0 {
+            return None
+          }
+          cp = cp * 16 + h
+        }
+        i += 4
+        if cp >= 55296 && cp <= 56319 && i + 5 < raw.len() && Int(raw[i]) == 92 && Int(raw[i + 1]) == 117 {
+          var lo = 0
+          var ok = true
+          for k in 0..4 {
+            let h = hex_val(Int(raw[i + 2 + k]))
+            if h < 0 {
+              ok = false
+            }
+            lo = lo * 16 + h
+          }
+          if ok && lo >= 56320 && lo <= 57343 {
+            cp = 65536 + ((cp - 55296) << 10) + (lo - 56320)
+            i += 6
+          }
+        }
+        utf8(out, cp)
+      }
+      _ => return None
+    }
+  }
+  out.freeze().to_str()
+}
+
+/// A quoted string or a text block.
+fn (var p: P) string() -> Str ! ParseErr {
+  p.ws()
+  if p.peek() != 34 {
+    return p.fail("want a string")
+  }
+  if p.peek_at(1) == 34 && p.peek_at(2) == 34 {
+    return p.text_block()
+  }
+  p.pos += 1
+  let start = p.pos
+  while !p.at_end() && p.peek() != 34 {
+    if p.peek() == 92 {
+      p.pos += 1
+    }
+    p.pos += 1
+  }
+  if p.at_end() {
+    return p.fail("unterminated string")
+  }
+  let raw = p.src[start..p.pos]
+  p.pos += 1
+  match unescape(raw) {
+    Some(s) => Ok(s)
+    None => p.fail("bad escape in string")
+  }
+}
+
+/// A text block: the lines after the opening `"""`, with the indentation
+/// they share (counting the closing line's) and trailing spaces removed,
+/// then escapes interpreted.
+fn (var p: P) text_block() -> Str ! ParseErr {
+  p.pos += 3
+  p.sp()
+  if p.peek() == 13 {
+    p.pos += 1
+  }
+  if p.peek() != 10 {
+    return p.fail("a text block starts with a newline after the quotes")
+  }
+  p.pos += 1
+  let start = p.pos
+  while !p.at_end() {
+    if p.peek() == 92 {
+      p.pos += 2
+      continue
+    }
+    if p.peek() == 34 && p.peek_at(1) == 34 && p.peek_at(2) == 34 {
+      break
+    }
+    p.pos += 1
+  }
+  if p.at_end() {
+    return p.fail("unterminated text block")
+  }
+  let body = p.src[start..p.pos].to_str() ?? ""
+  p.pos += 3
+  let lines = body.replace("\r\n", "\n").split("\n")
+  var indent = 1000000
+  for (k, l) in lines.indexed() {
+    let trimmed = l.trim_start()
+    let blank = trimmed.is_empty()
+    if !blank || k == lines.len() - 1 {
+      let n = l.len() - trimmed.len()
+      if n < indent {
+        indent = n
+      }
+    }
+  }
+  var out: List[Str] = []
+  for l in lines {
+    if l.trim().is_empty() {
+      out.push("")
+    } else {
+      out.push(l.bytes()[indent..l.len()].to_str() ?? "")
+    }
+  }
+  let joined = out.map(fn(l: Str) -> Str { l.trim_end() }).join("\n")
+  match unescape(joined.bytes()) {
+    Some(s) => Ok(s)
+    None => p.fail("bad escape in text block")
+  }
+}
+
+fn (var p: P) number() -> json.Value ! ParseErr {
+  let start = p.pos
+  var float = false
+  if p.peek() == 45 {
+    p.pos += 1
+  }
+  while !p.at_end() {
+    let c = p.peek()
+    if c >= 48 && c <= 57 {
+      p.pos += 1
+    } else if c == 46 || c == 101 || c == 69 || ((c == 43 || c == 45) && (Int(p.src[p.pos - 1]) == 101 || Int(p.src[p.pos - 1]) == 69)) {
+      float = true
+      p.pos += 1
+    } else {
+      break
+    }
+  }
+  let text = p.src[start..p.pos].to_str() ?? ""
+  if float {
+    match Float.parse(text) {
+      Some(f) => Ok(json.Value.Num(f))
+      None => p.fail("bad number ${text}")
+    }
+  } else {
+    match Int.parse(text) {
+      Some(n) => Ok(json.Value.Int(n))
+      None => p.fail("bad number ${text}")
+    }
+  }
+}
+
+/// A node value. A bare identifier other than true, false and null is a
+/// shape id, resolved through `use` when it names one.
+fn (var p: P) node() -> json.Value ! ParseErr {
+  p.ws()
+  let c = p.peek()
+  if c == 123 {
+    p.pos += 1
+    var fields: List[(Str, json.Value)] = []
+    while !p.accept(125) {
+      let key = if p.peek() == 34 { p.string()? } else { p.ident()? }
+      p.expect(58, "`:`")?
+      fields.push((key, p.node()?))
+    }
+    return Ok(json.Value.Object(fields))
+  }
+  if c == 91 {
+    p.pos += 1
+    var items: List[json.Value] = []
+    while !p.accept(93) {
+      items.push(p.node()?)
+    }
+    return Ok(json.Value.List(items))
+  }
+  if c == 34 {
+    return Ok(json.Value.Str(p.string()?))
+  }
+  if c == 45 || (c >= 48 && c <= 57) {
+    return p.number()
+  }
+  let id = p.ident()?
+  match id {
+    "true" => Ok(json.Value.Bool(true))
+    "false" => Ok(json.Value.Bool(false))
+    "null" => Ok(json.Value.Null)
+    _ => Ok(json.Value.Str(p.imports.get(id) ?? id))
+  }
+}
+
+/// Trait applications: `@name`, `@name(value)`, `@name(key: value ...)`.
+fn (var p: P) traits(max: Int = -1) -> List[(Str, json.Value)] ! ParseErr {
+  var out: List[(Str, json.Value)] = []
+  while {
+    p.ws()
+    if p.peek() != 64 || out.len() == max {
+      return Ok(out)
+    }
+    p.pos += 1
+    let name = p.ident()?
+    if p.peek() != 40 {
+      out.push((name, json.Value.Object([])))
+      continue
+    }
+    p.pos += 1
+    p.ws()
+    if p.peek() == 41 {
+      p.pos += 1
+      out.push((name, json.Value.Object([])))
+      continue
+    }
+    // `key:` starts the structure shorthand
+    let save = p.pos
+    var shorthand = false
+    if p.peek() == 34 || is_ident_start(p.peek()) {
+      let ok = if p.peek() == 34 { p.string().is_ok() } else { p.ident().is_ok() }
+      p.ws()
+      shorthand = ok && p.peek() == 58
+    }
+    p.pos = save
+    if shorthand {
+      var fields: List[(Str, json.Value)] = []
+      while !p.accept(41) {
+        let key = if p.peek() == 34 { p.string()? } else { p.ident()? }
+        p.expect(58, "`:`")?
+        fields.push((key, p.node()?))
+      }
+      out.push((name, json.Value.Object(fields)))
+    } else {
+      let v = p.node()?
+      p.expect(41, "`)`")?
+      out.push((name, v))
+    }
+  }
+}
+
+fn (var p: P) mixins() -> List[Str] ! ParseErr {
+  p.ws()
+  if !p.looking_at("with") {
+    return Ok([])
+  }
+  p.pos += 4
+  p.expect(91, "`[`")?
+  var out: List[Str] = []
+  while !p.accept(93) {
+    out.push(p.ident()?)
+  }
+  Ok(out)
+}
+
+/// The members of a structure, union, list or map body.
+fn (var p: P) members() -> List[RawMember] ! ParseErr {
+  p.expect(123, "`{`")?
+  var out: List[RawMember] = []
+  while !p.accept(125) {
+    let traits = p.traits()?
+    p.ws()
+    if p.peek() == 36 {
+      p.pos += 1
+      let name = p.ident()?
+      out.push(RawMember{name: name, target: None, traits: p.member_default(traits)?})
+      continue
+    }
+    let name = p.ident()?
+    p.expect(58, "`:`")?
+    let target = p.ident()?
+    out.push(RawMember{name: name, target: Some(target), traits: p.member_default(traits)?})
+  }
+  Ok(out)
+}
+
+/// `= value` after a member: the default trait.
+fn (var p: P) member_default(traits: List[(Str, json.Value)]) -> List[(Str, json.Value)] ! ParseErr {
+  p.sp()
+  if p.peek() != 61 {
+    return Ok(traits)
+  }
+  p.pos += 1
+  var out = traits
+  out.push(("default", p.node()?))
+  Ok(out)
+}
+
+/// An enum or intEnum body: `NAME` or `NAME = value`.
+fn (var p: P) enum_members(int_enum: Bool) -> List[RawMember] ! ParseErr {
+  p.expect(123, "`{`")?
+  var out: List[RawMember] = []
+  while !p.accept(125) {
+    var traits = p.traits()?
+    let name = p.ident()?
+    p.sp()
+    if p.peek() == 61 {
+      p.pos += 1
+      traits.push(("enumValue", p.node()?))
+    } else if !int_enum {
+      traits.push(("enumValue", json.Value.Str(name)))
+    } else {
+      return p.fail("intEnum member ${name} needs a value")
+    }
+    out.push(RawMember{name: name, target: Some("smithy.api#Unit"), traits: traits})
+  }
+  Ok(out)
+}
+
+/// The body of an operation, service or resource. Lists hold shape ids,
+/// `identifiers` and `properties` map names to shape ids, and an
+/// operation's `input` or `output` may be inline (`:=`), which adds
+/// `extra` shapes.
+fn (var p: P) entity(op_name: Str, var extra: List[RawShape]) -> List[(Str, Prop)] ! ParseErr {
+  p.expect(123, "`{`")?
+  var out: List[(Str, Prop)] = []
+  while !p.accept(125) {
+    let key = p.ident()?
+    p.ws()
+    if p.peek() == 58 && p.peek_at(1) == 61 {
+      p.pos += 2
+      let traits = p.traits()?
+      let mixins = p.mixins()?
+      let members = p.members()?
+      let suffix = if key == "input" { p.input_suffix } else { p.output_suffix }
+      let id = "${p.ns}#${op_name}${suffix}"
+      var all = traits
+      all.push((key, json.Value.Object([])))
+      extra.push(RawShape{ctx: p.ctx, id: id, kind: "structure", traits: all, members: members, mixins: mixins, props: []})
+      out.push((key, Prop.Ref(id)))
+      continue
+    }
+    p.expect(58, "`:`")?
+    p.ws()
+    let c = p.peek()
+    if c == 91 {
+      p.pos += 1
+      var names: List[Str] = []
+      while !p.accept(93) {
+        names.push(p.ident()?)
+      }
+      out.push((key, Prop.Refs(names)))
+    } else if c == 123 && (key == "identifiers" || key == "properties") {
+      p.pos += 1
+      var items: List[(Str, Str)] = []
+      while !p.accept(125) {
+        let name = p.ident()?
+        p.expect(58, "`:`")?
+        items.push((name, p.ident()?))
+      }
+      out.push((key, Prop.Pairs(items)))
+    } else if is_ident_start(c) && key != "version" {
+      out.push((key, Prop.Ref(p.ident()?)))
+    } else {
+      out.push((key, Prop.Node(p.node()?)))
+    }
+  }
+  Ok(out)
+}
+
+fn parse_file(s: Source, ctx: Int, var raw: Raw) -> () ! ParseErr {
+  var p = new_parser(s, ctx)
+  while {
+    p.ws()
+    if p.at_end() {
+      break
+    }
+    let c = p.peek()
+    if c == 36 {
+      p.pos += 1
+      let name = p.ident()?
+      p.expect(58, "`:`")?
+      let v = p.node()?
+      match (name, v) {
+        ("operationInputSuffix", json.Value.Str(sfx)) => p.input_suffix = sfx
+        ("operationOutputSuffix", json.Value.Str(sfx)) => p.output_suffix = sfx
+        _ => {}
+      }
+      continue
+    }
+    if p.looking_at("namespace") {
+      p.pos += 9
+      p.ns = p.ident()?
+      continue
+    }
+    if p.looking_at("use") {
+      p.pos += 3
+      let id = p.ident()?
+      let name = (id.cut("#") ?? ("", id)).1
+      p.imports.put(name, id)
+      continue
+    }
+    if p.looking_at("metadata") {
+      p.pos += 8
+      let key = if p.peek_after_ws() == 34 { p.string()? } else { p.ident()? }
+      p.expect(61, "`=`")?
+      raw.metadata.push((key, p.node()?))
+      continue
+    }
+    if p.looking_at("apply") {
+      p.pos += 5
+      let target = p.ident()?
+      p.ws()
+      let traits = if p.peek() == 123 {
+        p.pos += 1
+        let ts = p.traits()?
+        p.expect(125, "`}`")?
+        ts
+      } else {
+        // without braces, apply takes one trait
+        p.traits(1)?
+      }
+      raw.applies.push(RawApply{ctx: ctx, target: target, traits: traits})
+      continue
+    }
+    let traits = p.traits()?
+    let kind = p.ident()?
+    let name = p.ident()?
+    let id = "${p.ns}#${name}"
+    p.ws()
+    if p.looking_at("for") {
+      p.pos += 3
+      let _ = p.ident()?
+    }
+    let mixins = p.mixins()?
+    var extra: List[RawShape] = []
+    let shape = if SIMPLE.contains(kind) {
+      RawShape{ctx: ctx, id: id, kind: kind, traits: traits, members: [], mixins: mixins, props: []}
+    } else if kind == "enum" || kind == "intEnum" {
+      RawShape{ctx: ctx, id: id, kind: kind, traits: traits, members: p.enum_members(kind == "intEnum")?, mixins: mixins, props: []}
+    } else if kind == "structure" || kind == "union" || kind == "list" || kind == "map" || kind == "set" {
+      var ts = traits
+      if kind == "set" {
+        ts.push(("uniqueItems", json.Value.Object([])))
+      }
+      RawShape{ctx: ctx, id: id, kind: if kind == "set" { "list" } else { kind }, traits: ts, members: p.members()?, mixins: mixins, props: []}
+    } else if kind == "operation" || kind == "service" || kind == "resource" {
+      let props = p.entity(name, extra)?
+      RawShape{ctx: ctx, id: id, kind: kind, traits: traits, members: [], mixins: mixins, props: props}
+    } else {
+      return p.fail("unknown shape type ${kind}")
+    }
+    raw.shapes.push(shape)
+    for x in extra {
+      raw.shapes.push(x)
+    }
+  }
+  raw.ctxs.push(Ctx{file: s.name, ns: p.ns, imports: p.imports})
+  Ok(())
+}
+
+fn (var p: P) peek_after_ws() -> Int {
+  p.ws()
+  p.peek()
+}
+
+/// Resolves a relative shape id as Smithy does: a `use`d name, then a
+/// shape of the file's namespace, then the prelude.
+fn resolve(name: Str, c: Ctx, defined: Set[Str]) -> Str {
+  if name.contains("#") {
+    return name
+  }
+  if let Some((base, member)) = name.cut("$") {
+    return "${resolve(base, c, defined)}$${member}"
+  }
+  if let Some(u) = c.imports.get(name) {
+    return u
+  }
+  let local = "${c.ns}#${name}"
+  if defined.contains(local) {
+    return local
+  }
+  "smithy.api#${name}"
+}
+
+fn resolve_traits(ts: List[(Str, json.Value)], c: Ctx, defined: Set[Str]) -> List[(Str, json.Value)] {
+  ts.map(fn(t: (Str, json.Value)) -> (Str, json.Value) { (resolve(t.0, c, defined), t.1) })
+}
+
+/// Sets `name` to `v`, replacing an earlier value (a later trait wins).
+fn put_trait(var ts: List[(Str, json.Value)], name: Str, v: json.Value) {
+  for i in 0..ts.len() {
+    if ts[i].0 == name {
+      ts[i] = (name, v)
+      return
+    }
+  }
+  ts.push((name, v))
+}
+
+struct Flat {
+  members: List[RawMember]
+  traits: List[(Str, json.Value)]
+}
+
+/// Parses the files as one model and returns its JSON AST, with mixins
+/// flattened into the shapes that use them and `apply` merged.
+pub fn parse(sources: List[Source]) -> json.Value ! ParseErr {
+  var raw = Raw{ctxs: [], shapes: [], applies: [], metadata: []}
+  // the context index of each file is its position; parse_file pushes
+  // the context at the end, so shapes refer to it by that index
+  for (i, s) in sources.indexed() {
+    parse_file(s, i, raw)?
+  }
+  var defined: Set[Str] = [].to_set()
+  for s in raw.shapes {
+    defined.add(s.id)
+  }
+  // resolve names
+  var shapes: Map[Str, RawShape] = {}
+  var order: List[Str] = []
+  for s in raw.shapes {
+    let c = raw.ctxs[s.ctx]
+    var members: List[RawMember] = []
+    for m in s.members {
+      members.push(RawMember{
+        name: m.name,
+        target: m.target.map(fn(t: Str) -> Str { resolve(t, c, defined) }),
+        traits: resolve_traits(m.traits, c, defined),
+      })
+    }
+    var props: List[(Str, Prop)] = []
+    for (k, v) in s.props {
+      props.push((k, match v {
+        Ref(n) => Prop.Ref(resolve(n, c, defined))
+        Refs(ns) => Prop.Refs(ns.map(fn(n: Str) -> Str { resolve(n, c, defined) }))
+        Pairs(items) => Prop.Pairs(items.map(fn(it: (Str, Str)) -> (Str, Str) { (it.0, resolve(it.1, c, defined)) }))
+        Node(n) => Prop.Node(n)
+      }))
+    }
+    if shapes.contains(s.id) {
+      return Err(ParseErr{file: c.file, line: 0, msg: "shape ${s.id} is defined twice"})
+    }
+    order.push(s.id)
+    shapes.put(s.id, RawShape{
+      ctx: s.ctx,
+      id: s.id,
+      kind: s.kind,
+      traits: resolve_traits(s.traits, c, defined),
+      members: members,
+      mixins: s.mixins.map(fn(n: Str) -> Str { resolve(n, c, defined) }),
+      props: props,
+    })
+  }
+  // flatten mixins
+  var flat: Map[Str, Flat] = {}
+  for id in order {
+    flatten(id, shapes, flat, raw.ctxs)?
+  }
+  // apply
+  for a in raw.applies {
+    let c = raw.ctxs[a.ctx]
+    let target = resolve(a.target, c, defined)
+    let traits = resolve_traits(a.traits, c, defined)
+    let (base, member) = target.cut("$") ?? (target, "")
+    var f = flat.get(base) ?? return Err(ParseErr{file: c.file, line: 0, msg: "apply to unknown shape ${target}"})
+    if member == "" {
+      for (k, v) in traits {
+        put_trait(f.traits, k, v)
+      }
+    } else {
+      var found = false
+      for i in 0..f.members.len() {
+        if f.members[i].name == member {
+          var m = f.members[i]
+          for (k, v) in traits {
+            put_trait(m.traits, k, v)
+          }
+          f.members[i] = m
+          found = true
+        }
+      }
+      if !found {
+        return Err(ParseErr{file: c.file, line: 0, msg: "apply to unknown member ${target}"})
+      }
+    }
+    flat.put(base, f)
+  }
+  // write the AST
+  var out: List[(Str, json.Value)] = []
+  for id in order {
+    let s = shapes.get(id) ?? continue
+    let f = flat.get(id) ?? continue
+    out.push((id, ast_shape(s, f)))
+  }
+  var meta: List[(Str, json.Value)] = []
+  for (k, v) in raw.metadata {
+    // metadata lists from several files are concatenated
+    var merged = v
+    for (k2, v2) in meta {
+      if k2 == k {
+        merged = match (v2, v) {
+          (json.Value.List(a), json.Value.List(b)) => json.Value.List(a + b)
+          _ => v
+        }
+      }
+    }
+    put_trait(meta, k, merged)
+  }
+  Ok(json.Value.Object([
+    ("smithy", json.Value.Str("2.0")),
+    ("metadata", json.Value.Object(meta)),
+    ("shapes", json.Value.Object(out)),
+  ]))
+}
+
+fn flatten(id: Str, shapes: Map[Str, RawShape], var flat: Map[Str, Flat], ctxs: List[Ctx]) -> Flat ! ParseErr {
+  if let Some(f) = flat.get(id) {
+    return Ok(f)
+  }
+  let s = shapes.get(id) ?? return Err(ParseErr{file: "", line: 0, msg: "unknown mixin ${id}"})
+  var members: List[RawMember] = []
+  var traits: List[(Str, json.Value)] = []
+  for mx in s.mixins {
+    let mf = flatten(mx, shapes, flat, ctxs)?
+    let local = match model_trait(mf.traits, "smithy.api#mixin") {
+      Some(json.Value.Object(fs)) => match fs.find(fn(x: (Str, json.Value)) -> Bool { x.0 == "localTraits" }) {
+        Some((_, json.Value.List(items))) => items.filter_map(fn(v: json.Value) -> Str? {
+          match v {
+            json.Value.Str(t) => Some(if t.contains("#") { t } else { "smithy.api#${t}" })
+            _ => None
+          }
+        })
+        _ => []
+      }
+      _ => []
+    }
+    for (k, v) in mf.traits {
+      if k != "smithy.api#mixin" && !local.contains(k) {
+        put_trait(traits, k, v)
+      }
+    }
+    for m in mf.members {
+      members.push(m)
+    }
+  }
+  for (k, v) in s.traits {
+    put_trait(traits, k, v)
+  }
+  for m in s.members {
+    var merged = false
+    for i in 0..members.len() {
+      if members[i].name == m.name {
+        var have = members[i]
+        if let Some(t) = m.target {
+          have.target = Some(t)
+        }
+        for (k, v) in m.traits {
+          put_trait(have.traits, k, v)
+        }
+        members[i] = have
+        merged = true
+      }
+    }
+    if !merged {
+      if m.target.is_none() {
+        let c = ctxs[s.ctx]
+        return Err(ParseErr{file: c.file, line: 0, msg: "elided member ${id}$${m.name} has no mixin to take its target from"})
+      }
+      members.push(m)
+    }
+  }
+  let f = Flat{members: members, traits: traits}
+  flat.put(id, f)
+  Ok(f)
+}
+
+fn model_trait(ts: List[(Str, json.Value)], name: Str) -> json.Value? {
+  for (k, v) in ts {
+    if k == name {
+      return Some(v)
+    }
+  }
+  None
+}
+
+fn target_obj(t: Str) -> json.Value {
+  json.Value.Object([("target", json.Value.Str(t))])
+}
+
+fn member_obj(m: RawMember) -> json.Value {
+  var fs: List[(Str, json.Value)] = [("target", json.Value.Str(m.target ?? ""))]
+  if !m.traits.is_empty() {
+    fs.push(("traits", json.Value.Object(m.traits)))
+  }
+  json.Value.Object(fs)
+}
+
+fn ast_shape(s: RawShape, f: Flat) -> json.Value {
+  var fs: List[(Str, json.Value)] = [("type", json.Value.Str(s.kind))]
+  if s.kind == "list" {
+    for m in f.members {
+      if m.name == "member" {
+        fs.push(("member", member_obj(m)))
+      }
+    }
+  } else if s.kind == "map" {
+    for m in f.members {
+      if m.name == "key" || m.name == "value" {
+        fs.push((m.name, member_obj(m)))
+      }
+    }
+  } else if s.kind == "structure" || s.kind == "union" || s.kind == "enum" || s.kind == "intEnum" {
+    fs.push(("members", json.Value.Object(f.members.map(fn(m: RawMember) -> (Str, json.Value) { (m.name, member_obj(m)) }))))
+  }
+  for (k, v) in s.props {
+    fs.push((k, match v {
+      Ref(n) => target_obj(n)
+      Refs(ns) => json.Value.List(ns.map(fn(n: Str) -> json.Value { target_obj(n) }))
+      Pairs(items) => json.Value.Object(items.map(fn(it: (Str, Str)) -> (Str, json.Value) { (it.0, target_obj(it.1)) }))
+      Node(n) => n
+    }))
+  }
+  if !f.traits.is_empty() {
+    fs.push(("traits", json.Value.Object(f.traits)))
+  }
+  json.Value.Object(fs)
+}

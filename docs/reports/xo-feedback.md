@@ -51,7 +51,18 @@ says what happened, not a general opinion. Bugs with repros go in
   `.add`"; `.slice(a, b)` → "Xo slices with a range"; a discarded
   `sort()` → "values are not changed in place, assign it back".
 
+- **The team turns feedback into releases within hours (2026-11-04).**
+  `scope` became a contextual word, `display` became callable across
+  modules, and the `pub enum Err` and `T ! E` field diagnostics name
+  their fix, all from entries in this file, the same day.
+
 ## Didn't like, or cost time
+
+- **Byte vocabulary (2026-11-04).** Bytes iterate as `UInt8`, so the
+  conversion is `UInt8(n)`, not `Byte(n)`; `enumerate` is `indexed`;
+  an infinite loop is `while {`, not `loop`; `uses` is a keyword, so a
+  field cannot be named `uses` (a parser's `use` statements). Each was a
+  one-line diagnostic, but four guesses in one file.
 
 - **No way to make an empty Set by name (2026-11-04).** No `Set.new()`
   and no Set literal I could find; `[].to_set()` works. A `Set[T]` with

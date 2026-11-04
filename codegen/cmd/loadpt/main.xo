@@ -1,0 +1,57 @@
+// Parses every protocol test IDL file (fetch-protocol-tests.sh first) as
+// one model, loads each test service, and prints its protocol test
+// counts.
+
+use std/json
+use github.com/xo-lang/aws/codegen/idl
+use github.com/xo-lang/aws/codegen/model
+
+fn count(v: json.Value?) -> Int {
+  match v {
+    Some(json.Value.List(items)) => items.len()
+    _ => 0
+  }
+}
+
+fn main(os: Os) -> () ! Error {
+  let dir = ".protocol-tests/smithy-aws-protocol-tests/model"
+  let files = os.fs.glob("${dir}/*.smithy")? + os.fs.glob("${dir}/*/*.smithy")? + os.fs.glob("${dir}/*/*/*.smithy")? + os.fs.glob(".protocol-tests/smithy-validation-model/model/*.smithy")?
+  var sources: List[idl.Source] = []
+  for f in files.sort() {
+    sources.push(idl.Source{name: f.cut_prefix("${dir}/") ?? f, text: os.fs.read_text(f)?})
+  }
+  let start = os.clock.now()
+  let ast = idl.parse(sources)?
+  let shapes = match ast.get("shapes") {
+    Some(json.Value.Object(fs)) => fs
+    _ => []
+  }
+  var services: List[Str] = []
+  for (id, v) in shapes {
+    if v.get("type") == Some(json.Value.Str("service")) {
+      services.push(id)
+    }
+  }
+  os.stdio.println("files ${sources.len()} shapes ${shapes.len()} services ${services.len()} parse ms ${(os.clock.now() - start).millis()}")
+  for svc in services.sort() {
+    match model.from_ast(ast, svc) {
+      Ok(m) => {
+        var req = 0
+        var resp = 0
+        for op in model.operations(m) {
+          let s = model.shape(m, op) ?? continue
+          req += count(model.trait_of(s.traits, "smithy.test#httpRequestTests"))
+          resp += count(model.trait_of(s.traits, "smithy.test#httpResponseTests"))
+          for e in s.errors {
+            if let Some(es) = model.shape(m, e) {
+              resp += count(model.trait_of(es.traits, "smithy.test#httpResponseTests"))
+            }
+          }
+        }
+        os.stdio.println("${svc} operations ${model.operations(m).len()} request tests ${req} response tests ${resp}")
+      }
+      Err(e) => os.stdio.println("FAIL ${svc}: ${e.display()}")
+    }
+  }
+  Ok(())
+}

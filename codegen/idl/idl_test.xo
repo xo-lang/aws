@@ -1,0 +1,72 @@
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+const SAMPLE: Str = embed("testdata/weather.smithy")
+
+test "parses into a model" {
+  let ast = parse([Source{name: "weather.smithy", text: SAMPLE}])?
+  let m = model.from_ast(ast)?
+  expect(m.service) == "example.weather#Weather"
+  expect(model.operations(m)) == ["example.weather#GetCity", "example.weather#PutCity"]
+  let svc = m.shapes.get(m.service)?
+  expect(svc.version) == "2006-03-01"
+  expect(model.has_trait(svc.traits, "aws.protocols#restJson1")) == true
+  let get = m.shapes.get("example.weather#GetCity")?
+  expect(get.input) == "example.weather#GetCityInput"
+  expect(get.errors) == ["example.weather#NoSuchCity"]
+  expect(model.has_trait(get.traits, "readonly")) == true
+  let http = model.trait_of(get.traits, "http")?
+  expect(http.get("uri")) == Some(json.Value.Str("/cities/{cityId}"))
+}
+
+test "inline input with a mixin, defaults and elided members" {
+  let m = model.from_ast(parse([Source{name: "w", text: SAMPLE}])?)?
+  let put = m.shapes.get("example.weather#PutCity")?
+  expect(put.input) == "example.weather#PutCityRequest"
+  expect(put.output) == "example.weather#PutCityOutput"
+  let input = m.shapes.get(put.input)?
+  expect(input.members.map(fn(x: model.Member) -> Str { x.name })) == ["name", "size"]
+  expect(model.has_trait(input.traits, "input")) == true
+  let size = model.member(input, "size")?
+  expect(model.trait_of(size.traits, "default")) == Some(json.Value.Int(0))
+  let name = model.member(input, "name")?
+  expect(name.target) == "smithy.api#String"
+  expect(model.has_trait(name.traits, "required")) == true
+  let out = m.shapes.get("example.weather#GetCityOutput")?
+  expect(out.members.map(fn(x: model.Member) -> Str { x.name })) == ["name", "coordinates", "kind", "level"]
+  expect(model.trait_str(model.member(out, "name")?.traits, "documentation")) == Some("The city name.")
+  expect(model.has_trait(out.traits, "mixin")) == false
+}
+
+test "enums, collections and the request test trait" {
+  let m = model.from_ast(parse([Source{name: "w", text: SAMPLE}])?)?
+  let kind = m.shapes.get("example.weather#CityKind")?
+  expect(model.trait_of(model.member(kind, "SMALL")?.traits, "enumValue")) == Some(json.Value.Str("SMALL"))
+  expect(model.trait_of(model.member(kind, "LARGE")?.traits, "enumValue")) == Some(json.Value.Str("large"))
+  let level = m.shapes.get("example.weather#Level")?
+  expect(model.trait_of(model.member(level, "HIGH")?.traits, "enumValue")) == Some(json.Value.Int(2))
+  expect(m.shapes.get("example.weather#Coords")?.members[0].target) == "smithy.api#Float"
+  expect(m.shapes.get("example.weather#Tags")?.members.len()) == 2
+  let get = m.shapes.get("example.weather#GetCity")?
+  let tests = model.trait_of(get.traits, "smithy.test#httpRequestTests")?
+  let first = match tests {
+    json.Value.List(items) => items[0]
+    _ => json.Value.Null
+  }
+  expect(first.get("protocol")) == Some(json.Value.Str("aws.protocols#restJson1"))
+  expect(first.get("body")) == Some(json.Value.Str("{\n    \"a\": \"b    c\"\n}\n"))
+  let params = first.get("params")?
+  expect(params.get("n")) == Some(json.Value.Num(-1500.0))
+  expect(params.get("nothing")) == Some(json.Value.Null)
+}
+
+test "errors carry the file and line" {
+  match parse([Source{name: "bad.smithy", text: "namespace a\n\nstructure X {\n  a: \n}\n"}]) {
+    Err(e) => {
+      expect(e.file) == "bad.smithy"
+      expect(e.line) == 5
+    }
+    Ok(_) => expect("parsed") == "an error"
+  }
+}
+

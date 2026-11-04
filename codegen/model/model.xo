@@ -210,6 +210,13 @@ pub fn load(text: Str) -> Model ! LoadErr {
     Ok(v) => v
     Err(e) => return Err(LoadErr.Json(e.display()))
   }
+  from_ast(root)
+}
+
+/// A model from a parsed JSON AST (codegen/idl makes one from IDL).
+/// `service` picks the service when the AST has several (the protocol
+/// test models do); otherwise it must have exactly one.
+pub fn from_ast(root: json.Value, service: Str? = None) -> Model ! LoadErr {
   let smithy = str_field(root, "smithy", "$")?
   let fields = match root.get("shapes") {
     Some(json.Value.Object(fs)) => fs
@@ -226,10 +233,11 @@ pub fn load(text: Str) -> Model ! LoadErr {
     order.push(id)
     shapes.put(id, s)
   }
-  if services.len() != 1 {
-    return Err(LoadErr.Ast(at: "$.shapes", msg: "want one service shape, found ${services.len()}"))
+  let svc = match service {
+    Some(id) => if services.contains(id) { id } else { return Err(LoadErr.Target(at: "service", target: id)) }
+    None => if services.len() == 1 { services[0] } else { return Err(LoadErr.Ast(at: "$.shapes", msg: "want one service shape, found ${services.len()}")) }
   }
-  let m = Model{smithy: smithy, shapes: shapes, order: order, service: services[0], metadata: root.get("metadata") ?? json.Value.Null}
+  let m = Model{smithy: smithy, shapes: shapes, order: order, service: svc, metadata: root.get("metadata") ?? json.Value.Null}
   check_targets(m)?
   Ok(m)
 }

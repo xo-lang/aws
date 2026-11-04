@@ -16,10 +16,12 @@ pub fn error_element(body: Bytes) -> xml.Element? {
   root.child("Error")
 }
 
-pub fn error_code(body: Bytes) -> Str {
-  match error_element(body) {
+/// The error code of a response; a bodiless 404 (S3's HEAD requests) is
+/// `NotFound`.
+pub fn error_code(resp: http.Response) -> Str {
+  match error_element(resp.body) {
     Some(e) => xmlv.child_text(e, "Code") ?? ""
-    None => ""
+    None => if resp.status == 404 && resp.body.is_empty() { "NotFound" } else { "" }
   }
 }
 
@@ -59,6 +61,6 @@ pub fn api_error(resp: http.Response) -> aws.ApiError {
 
 /// transport.send's retry decision for a restXml error response.
 pub fn classify(resp: http.Response) -> retry.Failure {
-  let code = error_code(resp.body)
+  let code = error_code(resp)
   retry.classify_response(resp.status, if code == "" { None } else { Some(code) })
 }

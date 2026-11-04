@@ -12,10 +12,10 @@ else
   dirs=$(git ls-files -co --exclude-standard '*.xo' | xargs -n1 dirname | sort -u)
 fi
 for d in $dirs; do
-  mod=.
-  case "$d" in codegen|codegen/*) mod=codegen ;; esac
-  rel=${d#"$mod"/}
-  [ "$rel" = "$d" ] && [ "$mod" != . ] && rel=.
+  # the nearest directory with an xo.mod is the module to run from
+  mod=$d
+  while [ "$mod" != . ] && [ ! -f "$mod/xo.mod" ]; do mod=$(dirname "$mod"); done
+  if [ "$mod" = "$d" ]; then rel=.; else rel=${d#"$mod"/}; fi
   echo "== $d"
   (cd "$mod" && "$xo" test "./$rel") || fail=1
 done

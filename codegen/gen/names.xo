@@ -87,3 +87,27 @@ pub fn variant_name(member: Str) -> Str {
   let s = naming.upper_camel(member)
   if s == "" { "Empty" } else if s.bytes()[0] >= 48 && s.bytes()[0] <= 57 { "V${s}" } else { s }
 }
+
+/// A service's directory and package name from its sdkId (decision
+/// 0001): lower case, spaces removed, `-` as `_`, other characters
+/// dropped; `svc` appended to a keyword, a predeclared name, or a name
+/// starting with a digit.
+pub fn service_dir(sdk_id: Str) -> Str {
+  var b = StrBuilder.new()
+  for r in sdk_id.to_lower().runes() {
+    if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+      b.write("${r}")
+    } else if r == '-' {
+      b.write("_")
+    }
+  }
+  let name = b.freeze()
+  let predeclared = ["true", "false", "self", "target", "fault", "dbg", "Ok", "Err", "Some", "None"]
+  let bs = name.bytes()
+  let first = if bs.is_empty() { 0 } else { Int(bs[0]) }
+  if KEYWORDS.contains(name) || predeclared.contains(name) || (first >= 48 && first <= 57) {
+    "${name}svc"
+  } else {
+    name
+  }
+}

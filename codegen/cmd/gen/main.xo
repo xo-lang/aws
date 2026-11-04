@@ -4,6 +4,9 @@
 // its protocol tests);
 //   xo run ./cmd/gen -- aws <model directory> <out dir>
 //   xo run ./cmd/gen -- endpoints <model directory> <out dir>
+//   xo run ./cmd/gen -- service <model directory> -
+// (the last writes the service's module into service/<name>, from its
+// sdkId, with an xo.mod, and lists it in xo.work)
 // (the last writes only the compiled endpoint rules and their tests)
 // generates the client of one AWS service from .models/models/<model
 // directory>. <out dir> is relative to the repository root.
@@ -26,7 +29,7 @@ fn protocol_test_ast(os: Os) -> json.Value ! Error {
 fn main(os: Os) -> () ! Error {
   // the arguments after the program name
   let args = os.env.args()
-  if args.len() < 3 || (args[0] != "protocol-test" && args[0] != "aws" && args[0] != "endpoints") {
+  if args.len() < 3 || (args[0] != "protocol-test" && args[0] != "aws" && args[0] != "endpoints" && args[0] != "service") {
     os.stdio.println("usage: gen protocol-test <service shape id> <out dir> | gen aws <model directory> <out dir>")
     return Ok(())
   }
@@ -58,8 +61,29 @@ fn main(os: Os) -> () ! Error {
     }
     model.load(os.fs.read_text(found[0])?)?
   }
-  let out = "../${args[2]}"
-  let files = if args[0] == "endpoints" { gen.endpoint_files(m, true) } else { gen.generate(m, gen.Options{package: args[2], protocol_tests: tests}) }
+  let dir = if args[0] == "service" {
+    let sdk = match model.trait_of((m.shapes.get(m.service) ?? return Ok(())).traits, "aws.api#service") {
+      Some(t) => match t.get("sdkId") {
+        Some(json.Value.Str(x)) => x
+        _ => args[1]
+      }
+      None => args[1]
+    }
+    "service/${gen.service_dir(sdk)}"
+  } else {
+    args[2]
+  }
+  let out = "../${dir}"
+  if args[0] == "service" {
+    let module = "github.com/xo-lang/aws/${dir}"
+    os.fs.create_dir_all(out)?
+    os.fs.write("${out}/xo.mod", "module ${module}\nedition preview\n".bytes())?
+    let work = os.fs.read_text("../xo.work")?
+    if !work.contains("use ./${dir}\n") {
+      os.fs.write("../xo.work", "${work}use ./${dir}\n".bytes())?
+    }
+  }
+  let files = if args[0] == "endpoints" { gen.endpoint_files(m, true) } else { gen.generate(m, gen.Options{package: dir, protocol_tests: tests}) }
   os.fs.create_dir_all(out)?
   for f in files {
     os.fs.write("${out}/${f.path}", f.text.bytes())?

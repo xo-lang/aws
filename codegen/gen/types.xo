@@ -1,6 +1,7 @@
 // Emits a service's types: structures, unions, enums (decision 0004).
 
 use std/json
+use std/regexp
 use github.com/xo-lang/aws/codegen/model
 
 /// The generator's view of one service.
@@ -116,7 +117,16 @@ fn strip_html(s: Str) -> Str {
       b.write("${r}")
     }
   }
-  b.freeze().fields().join(" ")
+  scrub(b.freeze().fields().join(" "))
+}
+
+/// AWS documentation's example values in the forms the public repository
+/// check rejects (decision 0007): account ids become the documented
+/// example 123456789012, email addresses user@example.com.
+pub fn scrub(s: Str) -> Str {
+  let accounts = regexp.must("\\b[0-9]{11,12}\\b")
+  let emails = regexp.must("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+  emails.replace_all_literal(accounts.replace_all_literal(s, "123456789012"), "user@example.com")
 }
 
 fn wrap(text: Str, width: Int) -> List[Str] {

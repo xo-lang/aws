@@ -1,0 +1,38 @@
+// S3 against MinIO (decision 0005, emulator tests): run by
+// scripts/integration-minio.sh, which starts MinIO on 127.0.0.1 with
+// invented credentials and sets the XO_AWS_TEST_* variables. The client
+// gets a Net that reaches only the loopback host.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+test "s3 round trip against MinIO" uses (net, env, clock) {
+  let endpoint = os.env.get("XO_AWS_TEST_S3_ENDPOINT") ?? "http://127.0.0.1:19000"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = s3.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, s3.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+    force_path_style: true,
+  })?
+  let bucket = "xo-lang-aws-it"
+  c.create_bucket(s3.CreateBucketRequest{bucket: bucket})?
+  c.put_object(s3.PutObjectRequest{bucket: bucket, key: "dir/hello world.txt", body: b"hello from xo"})?
+  let got = c.get_object(s3.GetObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?
+  expect(got.body) == Some(b"hello from xo")
+  let list = c.list_objects_v2(s3.ListObjectsV2Request{bucket: bucket})?
+  let keys = (list.contents ?? []).map(fn(o: s3.Object) -> Str { o.key ?? "" })
+  expect(keys) == ["dir/hello world.txt"]
+  let head = c.head_object(s3.HeadObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?
+  expect(head.content_length) == Some(13)
+  match c.get_object(s3.GetObjectRequest{bucket: bucket, key: "missing"}) {
+    Err(s3.GetObjectErr.NoSuchKey(_)) => {}
+    other => expect("${other:?}") == "NoSuchKey"
+  }
+  match c.head_object(s3.HeadObjectRequest{bucket: bucket, key: "missing"}) {
+    Err(s3.HeadObjectErr.NotFound(_)) => {}
+    other => expect("${other:?}") == "NotFound"
+  }
+  c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?
+  c.delete_bucket(s3.DeleteBucketRequest{bucket: bucket})?
+}

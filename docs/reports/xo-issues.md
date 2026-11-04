@@ -136,6 +136,6 @@ Why it matters: every generated input and output member is optional
 literals there (`query_params_map: {"k": ["v"]}`); 50 restJson1 tests hit
 it.
 
-Workaround: the generated tests pass map literals through
-`protocoltest.map_of` (an identity on `Map[Str, V]`). Status: reported
-to the lead 2026-11-04.
+Workaround (removed): the generated tests passed map literals through
+`protocoltest.map_of`. Status: FIXED on xo main 0e4fa349e (golden
+optional_coll_lit).

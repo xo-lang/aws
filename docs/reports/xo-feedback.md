@@ -45,12 +45,12 @@ says what happened, not a general opinion. Bugs with repros go in
   exactly what the caller built; Go keeps `RawPath`.
 - **A line may not start with `||` (2026-11-04).** Newline-terminated
   statements mean a long boolean must end each line with the operator.
-  The diagnostic says so clearly; it is still the opposite of the style
-  most formatters (gofmt, rustfmt) produce for long conditions.
+  Go has the same rule, so it is familiar to Go users; it still differs
+  from rustfmt and Black, which start continuation lines with the
+  operator. Minor: the diagnostic names the fix.
 - **FakeNet port matching (2026-11-04).** `listen("host:80")` is not
   reached by `http://host/` (no explicit port); an explicit port in both
   works. Silent, cost one gate run.
-
 - **Common words are keywords (2026-11-04).** `scope` is a keyword, so the
   natural name for SigV4's credential scope fails, and `test`, `type`,
   `match`, `select` are AWS member names the generator must rename.

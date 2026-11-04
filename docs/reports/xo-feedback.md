@@ -159,3 +159,11 @@ says what happened, not a general opinion. Bugs with repros go in
   transport.xo, xo reported cache entries "recorded by xo X did not replay
   in xo X" (same build) and rebuilt. Harmless but alarming; reported to
   the lead.
+- **Upstream turnaround is fast (2026-11-04).** Issues 3 and 4 and the
+  front end cache replay were fixed within hours of the report, each with
+  a golden test; the workarounds came out the same day.
+- **`test ... uses (net, env, clock)` with `--real` is the right shape
+  for emulator tests (2026-11-04).** The same file skips cleanly in the
+  normal gate ("1 uses clock, env, net: run with --real") and runs
+  against LocalStack under the script, and `os.net.only([...])` makes
+  "never reach real AWS" a type of value, not a convention.

@@ -15,7 +15,8 @@ report() {
   fail=1
 }
 
-hits=$(echo "$files" | xargs grep -n -I -E '(^|[^0-9A-Za-z])[0-9]{12}([^0-9A-Za-z]|$)' 2>/dev/null | grep -v -E '123456789012|[0-9]{8}T[0-9]{6}Z' | grep -E ':[^:]*\b[0-9]{12}\b')
+# (the last group of a UUID, such as the suites' 00000000-...-000000000000, is not an account id)
+hits=$(echo "$files" | xargs grep -n -I -E '(^|[^0-9A-Za-z-])[0-9]{12}([^0-9A-Za-z]|$)' 2>/dev/null | grep -v -E '123456789012|[0-9]{8}T[0-9]{6}Z' | grep -E ':[^:]*(^|[^-])\b[0-9]{12}\b')
 [ -n "$hits" ] && report "12 digit numbers (account ids?) other than 123456789012" "$hits"
 
 hits=$(echo "$files" | xargs grep -n -I -E '\b(AKIA|ASIA)[A-Z0-9]{16}\b' 2>/dev/null | grep -v -E 'EXAMPLE')

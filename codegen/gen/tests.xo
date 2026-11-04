@@ -1,0 +1,332 @@
+// Emits a model's Smithy protocol tests (httpRequestTests and
+// httpResponseTests) as Xo tests of the generated serializers and
+// deserializers (decision 0005).
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+/// The Xo literal of `node` (a test's params) as a value of shape `target`.
+pub fn lit(g: G, target: Str, node: json.Value) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String | BigInteger | BigDecimal => match node {
+      json.Value.Str(t) => lit_str(t)
+      json.Value.Int(n) => lit_str("${n}")
+      json.Value.Num(f) => lit_str("${f}")
+      _ => "\"\""
+    }
+    Enum => match node {
+      json.Value.Str(t) => {
+        let (vs, _) = enum_variants(s)
+        for (i, m) in s.members.indexed() {
+          let v = match model.trait_of(m.traits, "enumValue") {
+            Some(json.Value.Str(x)) => x
+            _ => m.name
+          }
+          if v == t {
+            return "${type_name(g.names, target)}.${vs[i]}"
+          }
+        }
+        "${type_name(g.names, target)}.from(${lit_str(t)})"
+      }
+      _ => "${type_name(g.names, target)}.from(\"\")"
+    }
+    IntEnum => match node {
+      json.Value.Int(n) => {
+        let (vs, _) = enum_variants(s)
+        for (i, m) in s.members.indexed() {
+          if model.trait_of(m.traits, "enumValue") == Some(json.Value.Int(n)) {
+            return "${type_name(g.names, target)}.${vs[i]}"
+          }
+        }
+        "${type_name(g.names, target)}.from(${n})"
+      }
+      _ => "${type_name(g.names, target)}.from(0)"
+    }
+    Byte | Short | Integer | Long => match node {
+      json.Value.Int(n) => "${n}"
+      json.Value.Num(f) => "${Int(f)}"
+      _ => "0"
+    }
+    Float | Double => match node {
+      json.Value.Int(n) => "${n}.0"
+      json.Value.Num(f) => {
+        let t = "${f}"
+        if t.contains(".") || t.contains("e") { t } else { "${t}.0" }
+      }
+      json.Value.Str("NaN") => "rest.nan()"
+      json.Value.Str("Infinity") => "rest.inf()"
+      json.Value.Str("-Infinity") => "-rest.inf()"
+      _ => "0.0"
+    }
+    Boolean => match node {
+      json.Value.Bool(b) => "${b}"
+      _ => "false"
+    }
+    Timestamp => match node {
+      json.Value.Int(n) => "Time.from_unix(${n})"
+      json.Value.Num(f) => "rest.epoch_seconds_float(${f})"
+      json.Value.Str(t) => "(rest.parse_date_time(${lit_str(t)}) ?? Time.UNIX_EPOCH)"
+      _ => "Time.UNIX_EPOCH"
+    }
+    Blob => match node {
+      json.Value.Str(t) => "${lit_str(t)}.bytes()"
+      _ => "b\"\""
+    }
+    Document => "protocoltest.doc(${lit_str(node.encode())})"
+    List => {
+      let m = s.members[0]
+      let sparse = has(s.traits, "sparse")
+      let items = match node {
+        json.Value.List(xs) => xs
+        _ => []
+      }
+      if items.is_empty() {
+        return "[]"
+      }
+      let parts = items.map(fn(x: json.Value) -> Str {
+        if sparse {
+          if x == json.Value.Null { "None" } else { "Some(${lit(g, m.target, x)})" }
+        } else {
+          lit(g, m.target, x)
+        }
+      })
+      "[${parts.join(", ")}]"
+    }
+    Map => {
+      let m = s.members[1]
+      let sparse = has(s.traits, "sparse")
+      let fields = match node {
+        json.Value.Object(fs) => fs
+        _ => []
+      }
+      if fields.is_empty() {
+        return "protocoltest.map_of({})"
+      }
+      let parts = fields.map(fn(f: (Str, json.Value)) -> Str {
+        let v = if sparse {
+          if f.1 == json.Value.Null { "None" } else { "Some(${lit(g, m.target, f.1)})" }
+        } else {
+          lit(g, m.target, f.1)
+        }
+        "${lit_str(f.0)}: ${v}"
+      })
+      // through map_of: docs/reports/xo-issues.md entry 4
+      "protocoltest.map_of({${parts.join(", ")}})"
+    }
+    Structure => {
+      let fields = match node {
+        json.Value.Object(fs) => fs
+        _ => []
+      }
+      var parts: List[Str] = []
+      for (k, v) in fields {
+        if let Some(m) = model.member(s, k) {
+          if v != json.Value.Null {
+            parts.push("${field_name(m.name)}: ${lit(g, m.target, v)}")
+          }
+        }
+      }
+      "${type_name(g.names, target)}{${parts.join(", ")}}"
+    }
+    Union => {
+      let (vs, catch_all) = union_variants(s)
+      let fields = match node {
+        json.Value.Object(fs) => fs
+        _ => []
+      }
+      for (k, v) in fields {
+        for (i, m) in s.members.indexed() {
+          if m.name == k {
+            if m.target == "smithy.api#Unit" {
+              return "${type_name(g.names, target)}.${vs[i]}"
+            }
+            return "${type_name(g.names, target)}.${vs[i]}(${lit(g, m.target, v)})"
+          }
+        }
+        return "${type_name(g.names, target)}.${catch_all}(${lit_str(k)})"
+      }
+      "${type_name(g.names, target)}.${catch_all}(\"\")"
+    }
+    _ => "()"
+  }
+}
+
+fn str_field(v: json.Value, key: Str) -> Str {
+  match v.get(key) {
+    Some(json.Value.Str(s)) => s
+    _ => ""
+  }
+}
+
+fn str_list(v: json.Value, key: Str) -> List[Str] {
+  match v.get(key) {
+    Some(json.Value.List(xs)) => xs.filter_map(fn(x: json.Value) -> Str? {
+      match x {
+        json.Value.Str(s) => Some(s)
+        _ => None
+      }
+    })
+    _ => []
+  }
+}
+
+fn header_pairs(v: json.Value) -> List[(Str, Str)] {
+  match v.get("headers") {
+    Some(json.Value.Object(fs)) => fs.map(fn(f: (Str, json.Value)) -> (Str, Str) {
+      (f.0, match f.1 {
+        json.Value.Str(s) => s
+        _ => ""
+      })
+    })
+    _ => []
+  }
+}
+
+fn cases(traits: List[(Str, json.Value)], name: Str, protocol: Str) -> List[json.Value] {
+  match model.trait_of(traits, name) {
+    Some(json.Value.List(xs)) => xs.filter(fn(c: json.Value) -> Bool {
+      str_field(c, "protocol") == protocol && str_field(c, "appliesTo") != "server"
+    })
+    _ => []
+  }
+}
+
+fn test_name(id: Str) -> Str {
+  lit_str(id)
+}
+
+/// Request and response tests for every operation and error of `g`'s
+/// service under `protocol` (a shape id such as aws.protocols#restJson1).
+/// `skip` lists test ids not run, each with the reason in a comment.
+pub fn emit_protocol_tests(g: G, protocol: Str, skip: List[(Str, Str)]) -> Str {
+  var out: List[Str] = [
+    "// Code generated by xo-lang-aws codegen. DO NOT EDIT.",
+    "",
+    "use std/http",
+    "use github.com/xo-lang/aws/protocol/protocoltest",
+    "use github.com/xo-lang/aws/protocol/rest",
+    "",
+    "const TOKEN: Str = \"00000000-0000-4000-8000-000000000000\"",
+    "",
+  ]
+  var seen: Set[Str] = [].to_set()
+  var error_cases: Set[Str] = [].to_set()
+  for op in model.operations(g.m) {
+    if !supported(g, op) {
+      continue
+    }
+    let s = shape_of(g, op)
+    let name = op_name(op)
+    for c in cases(s.traits, "smithy.test#httpRequestTests", protocol) {
+      let id = str_field(c, "id")
+      if seen.contains(id) {
+        continue
+      }
+      seen.add(id)
+      if let Some((_, why)) = skip.find(fn(x: (Str, Str)) -> Bool { x.0 == id }) {
+        out.push("// skipped ${id}: ${why}")
+        out.push("")
+        continue
+      }
+      let params = c.get("params") ?? json.Value.Object([])
+      let input = if s.input == "smithy.api#Unit" { "()" } else { lit(g, s.input, params) }
+      let host = str_field(c, "host")
+      let base = if host == "" { "https://example.com" } else { "https://${host}" }
+      var want: List[Str] = ["method: ${lit_str(str_field(c, "method"))}", "uri: ${lit_str(str_field(c, "uri"))}"]
+      if str_field(c, "resolvedHost") != "" {
+        want.push("resolved_host: ${lit_str(str_field(c, "resolvedHost"))}")
+      }
+      for (key, field) in [("queryParams", "query_params"), ("forbidQueryParams", "forbid_query_params"), ("requireQueryParams", "require_query_params"), ("forbidHeaders", "forbid_headers"), ("requireHeaders", "require_headers")] {
+        let xs = str_list(c, key)
+        if !xs.is_empty() {
+          want.push("${field}: [${xs.map(fn(x: Str) -> Str { lit_str(x) }).join(", ")}]")
+        }
+      }
+      let hs = header_pairs(c)
+      if !hs.is_empty() {
+        want.push("headers: [${hs.map(fn(h: (Str, Str)) -> Str { "(${lit_str(h.0)}, ${lit_str(h.1)})" }).join(", ")}]")
+      }
+      if let Some(json.Value.Str(b)) = c.get("body") {
+        want.push("body: ${lit_str(b)}")
+      }
+      if str_field(c, "bodyMediaType") != "" {
+        want.push("body_media_type: ${lit_str(str_field(c, "bodyMediaType"))}")
+      }
+      out.push("test ${test_name(id)} {")
+      out.push("  let ep = rest.parse_endpoint(${lit_str(base)}) ?? rest.Endpoint{host: \"example.com\"}")
+      out.push("  let req = serialize_${name}(ep, ${input}, TOKEN, 0)?")
+      out.push("  protocoltest.check_request(req, protocoltest.RequestWant{${want.join(", ")}})?")
+      out.push("}")
+      out.push("")
+    }
+    for c in cases(s.traits, "smithy.test#httpResponseTests", protocol) {
+      let id = str_field(c, "id")
+      if seen.contains(id) {
+        continue
+      }
+      seen.add(id)
+      if let Some((_, why)) = skip.find(fn(x: (Str, Str)) -> Bool { x.0 == id }) {
+        out.push("// skipped ${id}: ${why}")
+        out.push("")
+        continue
+      }
+      let params = c.get("params") ?? json.Value.Object([])
+      out.push("test ${test_name(id)} {")
+      out.push("  let resp = ${response_lit(c)}")
+      if s.output == "smithy.api#Unit" {
+        out.push("  deserialize_${name}(resp)?")
+      } else {
+        out.push("  let got = deserialize_${name}(resp)?")
+        out.push("  let want = ${lit(g, s.output, params)}")
+        out.push("  expect(\"\${got:?}\") == \"\${want:?}\"")
+      }
+      out.push("}")
+      out.push("")
+    }
+    // error response tests, once per error shape and operation
+    for e in s.errors {
+      let es = shape_of(g, e)
+      for c in cases(es.traits, "smithy.test#httpResponseTests", protocol) {
+        let id = str_field(c, "id")
+        if error_cases.contains(id) || seen.contains(id) {
+          continue
+        }
+        error_cases.add(id)
+        if let Some((_, why)) = skip.find(fn(x: (Str, Str)) -> Bool { x.0 == id }) {
+          out.push("// skipped ${id}: ${why}")
+          out.push("")
+          continue
+        }
+        let params = c.get("params") ?? json.Value.Object([])
+        let variant = err_variants(g, op).find(fn(x: (Str, Str)) -> Bool { x.0 == e })
+        let v = match variant {
+          Some((_, vn)) => vn
+          None => type_name(g.names, e)
+        }
+        out.push("test ${test_name(id)} {")
+        out.push("  let resp = ${response_lit(c)}")
+        out.push("  let want = ${lit(g, e, params)}")
+        out.push("  let got = deserialize_${name}_error(resp)")
+        out.push("  expect(\"\${got:?}\") == \"\${${op_err(op)}.${v}(want):?}\"")
+        out.push("}")
+        out.push("")
+      }
+    }
+  }
+  out.join("\n")
+}
+
+fn response_lit(c: json.Value) -> Str {
+  let code = match c.get("code") {
+    Some(json.Value.Int(n)) => n
+    _ => 200
+  }
+  let hs = header_pairs(c)
+  let headers = if hs.is_empty() { "{}" } else { "{${hs.map(fn(h: (Str, Str)) -> Str { "${lit_str(h.0)}: ${lit_str(h.1)}" }).join(", ")}}" }
+  let body = match c.get("body") {
+    Some(json.Value.Str(b)) => "${lit_str(b)}.bytes()"
+    _ => "b\"\""
+  }
+  "http.Response{status: ${code}, headers: ${headers}, body: ${body}}"
+}

@@ -83,22 +83,16 @@ fn main(os: Os) ! {
 - Shapes are plain structs, no derives except `Eq` and `Debug`;
   `Secret[T]` wraps members the model marks `@sensitive`, so Debug output
   and logs never show them.
-- Enums: `enum StorageClass { Standard, ReducedRedundancy, ...,
-  Unknown(value: Str) }` with generated `value() -> Str`,
-  `StorageClass.parse(s) -> StorageClass` and `StorageClass.values() ->
-  List[StorageClass]`. The `Unknown` variant keeps values a newer service
-  sends (forward compatible), and `match` stays exhaustive. Xo's valued
-  enums (`enum E: Str`) are not used: they refuse unknown values by design
-  (spec 2.3), which breaks when AWS adds a value (0006 item 2). `intEnum`
-  maps the same way over `Int`.
-  - Target shape (Xo decision 0493, accepted by the owner 2026-11-04):
-    a valued enum with a catch-all, `enum StorageClass: Str { Standard =
-    "STANDARD", ..., Unknown(Str) }`, where `StorageClass.from(v)` always
-    gives a value (unknown text lands in `Unknown`) and `known(v)` gives
-    `E?`. The generator emits this form once Xo implements 0493; until
-    then it emits the plain enum above with generated `value`/`parse`,
-    which have the same meaning, so the switch changes no call site
-    except `parse` becoming `from`.
+- Enums are Xo valued enums with a catch-all (Xo decision 0493, on Xo
+  main since a08235c63): `enum StorageClass: Str { Standard = "STANDARD",
+  ReducedRedundancy = "REDUCED_REDUNDANCY", ..., Unknown(value: Str) }`.
+  `.value()` is the wire value (the caught text too), `StorageClass.from(s)`
+  always gives a variant (a value a newer service sends lands in
+  `Unknown`, so code built today keeps working and `match` stays
+  exhaustive), `.known()` is false for the catch-all, and
+  `StorageClass.all()` lists the named variants. `intEnum` is the same
+  over `Int` (`Unknown(value: Int)`). If a model names a member `Unknown`,
+  the catch-all is `UnknownValue` (listed in RENAMES.md).
 - Unions: an enum with one variant per member plus `Unknown(tag: Str)`.
 - Timestamps are `Time`; blobs `Bytes`; documents `json.Value`; `Long` and
   `Integer` both `Int` (Go uses `int64`/`int32`; Xo's `Int` is 64 bit),

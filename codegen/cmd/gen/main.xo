@@ -1,0 +1,37 @@
+// The generator's command.
+//   xo run ./cmd/gen -- protocol-test <service shape id> <out dir>
+// generates a client for one of Smithy's protocol test services (with
+// its protocol tests) into <out dir>, relative to the repository root.
+
+use std/json
+use github.com/xo-lang/aws/codegen/gen
+use github.com/xo-lang/aws/codegen/idl
+use github.com/xo-lang/aws/codegen/model
+
+fn protocol_test_ast(os: Os) -> json.Value ! Error {
+  let dir = ".protocol-tests/smithy-aws-protocol-tests/model"
+  let files = os.fs.glob("${dir}/*.smithy")? + os.fs.glob("${dir}/*/*.smithy")? + os.fs.glob("${dir}/*/*/*.smithy")? + os.fs.glob(".protocol-tests/smithy-validation-model/model/*.smithy")?
+  var sources: List[idl.Source] = []
+  for f in files.sort() {
+    sources.push(idl.Source{name: f, text: os.fs.read_text(f)?})
+  }
+  Ok(idl.parse(sources)?)
+}
+
+fn main(os: Os) -> () ! Error {
+  // the arguments after the program name
+  let args = os.env.args()
+  if args.len() < 3 || args[0] != "protocol-test" {
+    os.stdio.println("usage: gen protocol-test <service shape id> <out dir>")
+    return Ok(())
+  }
+  let m = model.from_ast(protocol_test_ast(os)?, args[1])?
+  let out = "../${args[2]}"
+  let files = gen.generate(m, gen.Options{package: args[2], protocol_tests: true})
+  os.fs.create_dir_all(out)?
+  for f in files {
+    os.fs.write("${out}/${f.path}", f.text.bytes())?
+    os.stdio.println("wrote ${out}/${f.path}")
+  }
+  Ok(())
+}

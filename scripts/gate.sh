@@ -9,7 +9,7 @@ fail=0
 if [ $# -gt 0 ]; then
   dirs="$*"
 else
-  dirs=$(git ls-files '*.xo' | xargs -n1 dirname | sort -u)
+  dirs=$(git ls-files -co --exclude-standard '*.xo' | xargs -n1 dirname | sort -u)
 fi
 for d in $dirs; do
   mod=.

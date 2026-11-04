@@ -1,0 +1,63 @@
+// restJson1's error responses (decision 0003): the error code from the
+// `X-Amzn-Errortype` header or the body's `code` or `__type`, sanitized
+// as the Smithy protocol specifies.
+
+use std/http
+use std/json
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/protocol/jsonv
+use github.com/xo-lang/aws/retry
+
+/// `aws.protocoltests.restjson#FooError:http://...` is `FooError`.
+pub fn sanitize_code(raw: Str) -> Str {
+  let head = (raw.cut(":") ?? (raw, "")).0
+  match head.cut("#") {
+    Some((_, name)) => name.trim()
+    None => head.trim()
+  }
+}
+
+fn field_str(body: json.Value, key: Str) -> Str? {
+  match body.get(key) {
+    Some(json.Value.Str(s)) => Some(s)
+    _ => None
+  }
+}
+
+/// The error code of an error response whose body is `body`.
+pub fn error_code(resp: http.Response, body: json.Value) -> Str {
+  if let Some(h) = resp.header("X-Amzn-Errortype") {
+    if h != "" {
+      return sanitize_code(h)
+    }
+  }
+  if let Some(c) = field_str(body, "code") {
+    return sanitize_code(c)
+  }
+  if let Some(t) = field_str(body, "__type") {
+    return sanitize_code(t)
+  }
+  ""
+}
+
+pub fn error_message(body: json.Value) -> Str {
+  field_str(body, "message") ?? field_str(body, "Message") ?? field_str(body, "errorMessage") ?? ""
+}
+
+/// The service error of a response, for unmodeled codes.
+pub fn api_error(resp: http.Response, body: json.Value) -> aws.ApiError {
+  let code = error_code(resp, body)
+  aws.ApiError{
+    code: if code == "" { "UnknownError" } else { code },
+    message: error_message(body),
+    status: resp.status,
+    request_id: resp.header("X-Amzn-Requestid") ?? "",
+  }
+}
+
+/// transport.send's retry decision for a restJson1 error response.
+pub fn classify(resp: http.Response) -> retry.Failure {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Null
+  let code = error_code(resp, body)
+  retry.classify_response(resp.status, if code == "" { None } else { Some(code) })
+}

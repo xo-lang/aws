@@ -1,0 +1,122 @@
+// JSON values of Smithy's scalar shapes, both ways, for the JSON
+// protocols (restJson1, awsJson1_0, awsJson1_1). Generated serializers
+// build a json.Value and read one with these.
+
+use std/json
+use github.com/xo-lang/aws/protocol/rest
+
+pub fn float(f: Float) -> json.Value {
+  if f.is_nan() || f.is_inf() {
+    return json.Value.Str(rest.float_text(f))
+  }
+  json.Value.Num(f)
+}
+
+/// A timestamp in `format` (epoch-seconds, date-time or http-date).
+pub fn time(t: Time, format: Str) -> json.Value {
+  match format {
+    "date-time" => json.Value.Str(rest.date_time(t))
+    "http-date" => json.Value.Str(rest.http_date(t))
+    _ => {
+      let text = rest.epoch_seconds(t)
+      match Int.parse(text) {
+        Some(n) => json.Value.Int(n)
+        None => json.Value.Num(Float.parse(text) ?? 0.0)
+      }
+    }
+  }
+}
+
+pub fn blob(b: Bytes) -> json.Value {
+  json.Value.Str(b.to_base64())
+}
+
+pub fn read_str(v: json.Value) -> Str ! Str {
+  match v {
+    json.Value.Str(s) => Ok(s)
+    _ => Err("want a string, got ${v.encode()}")
+  }
+}
+
+pub fn read_int(v: json.Value) -> Int ! Str {
+  match v {
+    json.Value.Int(n) => Ok(n)
+    json.Value.Num(f) => if f == f.trunc() { Ok(Int(f)) } else { Err("want an integer, got ${f}") }
+    _ => Err("want an integer, got ${v.encode()}")
+  }
+}
+
+pub fn read_float(v: json.Value) -> Float ! Str {
+  match v {
+    json.Value.Int(n) => Ok(Float(n))
+    json.Value.Num(f) => Ok(f)
+    json.Value.Str(s) => match s {
+      "NaN" | "Infinity" | "-Infinity" => Ok(rest.parse_float(s) ?? 0.0)
+      _ => Err("want a number, got \"${s}\"")
+    }
+    _ => Err("want a number, got ${v.encode()}")
+  }
+}
+
+pub fn read_bool(v: json.Value) -> Bool ! Str {
+  match v {
+    json.Value.Bool(b) => Ok(b)
+    _ => Err("want a boolean, got ${v.encode()}")
+  }
+}
+
+pub fn read_blob(v: json.Value) -> Bytes ! Str {
+  let s = read_str(v)?
+  Ok(Bytes.from_base64(s) ?? return Err("not base64: ${s}"))
+}
+
+pub fn read_big(v: json.Value) -> Str ! Str {
+  match v {
+    json.Value.Int(n) => Ok("${n}")
+    json.Value.Num(f) => Ok(rest.float_text(f))
+    json.Value.Str(s) => Ok(s)
+    _ => Err("want a number, got ${v.encode()}")
+  }
+}
+
+pub fn read_time(v: json.Value, format: Str) -> Time ! Str {
+  match v {
+    json.Value.Int(n) => Ok(Time.from_unix(n))
+    json.Value.Num(f) => Ok(rest.epoch_seconds_float(f))
+    json.Value.Str(s) => {
+      let t = match format {
+        "http-date" => rest.parse_http_date(s)
+        "epoch-seconds" => rest.parse_epoch_seconds(s)
+        _ => rest.parse_date_time(s)
+      }
+      Ok(t ?? return Err("bad timestamp ${s}"))
+    }
+    _ => Err("want a timestamp, got ${v.encode()}")
+  }
+}
+
+/// An object's fields; null is an empty object.
+pub fn fields(v: json.Value) -> List[(Str, json.Value)] ! Str {
+  match v {
+    json.Value.Object(fs) => Ok(fs)
+    json.Value.Null => Ok([])
+    _ => Err("want an object, got ${v.encode()}")
+  }
+}
+
+pub fn items(v: json.Value) -> List[json.Value] ! Str {
+  match v {
+    json.Value.List(xs) => Ok(xs)
+    json.Value.Null => Ok([])
+    _ => Err("want a list, got ${v.encode()}")
+  }
+}
+
+/// The JSON of a body; an empty body is an empty object.
+pub fn parse_body(b: Bytes) -> json.Value ! Str {
+  let text = b.to_str() ?? return Err("body is not UTF-8")
+  if text.trim() == "" {
+    return Ok(json.Value.Object([]))
+  }
+  Ok(json.parse_value(text) ?? e => return Err(e.display()))
+}

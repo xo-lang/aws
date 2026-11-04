@@ -1,0 +1,89 @@
+// Xo names for a model's shapes, members and operations (decision 0002:
+// the plan step), with every rename recorded for RENAMES.md.
+
+use github.com/xo-lang/aws/codegen/model
+use github.com/xo-lang/aws/codegen/naming
+
+const KEYWORDS: List[Str] = ["as", "break", "const", "continue", "defer", "else", "ensures", "enum", "fn", "for", "if", "in", "interface", "invariant", "let", "match", "pub", "requires", "return", "select", "struct", "test", "type", "use", "uses", "var", "while", "true", "false", "self", "target", "fault", "dbg", "derive", "from", "loop"]
+
+/// Type names Xo or the generated package already use.
+const RESERVED_TYPES: List[Str] = ["Str", "Int", "Float", "Bool", "Bytes", "Time", "Duration", "List", "Map", "Set", "Option", "Result", "Error", "Some", "None", "Ok", "Err", "Rune", "UInt8", "Int8", "Int16", "Int32", "Int64", "Secret", "Mutex", "Atomic", "Client", "Options", "Display", "Debug", "Eq", "Os", "Net", "Fs", "Env", "Clock", "Rand"]
+
+pub struct Rename {
+  pub what: Str
+  pub from: Str
+  pub to: Str
+  pub why: Str
+}
+
+pub struct Names {
+  types: Map[Str, Str]
+  pub renames: List[Rename]
+}
+
+fn record(var n: Names, what: Str, from: Str, to: Str, why: Str) {
+  n.renames.push(Rename{what: what, from: from, to: to, why: why})
+}
+
+/// Names every structure, union, enum and intEnum in `ids`: the shape's
+/// name (or the service's `rename` for it), suffixed when it collides
+/// with an Xo type or another shape.
+pub fn plan_names(m: model.Model, ids: List[Str]) -> Names {
+  var n = Names{types: {}, renames: []}
+  var taken: Set[Str] = [].to_set()
+  var renames: Map[Str, Str] = {}
+  if let Some(svc) = m.shapes.get(m.service) {
+    for (from, to) in svc.rename {
+      renames.put(from, to)
+    }
+  }
+  for id in ids {
+    let s = model.shape(m, id) ?? continue
+    if !named_kind(s.kind) || id.starts_with(model.PRELUDE) {
+      continue
+    }
+    var name = renames.get(id) ?? model.name_of(id)
+    if RESERVED_TYPES.contains(name) || taken.contains(name) {
+      let base = name
+      name = "${base}Shape"
+      var k = 2
+      while taken.contains(name) {
+        name = "${base}Shape${k}"
+        k += 1
+      }
+      record(n, "type", id, name, "collides with an Xo or generated name")
+    }
+    taken.add(name)
+    n.types.put(id, name)
+  }
+  n
+}
+
+pub fn named_kind(k: model.Kind) -> Bool {
+  match k {
+    Structure | Union | Enum | IntEnum => true
+    _ => false
+  }
+}
+
+pub fn type_name(n: Names, id: Str) -> Str {
+  n.types.get(id) ?? model.name_of(id)
+}
+
+/// A member's field name: snake case (codegen/naming), with `_value`
+/// added to a keyword.
+pub fn field_name(member: Str) -> Str {
+  let s = naming.snake(member)
+  if KEYWORDS.contains(s) { "${s}_value" } else { s }
+}
+
+/// An operation's method name.
+pub fn op_name(id: Str) -> Str {
+  field_name(model.name_of(id))
+}
+
+/// An enum variant or union variant name.
+pub fn variant_name(member: Str) -> Str {
+  let s = naming.upper_camel(member)
+  if s == "" { "Empty" } else if s.bytes()[0] >= 48 && s.bytes()[0] <= 57 { "V${s}" } else { s }
+}

@@ -56,7 +56,22 @@ says what happened, not a general opinion. Bugs with repros go in
   modules, and the `pub enum Err` and `T ! E` field diagnostics name
   their fix, all from entries in this file, the same day.
 
+- **A Smithy IDL parser in an afternoon (2026-11-04).** Running the
+  Smithy CLI (a downloaded binary) was not allowed, so the protocol test
+  models needed an IDL parser; Xo's byte slices, `while let`, enums with
+  named fields and `?` made a 900 line recursive descent parser that
+  reads all 143 files in 5 ms. The one bug was mine.
+- **Generated code type checks fast (2026-11-04).** A first generated
+  restJson1 client of about 6,000 lines failed only on unused variables;
+  `xo check` named each one.
+
 ## Didn't like, or cost time
+
+- **`env.args()` leaves out the program name (2026-11-04).** Go's
+  `os.Args[0]` is the program; Xo's `args()` starts at the first
+  argument. Sensible, but a Go port reads the wrong index silently (my
+  `loadall` ignored its directory argument). The doc line could say
+  "without the program name" where `args()` is declared.
 
 - **Byte vocabulary (2026-11-04).** Bytes iterate as `UInt8`, so the
   conversion is `UInt8(n)`, not `Byte(n)`; `enumerate` is `indexed`;

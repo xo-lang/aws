@@ -1,0 +1,857 @@
+// Emits a restJson1 client (decision 0003): per operation a serializer
+// to a transport.Request, a deserializer of the response, the error
+// dispatch, and the Client method; JSON bodies go through json.Value.
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+/// How a member is bound to the HTTP message.
+enum Binding {
+  Label(greedy: Bool)
+  Query(name: Str)
+  QueryParams
+  Header(name: Str)
+  PrefixHeaders(prefix: Str)
+  Payload
+  ResponseCode
+  Body
+}
+
+fn binding(traits: List[(Str, json.Value)], uri: Str, name: Str) -> Binding {
+  if has(traits, "httpLabel") {
+    return Binding.Label(uri.contains("{${name}+}"))
+  }
+  if let Some(q) = model.trait_str(traits, "httpQuery") {
+    return Binding.Query(q)
+  }
+  if has(traits, "httpQueryParams") {
+    return Binding.QueryParams
+  }
+  if let Some(h) = model.trait_str(traits, "httpHeader") {
+    return Binding.Header(h)
+  }
+  if let Some(p) = model.trait_str(traits, "httpPrefixHeaders") {
+    return Binding.PrefixHeaders(p)
+  }
+  if has(traits, "httpPayload") {
+    return Binding.Payload
+  }
+  if has(traits, "httpResponseCode") {
+    return Binding.ResponseCode
+  }
+  Binding.Body
+}
+
+/// A function name part for shape `id`.
+pub fn fn_key(g: G, id: Str) -> Str {
+  let s = shape_of(g, id)
+  if named_kind(s.kind) { field_name(type_name(g.names, id)) } else { field_name(model.name_of(id)) }
+}
+
+fn ts_format(g: G, member_traits: List[(Str, json.Value)], target: Str, default: Str) -> Str {
+  model.trait_str(member_traits, "timestampFormat") ?? model.trait_str(shape_of(g, target).traits, "timestampFormat") ?? default
+}
+
+fn media_type(g: G, m: model.Member) -> Str? {
+  model.trait_str(m.traits, "mediaType") ?? model.trait_str(shape_of(g, m.target).traits, "mediaType")
+}
+
+/// The text form of value `v` of shape `target` in a label, query or
+/// header (`where` picks the default timestamp format).
+fn text_expr(g: G, m: model.Member, target: Str, v: Str, default_ts: Str) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String => if media_type(g, m).is_some() && default_ts == "http-date" { "${v}.bytes().to_base64()" } else { v }
+    Enum => "${v}.value()"
+    IntEnum => "\"\${${v}.value()}\""
+    Byte | Short | Integer | Long => "\"\${${v}}\""
+    Float | Double => "rest.float_text(${v})"
+    Boolean => "\"\${${v}}\""
+    Timestamp => match ts_format(g, m.traits, target, default_ts) {
+      "epoch-seconds" => "rest.epoch_seconds(${v})"
+      "http-date" => "rest.http_date(${v})"
+      _ => "rest.date_time(${v})"
+    }
+    Blob => "${v}.to_base64()"
+    _ => v
+  }
+}
+
+/// Reads text `v` (a header value) as shape `target`; an expression of
+/// type `T ! Str`'s value with `?`.
+fn parse_text_expr(g: G, m: model.Member, target: Str, v: Str) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String => if media_type(g, m).is_some() { "(Bytes.from_base64(${v}) ?? return Err(\"bad base64 header\")).to_str() ?? \"\"" } else { v }
+    Enum => "${type_name(g.names, target)}.from(${v})"
+    IntEnum => "${type_name(g.names, target)}.from(Int.parse(${v}) ?? return Err(\"bad integer header\"))"
+    Byte | Short | Integer | Long => "(Int.parse(${v}) ?? return Err(\"bad integer header \${${v}}\"))"
+    Float | Double => "(rest.parse_float(${v}) ?? return Err(\"bad number header \${${v}}\"))"
+    Boolean => "(${v} == \"true\")"
+    Timestamp => match ts_format(g, m.traits, target, "http-date") {
+      "epoch-seconds" => "(rest.parse_epoch_seconds(${v}) ?? return Err(\"bad timestamp header\"))"
+      "date-time" => "(rest.parse_date_time(${v}) ?? return Err(\"bad timestamp header\"))"
+      _ => "(rest.parse_http_date(${v}) ?? return Err(\"bad timestamp header\"))"
+    }
+    Blob => "(Bytes.from_base64(${v}) ?? return Err(\"bad base64 header\"))"
+    _ => v
+  }
+}
+
+/// The json.Value of value `v` of shape `target`.
+fn json_expr(g: G, traits: List[(Str, json.Value)], target: Str, v: Str) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String => "json.Value.Str(${v})"
+    Enum => "json.Value.Str(${v}.value())"
+    IntEnum => "json.Value.Int(${v}.value())"
+    Byte | Short | Integer | Long => "json.Value.Int(${v})"
+    Float | Double => "jsonv.float(${v})"
+    Boolean => "json.Value.Bool(${v})"
+    Timestamp => "jsonv.time(${v}, \"${ts_format(g, traits, target, "epoch-seconds")}\")"
+    Blob => "jsonv.blob(${v})"
+    BigInteger | BigDecimal => "json.Value.Num(Float.parse(${v}) ?? 0.0)"
+    Document => v
+    _ => "json_of_${fn_key(g, target)}(${v})"
+  }
+}
+
+/// Reads json.Value `v` as shape `target`; to be used with `?`.
+fn from_json_expr(g: G, traits: List[(Str, json.Value)], target: Str, v: Str) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String => "jsonv.read_str(${v})?"
+    Enum => "${type_name(g.names, target)}.from(jsonv.read_str(${v})?)"
+    IntEnum => "${type_name(g.names, target)}.from(jsonv.read_int(${v})?)"
+    Byte | Short | Integer | Long => "jsonv.read_int(${v})?"
+    Float | Double => "jsonv.read_float(${v})?"
+    Boolean => "jsonv.read_bool(${v})?"
+    Timestamp => "jsonv.read_time(${v}, \"${ts_format(g, traits, target, "epoch-seconds")}\")?"
+    Blob => "jsonv.read_blob(${v})?"
+    BigInteger | BigDecimal => "jsonv.read_big(${v})?"
+    Document => v
+    _ => "from_json_${fn_key(g, target)}(${v})?"
+  }
+}
+
+fn json_name(m: model.Member) -> Str {
+  model.trait_str(m.traits, "jsonName") ?? m.name
+}
+
+/// Shapes that need JSON functions: aggregates reachable from body
+/// members and payloads.
+fn json_shapes(g: G) -> List[Str] {
+  g.ids.filter(fn(id: Str) -> Bool {
+    let s = shape_of(g, id)
+    match s.kind {
+      Structure | Union | List | Map => !id.starts_with(model.PRELUDE)
+      _ => false
+    }
+  })
+}
+
+fn emit_json_fns(g: G, var out: List[Str]) {
+  for id in json_shapes(g) {
+    let s = shape_of(g, id)
+    let key = fn_key(g, id)
+    let t = xo_type(g, id)
+    match s.kind {
+      Structure => {
+        out.push("fn json_of_${key}(v: ${t}) -> json.Value {")
+        out.push("  var fs: List[(Str, json.Value)] = []")
+        for m in s.members {
+          out.push("  if let Some(x) = v.${field_name(m.name)} {")
+          out.push("    fs.push((${lit_str(json_name(m))}, ${json_expr(g, m.traits, m.target, "x")}))")
+          out.push("  }")
+        }
+        out.push("  json.Value.Object(fs)")
+        out.push("}")
+        out.push("")
+        out.push("fn from_json_${key}(v: json.Value) -> ${t} ! Str {")
+        out.push("  var out = ${t}{}")
+        if s.members.is_empty() {
+          out.push("  let _ = jsonv.fields(v)?")
+        } else {
+          out.push("  for (k, fv) in jsonv.fields(v)? {")
+          out.push("    if fv == json.Value.Null {")
+          out.push("      continue")
+          out.push("    }")
+          out.push("    match k {")
+          for m in s.members {
+            out.push("      ${lit_str(json_name(m))} => out.${field_name(m.name)} = ${from_json_expr(g, m.traits, m.target, "fv")}")
+          }
+          out.push("      _ => {}")
+          out.push("    }")
+          out.push("  }")
+        }
+        out.push("  Ok(out)")
+        out.push("}")
+      }
+      Union => {
+        let (vs, catch_all) = union_variants(s)
+        out.push("fn json_of_${key}(v: ${t}) -> json.Value {")
+        out.push("  match v {")
+        for (i, m) in s.members.indexed() {
+          if m.target == "smithy.api#Unit" {
+            out.push("    ${vs[i]} => json.Value.Object([(${lit_str(json_name(m))}, json.Value.Object([]))])")
+          } else {
+            out.push("    ${vs[i]}(x) => json.Value.Object([(${lit_str(json_name(m))}, ${json_expr(g, m.traits, m.target, "x")})])")
+          }
+        }
+        out.push("    ${catch_all}(_) => json.Value.Object([])")
+        out.push("  }")
+        out.push("}")
+        out.push("")
+        out.push("fn from_json_${key}(v: json.Value) -> ${t} ! Str {")
+        out.push("  for (k, fv) in jsonv.fields(v)? {")
+        out.push("    if fv == json.Value.Null || k == \"__type\" {")
+        out.push("      continue")
+        out.push("    }")
+        out.push("    return match k {")
+        for (i, m) in s.members.indexed() {
+          if m.target == "smithy.api#Unit" {
+            out.push("      ${lit_str(json_name(m))} => Ok(${t}.${vs[i]})")
+          } else {
+            out.push("      ${lit_str(json_name(m))} => Ok(${t}.${vs[i]}(${from_json_expr(g, m.traits, m.target, "fv")}))")
+          }
+        }
+        out.push("      _ => Ok(${t}.${catch_all}(k))")
+        out.push("    }")
+        out.push("  }")
+        out.push("  Err(\"${t}: no member set\")")
+        out.push("}")
+      }
+      List => {
+        let m = s.members[0]
+        let et = xo_type(g, m.target)
+        let sparse = has(s.traits, "sparse")
+        out.push("fn json_of_${key}(v: ${t}) -> json.Value {")
+        if sparse {
+          out.push("  json.Value.List(v.map(fn(e: ${et}?) -> json.Value {")
+          out.push("    match e {")
+          out.push("      Some(x) => ${json_expr(g, m.traits, m.target, "x")}")
+          out.push("      None => json.Value.Null")
+          out.push("    }")
+          out.push("  }))")
+        } else {
+          out.push("  json.Value.List(v.map(fn(x: ${et}) -> json.Value { ${json_expr(g, m.traits, m.target, "x")} }))")
+        }
+        out.push("}")
+        out.push("")
+        out.push("fn from_json_${key}(v: json.Value) -> ${t} ! Str {")
+        out.push("  var out: ${t} = []")
+        out.push("  for fv in jsonv.items(v)? {")
+        out.push("    if fv == json.Value.Null {")
+        out.push(if sparse { "      out.push(None)" } else { "      // a dense list skips nulls" })
+        out.push("      continue")
+        out.push("    }")
+        out.push("    out.push(${from_json_expr(g, m.traits, m.target, "fv")})")
+        out.push("  }")
+        out.push("  Ok(out)")
+        out.push("}")
+      }
+      Map => {
+        let m = s.members[1]
+        let vt = xo_type(g, m.target)
+        let sparse = has(s.traits, "sparse")
+        out.push("fn json_of_${key}(v: ${t}) -> json.Value {")
+        if sparse {
+          out.push("  json.Value.Object(v.entries().map(fn(e: (Str, ${vt}?)) -> (Str, json.Value) {")
+          out.push("    (e.0, match e.1 {")
+          out.push("      Some(x) => ${json_expr(g, m.traits, m.target, "x")}")
+          out.push("      None => json.Value.Null")
+          out.push("    })")
+          out.push("  }))")
+        } else {
+          out.push("  json.Value.Object(v.entries().map(fn(e: (Str, ${vt})) -> (Str, json.Value) { (e.0, ${json_expr(g, m.traits, m.target, "e.1")}) }))")
+        }
+        out.push("}")
+        out.push("")
+        out.push("fn from_json_${key}(v: json.Value) -> ${t} ! Str {")
+        out.push("  var out: ${t} = {}")
+        out.push("  for (k, fv) in jsonv.fields(v)? {")
+        out.push("    if fv == json.Value.Null {")
+        out.push(if sparse { "      out.put(k, None)" } else { "      // a dense map skips nulls" })
+        out.push("      continue")
+        out.push("    }")
+        out.push("    out.put(k, ${from_json_expr(g, m.traits, m.target, "fv")})")
+        out.push("  }")
+        out.push("  Ok(out)")
+        out.push("}")
+      }
+      _ => {}
+    }
+    out.push("")
+  }
+}
+
+/// The parts of an operation's `http` trait.
+pub struct Http {
+  pub method: Str
+  pub path: Str
+  pub query: Str
+  pub code: Int
+}
+
+pub fn http_of(s: model.Shape) -> Http {
+  let t = model.trait_of(s.traits, "http") ?? json.Value.Null
+  let uri = match t.get("uri") {
+    Some(json.Value.Str(u)) => u
+    _ => "/"
+  }
+  let (path, query) = uri.cut("?") ?? (uri, "")
+  Http{
+    method: match t.get("method") {
+      Some(json.Value.Str(m)) => m
+      _ => "POST"
+    },
+    path: path,
+    query: query,
+    code: match t.get("code") {
+      Some(json.Value.Int(c)) => c
+      _ => 200
+    },
+  }
+}
+
+fn needs_token(s: model.Shape) -> Bool {
+  s.members.any(fn(m: model.Member) -> Bool { has(m.traits, "idempotencyToken") })
+}
+
+/// Operations this generator can emit: not event streams.
+pub fn supported(g: G, op: Str) -> Bool {
+  let s = shape_of(g, op)
+  for io in [s.input, s.output] {
+    for m in shape_of(g, io).members {
+      let t = shape_of(g, m.target)
+      if has(t.traits, "streaming") && t.kind is model.Kind.Union {
+        return false
+      }
+    }
+  }
+  true
+}
+
+fn emit_serializer(g: G, op: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let h = http_of(s)
+  let input = shape_of(g, s.input)
+  let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
+  let name = op_name(op)
+  out.push("/// The HTTP request of ${model.name_of(op)}.")
+  out.push("pub fn serialize_${name}(ep: rest.Endpoint, input: ${in_t}, idempotency_token: Str = \"\", min_compress: Int = 10240) -> transport.Request ! Str {")
+  out.push("  let _ = (idempotency_token, min_compress)")
+  out.push("  var headers: List[(Str, Str)] = []")
+  // constant query from the uri
+  var consts: List[Str] = []
+  for part in h.query.split("&") {
+    if part == "" {
+      continue
+    }
+    let (k, v) = part.cut("=") ?? (part, "")
+    consts.push("(${lit_str(k)}, ${lit_str(v)})")
+  }
+  out.push("  var query: List[(Str, Str)] = [${consts.join(", ")}]")
+  // labels and path
+  var path = h.path
+  for m in input.members {
+    match binding(m.traits, h.path, m.name) {
+      Label(greedy) => {
+        let f = field_name(m.name)
+        out.push("  let label_${f} = match input.${f} {")
+        out.push("    Some(v) => ${text_expr(g, m, m.target, "v", "date-time")}")
+        out.push("    None => return Err(\"input member ${m.name} is required\")")
+        out.push("  }")
+        out.push("  if label_${f} == \"\" {")
+        out.push("    return Err(\"input member ${m.name} must not be empty\")")
+        out.push("  }")
+        let pat = if greedy { "{${m.name}+}" } else { "{${m.name}}" }
+        path = path.replace(pat, "\${rest.escape(label_${f}, ${greedy})}")
+      }
+      _ => {}
+    }
+  }
+  var token_set: List[Str] = []
+  for m in input.members {
+    let f = field_name(m.name)
+    let tok = has(m.traits, "idempotencyToken")
+    match binding(m.traits, h.path, m.name) {
+      Query(q) => {
+        let t = shape_of(g, m.target)
+        if t.kind is model.Kind.List {
+          let em = t.members[0]
+          out.push("  if let Some(xs) = input.${f} {")
+          out.push("    for x in xs {")
+          out.push("      query.push((${lit_str(q)}, ${text_expr(g, em, em.target, "x", "date-time")}))")
+          out.push("    }")
+          out.push("  }")
+        } else {
+          out.push("  if let Some(v) = input.${f} {")
+          out.push("    query.push((${lit_str(q)}, ${text_expr(g, m, m.target, "v", "date-time")}))")
+          if tok {
+            out.push("  } else if idempotency_token != \"\" {")
+            out.push("    query.push((${lit_str(q)}, idempotency_token))")
+          }
+          out.push("  }")
+        }
+      }
+      Header(hn) => {
+        let t = shape_of(g, m.target)
+        if t.kind is model.Kind.List {
+          let em = t.members[0]
+          let ts = shape_of(g, em.target).kind is model.Kind.Timestamp
+          out.push("  if let Some(xs) = input.${f} {")
+          out.push("    let items = xs.map(fn(x: ${xo_type(g, em.target)}) -> Str { ${text_expr(g, em, em.target, "x", "http-date")} })")
+          if ts {
+            out.push("    headers.push((${lit_str(hn)}, items.join(\", \")))")
+          } else {
+            out.push("    headers.push((${lit_str(hn)}, rest.header_list(items)))")
+          }
+          out.push("  }")
+        } else {
+          out.push("  if let Some(v) = input.${f} {")
+          out.push("    headers.push((${lit_str(hn)}, ${text_expr(g, m, m.target, "v", "http-date")}))")
+          if tok {
+            out.push("  } else if idempotency_token != \"\" {")
+            out.push("    headers.push((${lit_str(hn)}, idempotency_token))")
+          }
+          out.push("  }")
+        }
+      }
+      _ => {}
+    }
+    if tok {
+      token_set.push(f)
+    }
+  }
+  // prefix headers after the named ones, which win
+  for m in input.members {
+    let f = field_name(m.name)
+    if let Binding.PrefixHeaders(p) = binding(m.traits, h.path, m.name) {
+        out.push("  if let Some(hm) = input.${f} {")
+        out.push("    let named = headers.map(fn(h: (Str, Str)) -> Str { h.0.to_lower() })")
+        out.push("    for (k, v) in hm.entries() {")
+        out.push("      if !named.contains(\"${p.to_lower()}\${k.to_lower()}\") {")
+        out.push("        headers.push((\"${p}\${k}\", v))")
+        out.push("      }")
+        out.push("    }")
+        out.push("  }")
+          }
+  }
+  // query params last: httpQuery wins over them
+  for m in input.members {
+    if binding(m.traits, h.path, m.name) is Binding.QueryParams {
+      let f = field_name(m.name)
+      let vt = shape_of(g, shape_of(g, m.target).members[1].target)
+      out.push("  if let Some(qp) = input.${f} {")
+      out.push("    let fixed = query.map(fn(p: (Str, Str)) -> Str { p.0 })")
+      out.push("    for (k, v) in qp.entries() {")
+      out.push("      if fixed.contains(k) {")
+      out.push("        continue")
+      out.push("      }")
+      if vt.kind is model.Kind.List {
+        out.push("      for x in v {")
+        out.push("        query.push((k, x))")
+        out.push("      }")
+      } else {
+        out.push("      query.push((k, v))")
+      }
+      out.push("    }")
+      out.push("  }")
+    }
+  }
+  // body
+  let payload = input.members.find(fn(m: model.Member) -> Bool { binding(m.traits, h.path, m.name) is Binding.Payload })
+  let body_members = input.members.filter(fn(m: model.Member) -> Bool { binding(m.traits, h.path, m.name) is Binding.Body })
+  let has_ct = input.members.any(fn(m: model.Member) -> Bool { (model.trait_str(m.traits, "httpHeader") ?? "").to_lower() == "content-type" })
+  out.push("  var body = b\"\"")
+  match payload {
+    Some(m) => {
+      let f = field_name(m.name)
+      let t = shape_of(g, m.target)
+      let (expr, ct) = match t.kind {
+        Blob => ("v", media_type(g, m) ?? "application/octet-stream")
+        String => ("v.bytes()", media_type(g, m) ?? "text/plain")
+        Enum => ("v.value().bytes()", "text/plain")
+        _ => ("${json_expr(g, m.traits, m.target, "v")}.encode().bytes()", "application/json")
+      }
+      out.push("  if let Some(v) = input.${f} {")
+      out.push("    body = ${expr}")
+      if !has_ct {
+        out.push("    headers.push((\"Content-Type\", ${lit_str(ct)}))")
+      }
+      if ct == "application/json" && !(t.kind is model.Kind.Union) {
+        // an absent structure payload is an empty object
+        out.push("  } else {")
+        out.push("    body = b\"{}\"")
+        if !has_ct {
+          out.push("    headers.push((\"Content-Type\", \"application/json\"))")
+        }
+      }
+      out.push("  }")
+    }
+    None => {
+      if !body_members.is_empty() {
+        out.push("  var fs: List[(Str, json.Value)] = []")
+        for m in body_members {
+          let f = field_name(m.name)
+          out.push("  if let Some(x) = input.${f} {")
+          out.push("    fs.push((${lit_str(json_name(m))}, ${json_expr(g, m.traits, m.target, "x")}))")
+          if has(m.traits, "idempotencyToken") {
+            out.push("  } else if idempotency_token != \"\" {")
+            out.push("    fs.push((${lit_str(json_name(m))}, json.Value.Str(idempotency_token)))")
+          }
+          out.push("  }")
+        }
+        out.push("  body = json.Value.Object(fs).encode().bytes()")
+        if !has_ct {
+          out.push("  headers.push((\"Content-Type\", \"application/json\"))")
+        }
+      }
+    }
+  }
+  if has(s.traits, "httpChecksumRequired") {
+    out.push("  if !body.is_empty() {")
+    out.push("    headers.push((\"Content-MD5\", crypto.digest(crypto.Hash.Md5, body).to_base64()))")
+    out.push("  }")
+  }
+  if let Some(rc) = model.trait_of(s.traits, "requestCompression") {
+    if rc.encode().contains("\"gzip\"") {
+      out.push("  if !body.is_empty() && body.len() >= min_compress {")
+      out.push("    body = compress.gzip(body)")
+      out.push("    let i = headers.map(fn(h: (Str, Str)) -> Str { h.0.to_lower() }).index_of(\"content-encoding\")")
+      out.push("    match i {")
+      out.push("      Some(k) => headers[k] = (headers[k].0, \"\${headers[k].1}, gzip\")")
+      out.push("      None => headers.push((\"Content-Encoding\", \"gzip\"))")
+      out.push("    }")
+      out.push("  }")
+    }
+  }
+  out.push("  if !body.is_empty() {")
+  out.push("    headers.push((\"Content-Length\", \"\${body.len()}\"))")
+  out.push("  }")
+  // host prefix
+  var host = "ep.host"
+  if let Some(e) = model.trait_of(s.traits, "endpoint") {
+    if let Some(json.Value.Str(prefix)) = e.get("hostPrefix") {
+      var p = prefix
+      for m in input.members {
+        if has(m.traits, "hostLabel") {
+          let f = field_name(m.name)
+          out.push("  let host_${f} = input.${f} ?? return Err(\"input member ${m.name} is required\")")
+          p = p.replace("{${m.name}}", "\${host_${f}}")
+        }
+      }
+      host = "\"${p}\${ep.host}\""
+    }
+  }
+  out.push("  Ok(transport.Request{")
+  out.push("    method: ${lit_str(h.method)},")
+  out.push("    scheme: ep.scheme,")
+  out.push("    host: ${host},")
+  out.push("    port: ep.port,")
+  out.push("    path: \"\${ep.path}${path}\",")
+  out.push("    query: rest.query(query),")
+  out.push("    headers: headers,")
+  out.push("    body: body,")
+  out.push("  })")
+  out.push("}")
+  out.push("")
+}
+
+/// The statements that read the HTTP bindings of `shape` from `resp`
+/// into `out`, then its body members or payload.
+fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
+  let members = shape.members
+  for m in members {
+    let f = field_name(m.name)
+    match binding(m.traits, "", m.name) {
+      Header(hn) => {
+        let t = shape_of(g, m.target)
+        out.push("  if let Some(hv) = resp.header(${lit_str(hn)}) {")
+        if t.kind is model.Kind.List {
+          let em = t.members[0]
+          let split = if shape_of(g, em.target).kind is model.Kind.Timestamp && ts_format(g, em.traits, em.target, "http-date") == "http-date" { "rest.split_http_dates(hv)" } else { "rest.split_header_list(hv)" }
+          out.push("    var items: ${xo_type(g, m.target)} = []")
+          out.push("    for item in ${split} {")
+          out.push("      items.push(${parse_text_expr(g, em, em.target, "item")})")
+          out.push("    }")
+          out.push("    out.${f} = items")
+        } else {
+          out.push("    out.${f} = ${parse_text_expr(g, m, m.target, "hv")}")
+        }
+        out.push("  }")
+      }
+      PrefixHeaders(p) => {
+        out.push("  var prefixed_${f}: Map[Str, Str] = {}")
+        out.push("  for (k, hv) in resp.headers.entries() {")
+        out.push("    if k.to_lower().starts_with(${lit_str(p.to_lower())}) {")
+        out.push("      prefixed_${f}.put(k.bytes()[${p.len()}..k.len()].to_str() ?? k, hv)")
+        out.push("    }")
+        out.push("  }")
+        out.push("  if !prefixed_${f}.is_empty() {")
+        out.push("    out.${f} = prefixed_${f}")
+        out.push("  }")
+      }
+      ResponseCode => out.push("  out.${f} = resp.status")
+      _ => {}
+    }
+  }
+  let payload = members.find(fn(m: model.Member) -> Bool { binding(m.traits, "", m.name) is Binding.Payload })
+  // in a response, members bound to the request's labels or query are
+  // ordinary body members
+  let body_members = members.filter(fn(m: model.Member) -> Bool { in_response_body(binding(m.traits, "", m.name)) })
+  match payload {
+    Some(m) => {
+      let f = field_name(m.name)
+      let t = shape_of(g, m.target)
+      match t.kind {
+        Blob => {
+          out.push("  if !resp.body.is_empty() {")
+          out.push("    out.${f} = resp.body")
+          out.push("  }")
+        }
+        String => {
+          out.push("  if !resp.body.is_empty() {")
+          out.push("    out.${f} = resp.body.to_str() ?? \"\"")
+          out.push("  }")
+        }
+        Enum => {
+          out.push("  if !resp.body.is_empty() {")
+          out.push("    out.${f} = ${type_name(g.names, m.target)}.from(resp.body.to_str() ?? \"\")")
+          out.push("  }")
+        }
+        _ => {
+          out.push("  if !resp.body.is_empty() {")
+          out.push("    let doc = jsonv.parse_body(resp.body)?")
+          out.push("    out.${f} = ${from_json_expr(g, m.traits, m.target, "doc")}")
+          out.push("  }")
+        }
+      }
+    }
+    None => {
+      if !body_members.is_empty() {
+        out.push("  for (k, fv) in jsonv.fields(body)? {")
+        out.push("    if fv == json.Value.Null {")
+        out.push("      continue")
+        out.push("    }")
+        out.push("    match k {")
+        for m in body_members {
+          out.push("      ${lit_str(json_name(m))} => out.${field_name(m.name)} = ${from_json_expr(g, m.traits, m.target, "fv")}")
+        }
+        out.push("      _ => {}")
+        out.push("    }")
+        out.push("  }")
+      }
+    }
+  }
+}
+
+fn in_response_body(b: Binding) -> Bool {
+  match b {
+    Body | Label(_) | Query(_) | QueryParams => true
+    _ => false
+  }
+}
+
+fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let name = op_name(op)
+  if s.output == "smithy.api#Unit" {
+    out.push("pub fn deserialize_${name}(resp: http.Response) -> () ! Str {")
+    out.push("  let _ = resp")
+    out.push("  Ok(())")
+    out.push("}")
+    out.push("")
+    return
+  }
+  let output = shape_of(g, s.output)
+  let t = xo_type(g, s.output)
+  out.push("pub fn deserialize_${name}(resp: http.Response) -> ${t} ! Str {")
+  out.push("  var out = ${t}{}")
+  let has_payload = output.members.any(fn(m: model.Member) -> Bool { has(m.traits, "httpPayload") })
+  let has_body = output.members.any(fn(m: model.Member) -> Bool { in_response_body(binding(m.traits, "", m.name)) })
+  if !has_payload && has_body {
+    out.push("  let body = jsonv.parse_body(resp.body)?")
+  }
+  emit_read_members(g, output, out)
+  out.push("  Ok(out)")
+  out.push("}")
+  out.push("")
+}
+
+/// The name of an operation's error enum: `<Operation>Err`.
+pub fn op_err(op: Str) -> Str {
+  "${model.name_of(op)}Err"
+}
+
+fn err_variants(g: G, op: Str) -> List[(Str, Str)] {
+  let s = shape_of(g, op)
+  var errs = s.errors
+  if let Some(svc) = g.m.shapes.get(g.m.service) {
+    for e in svc.errors {
+      if !errs.contains(e) {
+        errs.push(e)
+      }
+    }
+  }
+  errs.map(fn(e: Str) -> (Str, Str) {
+    let n = type_name(g.names, e)
+    let v = if ["Api", "Send", "InvalidInput", "Deserialize"].contains(n) { "${n}Error" } else { n }
+    (e, v)
+  })
+}
+
+fn emit_errors(g: G, op: Str, var out: List[Str]) {
+  let en = op_err(op)
+  let vs = err_variants(g, op)
+  out.push("/// The errors of ${model.name_of(op)}.")
+  out.push("pub enum ${en} {")
+  for (e, v) in vs {
+    out.push("  ${v}(e: ${type_name(g.names, e)})")
+  }
+  out.push("  /// A service error the model does not list for this operation.")
+  out.push("  Api(e: aws.ApiError)")
+  out.push("  /// The request was not sent or no response came (after retries).")
+  out.push("  Send(e: transport.SendErr)")
+  out.push("  /// The input cannot be serialized (a required label is missing).")
+  out.push("  InvalidInput(msg: Str)")
+  out.push("  /// The response is not what the protocol says.")
+  out.push("  Deserialize(msg: Str)")
+  out.push("}")
+  out.push("")
+  out.push("pub fn (e: ${en}) display() -> Str {")
+  out.push("  match e {")
+  for (e, v) in vs {
+    out.push("    ${v}(x) => \"${model.name_of(e)}: \${x:?}\"")
+  }
+  out.push("    Api(x) => x.display()")
+  out.push("    Send(x) => x.display()")
+  out.push("    InvalidInput(msg) => \"invalid input: \${msg}\"")
+  out.push("    Deserialize(msg) => \"cannot read the response: \${msg}\"")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+  out.push("pub fn deserialize_${op_name(op)}_error(resp: http.Response) -> ${en} {")
+  out.push("  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])")
+  if !vs.is_empty() {
+    out.push("  match restjson.error_code(resp, body) {")
+    for (e, v) in vs {
+      out.push("    ${lit_str(model.name_of(e))} => match read_error_${fn_key(g, e)}(resp, body) {")
+      out.push("      Ok(x) => return ${en}.${v}(x)")
+      out.push("      Err(msg) => return ${en}.Deserialize(msg)")
+      out.push("    }")
+    }
+    out.push("    _ => {}")
+    out.push("  }")
+  }
+  out.push("  ${en}.Api(restjson.api_error(resp, body))")
+  out.push("}")
+  out.push("")
+}
+
+fn emit_error_readers(g: G, var out: List[Str]) {
+  var done: Set[Str] = [].to_set()
+  for id in g.ids {
+    let s = shape_of(g, id)
+    if !has(s.traits, "error") || done.contains(id) {
+      continue
+    }
+    done.add(id)
+    let t = xo_type(g, id)
+    out.push("fn read_error_${fn_key(g, id)}(resp: http.Response, body: json.Value) -> ${t} ! Str {")
+    out.push("  let _ = (resp, body)")
+    out.push("  var out = ${t}{}")
+    emit_read_members(g, s, out)
+    out.push("  Ok(out)")
+    out.push("}")
+    out.push("")
+  }
+}
+
+fn sigv4_name(g: G) -> Str {
+  let svc = shape_of(g, g.m.service)
+  match model.trait_of(svc.traits, "aws.auth#sigv4") {
+    Some(v) => match v.get("name") {
+      Some(json.Value.Str(n)) => n
+      _ => ""
+    }
+    None => ""
+  }
+}
+
+pub fn emit_restjson(g: G) -> Str {
+  var out: List[Str] = [
+    "// Code generated by xo-lang-aws codegen. DO NOT EDIT.",
+    "",
+    "use std/compress",
+    "use std/crypto",
+    "use std/http",
+    "use std/json",
+    "use github.com/xo-lang/aws",
+    "use github.com/xo-lang/aws/protocol/jsonv",
+    "use github.com/xo-lang/aws/protocol/rest",
+    "use github.com/xo-lang/aws/protocol/restjson",
+    "use github.com/xo-lang/aws/retry",
+    "use github.com/xo-lang/aws/transport",
+    "",
+    "/// How a Client is made.",
+    "pub struct Options {",
+    "  /// The base endpoint, such as `http://localhost:4566` (endpoint",
+    "  /// rules come with decision 0003's endpoints step).",
+    "  pub endpoint: Str",
+    "  pub region: Str = \"us-east-1\"",
+    "  pub credentials: aws.CredentialsProvider",
+    "  pub max_attempts: Int = 3",
+    "}",
+    "",
+    "pub struct Client {",
+    "  pub endpoint: rest.Endpoint",
+    "  pub region: Str",
+    "  pub transport: transport.Client",
+    "  rand: Rand",
+    "}",
+    "",
+    "pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {",
+    "  let ep = rest.parse_endpoint(options.endpoint) ?? return Err(\"bad endpoint \${options.endpoint}\")",
+    "  Ok(Client{",
+    "    endpoint: ep,",
+    "    region: options.region,",
+    "    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),",
+    "    rand: rand,",
+    "  })",
+    "}",
+    "",
+    "const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}",
+    "",
+  ]
+  emit_json_fns(g, out)
+  emit_error_readers(g, out)
+  for op in model.operations(g.m) {
+    if !supported(g, op) {
+      out.push("// ${model.name_of(op)}: event streams are not generated yet.")
+      out.push("")
+      continue
+    }
+    emit_serializer(g, op, out)
+    emit_deserializer(g, op, out)
+    emit_errors(g, op, out)
+    let s = shape_of(g, op)
+    let name = op_name(op)
+    let en = op_err(op)
+    let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
+    let out_t = if s.output == "smithy.api#Unit" { "()" } else { xo_type(g, s.output) }
+    let token = if needs_token(shape_of(g, s.input)) { "rest.uuid(c.rand)" } else { "\"\"" }
+    doc_lines(out, s.traits, "")
+    out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
+    out.push("  let req = serialize_${name}(c.endpoint, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
+    out.push("  let resp = transport.send(c.transport, req, transport.Signing{service: SIGNING_NAME, region: c.region}, restjson.classify) ?? e => return Err(${en}.Send(e))")
+    out.push("  if resp.status >= 300 {")
+    out.push("    return Err(deserialize_${name}_error(resp))")
+    out.push("  }")
+    out.push("  deserialize_${name}(resp) ?? e => Err(${en}.Deserialize(e))")
+    out.push("}")
+    out.push("")
+  }
+  out.join("\n")
+}

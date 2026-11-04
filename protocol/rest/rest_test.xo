@@ -1,0 +1,36 @@
+test "escaping and queries" {
+  expect(escape(" %:/?#[]@!$&'()*+,;=😹")) == "%20%25%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D%F0%9F%98%B9"
+  expect(escape("a/b c", true)) == "a/b%20c"
+  expect(query([("a", "b c"), ("list", "")])) == "a=b%20c&list="
+  expect(parse_query("a=b%20c&k=v%2Bw&e")) == [("a", "b c"), ("k", "v+w"), ("e", "")]
+}
+
+test "floats" {
+  expect(float_text(4.1)) == "4.1"
+  expect(float_text(1.0)) == "1"
+  expect(float_text(-2.0)) == "-2"
+  expect(float_text(nan())) == "NaN"
+  expect(float_text(-inf())) == "-Infinity"
+  expect(parse_float("Infinity")) == Some(inf())
+}
+
+test "header lists" {
+  expect(header_list(["a", "b,c", "d\"e"])) == "a, \"b,c\", \"d\\\"e\""
+  expect(split_header_list("a, \"b,c\", \"d\\\"e\"")) == ["a", "b,c", "d\"e"]
+  expect(split_header_list("1, 2,3")) == ["1", "2", "3"]
+  expect(split_http_dates("Mon, 16 Dec 2019 23:48:18 GMT, Mon, 16 Dec 2019 23:48:18 GMT").len()) == 2
+}
+
+test "timestamps" {
+  let t = parse_epoch_seconds("1576540098")?
+  expect(epoch_seconds(t)) == "1576540098"
+  expect(date_time(t)) == "2019-12-16T23:48:18Z"
+  expect(http_date(t)) == "Mon, 16 Dec 2019 23:48:18 GMT"
+  let f = parse_epoch_seconds("1515531081.123")?
+  expect(epoch_seconds(f)) == "1515531081.123"
+  expect(date_time(f)) == "2018-01-09T20:51:21.123Z"
+  expect(parse_date_time("2019-12-16T22:48:18-01:00")) == Some(t)
+  expect(parse_http_date("Mon, 16 Dec 2019 23:48:18 GMT")) == Some(t)
+  expect(parse_http_date("Tue, 29 Apr 2014 18:30:38.123 GMT").map(fn(x: Time) -> Str { epoch_seconds(x) })) == Some("1398796238.123")
+  expect(epoch_seconds(epoch_seconds_float(1515531081.123))) == "1515531081.123"
+}

@@ -1,0 +1,41 @@
+// Package gen turns a loaded model into Xo source files (decision 0002:
+// plan and emit).
+
+use github.com/xo-lang/aws/codegen/model
+
+pub struct Options {
+  /// The output directory relative to the repository root, which is also
+  /// the package's import path below the module.
+  pub package: Str
+  /// Also emit the model's Smithy protocol tests as Xo tests.
+  pub protocol_tests: Bool = false
+}
+
+pub struct File {
+  pub path: Str
+  pub text: Str
+}
+
+pub fn generate(m: model.Model, opts: Options) -> List[File] {
+  let g = new_g(m)
+  var files = [File{path: "types.xo", text: emit_types(g)}, File{path: "client.xo", text: emit_restjson(g)}]
+  if !g.names.renames.is_empty() {
+    var lines = ["# Renames", "", "Names the generator changed from the model's (decision 0002).", "", "| What | Model | Xo | Why |", "|---|---|---|---|"]
+    for r in g.names.renames {
+      lines.push("| ${r.what} | ${r.from} | ${r.to} | ${r.why} |")
+    }
+    files.push(File{path: "RENAMES.md", text: lines.join("\n") + "\n"})
+  }
+  if opts.protocol_tests {
+    files.push(File{path: "protocol_test.xo", text: emit_protocol_tests(g, "aws.protocols#restJson1", SKIP)})
+  }
+  files
+}
+
+/// Protocol tests not run, with why (aws-sdk-go-v2 skips most of these too).
+const SKIP: List[(Str, Str)] = [
+  ("RestJsonClientPopulatesDefaultValuesInInput", "members are optional and unset defaults are not sent (decision 0004); aws-sdk-go-v2 skips it too"),
+  ("RestJsonClientPopulatesDefaultsValuesWhenMissingInResponse", "defaults are not filled into outputs (decision 0004); aws-sdk-go-v2 skips it too"),
+  ("RestJsonClientPopulatesNestedDefaultValuesWhenMissing", "defaults are not filled in (decision 0004); aws-sdk-go-v2 skips it too"),
+  ("RestJsonClientPopulatesNestedDefaultsWhenMissingInResponseBody", "defaults are not filled in (decision 0004); aws-sdk-go-v2 skips it too"),
+]

@@ -1,0 +1,155 @@
+// Checks for the generated Smithy protocol tests (decision 0005): a
+// serialized request against an httpRequestTests case, compared the way
+// aws-sdk-go-v2's protocol test harness compares them.
+
+use std/json
+use github.com/xo-lang/aws/protocol/rest
+use github.com/xo-lang/aws/transport
+
+pub struct RequestWant {
+  pub method: Str
+  pub uri: Str
+  pub host: Str = ""
+  pub resolved_host: Str = ""
+  pub query_params: List[Str] = []
+  pub forbid_query_params: List[Str] = []
+  pub require_query_params: List[Str] = []
+  pub headers: List[(Str, Str)] = []
+  pub forbid_headers: List[Str] = []
+  pub require_headers: List[Str] = []
+  pub body: Str? = None
+  pub body_media_type: Str = ""
+}
+
+pub struct Mismatch {
+  pub msg: Str
+}
+
+pub fn (m: Mismatch) display() -> Str {
+  m.msg
+}
+
+fn header(req: transport.Request, name: Str) -> Str? {
+  let want = name.to_lower()
+  var found: List[Str] = []
+  for (k, v) in req.headers {
+    if k.to_lower() == want {
+      found.push(v)
+    }
+  }
+  if found.is_empty() { None } else { Some(found.join(", ")) }
+}
+
+pub fn check_request(req: transport.Request, want: RequestWant) -> () ! Mismatch {
+  var problems: List[Str] = []
+  if req.method != want.method {
+    problems.push("method ${req.method}, want ${want.method}")
+  }
+  let (want_path, want_query) = want.uri.cut("?") ?? (want.uri, "")
+  if req.path != want_path {
+    problems.push("path ${req.path}, want ${want_path}")
+  }
+  let raw = req.query.split("&").filter(fn(p: Str) -> Bool { p != "" })
+  var expected = want.query_params
+  if want_query != "" {
+    expected = expected + want_query.split("&")
+  }
+  for q in expected {
+    if !raw.contains(q) && !raw.contains("${q}=") {
+      problems.push("query lacks ${q} (query: ${req.query})")
+    }
+  }
+  let keys = rest.parse_query(req.query).map(fn(p: (Str, Str)) -> Str { p.0 })
+  for k in want.forbid_query_params {
+    if keys.contains(k) {
+      problems.push("query has forbidden ${k}")
+    }
+  }
+  for k in want.require_query_params {
+    if !keys.contains(k) {
+      problems.push("query lacks required ${k}")
+    }
+  }
+  for (k, v) in want.headers {
+    match header(req, k) {
+      Some(got) => if got != v { problems.push("header ${k}: ${got}, want ${v}") }
+      None => problems.push("header ${k} missing, want ${v}")
+    }
+  }
+  for k in want.forbid_headers {
+    if header(req, k).is_some() {
+      problems.push("header ${k} is forbidden")
+    }
+  }
+  for k in want.require_headers {
+    if header(req, k).is_none() {
+      problems.push("header ${k} is required")
+    }
+  }
+  let host = if want.resolved_host != "" { want.resolved_host } else { "" }
+  if host != "" && req.host != host {
+    problems.push("host ${req.host}, want ${host}")
+  }
+  if let Some(b) = want.body {
+    let got = req.body.to_str() ?? ""
+    if want.body_media_type.contains("json") && b != "" {
+      if !json_equal_text(got, b) {
+        problems.push("body ${got}, want ${b}")
+      }
+    } else if got != b {
+      problems.push("body ${got}, want ${b}")
+    }
+  }
+  if problems.is_empty() { Ok(()) } else { Err(Mismatch{msg: problems.join("; ")}) }
+}
+
+pub fn json_equal_text(a: Str, b: Str) -> Bool {
+  match (json.parse_value(a), json.parse_value(b)) {
+    (Ok(x), Ok(y)) => json_equal(x, y)
+    _ => false
+  }
+}
+
+/// JSON equality: objects as unordered maps, numbers by value.
+pub fn json_equal(a: json.Value, b: json.Value) -> Bool {
+  match (a, b) {
+    (json.Value.Object(xs), json.Value.Object(ys)) => {
+      if xs.len() != ys.len() {
+        return false
+      }
+      for (k, v) in xs {
+        match ys.find(fn(y: (Str, json.Value)) -> Bool { y.0 == k }) {
+          Some((_, w)) => if !json_equal(v, w) { return false }
+          None => return false
+        }
+      }
+      true
+    }
+    (json.Value.List(xs), json.Value.List(ys)) => {
+      if xs.len() != ys.len() {
+        return false
+      }
+      for i in 0..xs.len() {
+        if !json_equal(xs[i], ys[i]) {
+          return false
+        }
+      }
+      true
+    }
+    (json.Value.Int(x), json.Value.Num(y)) => Float(x) == y
+    (json.Value.Num(x), json.Value.Int(y)) => x == Float(y)
+    _ => a == b
+  }
+}
+
+/// A document parameter's value (the generator writes it as JSON text).
+pub fn doc(text: Str) -> json.Value {
+  json.parse_value(text).ok() ?? json.Value.Null
+}
+
+/// The map itself: generated tests write map literals through it, since
+/// native builds cannot yet convert a map literal to `Map?`
+/// (docs/reports/xo-issues.md entry 4).
+pub fn map_of[V](m: Map[Str, V]) -> Map[Str, V] {
+  m
+}

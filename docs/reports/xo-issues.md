@@ -110,3 +110,33 @@ local wrapper today.
 Workaround: a local function that calls it
 (credentials/stscreds/stscreds.xo `classify`). Status: reported to the
 lead 2026-11-04.
+
+## 4. A map literal where a `Map?` is expected is XO1201 on native
+
+Found 2026-11-04 (xo at b2e66f690). A map literal converted to an
+optional map (a struct field `Map[K, V]? = None` given `{"k": "v"}`)
+fails on the native backends: "not available on the native backends
+(arm64, amd64, LLVM) yet: this literal (support is planned)". The Go
+backend runs it. A typed `let` first, then the field, works.
+
+```xo
+struct In {
+  a: Map[Str, Str]? = None
+}
+
+fn main(os: Os) {
+  let ok: Map[Str, Str] = {"k": "v"}
+  let y = In{a: ok}                 // fine
+  let z = In{a: {"k": "v"}}         // XO1201 at the literal
+  os.stdio.println("${y:?} ${z:?}")
+}
+```
+
+Why it matters: every generated input and output member is optional
+(decision 0004), so users and the generated protocol tests write map
+literals there (`query_params_map: {"k": ["v"]}`); 50 restJson1 tests hit
+it.
+
+Workaround: the generated tests pass map literals through
+`protocoltest.map_of` (an identity on `Map[Str, V]`). Status: reported
+to the lead 2026-11-04.

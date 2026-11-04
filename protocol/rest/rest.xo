@@ -1,0 +1,257 @@
+// Shared pieces of the HTTP binding protocols (restJson1, restXml) and
+// of every protocol's scalar text forms: label, query and header
+// encodings, and the three Smithy timestamp formats, written and read as
+// smithy-go does (decision 0003).
+
+use std/time
+use std/url
+
+const HEX: Str = "0123456789ABCDEF"
+
+/// Escapes a label (or a query key or value): unreserved characters
+/// kept, everything else %XX; `/` kept too for a greedy label.
+pub fn escape(s: Str, keep_slash: Bool = false) -> Str {
+  let b = s.bytes()
+  let hex = HEX.bytes()
+  var out = BytesBuilder.with_capacity(b.len())
+  for c in b {
+    let keep = (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) ||
+      c == 45 || c == 46 || c == 95 || c == 126 || (keep_slash && c == 47)
+    if keep {
+      out.write_byte(c)
+    } else {
+      out.write_byte(37)
+      out.write_byte(hex[Int(c) >> 4])
+      out.write_byte(hex[Int(c) & 15])
+    }
+  }
+  out.freeze().to_str() ?? s
+}
+
+/// A query string from pairs, in order (`k=v&...`, a key alone for an
+/// empty constant such as `?list`).
+pub fn query(pairs: List[(Str, Str)]) -> Str {
+  pairs.map(fn(p: (Str, Str)) -> Str { "${escape(p.0)}=${escape(p.1)}" }).join("&")
+}
+
+/// The decoded pairs of a raw query.
+pub fn parse_query(raw: Str) -> List[(Str, Str)] {
+  if raw == "" {
+    return []
+  }
+  raw.split("&").map(fn(part: Str) -> (Str, Str) {
+    let (k, v) = part.cut("=") ?? (part, "")
+    (url.query_unescape(k).ok() ?? k, url.query_unescape(v).ok() ?? v)
+  })
+}
+
+/// Go's strconv.FormatFloat(f, 'f', -1, 64) with Smithy's names for the
+/// special values: the text forms in labels, queries and headers.
+pub fn float_text(f: Float) -> Str {
+  if f.is_nan() {
+    return "NaN"
+  }
+  if f.is_inf() {
+    return if f > 0.0 { "Infinity" } else { "-Infinity" }
+  }
+  f.to_fixed(-1)
+}
+
+/// NaN and the infinities (Float has no constants for them yet).
+pub fn nan() -> Float {
+  Float.parse("NaN") ?? 0.0
+}
+
+pub fn inf() -> Float {
+  Float.parse("Inf") ?? 0.0
+}
+
+pub fn parse_float(s: Str) -> Float? {
+  match s {
+    "NaN" => Some(nan())
+    "Infinity" => Some(inf())
+    "-Infinity" => Some(-inf())
+    _ => Float.parse(s)
+  }
+}
+
+/// A header list value: each item quoted when it holds a comma or a
+/// double quote (smithy-go's httpbinding), joined by ", ".
+pub fn header_list(items: List[Str]) -> Str {
+  items.map(fn(s: Str) -> Str {
+    if s.contains(",") || s.contains("\"") {
+      "\"${s.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+    } else {
+      s
+    }
+  }).join(", ")
+}
+
+/// Splits a header list value, honoring quoted items.
+pub fn split_header_list(v: Str) -> List[Str] {
+  var out: List[Str] = []
+  var cur = StrBuilder.new()
+  var quoted = false
+  var escaped = false
+  var was_quoted = false
+  for r in v.runes() {
+    if escaped {
+      cur.write("${r}")
+      escaped = false
+    } else if quoted && r == '\\' {
+      escaped = true
+    } else if r == '"' {
+      quoted = !quoted
+      was_quoted = true
+    } else if r == ',' && !quoted {
+      let item = cur.freeze()
+      out.push(if was_quoted { item } else { item.trim() })
+      cur = StrBuilder.new()
+      was_quoted = false
+    } else {
+      cur.write("${r}")
+    }
+  }
+  let last = cur.freeze()
+  if !last.trim().is_empty() || !out.is_empty() {
+    out.push(if was_quoted { last } else { last.trim() })
+  }
+  out.map(fn(s: Str) -> Str { s.trim() })
+}
+
+/// HTTP dates hold a comma; a list of them splits at every second comma.
+pub fn split_http_dates(v: Str) -> List[Str] {
+  let parts = v.split(",")
+  var out: List[Str] = []
+  var i = 0
+  while i + 1 < parts.len() {
+    out.push("${parts[i].trim()}, ${parts[i + 1].trim()}")
+    i += 2
+  }
+  out
+}
+
+fn unix_nanos(t: Time) -> Int {
+  (t - Time.UNIX_EPOCH).nanos()
+}
+
+fn from_nanos(n: Int) -> Time {
+  Time.UNIX_EPOCH + Duration.from_nanos(n)
+}
+
+/// The fraction of a second at millisecond precision, without trailing
+/// zeros (".123", ".1", or "" for none).
+fn millis_fraction(t: Time) -> Str {
+  let ms = ((unix_nanos(t) % 1000000000 + 1000000000) % 1000000000) / 1000000
+  if ms == 0 {
+    return ""
+  }
+  var s = "${ms + 1000}".bytes()[1..4].to_str() ?? ""
+  while s.ends_with("0") {
+    s = s.bytes()[0..s.len() - 1].to_str() ?? s
+  }
+  ".${s}"
+}
+
+/// Smithy `epoch-seconds`: seconds, with milliseconds when there are any.
+pub fn epoch_seconds(t: Time) -> Str {
+  let n = unix_nanos(t)
+  let secs = if n < 0 && n % 1000000000 != 0 { n / 1000000000 - 1 } else { n / 1000000000 }
+  "${secs}${millis_fraction(t)}"
+}
+
+/// Smithy `date-time`: RFC 3339 in UTC with milliseconds when there are any.
+pub fn date_time(t: Time) -> Str {
+  "${time.format(t, time.utc(), "{year}-{month}-{day}T{hour}:{minute}:{second}")}${millis_fraction(t)}Z"
+}
+
+/// Smithy `http-date`: IMF-fixdate.
+pub fn http_date(t: Time) -> Str {
+  "${time.format(t, time.utc(), "{weekday:short}, {day} {month:short} {year} {hour}:{minute}:{second}")}${millis_fraction(t)} GMT"
+}
+
+/// Reads an `epoch-seconds` number (integer or with a fraction).
+pub fn parse_epoch_seconds(s: Str) -> Time? {
+  let (whole, frac) = s.cut(".") ?? (s, "")
+  let secs = Int.parse(whole) ?? return None
+  var nanos = 0
+  if frac != "" {
+    var digits = frac
+    while digits.len() < 9 {
+      digits = "${digits}0"
+    }
+    nanos = Int.parse(digits.bytes()[0..9].to_str() ?? "") ?? return None
+    if whole.starts_with("-") {
+      nanos = -nanos
+    }
+  }
+  Some(from_nanos(secs * 1000000000 + nanos))
+}
+
+pub fn epoch_seconds_float(f: Float) -> Time {
+  from_nanos(Int((f * 1000.0).round()) * 1000000)
+}
+
+/// Reads a `date-time` (RFC 3339, any offset, any fraction).
+pub fn parse_date_time(s: Str) -> Time? {
+  Time.parse_rfc3339(s)
+}
+
+/// Reads an `http-date`, with or without a fraction of a second.
+pub fn parse_http_date(s: Str) -> Time? {
+  let trimmed = s.trim()
+  // drop a fraction before " GMT"
+  let text = match trimmed.cut_suffix(" GMT") {
+    Some(head) => match head.cut(".") {
+      Some((a, frac)) => {
+        let base = time.parse("${a} GMT", time.RFC1123, time.utc()).ok() ?? return None
+        let extra = parse_epoch_seconds("0.${frac}") ?? return None
+        return Some(base + (extra - Time.UNIX_EPOCH))
+      }
+      None => trimmed
+    }
+    None => trimmed
+  }
+  time.parse(text, time.RFC1123, time.utc()).ok()
+}
+
+/// Where requests go: a base endpoint URL's parts.
+pub struct Endpoint {
+  pub scheme: Str = "https"
+  pub host: Str
+  pub port: Int? = None
+  /// A path prefix the endpoint has ("" for none), without a final `/`.
+  pub path: Str = ""
+}
+
+/// The parts of a base endpoint such as `https://example.com` or
+/// `http://localhost:4566/prefix`.
+pub fn parse_endpoint(u: Str) -> Endpoint? {
+  let (scheme, rest) = u.cut("://") ?? return None
+  let (hostport, path) = match rest.cut("/") {
+    Some((h, p)) => (h, "/${p}")
+    None => (rest, "")
+  }
+  let trimmed = if path.ends_with("/") { path.bytes()[0..path.len() - 1].to_str() ?? path } else { path }
+  match hostport.cut(":") {
+    Some((h, p)) => Some(Endpoint{scheme: scheme, host: h, port: Some(Int.parse(p) ?? return None), path: trimmed})
+    None => Some(Endpoint{scheme: scheme, host: hostport, path: trimmed})
+  }
+}
+
+/// A random (version 4) UUID, the default idempotency token.
+pub fn uuid(rand: Rand) -> Str uses rand {
+  let b = rand.bytes(16)
+  let hex = b.to_hex()
+  let v = hex.bytes()
+  // version 4 and the RFC 4122 variant
+  let x = "${v[0..12].to_str() ?? ""}4${v[13..16].to_str() ?? ""}"
+  let variant = "89ab".bytes()[Int(b[8]) & 3]
+  var out = BytesBuilder.new()
+  out.write(x.bytes())
+  out.write_byte(variant)
+  out.write(v[17..32])
+  let s = out.freeze().to_str() ?? hex
+  let sb = s.bytes()
+  "${sb[0..8].to_str() ?? ""}-${sb[8..12].to_str() ?? ""}-${sb[12..16].to_str() ?? ""}-${sb[16..20].to_str() ?? ""}-${sb[20..32].to_str() ?? ""}"
+}

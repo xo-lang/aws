@@ -1,0 +1,30 @@
+// SQS (awsJson1_0, awsQueryCompatible) against LocalStack (decision 0005,
+// emulator tests): run by scripts/integration-localstack.sh, with invented
+// credentials. The client gets a Net that reaches only the loopback host.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/sqs
+
+test "sqs round trip against LocalStack" uses (net, env, clock) {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = sqs.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, sqs.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let q = c.create_queue(sqs.CreateQueueRequest{queue_name: "xo-lang-aws-it"})?
+  let url = q.queue_url ?? ""
+  expect(url.ends_with("/xo-lang-aws-it")) == true
+  let sent = c.send_message(sqs.SendMessageRequest{queue_url: url, message_body: "hello from xo"})?
+  expect(sent.message_id.is_some()) == true
+  let got = c.receive_message(sqs.ReceiveMessageRequest{queue_url: url, max_number_of_messages: 1, wait_time_seconds: 1})?
+  let msgs = got.messages ?? []
+  expect(msgs.map(fn(m: sqs.Message) -> Str { m.body ?? "" })) == ["hello from xo"]
+  c.delete_message(sqs.DeleteMessageRequest{queue_url: url, receipt_handle: msgs[0].receipt_handle ?? ""})?
+  match c.get_queue_url(sqs.GetQueueUrlRequest{queue_name: "xo-lang-aws-no-such-queue"}) {
+    Err(sqs.GetQueueUrlErr.QueueDoesNotExist(_)) => {}
+    other => expect("${other:?}") == "QueueDoesNotExist"
+  }
+  c.delete_queue(sqs.DeleteQueueRequest{queue_url: url})?
+}

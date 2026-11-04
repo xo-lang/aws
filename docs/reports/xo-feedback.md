@@ -167,3 +167,20 @@ says what happened, not a general opinion. Bugs with repros go in
   normal gate ("1 uses clock, env, net: run with --real") and runs
   against LocalStack under the script, and `os.net.only([...])` makes
   "never reach real AWS" a type of value, not a convention.
+
+## 2026-11-04: awsJson, DynamoDB, SQS
+
+- Liked: adding awsJson1_0/1_1 to the restJson emitter took one `rpc`
+  field and a binding override; the typed enums and optional fields made
+  the generated DynamoDB `AttributeValue` (a tagged union) read naturally,
+  and `expect(got.item) == Some(item)` compares a nested map of unions
+  structurally with no helper.
+- Liked: the `{"k": v}` map literal with the type taken from the
+  annotation.
+- Disliked: finding the map literal syntax: std.md mentions a "Map literal"
+  only in passing and has no `Map.from(pairs)`, so my first guess failed.
+  A one-line example in std.md's Map section would help.
+- Disliked: two backend regressions in one xo update (xo-issues 5, 6):
+  arm64 refused an inlined cross-module call that built before, and the Go
+  backend misses the `T` to `T?` wrap for `x ?? return Err(..)`. LLVM was
+  the working fallback, which made `--backend` a useful escape hatch.

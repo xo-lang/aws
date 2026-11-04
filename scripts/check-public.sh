@@ -25,7 +25,9 @@ report() {
 #                 ServerSideEncryptionByDefault$KMSMasterKeyID docs
 #   444455556666  models/s3: CreateMultipartUploadRequest$GrantRead docs
 #   555566667777  models/s3: PutBucketAcl docs
-ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777'
+#   999999999999  smithy-aws-protocol-tests model/awsJson1_1/kitchen-sink.smithy:
+#                 a Long member's test value (not an account id)
+ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777|999999999999'
 #   Grantees@email.com  models/s3: PutBucketAcl, PutBucketLogging, PutObjectAcl docs
 #   xyz@amazon.com, abc@amazon.com  models/s3: PutObjectAcl docs
 #   @example.com/.org/.net  reserved documentation domains (RFC 2606)

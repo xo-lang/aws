@@ -17,7 +17,11 @@ for d in $dirs; do
   while [ "$mod" != . ] && [ ! -f "$mod/xo.mod" ]; do mod=$(dirname "$mod"); done
   if [ "$mod" = "$d" ]; then rel=.; else rel=${d#"$mod"/}; fi
   echo "== $d"
-  (cd "$mod" && "$xo" test "./$rel") || fail=1
+  # packages listed in XO_GATE_LLVM build with the LLVM backend (a native
+  # backend bug: docs/reports/xo-issues.md entry 5)
+  flags=""
+  for p in ${XO_GATE_LLVM-internal/protocoltest/restjson}; do [ "$p" = "$d" ] && flags=--backend=llvm; done
+  (cd "$mod" && "$xo" test $flags "./$rel") || fail=1
 done
 [ $fail -eq 0 ] && echo "gate: ok" || echo "gate: FAILED"
 exit $fail

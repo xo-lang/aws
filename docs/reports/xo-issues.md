@@ -139,3 +139,39 @@ it.
 Workaround (removed): the generated tests passed map literals through
 `protocoltest.map_of`. Status: FIXED on xo main 0e4fa349e (golden
 optional_coll_lit).
+
+## 5. arm64: an inlined cross-module call fails as "runtime call"
+
+Found 2026-11-04 (xo at 97c8b271b). `xo test ./internal/protocoltest/restjson`
+(generated RestJson client) stops in the arm64 backend:
+
+```
+xo: protocol/restjson/restjson.xo:31:7: in `github.com/xo-lang/aws/protocol/restjson.error_code`
+(inlined into `deserialize_greeting_with_errors_error`): arm64 backend: runtime call
+`restjson.sanitize_code`
+```
+
+`error_code` (pub, module protocol/restjson) calls `sanitize_code` (pub,
+same module); the failure appears when `error_code` is inlined into a
+generated function of another module. `--backend=llvm` builds and passes
+all 194 tests, and the same package passed on arm64 with xo b2e66f690 and
+a82f123de. The awsJson packages, which call the same function from
+similar generated code, build. Status: reported to the lead 2026-11-04;
+the gate runs this package with `--backend=llvm` meanwhile (gate.sh
+XO_GATE_LLVM).
+
+## 6. Go backend: `field = (x ?? return Err(..))` into an optional field
+
+Found 2026-11-04 (xo at 97c8b271b). `xo test --backend=go
+./internal/protocoltest/restjson` fails in `go build` ("a code generator
+bug"):
+
+```
+client.xo:7626: cannot use x_c3537 (variable of type int64) as rt.Option[int64] value in assignment
+```
+
+from `out.header_byte = (Int.parse(hv) ?? return Err("..."))` where
+`header_byte: Int? = None`: the implicit `T` to `T?` wrap is missing when
+the right side is a `?? return` expression (also for `(s == "true")` into a
+`Bool?`, and Time). Native and LLVM accept it. Status: reported to the
+lead 2026-11-04.

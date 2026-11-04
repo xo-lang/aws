@@ -17,6 +17,14 @@ enum Binding {
   Body
 }
 
+/// A member's binding; awsJson has none, everything is in the body.
+fn bind(g: G, traits: List[(Str, json.Value)], uri: Str, name: Str) -> Binding {
+  if g.rpc != "" {
+    return Binding.Body
+  }
+  binding(traits, uri, name)
+}
+
 fn binding(traits: List[(Str, json.Value)], uri: Str, name: Str) -> Binding {
   if has(traits, "httpLabel") {
     return Binding.Label(uri.contains("{${name}+}"))
@@ -134,7 +142,11 @@ fn from_json_expr(g: G, traits: List[(Str, json.Value)], target: Str, v: Str) ->
   }
 }
 
-fn json_name(m: model.Member) -> Str {
+fn json_name(g: G, m: model.Member) -> Str {
+  // awsJson ignores jsonName
+  if g.rpc != "" {
+    return m.name
+  }
   model.trait_str(m.traits, "jsonName") ?? m.name
 }
 
@@ -161,7 +173,7 @@ fn emit_json_fns(g: G, var out: List[Str]) {
         out.push("  var fs: List[(Str, json.Value)] = []")
         for m in s.members {
           out.push("  if let Some(x) = v.${field_name(m.name)} {")
-          out.push("    fs.push((${lit_str(json_name(m))}, ${json_expr(g, m.traits, m.target, "x")}))")
+          out.push("    fs.push((${lit_str(json_name(g, m))}, ${json_expr(g, m.traits, m.target, "x")}))")
           out.push("  }")
         }
         out.push("  json.Value.Object(fs)")
@@ -178,7 +190,7 @@ fn emit_json_fns(g: G, var out: List[Str]) {
           out.push("    }")
           out.push("    match k {")
           for m in s.members {
-            out.push("      ${lit_str(json_name(m))} => out.${field_name(m.name)} = ${from_json_expr(g, m.traits, m.target, "fv")}")
+            out.push("      ${lit_str(json_name(g, m))} => out.${field_name(m.name)} = ${from_json_expr(g, m.traits, m.target, "fv")}")
           }
           out.push("      _ => {}")
           out.push("    }")
@@ -193,9 +205,9 @@ fn emit_json_fns(g: G, var out: List[Str]) {
         out.push("  match v {")
         for (i, m) in s.members.indexed() {
           if m.target == "smithy.api#Unit" {
-            out.push("    ${vs[i]} => json.Value.Object([(${lit_str(json_name(m))}, json.Value.Object([]))])")
+            out.push("    ${vs[i]} => json.Value.Object([(${lit_str(json_name(g, m))}, json.Value.Object([]))])")
           } else {
-            out.push("    ${vs[i]}(x) => json.Value.Object([(${lit_str(json_name(m))}, ${json_expr(g, m.traits, m.target, "x")})])")
+            out.push("    ${vs[i]}(x) => json.Value.Object([(${lit_str(json_name(g, m))}, ${json_expr(g, m.traits, m.target, "x")})])")
           }
         }
         out.push("    ${catch_all}(_) => json.Value.Object([])")
@@ -210,9 +222,9 @@ fn emit_json_fns(g: G, var out: List[Str]) {
         out.push("    return match k {")
         for (i, m) in s.members.indexed() {
           if m.target == "smithy.api#Unit" {
-            out.push("      ${lit_str(json_name(m))} => Ok(${t}.${vs[i]})")
+            out.push("      ${lit_str(json_name(g, m))} => Ok(${t}.${vs[i]})")
           } else {
-            out.push("      ${lit_str(json_name(m))} => Ok(${t}.${vs[i]}(${from_json_expr(g, m.traits, m.target, "fv")}))")
+            out.push("      ${lit_str(json_name(g, m))} => Ok(${t}.${vs[i]}(${from_json_expr(g, m.traits, m.target, "fv")}))")
           }
         }
         out.push("      _ => Ok(${t}.${catch_all}(k))")
@@ -334,7 +346,7 @@ pub fn supported(g: G, op: Str) -> Bool {
 
 fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   let s = shape_of(g, op)
-  let h = http_of(s)
+  let h = if g.rpc != "" { Http{method: "POST", path: "/", query: "", code: 200} } else { http_of(s) }
   let input = shape_of(g, s.input)
   let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
   let name = op_name(op)
@@ -355,7 +367,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   // labels and path
   var path = h.path
   for m in input.members {
-    match binding(m.traits, h.path, m.name) {
+    match bind(g, m.traits, h.path, m.name) {
       Label(greedy) => {
         let f = field_name(m.name)
         if g.s3 && m.name == "Bucket" {
@@ -387,7 +399,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   for m in input.members {
     let f = field_name(m.name)
     let tok = has(m.traits, "idempotencyToken")
-    match binding(m.traits, h.path, m.name) {
+    match bind(g, m.traits, h.path, m.name) {
       Query(q) => {
         let t = shape_of(g, m.target)
         if t.kind is model.Kind.List {
@@ -439,7 +451,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   // prefix headers after the named ones, which win
   for m in input.members {
     let f = field_name(m.name)
-    if let Binding.PrefixHeaders(p) = binding(m.traits, h.path, m.name) {
+    if let Binding.PrefixHeaders(p) = bind(g, m.traits, h.path, m.name) {
         out.push("  if let Some(hm) = input.${f} {")
         out.push("    let named = headers.map(fn(h: (Str, Str)) -> Str { h.0.to_lower() })")
         out.push("    for (k, v) in hm.entries() {")
@@ -452,7 +464,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   }
   // query params last: httpQuery wins over them
   for m in input.members {
-    if binding(m.traits, h.path, m.name) is Binding.QueryParams {
+    if bind(g, m.traits, h.path, m.name) is Binding.QueryParams {
       let f = field_name(m.name)
       let vt = shape_of(g, shape_of(g, m.target).members[1].target)
       out.push("  if let Some(qp) = input.${f} {")
@@ -473,8 +485,8 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
     }
   }
   // body
-  let payload = input.members.find(fn(m: model.Member) -> Bool { binding(m.traits, h.path, m.name) is Binding.Payload })
-  let body_members = input.members.filter(fn(m: model.Member) -> Bool { binding(m.traits, h.path, m.name) is Binding.Body })
+  let payload = input.members.find(fn(m: model.Member) -> Bool { bind(g, m.traits, h.path, m.name) is Binding.Payload })
+  let body_members = input.members.filter(fn(m: model.Member) -> Bool { bind(g, m.traits, h.path, m.name) is Binding.Body })
   let has_ct = input.members.any(fn(m: model.Member) -> Bool { (model.trait_str(m.traits, "httpHeader") ?? "").to_lower() == "content-type" })
   out.push("  var body = b\"\"")
   match payload {
@@ -535,17 +547,23 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
         for m in body_members {
           let f = field_name(m.name)
           out.push("  if let Some(x) = input.${f} {")
-          out.push("    fs.push((${lit_str(json_name(m))}, ${json_expr(g, m.traits, m.target, "x")}))")
+          out.push("    fs.push((${lit_str(json_name(g, m))}, ${json_expr(g, m.traits, m.target, "x")}))")
           if has(m.traits, "idempotencyToken") {
             out.push("  } else if idempotency_token != \"\" {")
-            out.push("    fs.push((${lit_str(json_name(m))}, json.Value.Str(idempotency_token)))")
+            out.push("    fs.push((${lit_str(json_name(g, m))}, json.Value.Str(idempotency_token)))")
           }
           out.push("  }")
         }
         out.push("  body = json.Value.Object(fs).encode().bytes()")
-        if !has_ct {
+        if !has_ct && g.rpc == "" {
           out.push("  headers.push((\"Content-Type\", \"application/json\"))")
         }
+      } else if g.rpc != "" {
+        out.push("  body = b\"{}\"")
+      }
+      if g.rpc != "" {
+        out.push("  headers.push((\"Content-Type\", \"application/x-amz-json-${g.rpc}\"))")
+        out.push("  headers.push((\"X-Amz-Target\", \"${model.name_of(g.m.service)}.${model.name_of(op)}\"))")
       }
     }
   }
@@ -589,7 +607,11 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   out.push("    scheme: ep.scheme,")
   out.push("    host: ${host},")
   out.push("    port: ep.port,")
-  out.push("    path: rest.join_path(ep.path, \"${path}\"),")
+  if g.rpc != "" {
+    out.push("    path: rest.rpc_path(ep.path),")
+  } else {
+    out.push("    path: rest.join_path(ep.path, \"${path}\"),")
+  }
   out.push("    query: rest.query(query),")
   out.push("    headers: headers,")
   out.push("    body: body,")
@@ -604,7 +626,7 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
   let members = shape.members
   for m in members {
     let f = field_name(m.name)
-    match binding(m.traits, "", m.name) {
+    match bind(g, m.traits, "", m.name) {
       Header(hn) => {
         let t = shape_of(g, m.target)
         out.push("  if let Some(hv) = resp.header(${lit_str(hn)}) {")
@@ -636,10 +658,10 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
       _ => {}
     }
   }
-  let payload = members.find(fn(m: model.Member) -> Bool { binding(m.traits, "", m.name) is Binding.Payload })
+  let payload = members.find(fn(m: model.Member) -> Bool { bind(g, m.traits, "", m.name) is Binding.Payload })
   // in a response, members bound to the request's labels or query are
   // ordinary body members
-  let body_members = members.filter(fn(m: model.Member) -> Bool { in_response_body(binding(m.traits, "", m.name)) })
+  let body_members = members.filter(fn(m: model.Member) -> Bool { in_response_body(bind(g, m.traits, "", m.name)) })
   match payload {
     Some(m) => {
       let f = field_name(m.name)
@@ -682,7 +704,7 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
         out.push("    }")
         out.push("    match k {")
         for m in body_members {
-          out.push("      ${lit_str(json_name(m))} => out.${field_name(m.name)} = ${from_json_expr(g, m.traits, m.target, "fv")}")
+          out.push("      ${lit_str(json_name(g, m))} => out.${field_name(m.name)} = ${from_json_expr(g, m.traits, m.target, "fv")}")
         }
         out.push("      _ => {}")
         out.push("    }")
@@ -715,7 +737,7 @@ fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
   out.push("pub fn deserialize_${name}(resp: http.Response) -> ${t} ! Str {")
   out.push("  var out = ${t}{}")
   let has_payload = output.members.any(fn(m: model.Member) -> Bool { has(m.traits, "httpPayload") })
-  let has_body = output.members.any(fn(m: model.Member) -> Bool { in_response_body(binding(m.traits, "", m.name)) })
+  let has_body = output.members.any(fn(m: model.Member) -> Bool { in_response_body(bind(g, m.traits, "", m.name)) })
   if !has_payload && has_body {
     if g.xml && has(s.traits, "aws.customizations#s3UnwrappedXmlOutput") {
       // S3: the body's root is the output member itself

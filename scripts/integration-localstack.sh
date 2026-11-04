@@ -16,7 +16,7 @@ status=1
 if [ -n "$id" ]; then
   i=0
   while [ $i -lt 120 ] && ! curl -sf "http://127.0.0.1:$port/_localstack/health" | grep -q '"s3": "\(available\|running\)"'; do sleep 1; i=$((i + 1)); done
-  (cd integration && XO_AWS_TEST_S3_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_KEY_ID=AKIDTEST0000000000 XO_AWS_TEST_SECRET=xo-lang-aws-test-secret-not-real "$xo" test --real .)
+  (cd integration && XO_AWS_TEST_S3_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_KEY_ID=AKIDTEST0000000000 XO_AWS_TEST_SECRET=xo-lang-aws-test-secret-not-real "$xo" test --real .)
   status=$?
   docker rm -f "$id" >/dev/null
 fi

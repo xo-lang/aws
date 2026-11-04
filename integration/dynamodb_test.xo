@@ -1,0 +1,42 @@
+// DynamoDB (awsJson1_0) against LocalStack (decision 0005, emulator
+// tests): run by scripts/integration-localstack.sh, with invented
+// credentials. The client gets a Net that reaches only the loopback host.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/dynamodb
+
+test "dynamodb round trip against LocalStack" uses (net, env, clock) {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = dynamodb.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, dynamodb.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let table = "xo-lang-aws-it"
+  c.create_table(dynamodb.CreateTableInput{
+    table_name: table,
+    attribute_definitions: [dynamodb.AttributeDefinition{attribute_name: "pk", attribute_type: dynamodb.ScalarAttributeType.S}],
+    key_schema: [dynamodb.KeySchemaElement{attribute_name: "pk", key_type: dynamodb.KeyType.Hash}],
+    billing_mode: dynamodb.BillingMode.PayPerRequest,
+  })?
+  let item: Map[Str, dynamodb.AttributeValue] = {
+    "pk": dynamodb.AttributeValue.S("user#1"),
+    "n": dynamodb.AttributeValue.N("42"),
+    "tags": dynamodb.AttributeValue.Ss(["a", "b"]),
+    "ok": dynamodb.AttributeValue.Bool(true),
+    "raw": dynamodb.AttributeValue.B(b"\x00\x01\xff"),
+    "nested": dynamodb.AttributeValue.M({"x": dynamodb.AttributeValue.L([dynamodb.AttributeValue.Null(true)])}),
+  }
+  c.put_item(dynamodb.PutItemInput{table_name: table, item: item})?
+  let key: Map[Str, dynamodb.AttributeValue] = {"pk": dynamodb.AttributeValue.S("user#1")}
+  let got = c.get_item(dynamodb.GetItemInput{table_name: table, key: key, consistent_read: true})?
+  expect(got.item) == Some(item)
+  let none = c.get_item(dynamodb.GetItemInput{table_name: table, key: {"pk": dynamodb.AttributeValue.S("missing")}})?
+  expect(none.item) == None
+  match c.get_item(dynamodb.GetItemInput{table_name: "xo-lang-aws-no-such-table", key: key}) {
+    Err(dynamodb.GetItemErr.ResourceNotFoundException(_)) => {}
+    other => expect("${other:?}") == "ResourceNotFoundException"
+  }
+  c.delete_table(dynamodb.DeleteTableInput{table_name: table})?
+}

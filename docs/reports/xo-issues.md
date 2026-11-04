@@ -156,9 +156,12 @@ same module); the failure appears when `error_code` is inlined into a
 generated function of another module. `--backend=llvm` builds and passes
 all 194 tests, and the same package passed on arm64 with xo b2e66f690 and
 a82f123de. The awsJson packages, which call the same function from
-similar generated code, build. Status: reported to the lead 2026-11-04;
-the gate runs this package with `--backend=llvm` meanwhile (gate.sh
-XO_GATE_LLVM).
+similar generated code, build. Status: reported to the lead 2026-11-04.
+Lang 1 could not reproduce it on the pushed tree (9e80ea7) with any cache
+state; later the same day it no longer reproduced here either, on the
+shared cache or a fresh one (233/233 on arm64, after the package was
+regenerated with more response tests). Not reproducible; the gate's
+LLVM override (XO_GATE_LLVM) stays available and is empty by default.
 
 ## 6. Go backend: `field = (x ?? return Err(..))` into an optional field
 

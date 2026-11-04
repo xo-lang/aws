@@ -65,7 +65,15 @@ Each item names its reference and its test source (0005).
   others wait (`Mutex`), as Go's `CredentialsCache`.
 - The STS and SSO calls the providers make use small hand written
   clients inside the core (two operations each), so the core never imports
-  a generated service module (no cycle).
+  a generated service module (no cycle). **Amended 2026-11-04 for STS:**
+  `credentials/stscreds` and `config` now use the generated `service/sts`
+  (awsQuery), as aws-sdk-go-v2's credentials/stscreds uses its
+  service/sts. The modules form a cycle (the root module and service/sts
+  each use the other) but the packages do not: service/sts imports aws,
+  transport, endpoints and protocol packages, never credentials/stscreds
+  or config. Xo accepts this in the workspace (checked 2026-11-04). The
+  hand written STS client is removed; SSO stays hand written until its
+  restJson service is generated the same way.
 - Loading reads files and environment through the `Fs` and `Env`
   capabilities passed in; tests pass `MemFs` and `FakeEnv` (0005). The
   file parser follows the shared config file specification of the AWS

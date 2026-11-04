@@ -204,6 +204,9 @@ pub fn emit_protocol_tests(g: G, protocol: Str, skip: List[(Str, Str)]) -> Str {
     "",
   ]
   var seen: Set[Str] = [].to_set()
+  // a response test may share its id with a request test (the suites
+  // pair them); it gets its own test name
+  var rseen: Set[Str] = [].to_set()
   var error_cases: Set[Str] = [].to_set()
   for op in model.operations(g.m) {
     if !supported(g, op) {
@@ -264,17 +267,17 @@ pub fn emit_protocol_tests(g: G, protocol: Str, skip: List[(Str, Str)]) -> Str {
     }
     for c in cases(s.traits, "smithy.test#httpResponseTests", protocol) {
       let id = str_field(c, "id")
-      if seen.contains(id) {
+      if rseen.contains(id) {
         continue
       }
-      seen.add(id)
+      rseen.add(id)
       if let Some((_, why)) = skip.find(fn(x: (Str, Str)) -> Bool { x.0 == id }) {
         out.push("// skipped ${id}: ${why}")
         out.push("")
         continue
       }
       let params = c.get("params") ?? json.Value.Object([])
-      out.push("test ${test_name(id)} {")
+      out.push("test ${test_name(if seen.contains(id) { "${id}_response" } else { id })} {")
       out.push("  let resp = ${response_lit(c)}")
       if s.output == "smithy.api#Unit" {
         out.push("  deserialize_${name}(resp)?")
@@ -291,7 +294,7 @@ pub fn emit_protocol_tests(g: G, protocol: Str, skip: List[(Str, Str)]) -> Str {
       let es = shape_of(g, e)
       for c in cases(es.traits, "smithy.test#httpResponseTests", protocol) {
         let id = str_field(c, "id")
-        if error_cases.contains(id) || seen.contains(id) {
+        if error_cases.contains(id) || seen.contains(id) || rseen.contains(id) {
           continue
         }
         error_cases.add(id)

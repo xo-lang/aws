@@ -15,12 +15,18 @@ pub struct G {
   pub s3: Bool = false
   /// "1.0" or "1.1" for awsJson services (no HTTP bindings).
   pub rpc: Str = ""
+  /// awsQuery: form encoded requests, XML responses (xml is set too).
+  pub query: Bool = false
 }
 
 pub fn new_g(m: model.Model) -> G {
   let ids = model.closure(m)
   let svc = model.shape(m, m.service)
-  let xml = match svc {
+  let query = match svc {
+    Some(x) => model.has_trait(x.traits, "aws.protocols#awsQuery")
+    None => false
+  }
+  let xml = query || match svc {
     Some(x) => model.has_trait(x.traits, "aws.protocols#restXml")
     None => false
   }
@@ -35,7 +41,7 @@ pub fn new_g(m: model.Model) -> G {
     Some(x) => if model.has_trait(x.traits, "aws.protocols#awsJson1_0") { "1.0" } else if model.has_trait(x.traits, "aws.protocols#awsJson1_1") { "1.1" } else { "" }
     None => ""
   }
-  G{m: m, names: plan_names(m, ids), ids: ids, xml: xml, s3: s3, rpc: rpc}
+  G{m: m, names: plan_names(m, ids), ids: ids, xml: xml, s3: s3, rpc: rpc, query: query}
 }
 
 pub fn shape_of(g: G, id: Str) -> model.Shape {

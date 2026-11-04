@@ -1,0 +1,27 @@
+// STS (awsQuery) against LocalStack (decision 0005, emulator tests): run
+// by scripts/integration-localstack.sh, with invented credentials. The
+// client gets a Net that reaches only the loopback host. The role is in
+// the emulator's own account, as GetCallerIdentity reports it.
+
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/credentials/stscreds
+use github.com/xo-lang/aws/service/sts
+
+test "sts caller identity and assume role against LocalStack" uses net, env, clock {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = sts.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, sts.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let who = c.get_caller_identity(sts.GetCallerIdentityRequest{})?
+  let account = who.account ?? ""
+  expect(account.len()) == 12
+  let role = "arn:aws:iam::${account}:role/xo-lang-aws-it"
+  let p = stscreds.AssumeRoleProvider{client: c, input: sts.AssumeRoleRequest{role_arn: role, role_session_name: "it", duration_seconds: 900}}
+  let creds: aws.Credentials = p.retrieve()?
+  expect(creds.access_key_id != "") == true
+  expect(creds.session_token.is_some()) == true
+}

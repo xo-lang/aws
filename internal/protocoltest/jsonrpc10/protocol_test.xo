@@ -306,6 +306,13 @@ test "AwsJson10NoInputAndOutput" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/", headers: [("Content-Type", "application/x-amz-json-1.0"), ("X-Amz-Target", "JsonRpc10.NoInputAndOutput")], body: "{}", body_media_type: "application/json"})?
 }
 
+test "AwsJson10NoInputAndOutput_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/x-amz-json-1.0"}, body: "{}".bytes()}
+  let got = deserialize_no_input_and_output(resp)?
+  let want = NoInputAndOutputOutput{}
+  expect("${got:?}") == "${want:?}"
+}
+
 // skipped AwsJson10ClientPopulatesDefaultValuesInInput: members are optional and unset defaults are not sent (decision 0004)
 
 test "AwsJson10ClientSkipsTopLevelDefaultValuesInInput" {
@@ -383,4 +390,25 @@ test "AwsJson10SupportsNegativeInfinityFloatInputs" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_simple_scalar_properties(ep, SimpleScalarPropertiesInput{float_value: -rest.inf(), double_value: -rest.inf()}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/", headers: [("Content-Type", "application/x-amz-json-1.0"), ("X-Amz-Target", "JsonRpc10.SimpleScalarProperties")], body: "{\n    \"floatValue\": \"-Infinity\",\n    \"doubleValue\": \"-Infinity\"\n}", body_media_type: "application/json"})?
+}
+
+test "AwsJson10SupportsNaNFloatInputs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/x-amz-json-1.0"}, body: "{\n    \"floatValue\": \"NaN\",\n    \"doubleValue\": \"NaN\"\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesOutput{float_value: rest.nan(), double_value: rest.nan()}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "AwsJson10SupportsInfinityFloatInputs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/x-amz-json-1.0"}, body: "{\n    \"floatValue\": \"Infinity\",\n    \"doubleValue\": \"Infinity\"\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesOutput{float_value: rest.inf(), double_value: rest.inf()}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "AwsJson10SupportsNegativeInfinityFloatInputs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/x-amz-json-1.0"}, body: "{\n    \"floatValue\": \"-Infinity\",\n    \"doubleValue\": \"-Infinity\"\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesOutput{float_value: -rest.inf(), double_value: -rest.inf()}
+  expect("${got:?}") == "${want:?}"
 }

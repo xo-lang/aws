@@ -101,6 +101,10 @@ pub fn check_request(req: transport.Request, want: RequestWant) -> () ! Mismatch
       if !xml_equal_text(got, b) {
         problems.push("body ${got}, want ${b}")
       }
+    } else if want.body_media_type.contains("x-www-form-urlencoded") {
+      if form_pairs(got) != form_pairs(b) {
+        problems.push("body ${got}, want ${b}")
+      }
     } else if got != b {
       problems.push("body ${got}, want ${b}")
     }
@@ -187,4 +191,25 @@ fn canonical(e: xml.Element) -> Str {
   }
   out.write("</>")
   out.freeze()
+}
+
+/// A form body's `k=v` pairs, sorted, with line breaks (the suites wrap
+/// long bodies) removed and percent escapes in upper case.
+pub fn form_pairs(body: Str) -> List[Str] {
+  let flat = body.split("\n").map(fn(l: Str) -> Str { l.trim() }).join("")
+  if flat == "" {
+    return []
+  }
+  flat.split("&").map(fn(p: Str) -> Str { upper_escapes(p) }).sort()
+}
+
+fn upper_escapes(s: Str) -> Str {
+  let parts = s.split("%")
+  var out = parts[0]
+  for p in parts[1..parts.len()] {
+    let b = p.bytes()
+    let n = if b.len() < 2 { b.len() } else { 2 }
+    out = "${out}%${(b[0..n].to_str() ?? "").to_upper()}${b[n..b.len()].to_str() ?? ""}"
+  }
+  out
 }

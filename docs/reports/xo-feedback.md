@@ -184,3 +184,20 @@ says what happened, not a general opinion. Bugs with repros go in
   arm64 refused an inlined cross-module call that built before, and the Go
   backend misses the `T` to `T?` wrap for `x ?? return Err(..)`. LLVM was
   the working fallback, which made `--backend` a useful escape hatch.
+
+## 2026-11-04: awsQuery and the generated STS
+
+- Liked: module cycles with acyclic packages just work in a workspace,
+  so `credentials/stscreds` can use the generated `service/sts` the way
+  aws-sdk-go-v2 does, with no restructuring.
+- Liked: `var f: query.Form` parameters made the form writer a set of
+  small functions that each append under a key prefix, with no builder
+  object threaded through returns.
+- Disliked: a generated test name collision (a request and a response
+  test sharing a Smithy id) was skipped silently by my own generator for
+  weeks of suites; Xo rejecting duplicate `test` names is what forced the
+  dedupe in the first place, and an error naming both would have been
+  better than my workaround. Not a language bug; noted for tooling.
+- Disliked: `List.sorted()` vs `sort()`, and no `Byte(n)` conversion: two
+  more guesses that failed. std.md's method index answers it, but a
+  "did you mean `sort`" hint would save the lookup.

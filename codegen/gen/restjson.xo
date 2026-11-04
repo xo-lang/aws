@@ -19,7 +19,7 @@ enum Binding {
 
 /// A member's binding; awsJson has none, everything is in the body.
 fn bind(g: G, traits: List[(Str, json.Value)], uri: Str, name: Str) -> Binding {
-  if g.rpc != "" {
+  if g.rpc != "" || g.query {
     return Binding.Body
   }
   binding(traits, uri, name)
@@ -346,7 +346,7 @@ pub fn supported(g: G, op: Str) -> Bool {
 
 fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   let s = shape_of(g, op)
-  let h = if g.rpc != "" { Http{method: "POST", path: "/", query: "", code: 200} } else { http_of(s) }
+  let h = if g.rpc != "" || g.query { Http{method: "POST", path: "/", query: "", code: 200} } else { http_of(s) }
   let input = shape_of(g, s.input)
   let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
   let name = op_name(op)
@@ -363,7 +363,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
     let (k, v) = part.cut("=") ?? (part, "")
     consts.push("(${lit_str(k)}, ${lit_str(v)})")
   }
-  out.push("  var query: List[(Str, Str)] = [${consts.join(", ")}]")
+  out.push("  var qs: List[(Str, Str)] = [${consts.join(", ")}]")
   // labels and path
   var path = h.path
   for m in input.members {
@@ -406,15 +406,15 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
           let em = t.members[0]
           out.push("  if let Some(xs) = input.${f} {")
           out.push("    for x in xs {")
-          out.push("      query.push((${lit_str(q)}, ${text_expr(g, em, em.target, "x", "date-time")}))")
+          out.push("      qs.push((${lit_str(q)}, ${text_expr(g, em, em.target, "x", "date-time")}))")
           out.push("    }")
           out.push("  }")
         } else {
           out.push("  if let Some(v) = input.${f} {")
-          out.push("    query.push((${lit_str(q)}, ${text_expr(g, m, m.target, "v", "date-time")}))")
+          out.push("    qs.push((${lit_str(q)}, ${text_expr(g, m, m.target, "v", "date-time")}))")
           if tok {
             out.push("  } else if idempotency_token != \"\" {")
-            out.push("    query.push((${lit_str(q)}, idempotency_token))")
+            out.push("    qs.push((${lit_str(q)}, idempotency_token))")
           }
           out.push("  }")
         }
@@ -468,17 +468,17 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       let f = field_name(m.name)
       let vt = shape_of(g, shape_of(g, m.target).members[1].target)
       out.push("  if let Some(qp) = input.${f} {")
-      out.push("    let fixed = query.map(fn(p: (Str, Str)) -> Str { p.0 })")
+      out.push("    let fixed = qs.map(fn(p: (Str, Str)) -> Str { p.0 })")
       out.push("    for (k, v) in qp.entries() {")
       out.push("      if fixed.contains(k) {")
       out.push("        continue")
       out.push("      }")
       if vt.kind is model.Kind.List {
         out.push("      for x in v {")
-        out.push("        query.push((k, x))")
+        out.push("        qs.push((k, x))")
         out.push("      }")
       } else {
-        out.push("      query.push((k, v))")
+        out.push("      qs.push((k, v))")
       }
       out.push("    }")
       out.push("  }")
@@ -489,6 +489,12 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   let body_members = input.members.filter(fn(m: model.Member) -> Bool { bind(g, m.traits, h.path, m.name) is Binding.Body })
   let has_ct = input.members.any(fn(m: model.Member) -> Bool { (model.trait_str(m.traits, "httpHeader") ?? "").to_lower() == "content-type" })
   out.push("  var body = b\"\"")
+  if g.query {
+    out.push("  var f = query.form(${lit_str(model.name_of(op))}, ${lit_str(shape_of(g, g.m.service).version)})")
+    query_members(g, input, "input", "\"\"", "idempotency_token", "  ", out)
+    out.push("  body = query.encode(f).bytes()")
+    out.push("  headers.push((\"Content-Type\", \"application/x-www-form-urlencoded\"))")
+  } else {
   match payload {
     Some(m) => {
       let f = field_name(m.name)
@@ -567,6 +573,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       }
     }
   }
+  }
   if has(s.traits, "httpChecksumRequired") {
     out.push("  if !body.is_empty() {")
     out.push("    headers.push((\"Content-MD5\", crypto.digest(crypto.Hash.Md5, body).to_base64()))")
@@ -607,12 +614,12 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   out.push("    scheme: ep.scheme,")
   out.push("    host: ${host},")
   out.push("    port: ep.port,")
-  if g.rpc != "" {
+  if g.rpc != "" || g.query {
     out.push("    path: rest.rpc_path(ep.path),")
   } else {
     out.push("    path: rest.join_path(ep.path, \"${path}\"),")
   }
-  out.push("    query: rest.query(query),")
+  out.push("    query: rest.query(qs),")
   out.push("    headers: headers,")
   out.push("    body: body,")
   out.push("  })")
@@ -650,9 +657,8 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
         out.push("      prefixed_${f}.put(k.bytes()[${p.len()}..k.len()].to_str() ?? k, hv)")
         out.push("    }")
         out.push("  }")
-        out.push("  if !prefixed_${f}.is_empty() {")
-        out.push("    out.${f} = prefixed_${f}")
-        out.push("  }")
+        // no such headers is an empty map, as the suites expect
+        out.push("  out.${f} = prefixed_${f}")
       }
       ResponseCode => out.push("  out.${f} = resp.status")
       _ => {}
@@ -742,6 +748,9 @@ fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
     if g.xml && has(s.traits, "aws.customizations#s3UnwrappedXmlOutput") {
       // S3: the body's root is the output member itself
       out.push("  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.wrap(xmlv.parse_body(resp.body)?) }")
+    } else if g.query {
+      // awsQuery: the members are in <OperationResponse><OperationResult>
+      out.push("  let body = query.result_of(resp.body, ${lit_str(model.name_of(op))})?")
     } else if g.xml {
       out.push("  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }")
     } else {
@@ -752,6 +761,19 @@ fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
   out.push("  Ok(out)")
   out.push("}")
   out.push("")
+}
+
+/// The code an error shape answers to: its name, or awsQuery's
+/// awsQueryError code.
+fn error_code_of(g: G, e: Str) -> Str {
+  if g.query {
+    if let Some(t) = model.trait_of(shape_of(g, e).traits, "aws.protocols#awsQueryError") {
+      if let Some(json.Value.Str(c)) = t.get("code") {
+        return c
+      }
+    }
+  }
+  model.name_of(e)
 }
 
 /// The name of an operation's error enum: `<Operation>Err`.
@@ -815,7 +837,7 @@ fn emit_errors(g: G, op: Str, var out: List[Str]) {
   if !vs.is_empty() {
     out.push(if g.xml { "  match restxml.error_code(resp) {" } else { "  match restjson.error_code(resp, body) {" })
     for (e, v) in vs {
-      out.push("    ${lit_str(model.name_of(e))} => match read_error_${fn_key(g, e)}(resp, body) {")
+      out.push("    ${lit_str(error_code_of(g, e))} => match read_error_${fn_key(g, e)}(resp, body) {")
       out.push("      Ok(x) => return ${en}.${v}(x)")
       out.push("      Err(msg) => return ${en}.Deserialize(msg)")
       out.push("    }")
@@ -867,7 +889,10 @@ fn sigv4_name(g: G) -> Str {
 pub fn emit_restjson(g: G) -> Str {
   var out: List[Str] = []
   emit_client_head(g, out)
-  if g.xml {
+  if g.query {
+    emit_xml_fns(g, out)
+    emit_query_fns(g, out)
+  } else if g.xml {
     emit_xml_fns(g, out)
     emit_xml_bodies(g, out)
   } else {

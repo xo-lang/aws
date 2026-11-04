@@ -5,8 +5,7 @@
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/credentials/stscreds
-use github.com/xo-lang/aws/retry
-use github.com/xo-lang/aws/transport
+use github.com/xo-lang/aws/service/sts
 
 /// Settings given in code; each wins over the environment and files.
 pub struct Options {
@@ -170,11 +169,14 @@ fn profile_provider(ctx: RoleContext, profile: Str, seen: List[Str]) -> aws.Cred
     }
     None => None
   }
-  let t = transport.new_client(ctx.net, ctx.clock, ctx.rand, source, retry.standard())
-  let client = stscreds.Client{transport: t, region: region, endpoint: stscreds.endpoint(region, aws.endpoint_for(ctx.endpoints, "STS"))}
-  Ok(credentials.cache(stscreds.AssumeRoleProvider{client: client, input: stscreds.AssumeRoleInput{
+  let client = sts.new(ctx.net, ctx.clock, ctx.rand, sts.Options{
+    region: region,
+    endpoint: aws.endpoint_for(ctx.endpoints, "STS"),
+    credentials: source,
+  }) ?? e => return Err(ConfigErr.Invalid(setting: "role_arn", value: arn, msg: e))
+  Ok(credentials.cache(stscreds.AssumeRoleProvider{client: client, input: sts.AssumeRoleRequest{
     role_arn: arn,
-    role_session_name: non_empty(p.props.get("role_session_name")) ?? "",
+    role_session_name: non_empty(p.props.get("role_session_name")),
     duration_seconds: duration,
     external_id: non_empty(p.props.get("external_id")),
   }}, ctx.clock))

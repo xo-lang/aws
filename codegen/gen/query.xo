@@ -1,0 +1,108 @@
+// The form codec of awsQuery requests (decision 0003): per aggregate shape
+// a writer onto a query.Form under a key prefix, with Smithy's query key
+// rules (xmlName renames a key, lists are `.member.N` unless
+// xmlFlattened, maps are `.entry.N.key` and `.entry.N.value`).
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+/// The awsQuery key of member `m`.
+fn query_name(m: model.Member) -> Str {
+  model.trait_str(m.traits, "xmlName") ?? m.name
+}
+
+/// A statement writing `v` (of `target`) under key expression `key`;
+/// `flat` is the referencing member's xmlFlattened.
+fn query_put(g: G, traits: List[(Str, json.Value)], target: Str, v: Str, key: Str, flat: Bool) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    Structure | Union => "query_put_${fn_key(g, target)}(f, ${key}, ${v})"
+    List | Map => "query_put_${fn_key(g, target)}(f, ${key}, ${v}, ${flat})"
+    _ => "query.add(f, ${key}, ${text_expr(g, model.Member{name: "", target: target, traits: traits}, target, v, "date-time")})"
+  }
+}
+
+/// Statements writing the members of structure `s`, whose value is `v`,
+/// under prefix expression `prefix` ("" at the top level). `token` names
+/// the idempotency token to use for an unset token member ("" for none).
+pub fn query_members(g: G, s: model.Shape, v: Str, prefix: Str, token: Str, indent: Str, var out: List[Str]) {
+  for m in s.members {
+    let key = "query.key(${prefix}, ${lit_str(query_name(m))})"
+    out.push("${indent}if let Some(x) = ${v}.${field_name(m.name)} {")
+    out.push("${indent}  ${query_put(g, m.traits, m.target, "x", key, has(m.traits, "xmlFlattened"))}")
+    if token != "" && has(m.traits, "idempotencyToken") {
+      out.push("${indent}} else if ${token} != \"\" {")
+      out.push("${indent}  query.add(f, ${key}, ${token})")
+    }
+    out.push("${indent}}")
+  }
+}
+
+pub fn emit_query_fns(g: G, var out: List[Str]) {
+  for id in json_shapes(g) {
+    let s = shape_of(g, id)
+    let key = fn_key(g, id)
+    let t = xo_type(g, id)
+    match s.kind {
+      Structure => {
+        out.push("fn query_put_${key}(var f: query.Form, prefix: Str, v: ${t}) {")
+        if s.members.is_empty() {
+          out.push("  let _ = (f, prefix, v)")
+        }
+        query_members(g, s, "v", "prefix", "", "  ", out)
+        out.push("}")
+        out.push("")
+      }
+      Union => {
+        let (vs, catch_all) = union_variants(s)
+        out.push("fn query_put_${key}(var f: query.Form, prefix: Str, v: ${t}) {")
+        out.push("  match v {")
+        for (i, m) in s.members.indexed() {
+          let k = "query.key(prefix, ${lit_str(query_name(m))})"
+          if m.target == "smithy.api#Unit" {
+            out.push("    ${vs[i]} => query.add(f, ${k}, \"\")")
+          } else {
+            out.push("    ${vs[i]}(x) => ${query_put(g, m.traits, m.target, "x", k, has(m.traits, "xmlFlattened"))}")
+          }
+        }
+        out.push("    ${catch_all}(_) => {}")
+        out.push("  }")
+        out.push("}")
+        out.push("")
+      }
+      List => {
+        let em = s.members[0]
+        let item = model.trait_str(em.traits, "xmlName") ?? "member"
+        out.push("fn query_put_${key}(var f: query.Form, prefix: Str, v: ${t}, flat: Bool) {")
+        out.push("  if v.is_empty() {")
+        out.push("    query.add(f, prefix, \"\")")
+        out.push("    return")
+        out.push("  }")
+        out.push("  for (i, x) in v.indexed() {")
+        out.push("    let k = if flat { \"\${prefix}.\${i + 1}\" } else { \"\${prefix}.${item}.\${i + 1}\" }")
+        out.push("    ${query_put(g, em.traits, em.target, "x", "k", false)}")
+        out.push("  }")
+        out.push("}")
+        out.push("")
+      }
+      Map => {
+        let km = s.members[0]
+        let vm = s.members[1]
+        let kn = model.trait_str(km.traits, "xmlName") ?? "key"
+        let vn = model.trait_str(vm.traits, "xmlName") ?? "value"
+        out.push("fn query_put_${key}(var f: query.Form, prefix: Str, v: ${t}, flat: Bool) {")
+        out.push("  // sorted keys, as aws-sdk-go-v2 writes them")
+        out.push("  for (i, k) in v.keys().sort().indexed() {")
+        out.push("    let e = if flat { \"\${prefix}.\${i + 1}\" } else { \"\${prefix}.entry.\${i + 1}\" }")
+        out.push("    query.add(f, \"\${e}.${kn}\", ${text_expr(g, km, km.target, "k", "date-time")})")
+        out.push("    if let Some(x) = v.get(k) {")
+        out.push("      ${query_put(g, vm.traits, vm.target, "x", "\"\${e}.${vn}\"", false)}")
+        out.push("    }")
+        out.push("  }")
+        out.push("}")
+        out.push("")
+      }
+      _ => {}
+    }
+  }
+}

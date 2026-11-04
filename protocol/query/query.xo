@@ -120,3 +120,20 @@ pub fn classify(resp: http.Response) -> retry.Failure {
   let e = read_error(resp)
   retry.classify_response(resp.status, if e.code == "UnknownError" { None } else { Some(e.code) })
 }
+
+/// A member's key under `prefix` ("" at the top level).
+pub fn key(prefix: Str, name: Str) -> Str {
+  if prefix == "" { name } else { "${prefix}.${name}" }
+}
+
+/// The `<{action}Result>` element of a successful response body, or an
+/// empty element when the body or the result is absent.
+pub fn result_of(body: Bytes, action: Str) -> xml.Element ! Str {
+  let empty = xml.Element{name: xml.Name{space: "", local: "${action}Result"}, attrs: [], children: []}
+  let text = body.to_str() ?? return Err("body is not UTF-8")
+  if text.trim() == "" {
+    return Ok(empty)
+  }
+  let root = xml.parse(text) ?? e => return Err(e.display())
+  Ok(root.child("${action}Result") ?? empty)
+}

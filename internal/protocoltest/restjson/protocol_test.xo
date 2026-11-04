@@ -190,6 +190,13 @@ test "RestJsonEmptyInputAndEmptyOutput" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/EmptyInputAndEmptyOutput", body: ""})?
 }
 
+test "RestJsonEmptyInputAndEmptyOutput_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{}".bytes()}
+  let got = deserialize_empty_input_and_empty_output(resp)?
+  let want = EmptyInputAndEmptyOutputOutput{}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonEmptyInputAndEmptyOutputJsonObjectOutput" {
   let resp = http.Response{status: 200, headers: {}, body: "".bytes()}
   let got = deserialize_empty_input_and_empty_output(resp)?
@@ -378,10 +385,31 @@ test "RestJsonHttpPayloadTraitsWithNoBlobBody" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/HttpPayloadTraits", headers: [("X-Foo", "Foo")], body: "", body_media_type: "application/octet-stream"})?
 }
 
+test "RestJsonHttpPayloadTraitsWithBlob_response" {
+  let resp = http.Response{status: 200, headers: {"X-Foo": "Foo"}, body: "blobby blob blob".bytes()}
+  let got = deserialize_http_payload_traits(resp)?
+  let want = HttpPayloadTraitsInputOutput{foo: "Foo", blob: "blobby blob blob".bytes()}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonHttpPayloadTraitsWithNoBlobBody_response" {
+  let resp = http.Response{status: 200, headers: {"X-Foo": "Foo"}, body: "".bytes()}
+  let got = deserialize_http_payload_traits(resp)?
+  let want = HttpPayloadTraitsInputOutput{foo: "Foo"}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_http_payload_traits_with_media_type(ep, HttpPayloadTraitsWithMediaTypeInputOutput{foo: "Foo", blob: "blobby blob blob".bytes()}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/HttpPayloadTraitsWithMediaType", require_headers: ["Content-Length"], headers: [("X-Foo", "Foo"), ("Content-Type", "text/plain")], body: "blobby blob blob", body_media_type: "application/octet-stream"})?
+}
+
+test "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob_response" {
+  let resp = http.Response{status: 200, headers: {"X-Foo": "Foo", "Content-Type": "text/plain"}, body: "blobby blob blob".bytes()}
+  let got = deserialize_http_payload_traits_with_media_type(resp)?
+  let want = HttpPayloadTraitsWithMediaTypeInputOutput{foo: "Foo", blob: "blobby blob blob".bytes()}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonHttpPayloadWithStructure" {
@@ -409,6 +437,20 @@ test "RestJsonHttpPayloadWithUnsetUnion" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/HttpPayloadWithUnion", body: ""})?
 }
 
+test "RestJsonHttpPayloadWithUnion_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"greeting\": \"hello\"\n}".bytes()}
+  let got = deserialize_http_payload_with_union(resp)?
+  let want = HttpPayloadWithUnionInputOutput{nested: UnionPayload.Greeting("hello")}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonHttpPayloadWithUnsetUnion_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Length": "0"}, body: "".bytes()}
+  let got = deserialize_http_payload_with_union(resp)?
+  let want = HttpPayloadWithUnionInputOutput{}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonHttpPrefixHeadersArePresent" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_http_prefix_headers(ep, HttpPrefixHeadersInput{foo: "Foo", foo_map: {"abc": "Abc value", "def": "Def value"}}, TOKEN, 0)?
@@ -425,6 +467,13 @@ test "RestJsonHttpPrefixEmptyHeaders" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_http_prefix_headers(ep, HttpPrefixHeadersInput{foo_map: {"abc": ""}}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "GET", uri: "/HttpPrefixHeaders", headers: [("x-foo-abc", "")], body: ""})?
+}
+
+test "RestJsonHttpPrefixHeadersArePresent_response" {
+  let resp = http.Response{status: 200, headers: {"x-foo": "Foo", "x-foo-abc": "Abc value", "x-foo-def": "Def value"}, body: b""}
+  let got = deserialize_http_prefix_headers(resp)?
+  let want = HttpPrefixHeadersOutput{foo: "Foo", foo_map: {"abc": "Abc value", "def": "Def value"}}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "HttpPrefixHeadersResponse" {
@@ -588,6 +637,55 @@ test "RestJsonSupportsNegativeInfinityFloatHeaderInputs" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/InputAndOutputWithHeaders", headers: [("X-Float", "-Infinity"), ("X-Double", "-Infinity")], body: ""})?
 }
 
+test "RestJsonInputAndOutputWithStringHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-String": "Hello", "X-StringList": "a, b, c", "X-StringSet": "a, b, c"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_string: "Hello", header_string_list: ["a", "b", "c"], header_string_set: ["a", "b", "c"]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonInputAndOutputWithQuotedStringHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-StringList": "\"b,c\", \"\\\"def\\\"\", a"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_string_list: ["b,c", "\"def\"", "a"]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonInputAndOutputWithNumericHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-Byte": "1", "X-Short": "123", "X-Integer": "123", "X-Long": "123", "X-Float": "1.1", "X-Double": "1.1", "X-IntegerList": "1, 2, 3"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_byte: 1, header_short: 123, header_integer: 123, header_long: 123, header_float: 1.1, header_double: 1.1, header_integer_list: [1, 2, 3]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonInputAndOutputWithBooleanHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-Boolean1": "true", "X-Boolean2": "false", "X-BooleanList": "true, false, true"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_true_bool: true, header_false_bool: false, header_boolean_list: [true, false, true]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonInputAndOutputWithTimestampHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-TimestampList": "Mon, 16 Dec 2019 23:48:18 GMT, Mon, 16 Dec 2019 23:48:18 GMT"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_timestamp_list: [Time.from_unix(1576540098), Time.from_unix(1576540098)]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonInputAndOutputWithEnumHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-Enum": "Foo", "X-EnumList": "Foo, Bar, Baz"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_enum: FooEnum.Foo, header_enum_list: [FooEnum.Foo, FooEnum.Bar, FooEnum.Baz]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonInputAndOutputWithIntEnumHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-IntegerEnum": "1", "X-IntegerEnumList": "1, 2, 3"}, body: b""}
+  let got = deserialize_input_and_output_with_headers(resp)?
+  let want = InputAndOutputWithHeadersIO{header_integer_enum: IntegerEnum.A, header_integer_enum_list: [IntegerEnum.A, IntegerEnum.B, IntegerEnum.C]}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonSupportsNaNFloatHeaderOutputs" {
   let resp = http.Response{status: 200, headers: {"X-Float": "NaN", "X-Double": "NaN"}, body: b""}
   let got = deserialize_input_and_output_with_headers(resp)?
@@ -615,16 +713,37 @@ test "RestJsonJsonBlobs" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/JsonBlobs", headers: [("Content-Type", "application/json")], body: "{\n    \"data\": \"dmFsdWU=\"\n}", body_media_type: "application/json"})?
 }
 
+test "RestJsonJsonBlobs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"data\": \"dmFsdWU=\"\n}".bytes()}
+  let got = deserialize_json_blobs(resp)?
+  let want = JsonBlobsInputOutput{data: "value".bytes()}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonJsonEnums" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_json_enums(ep, JsonEnumsInputOutput{foo_enum1: FooEnum.Foo, foo_enum2: FooEnum.Zero, foo_enum3: FooEnum.One, foo_enum_list: [FooEnum.Foo, FooEnum.Zero], foo_enum_set: [FooEnum.Foo, FooEnum.Zero], foo_enum_map: {"hi": FooEnum.Foo, "zero": FooEnum.Zero}}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/JsonEnums", headers: [("Content-Type", "application/json")], body: "{\n    \"fooEnum1\": \"Foo\",\n    \"fooEnum2\": \"0\",\n    \"fooEnum3\": \"1\",\n    \"fooEnumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumSet\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumMap\": {\n        \"hi\": \"Foo\",\n        \"zero\": \"0\"\n    }\n}", body_media_type: "application/json"})?
 }
 
+test "RestJsonJsonEnums_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"fooEnum1\": \"Foo\",\n    \"fooEnum2\": \"0\",\n    \"fooEnum3\": \"1\",\n    \"fooEnumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumSet\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"fooEnumMap\": {\n        \"hi\": \"Foo\",\n        \"zero\": \"0\"\n    }\n}".bytes()}
+  let got = deserialize_json_enums(resp)?
+  let want = JsonEnumsInputOutput{foo_enum1: FooEnum.Foo, foo_enum2: FooEnum.Zero, foo_enum3: FooEnum.One, foo_enum_list: [FooEnum.Foo, FooEnum.Zero], foo_enum_set: [FooEnum.Foo, FooEnum.Zero], foo_enum_map: {"hi": FooEnum.Foo, "zero": FooEnum.Zero}}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonJsonIntEnums" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_json_int_enums(ep, JsonIntEnumsInputOutput{integer_enum1: IntegerEnum.A, integer_enum2: IntegerEnum.B, integer_enum3: IntegerEnum.C, integer_enum_list: [IntegerEnum.A, IntegerEnum.B, IntegerEnum.C], integer_enum_set: [IntegerEnum.A, IntegerEnum.B], integer_enum_map: {"abc": IntegerEnum.A, "def": IntegerEnum.B}}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/JsonIntEnums", headers: [("Content-Type", "application/json")], body: "{\n    \"integerEnum1\": 1,\n    \"integerEnum2\": 2,\n    \"integerEnum3\": 3,\n    \"integerEnumList\": [\n        1,\n        2,\n        3\n    ],\n    \"integerEnumSet\": [\n        1,\n        2\n    ],\n    \"integerEnumMap\": {\n        \"abc\": 1,\n        \"def\": 2\n    }\n}", body_media_type: "application/json"})?
+}
+
+test "RestJsonJsonIntEnums_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"integerEnum1\": 1,\n    \"integerEnum2\": 2,\n    \"integerEnum3\": 3,\n    \"integerEnumList\": [\n        1,\n        2,\n        3\n    ],\n    \"integerEnumSet\": [\n        1,\n        2\n    ],\n    \"integerEnumMap\": {\n        \"abc\": 1,\n        \"def\": 2\n    }\n}".bytes()}
+  let got = deserialize_json_int_enums(resp)?
+  let want = JsonIntEnumsInputOutput{integer_enum1: IntegerEnum.A, integer_enum2: IntegerEnum.B, integer_enum3: IntegerEnum.C, integer_enum_list: [IntegerEnum.A, IntegerEnum.B, IntegerEnum.C], integer_enum_set: [IntegerEnum.A, IntegerEnum.B], integer_enum_map: {"abc": IntegerEnum.A, "def": IntegerEnum.B}}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonLists" {
@@ -637,6 +756,20 @@ test "RestJsonListsEmpty" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_json_lists(ep, JsonListsInputOutput{string_list: []}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/JsonLists", headers: [("Content-Type", "application/json")], body: "{\n    \"stringList\": []\n}", body_media_type: "application/json"})?
+}
+
+test "RestJsonLists_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"stringList\": [\n        \"foo\",\n        \"bar\"\n    ],\n    \"stringSet\": [\n        \"foo\",\n        \"bar\"\n    ],\n    \"integerList\": [\n        1,\n        2\n    ],\n    \"booleanList\": [\n        true,\n        false\n    ],\n    \"timestampList\": [\n        1398796238,\n        1398796238\n    ],\n    \"enumList\": [\n        \"Foo\",\n        \"0\"\n    ],\n    \"intEnumList\": [\n        1,\n        2\n    ],\n    \"nestedStringList\": [\n        [\n            \"foo\",\n            \"bar\"\n        ],\n        [\n            \"baz\",\n            \"qux\"\n        ]\n    ],\n    \"myStructureList\": [\n        {\n            \"value\": \"1\",\n            \"other\": \"2\"\n        },\n        {\n            \"value\": \"3\",\n            \"other\": \"4\"\n        }\n    ]\n}".bytes()}
+  let got = deserialize_json_lists(resp)?
+  let want = JsonListsInputOutput{string_list: ["foo", "bar"], string_set: ["foo", "bar"], integer_list: [1, 2], boolean_list: [true, false], timestamp_list: [Time.from_unix(1398796238), Time.from_unix(1398796238)], enum_list: [FooEnum.Foo, FooEnum.Zero], int_enum_list: [IntegerEnum.A, IntegerEnum.B], nested_string_list: [["foo", "bar"], ["baz", "qux"]], structure_list: [StructureListMember{a: "1", b: "2"}, StructureListMember{a: "3", b: "4"}]}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonListsEmpty_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"stringList\": []\n}".bytes()}
+  let got = deserialize_json_lists(resp)?
+  let want = JsonListsInputOutput{string_list: []}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonJsonMaps" {
@@ -655,6 +788,13 @@ test "RestJsonSerializesDenseSetMap" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_json_maps(ep, JsonMapsInputOutput{dense_set_map: {"x": [], "y": ["a", "b"]}}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/JsonMaps", headers: [("Content-Type", "application/json")], body: "{\n    \"denseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"]\n    }\n}", body_media_type: "application/json"})?
+}
+
+test "RestJsonJsonMaps_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"denseStructMap\": {\n        \"foo\": {\n            \"hi\": \"there\"\n        },\n        \"baz\": {\n            \"hi\": \"bye\"\n        }\n    }\n}".bytes()}
+  let got = deserialize_json_maps(resp)?
+  let want = JsonMapsInputOutput{dense_struct_map: {"foo": GreetingStruct{hi: "there"}, "baz": GreetingStruct{hi: "bye"}}}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonDeserializesZeroValuesInMaps" {
@@ -711,6 +851,55 @@ test "RestJsonJsonTimestampsWithHttpDateOnTargetFormat" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_json_timestamps(ep, JsonTimestampsInputOutput{http_date_on_target: Time.from_unix(1398796238)}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/JsonTimestamps", headers: [("Content-Type", "application/json")], body: "{\n    \"httpDateOnTarget\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}", body_media_type: "application/json"})?
+}
+
+test "RestJsonJsonTimestamps_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"normal\": 1398796238\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{normal: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonJsonTimestampsWithDateTimeFormat_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"dateTime\": \"2014-04-29T18:30:38Z\"\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{date_time: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonJsonTimestampsWithDateTimeOnTargetFormat_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"dateTimeOnTarget\": \"2014-04-29T18:30:38Z\"\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{date_time_on_target: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonJsonTimestampsWithEpochSecondsFormat_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"epochSeconds\": 1398796238\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{epoch_seconds: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonJsonTimestampsWithEpochSecondsOnTargetFormat_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"epochSecondsOnTarget\": 1398796238\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{epoch_seconds_on_target: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonJsonTimestampsWithHttpDateFormat_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"httpDate\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{http_date: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonJsonTimestampsWithHttpDateOnTargetFormat_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"httpDateOnTarget\": \"Tue, 29 Apr 2014 18:30:38 GMT\"\n}".bytes()}
+  let got = deserialize_json_timestamps(resp)?
+  let want = JsonTimestampsInputOutput{http_date_on_target: Time.from_unix(1398796238)}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonSerializeStringUnionValue" {
@@ -873,6 +1062,11 @@ test "RestJsonNoInputAndNoOutput" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_no_input_and_no_output(ep, (), TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/NoInputAndNoOutput", body: ""})?
+}
+
+test "RestJsonNoInputAndNoOutput_response" {
+  let resp = http.Response{status: 200, headers: {}, body: "".bytes()}
+  deserialize_no_input_and_no_output(resp)?
 }
 
 test "RestJsonNoInputAndOutput" {
@@ -1052,6 +1246,13 @@ test "RestJsonRecursiveShapes" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/RecursiveShapes", headers: [("Content-Type", "application/json")], body: "{\n    \"nested\": {\n        \"foo\": \"Foo1\",\n        \"nested\": {\n            \"bar\": \"Bar1\",\n            \"recursiveMember\": {\n                \"foo\": \"Foo2\",\n                \"nested\": {\n                    \"bar\": \"Bar2\"\n                }\n            }\n        }\n    }\n}", body_media_type: "application/json"})?
 }
 
+test "RestJsonRecursiveShapes_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"nested\": {\n        \"foo\": \"Foo1\",\n        \"nested\": {\n            \"bar\": \"Bar1\",\n            \"recursiveMember\": {\n                \"foo\": \"Foo2\",\n                \"nested\": {\n                    \"bar\": \"Bar2\"\n                }\n            }\n        }\n    }\n}".bytes()}
+  let got = deserialize_recursive_shapes(resp)?
+  let want = RecursiveShapesInputOutput{nested: RecursiveShapesInputOutputNested1{foo: "Foo1", nested: RecursiveShapesInputOutputNested2{bar: "Bar1", recursive_member: RecursiveShapesInputOutputNested1{foo: "Foo2", nested: RecursiveShapesInputOutputNested2{bar: "Bar2"}}}}}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonSimpleScalarProperties" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_simple_scalar_properties(ep, SimpleScalarPropertiesInputOutput{foo: "Foo", string_value: "string", true_boolean_value: true, false_boolean_value: false, byte_value: 1, short_value: 2, integer_value: 3, long_value: 4, float_value: 5.5, double_value: 6.5}, TOKEN, 0)?
@@ -1082,6 +1283,13 @@ test "RestJsonSupportsNegativeInfinityFloatInputs" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/SimpleScalarProperties", headers: [("Content-Type", "application/json")], body: "{\n    \"floatValue\": \"-Infinity\",\n    \"DoubleDribble\": \"-Infinity\"\n}", body_media_type: "application/json"})?
 }
 
+test "RestJsonSimpleScalarProperties_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json", "X-Foo": "Foo"}, body: "{\n    \"stringValue\": \"string\",\n    \"trueBooleanValue\": true,\n    \"falseBooleanValue\": false,\n    \"byteValue\": 1,\n    \"shortValue\": 2,\n    \"integerValue\": 3,\n    \"longValue\": 4,\n    \"floatValue\": 5.5,\n    \"DoubleDribble\": 6.5\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesInputOutput{foo: "Foo", string_value: "string", true_boolean_value: true, false_boolean_value: false, byte_value: 1, short_value: 2, integer_value: 3, long_value: 4, float_value: 5.5, double_value: 6.5}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonDoesntDeserializeNullStructureValues" {
   let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"stringValue\": null\n}".bytes()}
   let got = deserialize_simple_scalar_properties(resp)?
@@ -1089,10 +1297,38 @@ test "RestJsonDoesntDeserializeNullStructureValues" {
   expect("${got:?}") == "${want:?}"
 }
 
+test "RestJsonSupportsNaNFloatInputs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"floatValue\": \"NaN\",\n    \"DoubleDribble\": \"NaN\"\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesInputOutput{float_value: rest.nan(), double_value: rest.nan()}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonSupportsInfinityFloatInputs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"floatValue\": \"Infinity\",\n    \"DoubleDribble\": \"Infinity\"\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesInputOutput{float_value: rest.inf(), double_value: rest.inf()}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonSupportsNegativeInfinityFloatInputs_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"floatValue\": \"-Infinity\",\n    \"DoubleDribble\": \"-Infinity\"\n}".bytes()}
+  let got = deserialize_simple_scalar_properties(resp)?
+  let want = SimpleScalarPropertiesInputOutput{float_value: -rest.inf(), double_value: -rest.inf()}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonSparseListsSerializeNull" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_sparse_json_lists(ep, SparseJsonListsInputOutput{sparse_string_list: [None, Some("hi")], sparse_short_list: [None, Some(2)]}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "PUT", uri: "/SparseJsonLists", headers: [("Content-Type", "application/json")], body: "{\n    \"sparseStringList\": [\n        null,\n        \"hi\"\n    ],\n    \"sparseShortList\": [\n        null,\n        2\n    ]\n}", body_media_type: "application/json"})?
+}
+
+test "RestJsonSparseListsSerializeNull_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"sparseStringList\": [\n        null,\n        \"hi\"\n    ],\n    \"sparseShortList\": [\n        null,\n        2\n    ]\n}".bytes()}
+  let got = deserialize_sparse_json_lists(resp)?
+  let want = SparseJsonListsInputOutput{sparse_string_list: [None, Some("hi")], sparse_short_list: [None, Some(2)]}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonSparseJsonMaps" {
@@ -1123,6 +1359,13 @@ test "RestJsonSerializesSparseSetMapAndRetainsNull" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_sparse_json_maps(ep, SparseJsonMapsInputOutput{sparse_set_map: {"x": Some([]), "y": Some(["a", "b"]), "z": None}}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/SparseJsonMaps", headers: [("Content-Type", "application/json")], body: "{\n    \"sparseSetMap\": {\n        \"x\": [],\n        \"y\": [\"a\", \"b\"],\n        \"z\": null\n    }\n}", body_media_type: "application/json"})?
+}
+
+test "RestJsonSparseJsonMaps_response" {
+  let resp = http.Response{status: 200, headers: {"Content-Type": "application/json"}, body: "{\n    \"sparseStructMap\": {\n        \"foo\": {\n            \"hi\": \"there\"\n        },\n        \"baz\": {\n            \"hi\": \"bye\"\n        }\n   }\n}".bytes()}
+  let got = deserialize_sparse_json_maps(resp)?
+  let want = SparseJsonMapsInputOutput{sparse_struct_map: {"foo": Some(GreetingStruct{hi: "there"}), "baz": Some(GreetingStruct{hi: "bye"})}}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonDeserializesSparseNullMapValues" {
@@ -1165,6 +1408,20 @@ test "RestJsonStreamingTraitsWithNoBlobBody" {
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/StreamingTraits", headers: [("X-Foo", "Foo")], body: "", body_media_type: "application/octet-stream"})?
 }
 
+test "RestJsonStreamingTraitsWithBlob_response" {
+  let resp = http.Response{status: 200, headers: {"X-Foo": "Foo", "Content-Type": "application/octet-stream"}, body: "blobby blob blob".bytes()}
+  let got = deserialize_streaming_traits(resp)?
+  let want = StreamingTraitsInputOutput{foo: "Foo", blob: "blobby blob blob".bytes()}
+  expect("${got:?}") == "${want:?}"
+}
+
+test "RestJsonStreamingTraitsWithNoBlobBody_response" {
+  let resp = http.Response{status: 200, headers: {"X-Foo": "Foo"}, body: "".bytes()}
+  let got = deserialize_streaming_traits(resp)?
+  let want = StreamingTraitsInputOutput{foo: "Foo"}
+  expect("${got:?}") == "${want:?}"
+}
+
 test "RestJsonStreamingTraitsRequireLengthWithBlob" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_streaming_traits_require_length(ep, StreamingTraitsRequireLengthInput{foo: "Foo", blob: "blobby blob blob".bytes()}, TOKEN, 0)?
@@ -1181,6 +1438,13 @@ test "RestJsonStreamingTraitsWithMediaTypeWithBlob" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_streaming_traits_with_media_type(ep, StreamingTraitsWithMediaTypeInputOutput{foo: "Foo", blob: "blobby blob blob".bytes()}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/StreamingTraitsWithMediaType", headers: [("X-Foo", "Foo"), ("Content-Type", "text/plain")], body: "blobby blob blob", body_media_type: "application/octet-stream"})?
+}
+
+test "RestJsonStreamingTraitsWithMediaTypeWithBlob_response" {
+  let resp = http.Response{status: 200, headers: {"X-Foo": "Foo", "Content-Type": "text/plain"}, body: "blobby blob blob".bytes()}
+  let got = deserialize_streaming_traits_with_media_type(resp)?
+  let want = StreamingTraitsWithMediaTypeInputOutput{foo: "Foo", blob: "blobby blob blob".bytes()}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonHttpWithEmptyBody" {
@@ -1229,6 +1493,13 @@ test "RestJsonTimestampFormatHeaders" {
   let ep = rest.parse_endpoint("https://example.com") ?? rest.Endpoint{host: "example.com"}
   let req = serialize_timestamp_format_headers(ep, TimestampFormatHeadersIO{member_epoch_seconds: Time.from_unix(1576540098), member_http_date: Time.from_unix(1576540098), member_date_time: Time.from_unix(1576540098), default_format: Time.from_unix(1576540098), target_epoch_seconds: Time.from_unix(1576540098), target_http_date: Time.from_unix(1576540098), target_date_time: Time.from_unix(1576540098)}, TOKEN, 0)?
   protocoltest.check_request(req, protocoltest.RequestWant{method: "POST", uri: "/TimestampFormatHeaders", headers: [("X-memberEpochSeconds", "1576540098"), ("X-memberHttpDate", "Mon, 16 Dec 2019 23:48:18 GMT"), ("X-memberDateTime", "2019-12-16T23:48:18Z"), ("X-defaultFormat", "Mon, 16 Dec 2019 23:48:18 GMT"), ("X-targetEpochSeconds", "1576540098"), ("X-targetHttpDate", "Mon, 16 Dec 2019 23:48:18 GMT"), ("X-targetDateTime", "2019-12-16T23:48:18Z")], body: ""})?
+}
+
+test "RestJsonTimestampFormatHeaders_response" {
+  let resp = http.Response{status: 200, headers: {"X-memberEpochSeconds": "1576540098", "X-memberHttpDate": "Mon, 16 Dec 2019 23:48:18 GMT", "X-memberDateTime": "2019-12-16T23:48:18Z", "X-defaultFormat": "Mon, 16 Dec 2019 23:48:18 GMT", "X-targetEpochSeconds": "1576540098", "X-targetHttpDate": "Mon, 16 Dec 2019 23:48:18 GMT", "X-targetDateTime": "2019-12-16T23:48:18Z"}, body: b""}
+  let got = deserialize_timestamp_format_headers(resp)?
+  let want = TimestampFormatHeadersIO{member_epoch_seconds: Time.from_unix(1576540098), member_http_date: Time.from_unix(1576540098), member_date_time: Time.from_unix(1576540098), default_format: Time.from_unix(1576540098), target_epoch_seconds: Time.from_unix(1576540098), target_http_date: Time.from_unix(1576540098), target_date_time: Time.from_unix(1576540098)}
+  expect("${got:?}") == "${want:?}"
 }
 
 test "RestJsonUnitInputAndOutput" {

@@ -35,11 +35,23 @@ says what happened, not a general opinion. Bugs with repros go in
   plus `http.server` in a `scope` gave a wire level test of what the
   client sends (it caught issue 2) with no sockets and no ports.
 - **Fast std turnaround (2026-11-04).** crc64 NVME and an ECDSA raw key
-  constructor landed the same day they were asked for.
+  constructor landed the same day they were asked for; the raw path fix
+  (issue 2) and the match arm fix (issue 1) landed within hours, each
+  with a golden test, so both workarounds are already gone.
+- **Effects caught a design gap (2026-11-04).** The credentials
+  interface said `uses (net.dial, clock)`; the assume role provider
+  retries with jitter, so it needs `rand`, and the compiler refused it
+  until the interface said so. In Go that dependency would be invisible.
 
 ## Didn't like, or cost time
 
-- **std/http's client rewrites the path (2026-11-04).** It keeps only the
+- **Another module's function is not a value on native (2026-11-04).**
+  `transport.send(..., query.classify)` is XO1201 (issue 3); every
+  cross-module callback needs a local wrapper for now.
+- **Fakes are not named in the prelude (2026-11-04).** A test helper
+  taking `os.fs` needs `use std/testing` and `testing.MemFs`; `FakeEnv`
+  has `set` but no `unset` (setting "" works for the SDK).
+- **std/http's client rewrote the path (2026-11-04, fixed same day).** It keeps only the
   decoded path and re-escapes it, so `%2B` goes out as `+`
   (xo-issues.md entry 2). For a signing SDK the request line must be
   exactly what the caller built; Go keeps `RawPath`.

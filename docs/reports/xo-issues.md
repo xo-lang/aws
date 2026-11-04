@@ -46,8 +46,8 @@ fn main(os: Os) ! {
 }
 ```
 
-Workaround: convert in a helper function's return
-(`config.default_chain`). Status: reported to the lead 2026-11-04.
+Workaround (removed): `config.default_chain`. Status: FIXED on xo main
+11b6c6e3e (golden iface_match_arm).
 
 ## 2. std/http client drops a request's raw (escaped) path
 
@@ -72,9 +72,41 @@ Ask: `new_request` (and `Request.url` parsing) keep the raw path as Go's
 `url.Parse` does (`RawPath` when the escaping differs from the default),
 so `escaped_path()` and the request line give it back unchanged.
 
-Workaround: transport.wire_path computes the form std/http sends and the
-transport signs that form. Status: reported to the lead 2026-11-04.
+Workaround (removed): transport.wire_path. Status: FIXED on xo main
+6ccace320 (raw path kept; default ports in the in-memory net too).
 
 Also seen (not a bug, a sharp edge): `os.net.listen("host:80")` is not
 reached by a client URL `http://host/...` without the port; with an
 explicit port (`host:8080` in both) it is.
+
+## 3. Another module's function as a value is XO1201 on native
+
+Found 2026-11-04 (xo at 53ae55bad). Passing `m.double` (a `pub fn` of
+an imported module) where a `fn(Int) -> Int` is expected fails on the
+native backends: "not available on the native backends (arm64, amd64,
+LLVM) yet: the name `m` here (support is planned)". A function of the
+same module works as a value.
+
+Repro (one module `example.com/repro`):
+
+```xo
+// m/m.xo
+pub fn double(n: Int) -> Int { n * 2 }
+
+// main.xo
+use example.com/repro/m
+
+fn apply(f: fn(Int) -> Int, n: Int) -> Int { f(n) }
+
+fn main(os: Os) {
+  os.stdio.println("${apply(m.double, 21)}")   // XO1201 at `m`
+}
+```
+
+Why it matters: generated clients pass protocol functions
+(`query.classify`, a serializer) to the transport; every one needs a
+local wrapper today.
+
+Workaround: a local function that calls it
+(credentials/stscreds/stscreds.xo `classify`). Status: reported to the
+lead 2026-11-04.

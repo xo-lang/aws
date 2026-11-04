@@ -4,6 +4,9 @@
 
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/credentials/stscreds
+use github.com/xo-lang/aws/retry
+use github.com/xo-lang/aws/transport
 
 /// Settings given in code; each wins over the environment and files.
 pub struct Options {
@@ -33,10 +36,12 @@ pub fn (e: ConfigErr) display() -> Str {
 }
 
 /// The default configuration: region, the credentials chain (the
-/// environment's keys, then the profile's static keys; roles, SSO, web
-/// identity, containers and instance metadata are added by later
-/// steps), retries, and configured endpoints.
-pub fn load_default_config(env: Env, fs: Fs, clock: Clock, opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
+/// environment's keys, then the profile: its static keys, or a role
+/// assumed from `source_profile` or `credential_source = Environment`;
+/// SSO, web identity, containers and instance metadata are added by
+/// later steps), retries, and configured endpoints. `net` and `rand`
+/// are kept for the role provider's STS calls; nothing is sent here.
+pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand, opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
   let explicit = opts.profile.is_some() || (env.get("AWS_PROFILE") ?? "") != ""
   let profile = opts.profile ?? profile_name(env)
   let sc = match load_shared(env, fs) {
@@ -73,14 +78,22 @@ pub fn load_default_config(env: Env, fs: Fs, clock: Clock, opts: Options = Optio
     }
   }
 
-  let creds = opts.credentials ?? default_chain(env, sc, profile, clock, opts.refresh_window)
+  let endpoints = configured_endpoints(env, sc, p)
+  let creds: aws.CredentialsProvider = match opts.credentials {
+    Some(c) => c
+    None => {
+      let ctx = RoleContext{env: env, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints}
+      let from_profile = profile_provider(ctx, profile, [])?
+      credentials.cache(credentials.Chain{providers: [credentials.env_provider(env), from_profile]}, clock, opts.refresh_window)
+    }
+  }
 
   Ok(aws.Config{
     region: region,
     credentials: creds,
     retry_mode: retry_mode,
     max_attempts: max_attempts,
-    endpoints: configured_endpoints(env, sc, p),
+    endpoints: endpoints,
     use_fips: bool_setting(env.get("AWS_USE_FIPS_ENDPOINT") ?? p.props.get("use_fips_endpoint")),
     use_dualstack: bool_setting(env.get("AWS_USE_DUALSTACK_ENDPOINT") ?? p.props.get("use_dualstack_endpoint")),
     app_id: non_empty(env.get("AWS_SDK_UA_APP_ID")) ?? non_empty(p.props.get("sdk_ua_app_id")),
@@ -88,15 +101,83 @@ pub fn load_default_config(env: Env, fs: Fs, clock: Clock, opts: Options = Optio
   })
 }
 
-/// The default credentials chain, cached. (A function, not a match arm:
-/// the native backends cannot yet convert a struct to an interface in a
-/// match arm, docs/reports/xo-issues.md entry 1; owned by the Xo
-/// language team since 2026-11-04.)
-fn default_chain(env: Env, sc: SharedConfig, profile: Str, clock: Clock, window: Duration) -> aws.CredentialsProvider uses env {
-  credentials.cache(credentials.Chain{providers: [
-    credentials.env_provider(env),
-    credentials.FixedResult{result: profile_static_credentials(sc, profile)},
-  ]}, clock, window)
+/// What resolving a profile's credentials needs.
+struct RoleContext {
+  env: Env
+  sc: SharedConfig
+  net: Net
+  clock: Clock
+  rand: Rand
+  region: Str?
+  endpoints: aws.ConfiguredEndpoints
+}
+
+/// The credentials of `profile`, as aws-sdk-go-v2 resolves them: a
+/// profile with `role_arn` assumes that role with the credentials of its
+/// `source_profile` (whose static keys win over its own role, so a
+/// profile may name itself) or of its `credential_source`; otherwise
+/// the profile's static keys. `seen` holds the profiles already on the
+/// path, to refuse a loop.
+fn profile_provider(ctx: RoleContext, profile: Str, seen: List[Str]) -> aws.CredentialsProvider ! ConfigErr {
+  let p = ctx.sc.profiles.get(profile) ?? Section{}
+  let role_arn = non_empty(p.props.get("role_arn"))
+  let has_static = non_empty(p.props.get("aws_access_key_id")).is_some()
+  let statics = credentials.FixedResult{result: profile_static_credentials(ctx.sc, profile)}
+  // a source profile's own static keys end the chain (Go's rule)
+  if role_arn.is_none() || (seen.len() > 0 && has_static) {
+    return Ok(statics)
+  }
+  let arn = role_arn ?? ""
+  if seen.contains(profile) {
+    return Err(ConfigErr.Invalid(setting: "source_profile", value: profile, msg: "profiles form a loop: ${seen.join(" -> ")} -> ${profile}"))
+  }
+  let source_profile = non_empty(p.props.get("source_profile"))
+  let credential_source = non_empty(p.props.get("credential_source"))
+  if source_profile.is_some() && credential_source.is_some() {
+    return Err(ConfigErr.Invalid(setting: "credential_source", value: credential_source ?? "", msg: "profile ${profile} sets both source_profile and credential_source"))
+  }
+  if non_empty(p.props.get("mfa_serial")).is_some() {
+    return Err(ConfigErr.Invalid(setting: "mfa_serial", value: p.props.get("mfa_serial") ?? "", msg: "MFA token codes are not supported yet"))
+  }
+  var path = seen
+  path.push(profile)
+  let source: aws.CredentialsProvider = match source_profile {
+    Some(sp) => {
+      if !ctx.sc.profiles.contains(sp) {
+        return Err(ConfigErr.ProfileNotFound(profile: sp, files: ctx.sc.files))
+      }
+      if sp == profile {
+        // a profile that assumes its role with its own static keys
+        if !has_static {
+          return Err(ConfigErr.Invalid(setting: "source_profile", value: sp, msg: "profile ${profile} names itself but has no static keys"))
+        }
+        statics
+      } else {
+        profile_provider(ctx, sp, path)?
+      }
+    }
+    None => match credential_source {
+      Some("Environment") => credentials.env_provider(ctx.env)
+      Some(other) => return Err(ConfigErr.Invalid(setting: "credential_source", value: other, msg: "supported: Environment (Ec2InstanceMetadata and EcsContainer come later)"))
+      None => return Err(ConfigErr.Invalid(setting: "role_arn", value: arn, msg: "profile ${profile} sets role_arn without source_profile or credential_source"))
+    }
+  }
+  let region = non_empty(p.props.get("region")) ?? ctx.region ?? return Err(ConfigErr.Invalid(setting: "region", value: "", msg: "assuming role ${arn} needs a region"))
+  let duration = match non_empty(p.props.get("duration_seconds")) {
+    Some(text) => match Int.parse(text) {
+      Some(n) => Some(n)
+      None => return Err(ConfigErr.Invalid(setting: "duration_seconds", value: text, msg: "not an integer"))
+    }
+    None => None
+  }
+  let t = transport.new_client(ctx.net, ctx.clock, ctx.rand, source, retry.standard())
+  let client = stscreds.Client{transport: t, region: region, endpoint: stscreds.endpoint(region, aws.endpoint_for(ctx.endpoints, "STS"))}
+  Ok(credentials.cache(stscreds.AssumeRoleProvider{client: client, input: stscreds.AssumeRoleInput{
+    role_arn: arn,
+    role_session_name: non_empty(p.props.get("role_session_name")) ?? "",
+    duration_seconds: duration,
+    external_id: non_empty(p.props.get("external_id")),
+  }}, ctx.clock))
 }
 
 fn configured_endpoints(env: Env, sc: SharedConfig, p: Section) -> aws.ConfiguredEndpoints uses env {

@@ -107,7 +107,7 @@ test "host header and url" {
 }
 
 test "the wire keeps the escaped path and raw query (decision 0006 item 8)" {
-  let l = os.net.listen("objects.test:8080")?
+  let l = os.net.listen("objects.test:80")?
   let got = Mutex[List[Str]].new([])
   var r = http.router()
   r.handle("/{rest...}", fn(req: http.Request) -> http.Response {
@@ -117,18 +117,15 @@ test "the wire keeps the escaped path and raw query (decision 0006 item 8)" {
   let c = test_client(os.net, os.clock, os.rand)
   scope s {
     s.spawn_background(fn() { http.server(l, r).serve() })
-    let req = Request{method: "PUT", scheme: "http", host: "objects.test", port: 8080, path: "/bucket/a%20b%2Bc/%E1%88%B4//x", query: "versionId=a%2Fb&x-id=PutObject"}
+    let req = Request{method: "PUT", scheme: "http", host: "objects.test", path: "/bucket/a%20b%2Bc/%E1%88%B4//x", query: "versionId=a%2Fb&x-id=PutObject"}
     let resp = send(c, req, Signing{service: "s3", region: "us-east-1", s3: true}, status_failure)?
     expect(resp.status) == 200
   }
-  // std/http re-escapes the path (xo-issues entry 2): `%2B` goes out as
-  // `+`. The transport signs that same form, so the signature holds.
-  expect(got.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["/bucket/a%20b+c/%E1%88%B4//x?versionId=a%2Fb&x-id=PutObject"]
-  expect(wire_path("/bucket/a%20b%2Bc/%E1%88%B4//x")) == "/bucket/a%20b+c/%E1%88%B4//x"
+  expect(got.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["/bucket/a%20b%2Bc/%E1%88%B4//x?versionId=a%2Fb&x-id=PutObject"]
 }
 
 test "gzip bodies come back as stored (decision 0006 item 9)" {
-  let l = os.net.listen("objects.test:8080")?
+  let l = os.net.listen("objects.test:80")?
   let stored = b"\x1f\x8b\x08\x00not really gzip"
   var r = http.router()
   r.handle("/{rest...}", fn(_req: http.Request) -> http.Response {
@@ -137,7 +134,7 @@ test "gzip bodies come back as stored (decision 0006 item 9)" {
   let c = test_client(os.net, os.clock, os.rand)
   scope s {
     s.spawn_background(fn() { http.server(l, r).serve() })
-    let resp = send(c, Request{scheme: "http", host: "objects.test", port: 8080, path: "/b/k"}, Signing{service: "s3", region: "us-east-1", s3: true}, status_failure)?
+    let resp = send(c, Request{scheme: "http", host: "objects.test", path: "/b/k"}, Signing{service: "s3", region: "us-east-1", s3: true}, status_failure)?
     expect(resp.body) == stored
     expect(resp.header("Content-Encoding")) == Some("gzip")
   }

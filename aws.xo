@@ -34,9 +34,10 @@ pub fn (e: CredentialsErr) display() -> Str {
 
 /// Anything that gives credentials: static keys, the environment, a
 /// profile, a role, a metadata endpoint. Providers that call a service
-/// do it at retrieve time, hence the network and clock effects.
+/// do it at retrieve time, hence the network, clock and rand (retry
+/// jitter) effects.
 pub interface CredentialsProvider {
-  fn retrieve(self) -> Credentials ! CredentialsErr uses (net.dial, clock)
+  fn retrieve(self) -> Credentials ! CredentialsErr uses (net.dial, clock, rand)
 }
 
 /// True when `c` expires within `window` of `now` (or already has).
@@ -92,4 +93,22 @@ pub fn endpoint_for(e: ConfiguredEndpoints, suffix: Str) -> Str? {
     return None
   }
   e.env_service.get(suffix) ?? e.env_global ?? e.profile_service.get(suffix) ?? e.profile_global
+}
+
+/// Who caused a service error.
+pub enum Fault { Client, Server, Unknown }
+
+/// A service error response: its AWS error code and message, from any
+/// protocol. Modeled errors carry one as their `api` field.
+pub struct ApiError {
+  pub code: Str
+  pub message: Str = ""
+  pub fault: Fault = Fault.Unknown
+  pub request_id: Str = ""
+  pub status: Int = 0
+}
+
+pub fn (e: ApiError) display() -> Str {
+  let rid = if e.request_id == "" { "" } else { ", request id ${e.request_id}" }
+  "api error ${e.code}: ${e.message} (HTTP ${e.status}${rid})"
 }

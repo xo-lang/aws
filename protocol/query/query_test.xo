@@ -1,0 +1,39 @@
+use std/http
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/retry
+
+test "form encoding" {
+  var f = form("AssumeRole", "2011-06-15")
+  add(f, "RoleArn", "arn:aws:iam::123456789012:role/Demo")
+  add(f, "RoleSessionName", "a b+c/d")
+  expect(encode(f)) == "Action=AssumeRole&Version=2011-06-15&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2FDemo&RoleSessionName=a%20b%2Bc%2Fd"
+}
+
+const ERROR_BODY: Str = r"""<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+  <Error>
+    <Type>Sender</Type>
+    <Code>AccessDenied</Code>
+    <Message>Not authorized</Message>
+  </Error>
+  <RequestId>example-request-id-0</RequestId>
+</ErrorResponse>"""
+
+test "error responses" {
+  let e = read_error(http.text(403, ERROR_BODY))
+  expect(e.code) == "AccessDenied"
+  expect(e.message) == "Not authorized"
+  expect(e.fault) == aws.Fault.Client
+  expect(e.request_id) == "example-request-id-0"
+  expect(e.status) == 403
+  let throttled = http.text(400, ERROR_BODY.replace("AccessDenied", "Throttling"))
+  expect(classify(throttled)) == retry.Failure.Throttle
+  expect(classify(http.text(403, ERROR_BODY))) == retry.Failure.Permanent
+  expect(read_error(http.text(502, "<html>bad gateway</html>")).code) == "UnknownError"
+}
+
+test "result element" {
+  let body = "<GetCallerIdentityResponse><GetCallerIdentityResult><Account>123456789012</Account></GetCallerIdentityResult></GetCallerIdentityResponse>"
+  let r = read_result(http.text(200, body), "GetCallerIdentity")?
+  expect(child_text(r, "Account")) == "123456789012"
+  expect(read_result(http.text(403, ERROR_BODY), "GetCallerIdentity") is Err(ReadErr.Api(_))) == true
+}

@@ -5,7 +5,6 @@
 
 use std/http
 use std/time
-use std/url
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/retry
 use github.com/xo-lang/aws/sigv4
@@ -35,39 +34,11 @@ pub fn host_header(r: Request) -> Str {
   }
 }
 
-/// The request's URL, with the path as std/http will send it.
+/// The request's URL, with the path and query exactly as given
+/// (std/http sends a request's raw path unchanged).
 pub fn url_of(r: Request) -> Str {
   let q = if r.query == "" { "" } else { "?${r.query}" }
-  "${r.scheme}://${host_header(r)}${wire_path(r.path)}${q}"
-}
-
-/// The path std/http's client puts on the wire for `path`: it keeps only
-/// the decoded path and escapes it again as Go's URL.EscapedPath does
-/// (`$&+,/:;=@` and the unreserved characters kept). The signer must
-/// sign these exact bytes, so the transport sends and signs this form.
-/// Workaround for docs/reports/xo-issues.md entry 2 (the client drops
-/// a request's raw path); when std/http keeps it, this becomes `path`.
-pub fn wire_path(path: Str) -> Str {
-  let decoded = match url.path_unescape(path) {
-    Ok(p) => p
-    Err(_) => return path
-  }
-  let b = decoded.bytes()
-  let hex = "0123456789ABCDEF".bytes()
-  var out = BytesBuilder.with_capacity(b.len())
-  for c in b {
-    let keep = (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) ||
-      c == 45 || c == 46 || c == 95 || c == 126 ||
-      c == 36 || c == 38 || c == 43 || c == 44 || c == 47 || c == 58 || c == 59 || c == 61 || c == 64
-    if keep {
-      out.write_byte(c)
-    } else {
-      out.write_byte(37)
-      out.write_byte(hex[Int(c) >> 4])
-      out.write_byte(hex[Int(c) & 15])
-    }
-  }
-  out.freeze().to_str() ?? path
+  "${r.scheme}://${host_header(r)}${r.path}${q}"
 }
 
 /// How to sign for one service.
@@ -138,7 +109,7 @@ pub fn skew(c: Client) -> Duration {
 /// decision; it is the protocol's, since error codes live in the body.
 pub fn send(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure) -> http.Response ! SendErr uses (net.dial, clock, rand) {
   let max = c.retryer.max_attempts
-  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock) {
+  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
     attempt_once(c, req, signing, classify, attempt, max)
   }, fn(e: AttemptErr) -> retry.Failure {
     match e {
@@ -162,7 +133,7 @@ pub fn send(c: Client, req: Request, signing: Signing, classify: fn(http.Respons
   }
 }
 
-fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock) {
+fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
   let creds = match c.credentials.retrieve() {
     Ok(v) => v
     Err(e) => return Err(AttemptErr.Creds(e))
@@ -173,7 +144,7 @@ fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Res
   headers.push(("Amz-Sdk-Request", "attempt=${attempt}; max=${max}"))
   let payload = if signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
   let signed = sigv4.sign_header(
-    sigv4.Request{method: req.method, path: wire_path(req.path), query: req.query, headers: headers},
+    sigv4.Request{method: req.method, path: req.path, query: req.query, headers: headers},
     sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token},
     sigv4.Options{
       service: signing.service,

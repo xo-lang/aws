@@ -1,0 +1,122 @@
+// The awsQuery protocol (and ec2Query's shared parts): form encoded
+// requests and XML responses (decision 0003).
+
+use std/http
+use std/xml
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/retry
+
+/// A request body: `Action`, `Version`, then the members, in the order
+/// added (aws-sdk-go-v2 writes them in member order too).
+pub struct Form {
+  pub pairs: List[(Str, Str)] = []
+}
+
+pub fn form(action: Str, version: Str) -> Form {
+  Form{pairs: [("Action", action), ("Version", version)]}
+}
+
+pub fn add(var f: Form, key: Str, value: Str) {
+  f.pairs.push((key, value))
+}
+
+/// `k=v&...` with each part escaped as the query protocol wants:
+/// unreserved characters kept, everything else %XX (a space is %20).
+pub fn encode(f: Form) -> Str {
+  f.pairs.map(fn(p: (Str, Str)) -> Str { "${escape(p.0)}=${escape(p.1)}" }).join("&")
+}
+
+pub fn escape(s: Str) -> Str {
+  let b = s.bytes()
+  let hex = "0123456789ABCDEF".bytes()
+  var out = BytesBuilder.with_capacity(b.len())
+  for c in b {
+    let keep = (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) ||
+      c == 45 || c == 46 || c == 95 || c == 126
+    if keep {
+      out.write_byte(c)
+    } else {
+      out.write_byte(37)
+      out.write_byte(hex[Int(c) >> 4])
+      out.write_byte(hex[Int(c) & 15])
+    }
+  }
+  out.freeze().to_str() ?? s
+}
+
+pub const CONTENT_TYPE: Str = "application/x-www-form-urlencoded; charset=utf-8"
+
+/// Why a response could not be read.
+pub enum ReadErr {
+  /// The service answered with an error.
+  Api(e: aws.ApiError)
+  /// The body is not what the protocol says.
+  Malformed(msg: Str)
+}
+
+pub fn (e: ReadErr) display() -> Str {
+  match e {
+    Api(ae) => ae.display()
+    Malformed(msg) => "malformed response: ${msg}"
+  }
+}
+
+/// The `<ActionResult>` element of a successful response, or the
+/// service's error.
+pub fn read_result(resp: http.Response, action: Str) -> xml.Element ! ReadErr {
+  if resp.status >= 300 {
+    return Err(ReadErr.Api(read_error(resp)))
+  }
+  let text = resp.text() ?? return Err(ReadErr.Malformed("body is not UTF-8"))
+  let root = match xml.parse(text) {
+    Ok(r) => r
+    Err(e) => return Err(ReadErr.Malformed(e.display()))
+  }
+  match root.child("${action}Result") {
+    Some(r) => Ok(r)
+    None => Ok(xml.Element{name: xml.Name{space: "", local: "${action}Result"}, attrs: [], children: []})
+  }
+}
+
+/// The error of an error response: `<ErrorResponse><Error><Type>`,
+/// `<Code>`, `<Message>`, then `<RequestId>`.
+pub fn read_error(resp: http.Response) -> aws.ApiError {
+  let rid_header = resp.header("X-Amzn-RequestId") ?? ""
+  let unknown = aws.ApiError{code: "UnknownError", message: "HTTP ${resp.status}", status: resp.status, request_id: rid_header}
+  let text = resp.text() ?? return unknown
+  let root = match xml.parse(text) {
+    Ok(r) => r
+    Err(_) => return unknown
+  }
+  let e = root.child("Error") ?? root
+  let code = child_text(e, "Code")
+  if code == "" {
+    return unknown
+  }
+  let rid = child_text(root, "RequestId")
+  aws.ApiError{
+    code: code,
+    message: child_text(e, "Message"),
+    fault: match child_text(e, "Type") {
+      "Sender" => aws.Fault.Client
+      "Receiver" => aws.Fault.Server
+      _ => aws.Fault.Unknown
+    },
+    request_id: if rid == "" { rid_header } else { rid },
+    status: resp.status,
+  }
+}
+
+/// The text of a child element, "" when absent.
+pub fn child_text(e: xml.Element, local: Str) -> Str {
+  match e.child(local) {
+    Some(c) => c.text()
+    None => ""
+  }
+}
+
+/// The retry decision for an error response (transport.send's classify).
+pub fn classify(resp: http.Response) -> retry.Failure {
+  let e = read_error(resp)
+  retry.classify_response(resp.status, if e.code == "UnknownError" { None } else { Some(e.code) })
+}

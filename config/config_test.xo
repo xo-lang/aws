@@ -119,3 +119,65 @@ test "one key only is invalid" {
   let sc = SharedConfig{profiles: {"p": Section{props: {"aws_access_key_id": "AKIDTEST0000000000"}}}}
   expect(profile_static_credentials(sc, "p") is Err(aws.CredentialsErr.Invalid(_))) == true
 }
+
+test "default config from environment and files" {
+  os.env.set("AWS_CONFIG_FILE", "/cfg/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/cfg/credentials")
+  os.fs.write("/cfg/config", CONFIG.bytes())?
+  os.fs.write("/cfg/credentials", CREDS.bytes())?
+  let cfg = load_default_config(os.env, os.fs, os.clock)?
+  expect(cfg.region) == Some("us-west-2")
+  expect(cfg.profile) == "default"
+  expect(cfg.max_attempts) == 3
+  let creds = cfg.credentials?.retrieve()?
+  expect(creds.access_key_id) == "AKIDTEST0000000000"
+  expect(creds.source) == "SharedConfigCredentials: default"
+}
+
+test "environment wins over the profile" {
+  os.env.set("AWS_CONFIG_FILE", "/cfg/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/cfg/credentials")
+  os.fs.write("/cfg/config", CONFIG.bytes())?
+  os.fs.write("/cfg/credentials", CREDS.bytes())?
+  os.env.set("AWS_REGION", "ap-south-1")
+  os.env.set("AWS_ACCESS_KEY_ID", "AKIDTEST0000000009")
+  os.env.set("AWS_SECRET_ACCESS_KEY", "invented-secret-9")
+  os.env.set("AWS_MAX_ATTEMPTS", "5")
+  os.env.set("AWS_RETRY_MODE", "adaptive")
+  let cfg = load_default_config(os.env, os.fs, os.clock)?
+  expect(cfg.region) == Some("ap-south-1")
+  expect(cfg.max_attempts) == 5
+  expect(cfg.retry_mode) == aws.RetryMode.Adaptive
+  expect(cfg.credentials?.retrieve()?.source) == "EnvironmentVariables"
+}
+
+test "explicit profile must exist" {
+  os.env.set("AWS_CONFIG_FILE", "/cfg/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/cfg/credentials")
+  os.env.set("AWS_PROFILE", "nope")
+  expect(load_default_config(os.env, os.fs, os.clock) is Err(ConfigErr.ProfileNotFound(..))) == true
+}
+
+test "bad settings are errors" {
+  os.env.set("AWS_CONFIG_FILE", "/cfg/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/cfg/credentials")
+  os.env.set("AWS_MAX_ATTEMPTS", "zero")
+  expect(load_default_config(os.env, os.fs, os.clock) is Err(ConfigErr.Invalid(..))) == true
+}
+
+test "configured endpoint precedence" {
+  os.env.set("AWS_CONFIG_FILE", "/cfg/config")
+  os.env.set("AWS_SHARED_CREDENTIALS_FILE", "/cfg/credentials")
+  os.fs.write("/cfg/config", "[default]\nservices = local\nendpoint_url = http://127.0.0.1:4000\n[services local]\ns3 =\n  endpoint_url = http://127.0.0.1:9000\n".bytes())?
+  let cfg = load_default_config(os.env, os.fs, os.clock)?
+  expect(aws.endpoint_for(cfg.endpoints, "S3")) == Some("http://127.0.0.1:9000")
+  expect(aws.endpoint_for(cfg.endpoints, "SQS")) == Some("http://127.0.0.1:4000")
+  os.env.set("AWS_ENDPOINT_URL", "http://127.0.0.1:4566")
+  os.env.set("AWS_ENDPOINT_URL_SQS", "http://127.0.0.1:4567")
+  let cfg2 = load_default_config(os.env, os.fs, os.clock)?
+  expect(aws.endpoint_for(cfg2.endpoints, "S3")) == Some("http://127.0.0.1:4566")
+  expect(aws.endpoint_for(cfg2.endpoints, "SQS")) == Some("http://127.0.0.1:4567")
+  os.env.set("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")
+  let cfg3 = load_default_config(os.env, os.fs, os.clock)?
+  expect(aws.endpoint_for(cfg3.endpoints, "S3")) == None
+}

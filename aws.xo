@@ -46,3 +46,50 @@ pub fn expires_within(c: Credentials, now: Time, window: Duration) -> Bool {
     None => false
   }
 }
+
+/// How a client retries (decision 0003).
+pub enum RetryMode { Standard, Adaptive, Legacy }
+
+/// Shared configuration for every service client, made by
+/// `config.load_default_config` or written by hand.
+pub struct Config {
+  pub region: Str? = None
+  pub credentials: CredentialsProvider? = None
+  pub retry_mode: RetryMode = RetryMode.Standard
+  /// Total attempts per call, the first included.
+  pub max_attempts: Int = 3
+  /// Configured endpoint URLs (the SDKs' "service-specific endpoints").
+  pub endpoints: ConfiguredEndpoints = ConfiguredEndpoints{}
+  pub use_fips: Bool = false
+  pub use_dualstack: Bool = false
+  pub app_id: Str? = None
+  /// The profile the configuration came from.
+  pub profile: Str = "default"
+}
+
+/// Endpoint URLs from the environment and the profile, kept apart so
+/// `endpoint_for` applies the SDKs' precedence.
+pub struct ConfiguredEndpoints {
+  /// `AWS_ENDPOINT_URL`
+  pub env_global: Str? = None
+  /// `AWS_ENDPOINT_URL_<SUFFIX>`, keyed by the suffix (`S3`, `DYNAMODB`).
+  pub env_service: Map[Str, Str] = {}
+  /// The profile's `endpoint_url`.
+  pub profile_global: Str? = None
+  /// The profile's `services` section, keyed by the same upper case suffix.
+  pub profile_service: Map[Str, Str] = {}
+  /// `AWS_IGNORE_CONFIGURED_ENDPOINT_URLS` or the profile's
+  /// `ignore_configured_endpoint_urls`: none of the above applies.
+  pub ignore: Bool = false
+}
+
+/// The configured endpoint URL for a service, by its environment suffix
+/// (its sdkId upper cased, spaces as `_`): the service's variable, the
+/// global variable, the profile's services entry, the profile's
+/// `endpoint_url`, in that order.
+pub fn endpoint_for(e: ConfiguredEndpoints, suffix: Str) -> Str? {
+  if e.ignore {
+    return None
+  }
+  e.env_service.get(suffix) ?? e.env_global ?? e.profile_service.get(suffix) ?? e.profile_global
+}

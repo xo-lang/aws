@@ -1,0 +1,301 @@
+// JMESPath's builtin functions (jmespath.org/specification.html).
+
+use std/json
+
+/// A value's JMESPath type name.
+pub fn type_of(v: json.Value) -> Str {
+  match v {
+    Null => "null"
+    Bool(_) => "boolean"
+    Int(_) | Num(_) => "number"
+    Str(_) => "string"
+    List(_) => "array"
+    Object(_) => "object"
+    _ => "string"
+  }
+}
+
+fn arity(name: Str, args: List[Node], lo: Int, hi: Int) -> () ! JmesErr {
+  if args.len() < lo || (hi >= 0 && args.len() > hi) {
+    return Err(JmesErr{kind: "invalid-arity", msg: "${name} takes ${lo}${if hi == lo { "" } else if hi < 0 { " or more" } else { " to ${hi}" }} arguments, got ${args.len()}"})
+  }
+  Ok(())
+}
+
+fn want_type(name: Str, v: json.Value, types: List[Str]) -> () ! JmesErr {
+  if !types.contains(type_of(v)) {
+    return Err(invalid_type("${name}: want ${types.join(" or ")}, got ${type_of(v)}"))
+  }
+  Ok(())
+}
+
+fn number_value(f: Float) -> json.Value {
+  let i = Int(f)
+  if Float(i) == f { json.Value.Int(i) } else { json.Value.Num(f) }
+}
+
+fn list_of(name: Str, v: json.Value) -> List[json.Value] ! JmesErr {
+  match v {
+    List(xs) => Ok(xs)
+    other => Err(invalid_type("${name}: want array, got ${type_of(other)}"))
+  }
+}
+
+/// All numbers or all strings: the kind ("number", "string"), or an error.
+fn uniform(name: Str, xs: List[json.Value]) -> Str ! JmesErr {
+  if xs.is_empty() {
+    return Ok("number")
+  }
+  let t = type_of(xs[0])
+  if t != "number" && t != "string" {
+    return Err(invalid_type("${name}: want numbers or strings, got ${t}"))
+  }
+  for x in xs {
+    if type_of(x) != t {
+      return Err(invalid_type("${name}: mixed ${t} and ${type_of(x)}"))
+    }
+  }
+  Ok(t)
+}
+
+fn str_of(v: json.Value) -> Str {
+  match v {
+    Str(s) => s
+    _ => ""
+  }
+}
+
+fn num_of(v: json.Value) -> Float {
+  num(v) ?? 0.0
+}
+
+/// The expression of an `&expr` argument.
+fn expref_of(name: Str, n: Node) -> Node ! JmesErr {
+  match n {
+    ExpRef(e) => Ok(e)
+    _ => Err(invalid_type("${name}: want an expression reference (&expr)"))
+  }
+}
+
+/// Sorts `xs` by key values `keys` (all numbers or all strings), stable.
+fn sort_keyed(name: Str, xs: List[json.Value], keys: List[json.Value]) -> List[json.Value] ! JmesErr {
+  let t = uniform(name, keys)?
+  var idx: List[Int] = []
+  for (i, _) in xs.indexed() {
+    idx.push(i)
+  }
+  let sorted = if t == "number" {
+    idx.sort_by(fn(i: Int) -> Float { num_of(keys[i]) })
+  } else {
+    idx.sort_by(fn(i: Int) -> Str { str_of(keys[i]) })
+  }
+  Ok(sorted.map(fn(i: Int) -> json.Value { xs[i] }))
+}
+
+fn call(name: Str, args: List[Node], v: json.Value) -> json.Value ! JmesErr {
+  let known = ["abs", "avg", "ceil", "contains", "ends_with", "floor", "join", "keys", "length", "map", "max", "max_by", "merge", "min", "min_by", "not_null", "reverse", "sort", "sort_by", "starts_with", "sum", "to_array", "to_number", "to_string", "type", "values"]
+  if !known.contains(name) {
+    return Err(JmesErr{kind: "unknown-function", msg: name})
+  }
+  // map, sort_by, min_by and max_by take an expression reference
+  let by = ["map", "sort_by", "min_by", "max_by"].contains(name)
+  match name {
+    "abs" | "ceil" | "floor" | "keys" | "length" | "reverse" | "sort" | "sum" | "avg" | "max" | "min" | "to_array" | "to_number" | "to_string" | "type" | "values" => arity(name, args, 1, 1)?
+    "contains" | "ends_with" | "starts_with" | "join" | "map" | "sort_by" | "min_by" | "max_by" => arity(name, args, 2, 2)?
+    _ => arity(name, args, 1, -1)?
+  }
+  var a: List[json.Value] = []
+  for (i, n) in args.indexed() {
+    let is_ref = (name == "map" && i == 0) || (by && name != "map" && i == 1)
+    if is_ref {
+      a.push(json.Value.Null)
+    } else {
+      if n is Node.ExpRef(..) {
+        return Err(invalid_type("${name}: an expression reference is not a value here"))
+      }
+      a.push(eval(n, v)?)
+    }
+  }
+  match name {
+    "abs" => {
+      want_type(name, a[0], ["number"])?
+      Ok(match a[0] {
+        Int(n) => json.Value.Int(n.abs())
+        _ => json.Value.Num(num_of(a[0]).abs())
+      })
+    }
+    "ceil" => {
+      want_type(name, a[0], ["number"])?
+      Ok(number_value(num_of(a[0]).ceil()))
+    }
+    "floor" => {
+      want_type(name, a[0], ["number"])?
+      Ok(number_value(num_of(a[0]).floor()))
+    }
+    "avg" | "sum" => {
+      let xs = list_of(name, a[0])?
+      for x in xs {
+        want_type(name, x, ["number"])?
+      }
+      if name == "avg" && xs.is_empty() {
+        return Ok(json.Value.Null)
+      }
+      var total = 0.0
+      var all_int = true
+      for x in xs {
+        total += num_of(x)
+        if !(x is json.Value.Int(..)) {
+          all_int = false
+        }
+      }
+      if name == "avg" {
+        return Ok(json.Value.Num(total / Float(xs.len())))
+      }
+      Ok(if all_int { number_value(total) } else { json.Value.Num(total) })
+    }
+    "contains" => {
+      want_type(name, a[0], ["array", "string"])?
+      Ok(json.Value.Bool(match a[0] {
+        Str(s) => match a[1] {
+          Str(t) => s.contains(t)
+          _ => false
+        }
+        List(xs) => xs.any(fn(x: json.Value) -> Bool { equal(x, a[1]) })
+        _ => false
+      }))
+    }
+    "ends_with" | "starts_with" => {
+      want_type(name, a[0], ["string"])?
+      want_type(name, a[1], ["string"])?
+      let s = str_of(a[0])
+      let t = str_of(a[1])
+      Ok(json.Value.Bool(if name == "ends_with" { s.ends_with(t) } else { s.starts_with(t) }))
+    }
+    "join" => {
+      want_type(name, a[0], ["string"])?
+      let xs = list_of(name, a[1])?
+      for x in xs {
+        want_type(name, x, ["string"])?
+      }
+      Ok(json.Value.Str(xs.map(fn(x: json.Value) -> Str { str_of(x) }).join(str_of(a[0]))))
+    }
+    "keys" | "values" => match a[0] {
+      Object(fs) => Ok(json.Value.List(fs.map(fn(p: (Str, json.Value)) -> json.Value { if name == "keys" { json.Value.Str(p.0) } else { p.1 } })))
+      other => Err(invalid_type("${name}: want object, got ${type_of(other)}"))
+    }
+    "length" => match a[0] {
+      Str(s) => Ok(json.Value.Int(s.runes().len()))
+      List(xs) => Ok(json.Value.Int(xs.len()))
+      Object(fs) => Ok(json.Value.Int(fs.len()))
+      other => Err(invalid_type("length: want string, array or object, got ${type_of(other)}"))
+    }
+    "map" => {
+      let e = expref_of(name, args[0])?
+      let xs = list_of(name, eval(args[1], v)?)?
+      var out: List[json.Value] = []
+      for x in xs {
+        out.push(eval(e, x)?)
+      }
+      Ok(json.Value.List(out))
+    }
+    "max" | "min" => {
+      let xs = list_of(name, a[0])?
+      let t = uniform(name, xs)?
+      if xs.is_empty() {
+        return Ok(json.Value.Null)
+      }
+      var best = xs[0]
+      for x in xs {
+        let better = if t == "number" {
+          if name == "max" { num_of(x) > num_of(best) } else { num_of(x) < num_of(best) }
+        } else {
+          if name == "max" { str_of(x) > str_of(best) } else { str_of(x) < str_of(best) }
+        }
+        if better {
+          best = x
+        }
+      }
+      Ok(best)
+    }
+    "max_by" | "min_by" | "sort_by" => {
+      let xs = list_of(name, a[0])?
+      let e = expref_of(name, args[1])?
+      var keys: List[json.Value] = []
+      for x in xs {
+        keys.push(eval(e, x)?)
+      }
+      if name == "sort_by" {
+        return Ok(json.Value.List(sort_keyed(name, xs, keys)?))
+      }
+      if xs.is_empty() {
+        return Ok(json.Value.Null)
+      }
+      let t = uniform(name, keys)?
+      var bi = 0
+      for (i, k) in keys.indexed() {
+        let better = if t == "number" {
+          if name == "max_by" { num_of(k) > num_of(keys[bi]) } else { num_of(k) < num_of(keys[bi]) }
+        } else {
+          if name == "max_by" { str_of(k) > str_of(keys[bi]) } else { str_of(k) < str_of(keys[bi]) }
+        }
+        if better {
+          bi = i
+        }
+      }
+      Ok(xs[bi])
+    }
+    "merge" => {
+      var out: List[(Str, json.Value)] = []
+      for x in a {
+        match x {
+          Object(fs) => {
+            for (k, fv) in fs {
+              match out.map(fn(p: (Str, json.Value)) -> Str { p.0 }).index_of(k) {
+                Some(i) => out[i] = (k, fv)
+                None => out.push((k, fv))
+              }
+            }
+          }
+          other => return Err(invalid_type("merge: want object, got ${type_of(other)}"))
+        }
+      }
+      Ok(json.Value.Object(out))
+    }
+    "not_null" => {
+      for x in a {
+        if x != json.Value.Null {
+          return Ok(x)
+        }
+      }
+      Ok(json.Value.Null)
+    }
+    "reverse" => match a[0] {
+      Str(s) => Ok(json.Value.Str(s.runes().reverse().map(fn(r: Rune) -> Str { "${r}" }).join("")))
+      List(xs) => Ok(json.Value.List(xs.reverse()))
+      other => Err(invalid_type("reverse: want string or array, got ${type_of(other)}"))
+    }
+    "sort" => {
+      let xs = list_of(name, a[0])?
+      Ok(json.Value.List(sort_keyed(name, xs, xs)?))
+    }
+    "to_array" => Ok(match a[0] {
+      List(_) => a[0]
+      other => json.Value.List([other])
+    })
+    "to_number" => Ok(match a[0] {
+      Int(_) | Num(_) => a[0]
+      Str(s) => match json.parse_value(s.trim()) {
+        Ok(json.Value.Int(n)) => json.Value.Int(n)
+        Ok(json.Value.Num(f)) => json.Value.Num(f)
+        _ => json.Value.Null
+      }
+      _ => json.Value.Null
+    })
+    "to_string" => Ok(match a[0] {
+      Str(_) => a[0]
+      other => json.Value.Str(other.encode())
+    })
+    "type" => Ok(json.Value.Str(type_of(a[0])))
+    _ => Err(JmesErr{kind: "unknown-function", msg: name})
+  }
+}

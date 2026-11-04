@@ -1,0 +1,63 @@
+// Runs the JMESPath compliance suite (github.com/jmespath/jmespath.test,
+// fetched by scripts/check-jmespath.sh into .cache) against the jmespath
+// package and prints the totals and the failures. A case expecting an
+// error passes when evaluation fails with any error.
+
+use std/json
+use github.com/xo-lang/aws/jmespath
+
+fn main(os: Os) -> () ! Error {
+  let files = os.fs.glob(".cache/jmespath.test/tests/*.json")?.sort()
+  var pass = 0
+  var fail = 0
+  var shown = 0
+  for f in files {
+    let groups = match json.parse_value(os.fs.read_text(f)?)? {
+      json.Value.List(xs) => xs
+      _ => []
+    }
+    for g in groups {
+      let given = g.get("given") ?? json.Value.Null
+      let cases = match g.get("cases") {
+        Some(json.Value.List(xs)) => xs
+        _ => []
+      }
+      for c in cases {
+        if c.get("bench").is_some() {
+          continue
+        }
+        let expr = match c.get("expression") {
+          Some(json.Value.Str(s)) => s
+          _ => continue
+        }
+        let got = jmespath.search(expr, given)
+        let ok = match c.get("error") {
+          Some(_) => got.is_err()
+          None => match got {
+            Ok(v) => jmespath.equal(v, c.get("result") ?? json.Value.Null)
+            Err(_) => false
+          }
+        }
+        if ok {
+          pass += 1
+        } else {
+          fail += 1
+          if shown < 40 {
+            shown += 1
+            let want = match c.get("error") {
+              Some(e) => "error ${e.encode()}"
+              None => (c.get("result") ?? json.Value.Null).encode()
+            }
+            let have = match got {
+              Ok(v) => v.encode()
+              Err(e) => e.display()
+            }
+            os.stdio.println("FAIL ${f}: ${expr}\n  want ${want}\n  got  ${have}")
+          }
+        }
+      }
+    }
+  }
+  os.stdio.println("jmespath compliance: ${pass} passed, ${fail} failed")
+  Ok(())
+}

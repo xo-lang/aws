@@ -1,0 +1,725 @@
+// JMESPath (jmespath.org) over std/json values, for the waiters' matcher
+// paths (smithy.waiters#waitable). A Pratt parser with the reference
+// implementation's binding powers, and a tree evaluator with the
+// specification's builtin functions. Checked against the JMESPath
+// compliance suite (scripts/check-jmespath.sh).
+
+use std/json
+
+/// Why an expression could not be parsed or evaluated. `kind` is the
+/// compliance suite's error name: syntax, invalid-type, invalid-value,
+/// invalid-arity or unknown-function.
+pub struct JmesErr {
+  pub kind: Str
+  pub msg: Str
+}
+
+pub fn (e: JmesErr) display() -> Str {
+  "jmespath ${e.kind}: ${e.msg}"
+}
+
+fn syntax(msg: Str) -> JmesErr {
+  JmesErr{kind: "syntax", msg: msg}
+}
+
+fn invalid_type(msg: Str) -> JmesErr {
+  JmesErr{kind: "invalid-type", msg: msg}
+}
+
+// ---- lexer
+
+struct Tok {
+  kind: Str
+  text: Str = ""
+  num: Int = 0
+  lit: json.Value = json.Value.Null
+}
+
+fn is_ident_start(c: Int) -> Bool {
+  (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || c == 95
+}
+
+fn is_ident(c: Int) -> Bool {
+  is_ident_start(c) || (c >= 48 && c <= 57)
+}
+
+fn lex(src: Str) -> List[Tok] ! JmesErr {
+  let b = src.bytes()
+  var toks: List[Tok] = []
+  var i = 0
+  let at = fn(k: Int) -> Int { if k < b.len() { Int(b[k]) } else { -1 } }
+  while i < b.len() {
+    let c = Int(b[i])
+    if c == 32 || c == 9 || c == 10 || c == 13 {
+      i += 1
+      continue
+    }
+    if is_ident_start(c) {
+      var j = i
+      while j < b.len() && is_ident(Int(b[j])) {
+        j += 1
+      }
+      toks.push(Tok{kind: "unquoted_identifier", text: b[i..j].to_str() ?? ""})
+      i = j
+      continue
+    }
+    if (c >= 48 && c <= 57) || (c == 45 && at(i + 1) >= 48 && at(i + 1) <= 57) {
+      var j = i + 1
+      while j < b.len() && Int(b[j]) >= 48 && Int(b[j]) <= 57 {
+        j += 1
+      }
+      let t = b[i..j].to_str() ?? ""
+      toks.push(Tok{kind: "number", text: t, num: Int.parse(t) ?? 0})
+      i = j
+      continue
+    }
+    if c == 45 {
+      return Err(syntax("unexpected '-' at ${i}"))
+    }
+    if c == 34 {
+      // quoted identifier: a JSON string
+      let j = string_end(b, i, 34) ?? return Err(syntax("unterminated quoted identifier"))
+      let text = b[i..j + 1].to_str() ?? ""
+      match json.parse_value(text) {
+        Ok(json.Value.Str(s)) => toks.push(Tok{kind: "quoted_identifier", text: s})
+        _ => return Err(syntax("bad quoted identifier ${text}"))
+      }
+      i = j + 1
+      continue
+    }
+    if c == 39 {
+      // raw string: only \' is an escape
+      let j = string_end(b, i, 39) ?? return Err(syntax("unterminated raw string"))
+      let raw = b[i + 1..j].to_str() ?? ""
+      toks.push(Tok{kind: "literal", lit: json.Value.Str(raw.replace("\\'", "'"))})
+      i = j + 1
+      continue
+    }
+    if c == 96 {
+      // JSON literal; \` is an escaped backtick
+      let j = string_end(b, i, 96) ?? return Err(syntax("unterminated literal"))
+      let raw = (b[i + 1..j].to_str() ?? "").replace("\\`", "`")
+      let v = match json.parse_value(raw) {
+        Ok(v) => v
+        Err(_) => match json.parse_value("\"${raw.trim()}\"") {
+          // the legacy form: an unquoted string literal
+          Ok(v) => v
+          Err(_) => return Err(syntax("bad literal `${raw}`"))
+        }
+      }
+      toks.push(Tok{kind: "literal", lit: v})
+      i = j + 1
+      continue
+    }
+    let two = if i + 1 < b.len() { b[i..i + 2].to_str() ?? "" } else { "" }
+    let pair = match two {
+      "[?" => "filter"
+      "[]" => "flatten"
+      "||" => "or"
+      "&&" => "and"
+      "==" => "eq"
+      "!=" => "ne"
+      "<=" => "lte"
+      ">=" => "gte"
+      _ => ""
+    }
+    if pair != "" {
+      toks.push(Tok{kind: pair})
+      i += 2
+      continue
+    }
+    let one = match c {
+      46 => "dot"
+      42 => "star"
+      44 => "comma"
+      58 => "colon"
+      91 => "lbracket"
+      93 => "rbracket"
+      123 => "lbrace"
+      125 => "rbrace"
+      40 => "lparen"
+      41 => "rparen"
+      124 => "pipe"
+      38 => "expref"
+      33 => "not"
+      60 => "lt"
+      62 => "gt"
+      64 => "current"
+      _ => ""
+    }
+    if one == "" {
+      return Err(syntax("unexpected character at ${i}"))
+    }
+    toks.push(Tok{kind: one})
+    i += 1
+  }
+  toks.push(Tok{kind: "eof"})
+  Ok(toks)
+}
+
+/// The index of the quote closing the string opened at `start`; a
+/// backslash escapes the next byte.
+fn string_end(b: Bytes, start: Int, quote: Int) -> Int? {
+  var j = start + 1
+  while j < b.len() {
+    let c = Int(b[j])
+    if c == 92 {
+      j += 2
+      continue
+    }
+    if c == quote {
+      return Some(j)
+    }
+    j += 1
+  }
+  None
+}
+
+// ---- syntax tree
+
+/// A parsed expression.
+pub enum Node {
+  Identity
+  Field(name: Str)
+  Subexpr(l: Node, r: Node)
+  Index(n: Int)
+  Slice(start: Int?, stop: Int?, step: Int?)
+  IndexExpr(l: Node, r: Node)
+  Projection(l: Node, r: Node)
+  ValueProjection(l: Node, r: Node)
+  FilterProjection(l: Node, r: Node, cond: Node)
+  Flatten(n: Node)
+  Pipe(l: Node, r: Node)
+  Or(l: Node, r: Node)
+  And(l: Node, r: Node)
+  Not(n: Node)
+  Compare(op: Str, l: Node, r: Node)
+  Literal(v: json.Value)
+  MultiList(items: List[Node])
+  MultiHash(pairs: List[(Str, Node)])
+  Function(name: Str, args: List[Node])
+  ExpRef(n: Node)
+}
+
+fn power(kind: Str) -> Int {
+  match kind {
+    "pipe" => 1
+    "or" => 2
+    "and" => 3
+    "eq" | "ne" | "lt" | "lte" | "gt" | "gte" => 5
+    "flatten" => 9
+    "star" => 20
+    "filter" => 21
+    "dot" => 40
+    "not" => 45
+    "lbrace" => 50
+    "lbracket" => 55
+    "lparen" => 60
+    _ => 0
+  }
+}
+
+struct Parser {
+  toks: List[Tok]
+  pos: Int = 0
+}
+
+fn (p: Parser) cur() -> Str {
+  p.toks[p.pos].kind
+}
+
+fn (p: Parser) ahead(k: Int) -> Str {
+  if p.pos + k < p.toks.len() { p.toks[p.pos + k].kind } else { "eof" }
+}
+
+fn (var p: Parser) advance() {
+  if p.pos + 1 < p.toks.len() {
+    p.pos += 1
+  }
+}
+
+fn (var p: Parser) want(kind: Str) -> () ! JmesErr {
+  if p.cur() != kind {
+    return Err(syntax("want ${kind}, found ${p.cur()}"))
+  }
+  p.advance()
+  Ok(())
+}
+
+/// Parses `expr`.
+pub fn parse(expr: Str) -> Node ! JmesErr {
+  var p = Parser{toks: lex(expr)?}
+  let n = p.expression(0)?
+  if p.cur() != "eof" {
+    return Err(syntax("unexpected ${p.cur()} after the expression"))
+  }
+  Ok(n)
+}
+
+fn (var p: Parser) expression(bp: Int) -> Node ! JmesErr {
+  let t = p.toks[p.pos]
+  p.advance()
+  var left = p.nud(t)?
+  while bp < power(p.cur()) {
+    let k = p.cur()
+    p.advance()
+    left = p.led(k, left)?
+  }
+  Ok(left)
+}
+
+fn (var p: Parser) nud(t: Tok) -> Node ! JmesErr {
+  match t.kind {
+    "literal" => Ok(Node.Literal(t.lit))
+    "unquoted_identifier" => Ok(Node.Field(t.text))
+    "quoted_identifier" => {
+      if p.cur() == "lparen" {
+        return Err(syntax("a quoted identifier cannot be a function name"))
+      }
+      Ok(Node.Field(t.text))
+    }
+    "star" => {
+      let r = p.projection_rhs(power("star"))?
+      Ok(Node.ValueProjection(l: Node.Identity, r: r))
+    }
+    "filter" => p.led("filter", Node.Identity)
+    "lbrace" => p.multi_hash()
+    "lparen" => {
+      let e = p.expression(0)?
+      p.want("rparen")?
+      Ok(e)
+    }
+    "flatten" => {
+      let r = p.projection_rhs(power("flatten"))?
+      Ok(Node.Projection(l: Node.Flatten(Node.Identity), r: r))
+    }
+    "not" => Ok(Node.Not(p.expression(power("not"))?))
+    "lbracket" => {
+      if p.cur() == "number" || p.cur() == "colon" {
+        let r = p.index_expression()?
+        return p.project_if_slice(Node.Identity, r)
+      }
+      if p.cur() == "star" && p.ahead(1) == "rbracket" {
+        p.advance()
+        p.advance()
+        let r = p.projection_rhs(power("star"))?
+        return Ok(Node.Projection(l: Node.Identity, r: r))
+      }
+      p.multi_list()
+    }
+    "current" => Ok(Node.Identity)
+    "expref" => Ok(Node.ExpRef(p.expression(power("expref"))?))
+    other => Err(syntax("unexpected ${other}"))
+  }
+}
+
+fn (var p: Parser) led(kind: Str, left: Node) -> Node ! JmesErr {
+  match kind {
+    "dot" => {
+      if p.cur() != "star" {
+        let r = p.dot_rhs(power("dot"))?
+        return Ok(Node.Subexpr(l: left, r: r))
+      }
+      p.advance()
+      let r = p.projection_rhs(power("dot"))?
+      Ok(Node.ValueProjection(l: left, r: r))
+    }
+    "pipe" => Ok(Node.Pipe(l: left, r: p.expression(power("pipe"))?))
+    "or" => Ok(Node.Or(l: left, r: p.expression(power("or"))?))
+    "and" => Ok(Node.And(l: left, r: p.expression(power("and"))?))
+    "lparen" => {
+      let name = match left {
+        Field(n) => n
+        _ => return Err(syntax("only a name can be called"))
+      }
+      var args: List[Node] = []
+      while p.cur() != "rparen" {
+        args.push(p.expression(0)?)
+        if p.cur() == "comma" {
+          p.advance()
+          if p.cur() == "rparen" {
+            return Err(syntax("a trailing comma in a call"))
+          }
+        } else if p.cur() != "rparen" {
+          return Err(syntax("want , or ) in a call"))
+        }
+      }
+      p.want("rparen")?
+      Ok(Node.Function(name: name, args: args))
+    }
+    "filter" => {
+      let cond = p.expression(0)?
+      p.want("rbracket")?
+      let r = if p.cur() == "flatten" { Node.Identity } else { p.projection_rhs(power("filter"))? }
+      Ok(Node.FilterProjection(l: left, r: r, cond: cond))
+    }
+    "eq" | "ne" | "lt" | "lte" | "gt" | "gte" => Ok(Node.Compare(op: kind, l: left, r: p.expression(power(kind))?))
+    "flatten" => {
+      let r = p.projection_rhs(power("flatten"))?
+      Ok(Node.Projection(l: Node.Flatten(left), r: r))
+    }
+    "lbracket" => {
+      if p.cur() == "number" || p.cur() == "colon" {
+        let r = p.index_expression()?
+        return p.project_if_slice(left, r)
+      }
+      p.want("star")?
+      p.want("rbracket")?
+      let r = p.projection_rhs(power("star"))?
+      Ok(Node.Projection(l: left, r: r))
+    }
+    other => Err(syntax("unexpected ${other}"))
+  }
+}
+
+fn (var p: Parser) project_if_slice(left: Node, right: Node) -> Node ! JmesErr {
+  let ix = Node.IndexExpr(l: left, r: right)
+  if right is Node.Slice(..) {
+    let r = p.projection_rhs(power("star"))?
+    return Ok(Node.Projection(l: ix, r: r))
+  }
+  Ok(ix)
+}
+
+/// `[n]` or a slice `[a:b:c]`, after the `[`.
+fn (var p: Parser) index_expression() -> Node ! JmesErr {
+  if p.cur() == "colon" || p.ahead(1) == "colon" {
+    var parts: List[Int?] = [None, None, None]
+    var k = 0
+    while p.cur() != "rbracket" && k < 3 {
+      if p.cur() == "colon" {
+        k += 1
+        p.advance()
+      } else if p.cur() == "number" {
+        parts[k] = Some(p.toks[p.pos].num)
+        p.advance()
+      } else {
+        return Err(syntax("bad slice: ${p.cur()}"))
+      }
+    }
+    p.want("rbracket")?
+    if k > 2 {
+      return Err(syntax("too many colons in a slice"))
+    }
+    return Ok(Node.Slice(start: parts[0], stop: parts[1], step: parts[2]))
+  }
+  if p.cur() != "number" {
+    return Err(syntax("want an index"))
+  }
+  let n = p.toks[p.pos].num
+  p.advance()
+  p.want("rbracket")?
+  Ok(Node.Index(n))
+}
+
+fn (var p: Parser) projection_rhs(bp: Int) -> Node ! JmesErr {
+  let k = p.cur()
+  if power(k) < 10 {
+    return Ok(Node.Identity)
+  }
+  match k {
+    "lbracket" | "filter" => p.expression(bp)
+    "dot" => {
+      p.advance()
+      p.dot_rhs(bp)
+    }
+    _ => Err(syntax("unexpected ${k} after a projection"))
+  }
+}
+
+fn (var p: Parser) dot_rhs(bp: Int) -> Node ! JmesErr {
+  match p.cur() {
+    "quoted_identifier" | "unquoted_identifier" | "star" => p.expression(bp)
+    "lbracket" => {
+      p.advance()
+      p.multi_list()
+    }
+    "lbrace" => {
+      p.advance()
+      p.multi_hash()
+    }
+    other => Err(syntax("unexpected ${other} after a dot"))
+  }
+}
+
+/// `[a, b]`, after the `[`.
+fn (var p: Parser) multi_list() -> Node ! JmesErr {
+  var items: List[Node] = []
+  while true {
+    items.push(p.expression(0)?)
+    if p.cur() == "rbracket" {
+      break
+    }
+    p.want("comma")?
+    if p.cur() == "rbracket" {
+      return Err(syntax("a trailing comma in a list"))
+    }
+  }
+  p.want("rbracket")?
+  Ok(Node.MultiList(items))
+}
+
+/// `{k: a, l: b}`, after the `{`.
+fn (var p: Parser) multi_hash() -> Node ! JmesErr {
+  var pairs: List[(Str, Node)] = []
+  while true {
+    let t = p.toks[p.pos]
+    if t.kind != "quoted_identifier" && t.kind != "unquoted_identifier" {
+      return Err(syntax("want a key in a hash"))
+    }
+    p.advance()
+    p.want("colon")?
+    pairs.push((t.text, p.expression(0)?))
+    if p.cur() == "rbrace" {
+      break
+    }
+    p.want("comma")?
+  }
+  p.want("rbrace")?
+  Ok(Node.MultiHash(pairs))
+}
+
+// ---- evaluation
+
+/// Evaluates `expr` against `v`.
+pub fn search(expr: Str, v: json.Value) -> json.Value ! JmesErr {
+  eval(parse(expr)?, v)
+}
+
+/// JMESPath truth: false, null, "", [] and {} are false.
+pub fn truthy(v: json.Value) -> Bool {
+  match v {
+    Null => false
+    Bool(b) => b
+    Str(s) => s != ""
+    List(xs) => !xs.is_empty()
+    Object(fs) => !fs.is_empty()
+    _ => true
+  }
+}
+
+fn num(v: json.Value) -> Float? {
+  match v {
+    Int(n) => Some(Float(n))
+    Num(f) => Some(f)
+    _ => None
+  }
+}
+
+/// Deep equality, numbers by value and objects as unordered maps.
+pub fn equal(a: json.Value, b: json.Value) -> Bool {
+  if let Some(x) = num(a) {
+    return match num(b) {
+      Some(y) => x == y
+      None => false
+    }
+  }
+  match (a, b) {
+    (Null, Null) => true
+    (Bool(x), Bool(y)) => x == y
+    (Str(x), Str(y)) => x == y
+    (List(xs), List(ys)) => {
+      if xs.len() != ys.len() {
+        return false
+      }
+      for (i, x) in xs.indexed() {
+        if !equal(x, ys[i]) {
+          return false
+        }
+      }
+      true
+    }
+    (Object(xs), Object(ys)) => {
+      if xs.len() != ys.len() {
+        return false
+      }
+      for (k, x) in xs {
+        match ys.find(fn(p: (Str, json.Value)) -> Bool { p.0 == k }) {
+          Some((_, y)) => if !equal(x, y) {
+            return false
+          }
+          None => return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+fn field(v: json.Value, name: Str) -> json.Value {
+  match v {
+    Object(fs) => match fs.find(fn(p: (Str, json.Value)) -> Bool { p.0 == name }) {
+      Some((_, x)) => x
+      None => json.Value.Null
+    }
+    _ => json.Value.Null
+  }
+}
+
+fn slice(xs: List[json.Value], start: Int?, stop: Int?, step: Int?) -> List[json.Value] ! JmesErr {
+  let st = step ?? 1
+  if st == 0 {
+    return Err(JmesErr{kind: "invalid-value", msg: "a slice step of 0"})
+  }
+  let n = xs.len()
+  let clamp = fn(i: Int, lo: Int, hi: Int) -> Int { if i < lo { lo } else if i > hi { hi } else { i } }
+  let norm = fn(i: Int) -> Int {
+    if i < 0 {
+      if st < 0 { clamp(i + n, -1, n - 1) } else { clamp(i + n, 0, n) }
+    } else {
+      if st < 0 { clamp(i, -1, n - 1) } else { clamp(i, 0, n) }
+    }
+  }
+  let a = match start {
+    Some(s) => norm(s)
+    None => if st < 0 { n - 1 } else { 0 }
+  }
+  let z = match stop {
+    Some(s) => norm(s)
+    None => if st < 0 { -1 } else { n }
+  }
+  var out: List[json.Value] = []
+  var i = a
+  if st > 0 {
+    while i < z {
+      out.push(xs[i])
+      i += st
+    }
+  } else {
+    while i > z {
+      out.push(xs[i])
+      i += st
+    }
+  }
+  Ok(out)
+}
+
+fn compare(op: Str, a: json.Value, b: json.Value) -> json.Value {
+  match op {
+    "eq" => json.Value.Bool(equal(a, b))
+    "ne" => json.Value.Bool(!equal(a, b))
+    _ => match (num(a), num(b)) {
+      (Some(x), Some(y)) => json.Value.Bool(match op {
+        "lt" => x < y
+        "lte" => x <= y
+        "gt" => x > y
+        _ => x >= y
+      })
+      _ => json.Value.Null
+    }
+  }
+}
+
+/// Evaluates a parsed expression against `v`.
+pub fn eval(n: Node, v: json.Value) -> json.Value ! JmesErr {
+  match n {
+    Identity => Ok(v)
+    Field(name) => Ok(field(v, name))
+    Subexpr(l, r) => eval(r, eval(l, v)?)
+    Index(i) => Ok(match v {
+      List(xs) => {
+        let k = if i < 0 { xs.len() + i } else { i }
+        if k >= 0 && k < xs.len() { xs[k] } else { json.Value.Null }
+      }
+      _ => json.Value.Null
+    })
+    Slice(a, z, s) => match v {
+      List(xs) => Ok(json.Value.List(slice(xs, a, z, s)?))
+      _ => Ok(json.Value.Null)
+    }
+    IndexExpr(l, r) => eval(r, eval(l, v)?)
+    Projection(l, r) => match eval(l, v)? {
+      List(xs) => {
+        var out: List[json.Value] = []
+        for x in xs {
+          let y = eval(r, x)?
+          if y != json.Value.Null {
+            out.push(y)
+          }
+        }
+        Ok(json.Value.List(out))
+      }
+      _ => Ok(json.Value.Null)
+    }
+    ValueProjection(l, r) => match eval(l, v)? {
+      Object(fs) => {
+        var out: List[json.Value] = []
+        for (_, x) in fs {
+          let y = eval(r, x)?
+          if y != json.Value.Null {
+            out.push(y)
+          }
+        }
+        Ok(json.Value.List(out))
+      }
+      _ => Ok(json.Value.Null)
+    }
+    FilterProjection(l, r, cond) => match eval(l, v)? {
+      List(xs) => {
+        var out: List[json.Value] = []
+        for x in xs {
+          if truthy(eval(cond, x)?) {
+            let y = eval(r, x)?
+            if y != json.Value.Null {
+              out.push(y)
+            }
+          }
+        }
+        Ok(json.Value.List(out))
+      }
+      _ => Ok(json.Value.Null)
+    }
+    Flatten(inner) => match eval(inner, v)? {
+      List(xs) => {
+        var out: List[json.Value] = []
+        for x in xs {
+          match x {
+            List(ys) => {
+              for y in ys {
+                out.push(y)
+              }
+            }
+            other => out.push(other)
+          }
+        }
+        Ok(json.Value.List(out))
+      }
+      _ => Ok(json.Value.Null)
+    }
+    Pipe(l, r) => eval(r, eval(l, v)?)
+    Or(l, r) => {
+      let a = eval(l, v)?
+      if truthy(a) { Ok(a) } else { eval(r, v) }
+    }
+    And(l, r) => {
+      let a = eval(l, v)?
+      if truthy(a) { eval(r, v) } else { Ok(a) }
+    }
+    Not(inner) => Ok(json.Value.Bool(!truthy(eval(inner, v)?)))
+    Compare(op, l, r) => Ok(compare(op, eval(l, v)?, eval(r, v)?))
+    Literal(x) => Ok(x)
+    MultiList(items) => {
+      if v == json.Value.Null {
+        return Ok(json.Value.Null)
+      }
+      var out: List[json.Value] = []
+      for it in items {
+        out.push(eval(it, v)?)
+      }
+      Ok(json.Value.List(out))
+    }
+    MultiHash(pairs) => {
+      if v == json.Value.Null {
+        return Ok(json.Value.Null)
+      }
+      var out: List[(Str, json.Value)] = []
+      for (k, it) in pairs {
+        out.push((k, eval(it, v)?))
+      }
+      Ok(json.Value.Object(out))
+    }
+    Function(name, args) => call(name, args, v)
+    ExpRef(_) => Err(invalid_type("an expression reference outside a function"))
+  }
+}

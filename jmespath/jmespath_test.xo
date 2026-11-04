@@ -1,0 +1,27 @@
+use std/json
+
+fn doc(text: Str) -> json.Value {
+  json.parse_value(text).ok() ?? json.Value.Null
+}
+
+test "waiter paths from the AWS models" {
+  // AutoScaling GroupInService
+  let groups = doc("{\"AutoScalingGroups\":[{\"MinSize\":2,\"Instances\":[{\"LifecycleState\":\"InService\"},{\"LifecycleState\":\"Pending\"}]}]}")
+  let path = "contains(AutoScalingGroups[].[length(Instances[?LifecycleState=='InService']) >= MinSize][], `false`)"
+  expect(search(path, groups)?) == json.Value.Bool(true)
+  // a projection compared with allStringEquals or anyStringEquals
+  let tables = doc("{\"Reservations\":[{\"Instances\":[{\"State\":{\"Name\":\"running\"}},{\"State\":{\"Name\":\"pending\"}}]}]}")
+  expect(search("Reservations[].Instances[].State.Name", tables)?) == doc("[\"running\",\"pending\"]")
+  // && with raw strings, ! and a value projection
+  expect(search("status != 'CANCELLING' && status != 'CANCELLED'", doc("{\"status\":\"RUNNING\"}"))?) == json.Value.Bool(true)
+  expect(search("VerificationAttributes.*.VerificationStatus", doc("{\"VerificationAttributes\":{\"a\":{\"VerificationStatus\":\"Success\"}}}"))?) == doc("[\"Success\"]")
+  expect(search("length(Items) > `0`", doc("{\"Items\":[]}"))?) == json.Value.Bool(false)
+}
+
+test "errors" {
+  expect(search("foo[", json.Value.Null).is_err()) == true
+  expect(search("length(`1`)", json.Value.Null).is_err()) == true
+  expect(search("nope(a)", json.Value.Null).is_err()) == true
+  expect(truthy(doc("[]"))) == false
+  expect(equal(doc("{\"a\":1,\"b\":2.0}"), doc("{\"b\":2,\"a\":1.0}"))) == true
+}

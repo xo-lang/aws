@@ -1,0 +1,30 @@
+// SNS (awsQuery) against LocalStack (decision 0005, emulator tests): run by
+// scripts/integration-localstack.sh, with invented credentials. The client
+// gets a Net that reaches only the loopback host.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/sns
+
+test "sns round trip against LocalStack" uses net, env, clock {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = sns.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, sns.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let made = c.create_topic(sns.CreateTopicInput{name: "xo-lang-aws-it", attributes: {"DisplayName": "xo it"}})?
+  let arn = made.topic_arn ?? ""
+  expect(arn.ends_with(":xo-lang-aws-it")) == true
+  let attrs = c.get_topic_attributes(sns.GetTopicAttributesInput{topic_arn: arn})?
+  expect((attrs.attributes ?? {}).get("DisplayName")) == Some("xo it")
+  let listed = c.list_topics(sns.ListTopicsInput{})?
+  expect((listed.topics ?? []).map(fn(t: sns.Topic) -> Str { t.topic_arn ?? "" }).contains(arn)) == true
+  let sent = c.publish(sns.PublishInput{topic_arn: arn, message: "hello from xo", subject: "it"})?
+  expect(sent.message_id.is_some()) == true
+  c.delete_topic(sns.DeleteTopicInput{topic_arn: arn})?
+  match c.get_topic_attributes(sns.GetTopicAttributesInput{topic_arn: arn}) {
+    Err(sns.GetTopicAttributesErr.NotFoundException(_)) => {}
+    other => expect("${other:?}") == "NotFoundException"
+  }
+}

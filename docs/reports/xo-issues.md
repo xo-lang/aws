@@ -178,3 +178,41 @@ from `out.header_byte = (Int.parse(hv) ?? return Err("..."))` where
 the right side is a `?? return` expression (also for `(s == "true")` into a
 `Bool?`, and Time). Native and LLVM accept it. Status: reported to the
 lead 2026-11-04.
+
+## 7. `xo mod tidy` drops the require of a nested module the parent imports
+
+Found 2026-11-04 (xo at 97c8b271b) while checking the module cycle of
+decision 0003 (credentials/stscreds in the root module uses
+service/sts, a nested module that requires the root back). Repro: local
+git repositories through XO_GIT_BASE, XO_PROXY=direct, XO_SUMDB=off, no
+workspace. Repository github.com/acme/awsx holds the root module and
+`service/sts/xo.mod`; the root's package `stscreds` imports
+`github.com/acme/awsx/service/sts`.
+
+- In the root module with no `require` of service/sts, `xo check ./...`
+  passes: the nested module resolves from its subdirectory although the
+  spec (core 4.2) says a directory with its own xo.mod is never part of
+  the module around it, and a module must require every module it
+  imports from (XO1306).
+- `xo get github.com/acme/awsx/service/sts@v1.0.0` adds the require;
+  `xo mod tidy` then removes it again ("removed ... v1.0.0").
+- A root version tagged after tidy has no require, so a consumer gets
+  `XO1306` inside the fetched module (`cache/github.com/acme/awsx@v1.1.0/
+  stscreds/stscreds.xo: module ... is not required`).
+
+Expected: check reports XO1306 in the root module, and tidy keeps (or
+adds) the require. Workaround: add the require with `xo get` and do not
+run `xo mod tidy` in the root module.
+
+Also checked, and working as Go documents for module cycles (the spec
+does not say; worth a line in core 4.2): a tagged require cycle, root
+v1.2.0 -> service/sts v1.1.0 -> root v1.1.0 -> service/sts v1.0.0 ->
+root v1.0.0, resolves by minimal version selection; xo.lock records each
+version's hashes; `xo get`, `xo vendor` (selects sts v1.1.0, the root's
+requirement) and an app importing both run. XO0604 is a package import
+cycle (it fires on pa -> pb -> pa across two modules), not a module
+requirement cycle; core 4.1 calls packages "modules" there, which reads
+as the xo.mod sense. Smaller: `xo get sts@v1.0.0` in the app prints
+"v1.1.0 => v1.0.0" while selection stays v1.1.0 (required by the root),
+and there is no `xo mod graph` to see the selection.
+Status: reported to the lead 2026-11-04.

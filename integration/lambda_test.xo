@@ -1,0 +1,24 @@
+// Lambda (restJson1): control plane calls only; invoking a function needs LocalStack's Docker executor, which this run does not give it against LocalStack (decision 0005, emulator tests): run by
+// scripts/integration-localstack.sh, with invented credentials. The client
+// gets a Net that reaches only the loopback host.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/lambda
+
+test "lambda control plane against LocalStack" uses net, env, clock {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = lambda.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, lambda.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let settings = c.get_account_settings(lambda.GetAccountSettingsRequest{})?
+  expect(settings.account_limit.is_some()) == true
+  let fs = c.list_functions(lambda.ListFunctionsRequest{})?
+  expect((fs.functions ?? []).len() >= 0) == true
+  match c.get_function(lambda.GetFunctionRequest{function_name: "xo-lang-aws-no-such-function"}) {
+    Err(lambda.GetFunctionErr.ResourceNotFoundException(_)) => {}
+    other => expect("${other:?}") == "ResourceNotFoundException"
+  }
+}

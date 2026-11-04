@@ -15,9 +15,29 @@ report() {
   fail=1
 }
 
-# (the last group of a UUID, such as the suites' 00000000-...-000000000000, is not an account id)
-hits=$(echo "$files" | xargs grep -n -I -E '(^|[^0-9A-Za-z-])[0-9]{12}([^0-9A-Za-z]|$)' 2>/dev/null | grep -v -E '123456789012|[0-9]{8}T[0-9]{6}Z' | grep -E ':[^:]*(^|[^-])\b[0-9]{12}\b')
-[ -n "$hits" ] && report "12 digit numbers (account ids?) other than 123456789012" "$hits"
+# AWS's documented placeholder values (owner decision 2026-11-04, decision
+# 0007): kept verbatim in generated docs, removed from each line before the
+# checks below, so anything else on the same line is still checked. Each
+# is written by AWS in the pinned models (api-models-aws, codegen/models.lock).
+#   123456789012  the example account id across AWS's docs and the signing
+#                 suite (e.g. models/sts AssumeRole examples)
+#   111122223333  models/s3: PutBucketAcl, GetBucketPolicy,
+#                 ServerSideEncryptionByDefault$KMSMasterKeyID docs
+#   444455556666  models/s3: CreateMultipartUploadRequest$GrantRead docs
+#   555566667777  models/s3: PutBucketAcl docs
+ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777'
+#   Grantees@email.com  models/s3: PutBucketAcl, PutBucketLogging, PutObjectAcl docs
+#   xyz@amazon.com, abc@amazon.com  models/s3: PutObjectAcl docs
+#   @example.com/.org/.net  reserved documentation domains (RFC 2606)
+ALLOW_EMAILS='Grantees@email\.com|xyz@amazon\.com|abc@amazon\.com|[A-Za-z0-9._%+-]+@example\.(com|org|net)'
+
+# lines with the allowed values blanked out (file:line: prefix kept)
+strip_allowed() { sed -E "s/$1//g"; }
+
+# (the last group of a UUID, such as the suites' 00000000-...-000000000000,
+# and a SigV4 timestamp are not account ids)
+hits=$(echo "$files" | xargs grep -n -I -E '[0-9]{12}' 2>/dev/null | strip_allowed "$ALLOW_ACCOUNTS" | sed -E 's/[0-9]{8}T[0-9]{6}Z//g' | grep -E '^[^:]*:[0-9]+:.*(^|[^0-9A-Za-z-])[0-9]{12}([^0-9A-Za-z]|$)')
+[ -n "$hits" ] && report "12 digit numbers (account ids?) other than the allowed placeholders" "$hits"
 
 hits=$(echo "$files" | xargs grep -n -I -E '\b(AKIA|ASIA)[A-Z0-9]{16}\b' 2>/dev/null | grep -v -E 'EXAMPLE')
 [ -n "$hits" ] && report "access key ids" "$hits"
@@ -28,7 +48,7 @@ hits=$(echo "$files" | xargs grep -n -I -E '/(Users|home)/[A-Za-z0-9._-]+' 2>/de
 hits=$(echo "$files" | xargs grep -n -I -o -E '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 2>/dev/null | grep -v -E ':(127\.|0\.0\.0\.0|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|169\.254\.169\.254|169\.254\.170\.2)')
 [ -n "$hits" ] && report "IP addresses outside loopback, metadata and documentation ranges" "$hits"
 
-hits=$(echo "$files" | xargs grep -n -I -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' 2>/dev/null | grep -v -E '@example\.(com|org|net)')
+hits=$(echo "$files" | xargs grep -n -I -E '@' 2>/dev/null | strip_allowed "$ALLOW_EMAILS" | grep -E '^[^:]*:[0-9]+:.*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 [ -n "$hits" ] && report "email addresses" "$hits"
 
 if command -v gitleaks >/dev/null; then

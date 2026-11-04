@@ -40,6 +40,19 @@ logos.
   commit author's, keys, tokens, or local paths. `scripts/check-public.sh`
   and gitleaks run over the whole history before every push (0005). A
   finding is fixed before the push; pushed history is never rewritten.
+- **AWS's documentation placeholders stay verbatim (owner decision,
+  2026-11-04).** Generated docs carry the model documentation exactly as
+  AWS wrote it, including its example account ids (`111122223333`,
+  `444455556666`, `555566667777`, `123456789012`), example emails
+  (`Grantees@email.com`, `xyz@amazon.com`, `abc@amazon.com`) and the ARNs
+  built from them. The generator never rewrites them, since a rewrite
+  could turn a placeholder into something real. `scripts/check-public.sh`
+  allowlists exactly those values: a fixed list in the script, each with a
+  comment naming where AWS writes it in the pinned models. The allowed
+  values are removed from a line before it is checked, so any other
+  account id, email, ARN with an account, key or token on the same line
+  still fails. A new placeholder found in a later model update is added to
+  the list with its citation, never by widening a pattern.
 - Commits carry no attribution lines and no em dashes.
 
 ## Consequences

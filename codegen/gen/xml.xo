@@ -1,0 +1,334 @@
+// The XML body codec of restXml (decision 0003): per aggregate shape a
+// writer onto an xmlv.Writer and a reader from a std/xml element, with
+// Smithy's xmlName, xmlAttribute, xmlFlattened and xmlNamespace traits.
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+pub fn xml_name(m: model.Member) -> Str {
+  model.trait_str(m.traits, "xmlName") ?? m.name
+}
+
+/// The `xmlns` attribute list literal of an xmlNamespace trait.
+pub fn ns_lit(traits: List[(Str, json.Value)]) -> Str {
+  match model.trait_of(traits, "xmlNamespace") {
+    Some(ns) => {
+      let uri = match ns.get("uri") {
+        Some(json.Value.Str(u)) => u
+        _ => ""
+      }
+      match ns.get("prefix") {
+        Some(json.Value.Str(p)) => "[(\"xmlns:${p}\", ${lit_str(uri)})]"
+        _ => "[(\"xmlns\", ${lit_str(uri)})]"
+      }
+    }
+    None => "[]"
+  }
+}
+
+fn is_scalar(g: G, target: Str) -> Bool {
+  match shape_of(g, target).kind {
+    Structure | Union | List | Map => false
+    _ => true
+  }
+}
+
+fn flattened(m: model.Member) -> Bool {
+  has(m.traits, "xmlFlattened")
+}
+
+/// The XML text of scalar `v`.
+fn xml_text(g: G, traits: List[(Str, json.Value)], target: Str, v: Str) -> Str {
+  text_expr(g, model.Member{name: "", target: target, traits: traits}, target, v, "date-time")
+}
+
+/// Reads XML text `t` as scalar shape `target` (an expression).
+fn xml_parse(g: G, traits: List[(Str, json.Value)], target: Str, t: Str) -> Str {
+  let s = shape_of(g, target)
+  match s.kind {
+    String => t
+    Enum => "${type_name(g.names, target)}.from(${t})"
+    IntEnum => "${type_name(g.names, target)}.from(xmlv.read_int(${t})?)"
+    Byte | Short | Integer | Long => "xmlv.read_int(${t})?"
+    Float | Double => "xmlv.read_float(${t})?"
+    Boolean => "xmlv.read_bool(${t})?"
+    Timestamp => match ts_format(g, traits, target, "date-time") {
+      "epoch-seconds" => "(rest.parse_epoch_seconds(${t}.trim()) ?? return Err(\"bad timestamp\"))"
+      "http-date" => "(rest.parse_http_date(${t}.trim()) ?? return Err(\"bad timestamp\"))"
+      _ => "(rest.parse_date_time(${t}.trim()) ?? return Err(\"bad timestamp\"))"
+    }
+    Blob => "xmlv.read_blob(${t})?"
+    _ => t
+  }
+}
+
+/// A statement writing `v` of `target` as element `name` (a literal).
+fn xml_put(g: G, traits: List[(Str, json.Value)], target: Str, v: Str, name: Str) -> Str {
+  if is_scalar(g, target) {
+    "xmlv.elem(w, ${name}, ${xml_text(g, traits, target, v)}, ${ns_lit(traits)})"
+  } else {
+    "xml_write_${fn_key(g, target)}(w, ${v}, ${name}, ${ns_lit(traits)})"
+  }
+}
+
+/// Reads element `c` as `target` (an expression).
+fn xml_get(g: G, traits: List[(Str, json.Value)], target: Str, c: Str) -> Str {
+  if is_scalar(g, target) {
+    xml_parse(g, traits, target, "${c}.text()")
+  } else {
+    "xml_read_${fn_key(g, target)}(${c})?"
+  }
+}
+
+/// Statements writing member `m` whose value is `x` (not an attribute).
+pub fn xml_member_write(g: G, m: model.Member, x: Str, indent: Str, var out: List[Str]) {
+  let t = shape_of(g, m.target)
+  let name = lit_str(xml_name(m))
+  if flattened(m) && t.kind is model.Kind.List {
+    let lm = t.members[0]
+    if has(t.traits, "sparse") {
+      out.push("${indent}for e in ${x} {")
+      out.push("${indent}  if let Some(item) = e {")
+      out.push("${indent}    ${xml_put(g, lm.traits, lm.target, "item", name)}")
+      out.push("${indent}  }")
+      out.push("${indent}}")
+    } else {
+      out.push("${indent}for item in ${x} {")
+      out.push("${indent}  ${xml_put(g, lm.traits, lm.target, "item", name)}")
+      out.push("${indent}}")
+    }
+    return
+  }
+  if flattened(m) && t.kind is model.Kind.Map {
+    let km = t.members[0]
+    let vm = t.members[1]
+    out.push("${indent}for (k, item) in ${x}.entries() {")
+    out.push("${indent}  xmlv.start(w, ${name}, ${ns_lit(m.traits)})")
+    out.push("${indent}  xmlv.elem(w, ${lit_str(xml_name(km))}, k, ${ns_lit(km.traits)})")
+    if has(t.traits, "sparse") {
+      out.push("${indent}  if let Some(y) = item {")
+      out.push("${indent}    ${xml_put(g, vm.traits, vm.target, "y", lit_str(xml_name(vm)))}")
+      out.push("${indent}  }")
+    } else {
+      out.push("${indent}  ${xml_put(g, vm.traits, vm.target, "item", lit_str(xml_name(vm)))}")
+    }
+    out.push("${indent}  xmlv.end(w, ${name})")
+    out.push("${indent}}")
+    return
+  }
+  out.push("${indent}${xml_put(g, m.traits, m.target, x, name)}")
+}
+
+/// Match arms reading `members` from child element `c` into `out.<f>`.
+pub fn xml_member_arms(g: G, members: List[model.Member], indent: Str, var out: List[Str]) {
+  for m in members {
+    if has(m.traits, "xmlAttribute") {
+      continue
+    }
+    let f = field_name(m.name)
+    let t = shape_of(g, m.target)
+    let name = lit_str(xml_name(m))
+    if flattened(m) && t.kind is model.Kind.List {
+      let lm = t.members[0]
+      let item = if has(t.traits, "sparse") { "Some(${xml_get(g, lm.traits, lm.target, "c")})" } else { xml_get(g, lm.traits, lm.target, "c") }
+      out.push("${indent}${name} => {")
+      out.push("${indent}  var items = out.${f} ?? []")
+      out.push("${indent}  items.push(${item})")
+      out.push("${indent}  out.${f} = items")
+      out.push("${indent}}")
+    } else if flattened(m) && t.kind is model.Kind.Map {
+      let km = t.members[0]
+      let vm = t.members[1]
+      let val = if has(t.traits, "sparse") { "Some(${xml_get(g, vm.traits, vm.target, "vc")})" } else { xml_get(g, vm.traits, vm.target, "vc") }
+      out.push("${indent}${name} => {")
+      out.push("${indent}  var entries = out.${f} ?? {}")
+      out.push("${indent}  let k = xmlv.child_text(c, ${lit_str(xml_name(km))}) ?? \"\"")
+      out.push("${indent}  if let Some(vc) = c.child(${lit_str(xml_name(vm))}) {")
+      out.push("${indent}    entries.put(k, ${val})")
+      out.push("${indent}  }")
+      out.push("${indent}  out.${f} = entries")
+      out.push("${indent}}")
+    } else {
+      out.push("${indent}${name} => out.${f} = ${xml_get(g, m.traits, m.target, "c")}")
+    }
+  }
+}
+
+/// Statements reading `members` from element `e` into `out`.
+pub fn xml_read_members(g: G, members: List[model.Member], e: Str, indent: Str, var out: List[Str]) {
+  for m in members {
+    if has(m.traits, "xmlAttribute") {
+      out.push("${indent}if let Some(a) = ${e}.attr(${lit_str(xml_name(m))}) {")
+      out.push("${indent}  out.${field_name(m.name)} = ${xml_parse(g, m.traits, m.target, "a")}")
+      out.push("${indent}}")
+    }
+  }
+  if members.any(fn(m: model.Member) -> Bool { !has(m.traits, "xmlAttribute") }) {
+    out.push("${indent}for c in xmlv.elements(${e}) {")
+    out.push("${indent}  match c.name.local {")
+    xml_member_arms(g, members, "${indent}    ", out)
+    out.push("${indent}    _ => {}")
+    out.push("${indent}  }")
+    out.push("${indent}}")
+  }
+}
+
+/// Statements pushing the attribute members of `members` (values `v.<f>`)
+/// onto `attrs`.
+pub fn xml_attr_writes(g: G, members: List[model.Member], v: Str, indent: Str, var out: List[Str]) {
+  for m in members {
+    if has(m.traits, "xmlAttribute") {
+      out.push("${indent}if let Some(x) = ${v}.${field_name(m.name)} {")
+      out.push("${indent}  attrs.push((${lit_str(xml_name(m))}, ${xml_text(g, m.traits, m.target, "x")}))")
+      out.push("${indent}}")
+    }
+  }
+}
+
+pub fn emit_xml_fns(g: G, var out: List[Str]) {
+  for id in json_shapes(g) {
+    let s = shape_of(g, id)
+    let key = fn_key(g, id)
+    let t = xo_type(g, id)
+    out.push("fn xml_write_${key}(var w: xmlv.Writer, v: ${t}, name: Str, ns: List[(Str, Str)]) {")
+    // a shape's own xmlNamespace applies only at the body root
+    out.push("  var attrs = ns")
+    match s.kind {
+      Structure => {
+        xml_attr_writes(g, s.members, "v", "  ", out)
+        out.push("  xmlv.start(w, name, attrs)")
+        for m in s.members {
+          if has(m.traits, "xmlAttribute") {
+            continue
+          }
+          out.push("  if let Some(x) = v.${field_name(m.name)} {")
+          xml_member_write(g, m, "x", "    ", out)
+          out.push("  }")
+        }
+        if s.members.is_empty() {
+          out.push("  let _ = v")
+        }
+      }
+      Union => {
+        let (vs, catch_all) = union_variants(s)
+        out.push("  xmlv.start(w, name, attrs)")
+        out.push("  match v {")
+        for (i, m) in s.members.indexed() {
+          if m.target == "smithy.api#Unit" {
+            out.push("    ${vs[i]} => xmlv.elem(w, ${lit_str(xml_name(m))}, \"\")")
+          } else {
+            out.push("    ${vs[i]}(x) => {")
+            xml_member_write(g, m, "x", "      ", out)
+            out.push("    }")
+          }
+        }
+        out.push("    ${catch_all}(_) => {}")
+        out.push("  }")
+      }
+      List => {
+        let lm = s.members[0]
+        out.push("  xmlv.start(w, name, attrs)")
+        if has(s.traits, "sparse") {
+          out.push("  for e in v {")
+          out.push("    if let Some(item) = e {")
+          out.push("      ${xml_put(g, lm.traits, lm.target, "item", lit_str(xml_name(lm)))}")
+          out.push("    }")
+          out.push("  }")
+        } else {
+          out.push("  for item in v {")
+          out.push("    ${xml_put(g, lm.traits, lm.target, "item", lit_str(xml_name(lm)))}")
+          out.push("  }")
+        }
+      }
+      Map => {
+        let km = s.members[0]
+        let vm = s.members[1]
+        out.push("  xmlv.start(w, name, attrs)")
+        out.push("  for (k, item) in v.entries() {")
+        out.push("    xmlv.start(w, \"entry\")")
+        out.push("    xmlv.elem(w, ${lit_str(xml_name(km))}, k, ${ns_lit(km.traits)})")
+        if has(s.traits, "sparse") {
+          out.push("    if let Some(y) = item {")
+          out.push("      ${xml_put(g, vm.traits, vm.target, "y", lit_str(xml_name(vm)))}")
+          out.push("    }")
+        } else {
+          out.push("    ${xml_put(g, vm.traits, vm.target, "item", lit_str(xml_name(vm)))}")
+        }
+        out.push("    xmlv.end(w, \"entry\")")
+        out.push("  }")
+      }
+      _ => {}
+    }
+    out.push("  xmlv.end(w, name)")
+    out.push("}")
+    out.push("")
+    out.push("fn xml_read_${key}(e: xml.Element) -> ${t} ! Str {")
+    match s.kind {
+      Structure => {
+        out.push("  var out = ${t}{}")
+        if s.members.is_empty() {
+          out.push("  let _ = e")
+        }
+        xml_read_members(g, s.members, "e", "  ", out)
+        out.push("  Ok(out)")
+      }
+      Union => {
+        let (vs, catch_all) = union_variants(s)
+        out.push("  for c in xmlv.elements(e) {")
+        out.push("    return match c.name.local {")
+        for (i, m) in s.members.indexed() {
+          if m.target == "smithy.api#Unit" {
+            out.push("      ${lit_str(xml_name(m))} => Ok(${t}.${vs[i]})")
+          } else {
+            out.push("      ${lit_str(xml_name(m))} => Ok(${t}.${vs[i]}(${xml_get(g, m.traits, m.target, "c")}))")
+          }
+        }
+        out.push("      _ => Ok(${t}.${catch_all}(c.name.local))")
+        out.push("    }")
+        out.push("  }")
+        out.push("  Err(\"${t}: no member set\")")
+      }
+      List => {
+        let lm = s.members[0]
+        let item = if has(s.traits, "sparse") { "Some(${xml_get(g, lm.traits, lm.target, "c")})" } else { xml_get(g, lm.traits, lm.target, "c") }
+        out.push("  var out: ${t} = []")
+        out.push("  for c in xmlv.elements(e) {")
+        out.push("    out.push(${item})")
+        out.push("  }")
+        out.push("  Ok(out)")
+      }
+      Map => {
+        let km = s.members[0]
+        let vm = s.members[1]
+        let val = if has(s.traits, "sparse") { "Some(${xml_get(g, vm.traits, vm.target, "vc")})" } else { xml_get(g, vm.traits, vm.target, "vc") }
+        out.push("  var out: ${t} = {}")
+        out.push("  for entry in xmlv.elements(e) {")
+        out.push("    let k = xmlv.child_text(entry, ${lit_str(xml_name(km))}) ?? \"\"")
+        out.push("    if let Some(vc) = entry.child(${lit_str(xml_name(vm))}) {")
+        out.push("      out.put(k, ${val})")
+        out.push("    }")
+        out.push("  }")
+        out.push("  Ok(out)")
+      }
+      _ => out.push("  Err(\"unsupported\")")
+    }
+    out.push("}")
+    out.push("")
+  }
+}
+
+/// The root element name of a structure written as a body or payload.
+pub fn xml_root_name(g: G, member: model.Member?, target: Str) -> Str {
+  let from_member = match member {
+    Some(m) => model.trait_str(m.traits, "xmlName")
+    None => None
+  }
+  from_member ?? model.trait_str(shape_of(g, target).traits, "xmlName") ?? model.name_of(target)
+}
+
+/// The namespace attributes of a body root: the shape's, else the
+/// service's.
+pub fn xml_root_ns(g: G, target: Str) -> Str {
+  let own = ns_lit(shape_of(g, target).traits)
+  if own != "[]" { own } else { ns_lit(shape_of(g, g.m.service).traits) }
+}

@@ -1,0 +1,18 @@
+use std/http
+use github.com/xo-lang/aws
+
+test "wrapped and bare errors" {
+  let wrapped = http.Response{status: 400, headers: {}, body: b"<ErrorResponse><Error><Type>Sender</Type><Code>InvalidGreeting</Code><Message>Hi</Message></Error><RequestId>example-request-id-1</RequestId></ErrorResponse>"}
+  let e = api_error(wrapped)
+  expect(e.code) == "InvalidGreeting"
+  expect(e.message) == "Hi"
+  expect(e.request_id) == "example-request-id-1"
+  expect(e.fault == aws.Fault.Client) == true
+  let bare = http.Response{status: 503, headers: {"X-Amz-Request-Id": "example-request-id-2"}, body: b"<Error><Code>SlowDown</Code><Message>Reduce your request rate.</Message></Error>"}
+  let b = api_error(bare)
+  expect(b.code) == "SlowDown"
+  expect(b.request_id) == "example-request-id-2"
+  expect(b.fault == aws.Fault.Server) == true
+  let empty = http.Response{status: 404, headers: {}, body: b""}
+  expect(api_error(empty).code) == "NotFound"
+}

@@ -3,6 +3,8 @@
 // generates a client for one of Smithy's protocol test services (with
 // its protocol tests);
 //   xo run ./cmd/gen -- aws <model directory> <out dir>
+//   xo run ./cmd/gen -- endpoints <model directory> <out dir>
+// (the last writes only the compiled endpoint rules and their tests)
 // generates the client of one AWS service from .models/models/<model
 // directory>. <out dir> is relative to the repository root.
 
@@ -24,7 +26,7 @@ fn protocol_test_ast(os: Os) -> json.Value ! Error {
 fn main(os: Os) -> () ! Error {
   // the arguments after the program name
   let args = os.env.args()
-  if args.len() < 3 || (args[0] != "protocol-test" && args[0] != "aws") {
+  if args.len() < 3 || (args[0] != "protocol-test" && args[0] != "aws" && args[0] != "endpoints") {
     os.stdio.println("usage: gen protocol-test <service shape id> <out dir> | gen aws <model directory> <out dir>")
     return Ok(())
   }
@@ -40,7 +42,7 @@ fn main(os: Os) -> () ! Error {
     model.load(os.fs.read_text(found[0])?)?
   }
   let out = "../${args[2]}"
-  let files = gen.generate(m, gen.Options{package: args[2], protocol_tests: tests})
+  let files = if args[0] == "endpoints" { gen.endpoint_files(m, true) } else { gen.generate(m, gen.Options{package: args[2], protocol_tests: tests}) }
   os.fs.create_dir_all(out)?
   for f in files {
     os.fs.write("${out}/${f.path}", f.text.bytes())?

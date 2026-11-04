@@ -1,0 +1,267 @@
+// The endpoint rules compiler (decision 0003): a service's
+// endpointRuleSet becomes `resolve_endpoint`, nested `if`s over
+// json.Value, and its endpointTests become Xo tests. The interpreter in
+// package endpoints is the oracle: both run the same cases.
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+struct Ctx {
+  out: List[Str]
+  n: Int
+}
+
+fn line(var c: Ctx, indent: Str, s: Str) {
+  c.out.push("${indent}${s}")
+}
+
+/// A Xo expression building `v` as a json.Value.
+fn json_lit(v: json.Value) -> Str {
+  match v {
+    json.Value.Null => "json.Value.Null"
+    json.Value.Bool(b) => "json.Value.Bool(${b})"
+    json.Value.Int(n) => "json.Value.Int(${n})"
+    json.Value.Num(f) => "json.Value.Num(${f.to_fixed(-1)})"
+    json.Value.Str(s) => "json.Value.Str(${lit_str(s)})"
+    json.Value.List(xs) => "json.Value.List([${xs.map(json_lit).join(", ")}])"
+    json.Value.Object(fs) => "json.Value.Object([${fs.map(fn(f: (Str, json.Value)) -> Str { "(${lit_str(f.0)}, ${json_lit(f.1)})" }).join(", ")}])"
+    // pre-encoded JSON never comes from a parsed model
+    _ => "json.Value.Null"
+  }
+}
+
+fn lookup(vars: List[(Str, Str)], name: Str) -> Str {
+  var found = "json.Value.Null"
+  for (k, v) in vars {
+    if k == name {
+      found = v
+    }
+  }
+  found
+}
+
+/// A template string as a Xo Str expression.
+fn template(s: Str, vars: List[(Str, Str)]) -> Str {
+  var parts: List[Str] = []
+  var lit = StrBuilder.new()
+  let b = s.bytes()
+  var i = 0
+  while i < b.len() {
+    let ch = Int(b[i])
+    if (ch == 123 || ch == 125) && i + 1 < b.len() && Int(b[i + 1]) == ch {
+      lit.write(if ch == 123 { "{" } else { "}" })
+      i += 2
+      continue
+    }
+    if ch == 123 {
+      var j = i + 1
+      while j < b.len() && Int(b[j]) != 125 {
+        j += 1
+      }
+      let inner = b[i + 1..j].to_str() ?? ""
+      let pending = lit.freeze()
+      if pending != "" {
+        parts.push(lit_str(pending))
+      }
+      lit = StrBuilder.new()
+      parts.push(match inner.cut("#") {
+        Some((name, path)) => "endpoints.text(endpoints.get_attr(${lookup(vars, name)}, ${lit_str(path)}))"
+        None => "endpoints.text(${lookup(vars, inner)})"
+      })
+      i = j + 1
+      continue
+    }
+    var k = i + 1
+    while k < b.len() && Int(b[k]) != 123 && Int(b[k]) != 125 {
+      k += 1
+    }
+    lit.write(b[i..k].to_str() ?? "")
+    i = k
+  }
+  let rest = lit.freeze()
+  if rest != "" || parts.is_empty() {
+    parts.push(lit_str(rest))
+  }
+  if parts.len() == 1 { parts[0] } else { "[${parts.join(", ")}].join(\"\")" }
+}
+
+fn is_call(fs: List[(Str, json.Value)]) -> Bool {
+  fs.any(fn(f: (Str, json.Value)) -> Bool { f.0 == "fn" || f.0 == "ref" })
+}
+
+/// An expression (condition argument, url, error) as a Xo json.Value
+/// expression.
+fn expr(e: json.Value, vars: List[(Str, Str)]) -> Str {
+  match e {
+    json.Value.Str(s) => "json.Value.Str(${template(s, vars)})"
+    json.Value.Object(fs) => {
+      if !is_call(fs) {
+        return value(e, vars)
+      }
+      if let Some(json.Value.Str(r)) = e.get("ref") {
+        return lookup(vars, r)
+      }
+      let f = match e.get("fn") {
+        Some(json.Value.Str(x)) => x
+        _ => ""
+      }
+      let args = match e.get("argv") {
+        Some(json.Value.List(xs)) => xs.map(fn(a: json.Value) -> Str { expr(a, vars) })
+        _ => []
+      }
+      let arg = fn(i: Int) -> Str { args.get(i) ?? "json.Value.Null" }
+      match f {
+        "isSet" => "json.Value.Bool(${arg(0)} != json.Value.Null)"
+        "not" => "json.Value.Bool(!endpoints.truthy(${arg(0)}))"
+        "booleanEquals" => "json.Value.Bool(${arg(0)} == ${arg(1)} && ${arg(0)} != json.Value.Null)"
+        "getAttr" => match list_of(e.get("argv")).get(1) {
+          Some(json.Value.Str(path)) => "endpoints.get_attr(${arg(0)}, ${lit_str(path)})"
+          _ => "endpoints.call(\"getAttr\", [${args.join(", ")}], parts)?"
+        }
+        _ => "endpoints.call(${lit_str(f)}, [${args.join(", ")}], parts)?"
+      }
+    }
+    _ => json_lit(e)
+  }
+}
+
+/// A property value: objects and lists member by member, strings as
+/// templates.
+fn value(v: json.Value, vars: List[(Str, Str)]) -> Str {
+  match v {
+    json.Value.Object(fs) => {
+      if is_call(fs) {
+        return expr(v, vars)
+      }
+      "json.Value.Object([${fs.map(fn(f: (Str, json.Value)) -> Str { "(${lit_str(f.0)}, ${value(f.1, vars)})" }).join(", ")}])"
+    }
+    json.Value.List(xs) => "json.Value.List([${xs.map(fn(x: json.Value) -> Str { value(x, vars) }).join(", ")}])"
+    json.Value.Str(s) => "json.Value.Str(${template(s, vars)})"
+    _ => json_lit(v)
+  }
+}
+
+fn list_of(v: json.Value?) -> List[json.Value] {
+  match v {
+    Some(json.Value.List(xs)) => xs
+    _ => []
+  }
+}
+
+/// Emits `rules` in order; answers true when the last emitted rule always
+/// returns (so nothing after it is reachable).
+fn emit_rules(var c: Ctx, rules: List[json.Value], vars: List[(Str, Str)], indent: Str) -> Bool {
+  for rule in rules {
+    if emit_rule(c, rule, vars, indent) {
+      return true
+    }
+  }
+  false
+}
+
+fn emit_rule(var c: Ctx, rule: json.Value, outer: List[(Str, Str)], indent: Str) -> Bool {
+  var vars = outer
+  var ind = indent
+  let conds = list_of(rule.get("conditions"))
+  for cond in conds {
+    let name = "c${c.n}"
+    c.n += 1
+    line(c, ind, "let ${name} = ${expr(cond, vars)}")
+    line(c, ind, "if endpoints.truthy(${name}) {")
+    if let Some(json.Value.Str(a)) = cond.get("assign") {
+      vars.push((a, name))
+    }
+    ind = "${ind}  "
+  }
+  let kind = match rule.get("type") {
+    Some(json.Value.Str(t)) => t
+    _ => ""
+  }
+  match kind {
+    "endpoint" => {
+      let e = rule.get("endpoint") ?? json.Value.Null
+      let url = "endpoints.text(${expr(e.get("url") ?? json.Value.Null, vars)})"
+      let props = value(e.get("properties") ?? json.Value.Object([]), vars)
+      var hs: List[Str] = []
+      if let Some(json.Value.Object(fs)) = e.get("headers") {
+        for (k, hv) in fs {
+          let vals = list_of(Some(hv)).map(fn(x: json.Value) -> Str { "endpoints.text(${expr(x, vars)})" })
+          hs.push("(${lit_str(k)}, [${vals.join(", ")}])")
+        }
+      }
+      line(c, ind, "return Ok(endpoints.Endpoint{url: ${url}, properties: ${props}, headers: [${hs.join(", ")}]})")
+    }
+    "error" => line(c, ind, "return Err(endpoints.RuleErr{msg: endpoints.text(${expr(rule.get("error") ?? json.Value.Null, vars)})})")
+    "tree" => {
+      if !emit_rules(c, list_of(rule.get("rules")), vars, ind) {
+        line(c, ind, "return Err(endpoints.RuleErr{msg: \"rules in a matched tree rule were exhausted\"})")
+      }
+    }
+    _ => line(c, ind, "return Err(endpoints.RuleErr{msg: ${lit_str("unknown rule type ${kind}")}})")
+  }
+  for _ in conds {
+    ind = ind[0..ind.len() - 2]
+    line(c, ind, "}")
+  }
+  conds.is_empty()
+}
+
+/// `resolve_endpoint` for a rule set: the same signature as
+/// endpoints.resolve, without the rule set.
+pub fn emit_endpoint_rules(rules: json.Value) -> Str {
+  var c = Ctx{out: [], n: 0}
+  line(c, "", "/// Resolves this service's endpoint from its endpoint rules.")
+  line(c, "", "pub fn resolve_endpoint(params: List[(Str, json.Value)], parts: endpoints.Partitions) -> endpoints.Endpoint ! endpoints.RuleErr {")
+  var vars: List[(Str, Str)] = []
+  var names: List[Str] = ["parts"]
+  if let Some(json.Value.Object(defs)) = rules.get("parameters") {
+    for (name, def) in defs {
+      let v = "p${vars.len()}"
+      let required = def.get("required") == Some(json.Value.Bool(true))
+      line(c, "  ", "let ${v} = endpoints.param(params, ${lit_str(name)}, ${json_lit(def.get("default") ?? json.Value.Null)}, ${required})?")
+      vars.push((name, v))
+      names.push(v)
+    }
+  }
+  line(c, "  ", "let _ = (${names.join(", ")})")
+  if !emit_rules(c, list_of(rules.get("rules")), vars, "  ") {
+    line(c, "  ", "Err(endpoints.RuleErr{msg: \"no rule matched\"})")
+  }
+  line(c, "", "}")
+  c.out.join("\n") + "\n"
+}
+
+/// The endpointTests as Xo tests of the compiled rules.
+pub fn emit_endpoint_tests(tests: json.Value) -> Str {
+  var out: List[Str] = []
+  for (i, t) in list_of(tests.get("testCases")).indexed() {
+    let params = match t.get("params") {
+      Some(json.Value.Object(fs)) => fs
+      _ => []
+    }
+    let doc = match t.get("documentation") {
+      Some(json.Value.Str(d)) => d
+      _ => ""
+    }
+    let plist = params.map(fn(p: (Str, json.Value)) -> Str { "(${lit_str(p.0)}, ${json_lit(p.1)})" }).join(", ")
+    out.push("test ${lit_str("endpoint ${i}: ${doc}")} {")
+    out.push("  let got = resolve_endpoint([${plist}], endpoints.default_partitions())")
+    out.push("  expect(endpoints.check(got, ${json_lit(t.get("expect") ?? json.Value.Null)})) == \"\"")
+    out.push("}")
+    out.push("")
+  }
+  out.join("\n")
+}
+
+/// The endpoint files of a service, empty when it has no rule set.
+pub fn endpoint_files(m: model.Model, tests: Bool) -> List[File] {
+  let svc = m.shapes.get(m.service) ?? return []
+  let rules = model.trait_of(svc.traits, "smithy.rules#endpointRuleSet") ?? return []
+  var files = [File{path: "endpoint.xo", text: with_uses(emit_endpoint_rules(rules))}]
+  if tests {
+    if let Some(t) = model.trait_of(svc.traits, "smithy.rules#endpointTests") {
+      files.push(File{path: "endpoint_test.xo", text: with_uses(emit_endpoint_tests(t))})
+    }
+  }
+  files
+}

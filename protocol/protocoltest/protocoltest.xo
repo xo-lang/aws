@@ -3,6 +3,7 @@
 // aws-sdk-go-v2's protocol test harness compares them.
 
 use std/json
+use std/xml
 use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/transport
 
@@ -96,6 +97,10 @@ pub fn check_request(req: transport.Request, want: RequestWant) -> () ! Mismatch
       if !json_equal_text(got, b) {
         problems.push("body ${got}, want ${b}")
       }
+    } else if want.body_media_type.contains("xml") && b != "" {
+      if !xml_equal_text(got, b) {
+        problems.push("body ${got}, want ${b}")
+      }
     } else if got != b {
       problems.push("body ${got}, want ${b}")
     }
@@ -152,4 +157,41 @@ pub fn doc(text: Str) -> json.Value {
 /// (docs/reports/xo-issues.md entry 4).
 pub fn map_of[V](m: Map[Str, V]) -> Map[Str, V] {
   m
+}
+
+/// XML equality as the protocol tests mean it: names, attributes in any
+/// order, sibling elements in name order, and text, ignoring whitespace
+/// between elements.
+pub fn xml_equal_text(a: Str, b: Str) -> Bool {
+  match (xml.parse(a), xml.parse(b)) {
+    (Ok(x), Ok(y)) => canonical(x) == canonical(y)
+    _ => false
+  }
+}
+
+fn canonical(e: xml.Element) -> Str {
+  var out = StrBuilder.new()
+  out.write("<{${e.name.space}}${e.name.local}")
+  let attrs = e.attrs.map(fn(a: xml.Attr) -> Str { "{${a.name.space}}${a.name.local}=${a.value}" }).sort()
+  for a in attrs {
+    out.write(" ${a}")
+  }
+  out.write(">")
+  // sibling elements sorted by name, stably (list items keep their
+  // order), as smithy-go's XML comparison does
+  var texts = StrBuilder.new()
+  var kids: List[xml.Element] = []
+  for n in e.children {
+    match n {
+      xml.Node.Elem(c) => kids.push(c)
+      xml.Node.Text(t) => texts.write(t.trim())
+      _ => {}
+    }
+  }
+  out.write(texts.freeze())
+  for c in kids.sort_by(fn(c: xml.Element) -> Str { "{${c.name.space}}${c.name.local}" }) {
+    out.write(canonical(c))
+  }
+  out.write("</>")
+  out.freeze()
 }

@@ -1,0 +1,95 @@
+// XML bodies for the restXml, awsQuery and ec2Query protocols (decision
+// 0003): a small writer for generated serializers, and readers over
+// std/xml elements for generated deserializers.
+
+use std/xml
+use github.com/xo-lang/aws/protocol/rest
+
+/// Writes XML text with no element tree.
+pub struct Writer {
+  b: StrBuilder
+}
+
+pub fn writer() -> Writer {
+  Writer{b: StrBuilder.new()}
+}
+
+/// `<name attrs...>`; `attrs` are (name, value) with the values escaped
+/// here; a namespace is an `xmlns` or `xmlns:p` attribute.
+pub fn start(var w: Writer, name: Str, attrs: List[(Str, Str)] = []) {
+  w.b.write("<${name}")
+  for (k, v) in attrs {
+    w.b.write(" ${k}=\"")
+    w.b.write(attr_escape(v))
+    w.b.write("\"")
+  }
+  w.b.write(">")
+}
+
+pub fn end(var w: Writer, name: Str) {
+  w.b.write("</${name}>")
+}
+
+pub fn text(var w: Writer, s: Str) {
+  xml.escape_to(w.b, s)
+}
+
+/// `<name>text</name>`.
+pub fn elem(var w: Writer, name: Str, s: Str, attrs: List[(Str, Str)] = []) {
+  start(w, name, attrs)
+  text(w, s)
+  end(w, name)
+}
+
+pub fn finish(var w: Writer) -> Bytes {
+  w.b.freeze().bytes()
+}
+
+fn attr_escape(s: Str) -> Str {
+  xml.escape(s)
+}
+
+/// An element's text, or None when absent.
+pub fn child_text(e: xml.Element, local: Str) -> Str? {
+  e.child(local).map(fn(c: xml.Element) -> Str { c.text() })
+}
+
+/// The element children of `e`, in order.
+pub fn elements(e: xml.Element) -> List[xml.Element] {
+  e.children.filter_map(fn(n: xml.Node) -> xml.Element? {
+    match n {
+      xml.Node.Elem(c) => Some(c)
+      _ => None
+    }
+  })
+}
+
+pub fn parse_body(body: Bytes) -> xml.Element ! Str {
+  let s = body.to_str() ?? return Err("body is not UTF-8")
+  xml.parse(s) ?? e => return Err("xml: ${e.display()}")
+}
+
+pub fn read_int(s: Str) -> Int ! Str {
+  Int.parse(s.trim()) ?? return Err("not an integer: ${s}")
+}
+
+pub fn read_float(s: Str) -> Float ! Str {
+  rest.parse_float(s.trim()) ?? return Err("not a number: ${s}")
+}
+
+pub fn read_bool(s: Str) -> Bool ! Str {
+  match s.trim() {
+    "true" => Ok(true)
+    "false" => Ok(false)
+    _ => Err("not a boolean: ${s}")
+  }
+}
+
+pub fn read_blob(s: Str) -> Bytes ! Str {
+  Bytes.from_base64(s.trim()) ?? return Err("not base64: ${s}")
+}
+
+/// An element with no children: what an empty body reads as.
+pub fn empty() -> xml.Element {
+  xml.Element{name: xml.Name{space: "", local: ""}, attrs: [], children: []}
+}

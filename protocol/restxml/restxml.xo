@@ -1,0 +1,64 @@
+// restXml's error responses (decision 0003): `<ErrorResponse><Error>...`
+// or, for services with `noErrorWrapping` (S3), a bare `<Error>`.
+
+use std/http
+use std/xml
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/protocol/xmlv
+use github.com/xo-lang/aws/retry
+
+/// The `<Error>` element of an error body (wrapped or not).
+pub fn error_element(body: Bytes) -> xml.Element? {
+  let root = xmlv.parse_body(body).ok() ?? return None
+  if root.name.local == "Error" {
+    return Some(root)
+  }
+  root.child("Error")
+}
+
+pub fn error_code(body: Bytes) -> Str {
+  match error_element(body) {
+    Some(e) => xmlv.child_text(e, "Code") ?? ""
+    None => ""
+  }
+}
+
+/// The service error of a response, for unmodeled codes.
+pub fn api_error(resp: http.Response) -> aws.ApiError {
+  let e = error_element(resp.body)
+  let code = match e {
+    Some(x) => xmlv.child_text(x, "Code") ?? ""
+    None => ""
+  }
+  let message = match e {
+    Some(x) => xmlv.child_text(x, "Message") ?? ""
+    None => ""
+  }
+  let fault = match e {
+    Some(x) => match xmlv.child_text(x, "Type") {
+      Some("Sender") => aws.Fault.Client
+      Some("Receiver") => aws.Fault.Server
+      _ => if resp.status >= 500 { aws.Fault.Server } else { aws.Fault.Client }
+    }
+    None => if resp.status >= 500 { aws.Fault.Server } else { aws.Fault.Client }
+  }
+  let root = xmlv.parse_body(resp.body).ok()
+  let body_id = match root {
+    Some(r) => xmlv.child_text(r, "RequestId") ?? ""
+    None => ""
+  }
+  let request_id = if body_id != "" { body_id } else { resp.header("X-Amz-Request-Id") ?? resp.header("X-Amzn-Requestid") ?? "" }
+  aws.ApiError{
+    code: if code == "" { if resp.status == 404 { "NotFound" } else { "UnknownError" } } else { code },
+    message: message,
+    fault: fault,
+    status: resp.status,
+    request_id: request_id,
+  }
+}
+
+/// transport.send's retry decision for a restXml error response.
+pub fn classify(resp: http.Response) -> retry.Failure {
+  let code = error_code(resp.body)
+  retry.classify_response(resp.status, if code == "" { None } else { Some(code) })
+}

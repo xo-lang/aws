@@ -473,7 +473,11 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
         Blob => ("v", media_type(g, m) ?? "application/octet-stream")
         String => ("v.bytes()", media_type(g, m) ?? "text/plain")
         Enum => ("v.value().bytes()", "text/plain")
-        _ => ("${json_expr(g, m.traits, m.target, "v")}.encode().bytes()", "application/json")
+        _ => if g.xml {
+          ("xml_body_${fn_key(g, m.target)}(v, ${lit_str(xml_root_name(g, Some(m), m.target))}, ${xml_root_ns(g, m.target)})", "application/xml")
+        } else {
+          ("${json_expr(g, m.traits, m.target, "v")}.encode().bytes()", "application/json")
+        }
       }
       out.push("  if let Some(v) = input.${f} {")
       out.push("    body = ${expr}")
@@ -491,7 +495,30 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       out.push("  }")
     }
     None => {
-      if !body_members.is_empty() {
+      if !body_members.is_empty() && g.xml {
+        out.push("  var w = xmlv.writer()")
+        out.push("  var attrs: List[(Str, Str)] = ${xml_root_ns(g, s.input)}")
+        xml_attr_writes(g, body_members, "input", "  ", out)
+        let root = lit_str(xml_root_name(g, None, s.input))
+        out.push("  xmlv.start(w, ${root}, attrs)")
+        for m in body_members {
+          if has(m.traits, "xmlAttribute") {
+            continue
+          }
+          out.push("  if let Some(x) = input.${field_name(m.name)} {")
+          xml_member_write(g, m, "x", "    ", out)
+          if has(m.traits, "idempotencyToken") {
+            out.push("  } else if idempotency_token != \"\" {")
+            out.push("    xmlv.elem(w, ${lit_str(xml_name(m))}, idempotency_token)")
+          }
+          out.push("  }")
+        }
+        out.push("  xmlv.end(w, ${root})")
+        out.push("  body = xmlv.finish(w)")
+        if !has_ct {
+          out.push("  headers.push((\"Content-Type\", \"application/xml\"))")
+        }
+      } else if !body_members.is_empty() {
         out.push("  var fs: List[(Str, json.Value)] = []")
         for m in body_members {
           let f = field_name(m.name)
@@ -621,7 +648,11 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
           out.push("    out.${f} = ${type_name(g.names, m.target)}.from(resp.body.to_str() ?? \"\")")
           out.push("  }")
         }
-        _ => {
+        _ => if g.xml {
+          out.push("  if !resp.body.is_empty() {")
+          out.push("    out.${f} = xml_read_${fn_key(g, m.target)}(xmlv.parse_body(resp.body)?)?")
+          out.push("  }")
+        } else {
           out.push("  if !resp.body.is_empty() {")
           out.push("    let doc = jsonv.parse_body(resp.body)?")
           out.push("    out.${f} = ${from_json_expr(g, m.traits, m.target, "doc")}")
@@ -630,7 +661,9 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
       }
     }
     None => {
-      if !body_members.is_empty() {
+      if !body_members.is_empty() && g.xml {
+        xml_read_members(g, body_members, "body", "  ", out)
+      } else if !body_members.is_empty() {
         out.push("  for (k, fv) in jsonv.fields(body)? {")
         out.push("    if fv == json.Value.Null {")
         out.push("      continue")
@@ -672,7 +705,11 @@ fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
   let has_payload = output.members.any(fn(m: model.Member) -> Bool { has(m.traits, "httpPayload") })
   let has_body = output.members.any(fn(m: model.Member) -> Bool { in_response_body(binding(m.traits, "", m.name)) })
   if !has_payload && has_body {
-    out.push("  let body = jsonv.parse_body(resp.body)?")
+    if g.xml {
+      out.push("  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }")
+    } else {
+      out.push("  let body = jsonv.parse_body(resp.body)?")
+    }
   }
   emit_read_members(g, output, out)
   out.push("  Ok(out)")
@@ -733,9 +770,13 @@ fn emit_errors(g: G, op: Str, var out: List[Str]) {
   out.push("}")
   out.push("")
   out.push("pub fn deserialize_${op_name(op)}_error(resp: http.Response) -> ${en} {")
-  out.push("  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])")
+  if g.xml {
+    out.push("  let body = restxml.error_element(resp.body) ?? xmlv.empty()")
+  } else {
+    out.push("  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])")
+  }
   if !vs.is_empty() {
-    out.push("  match restjson.error_code(resp, body) {")
+    out.push(if g.xml { "  match restxml.error_code(resp.body) {" } else { "  match restjson.error_code(resp, body) {" })
     for (e, v) in vs {
       out.push("    ${lit_str(model.name_of(e))} => match read_error_${fn_key(g, e)}(resp, body) {")
       out.push("      Ok(x) => return ${en}.${v}(x)")
@@ -745,7 +786,12 @@ fn emit_errors(g: G, op: Str, var out: List[Str]) {
     out.push("    _ => {}")
     out.push("  }")
   }
-  out.push("  ${en}.Api(restjson.api_error(resp, body))")
+  if g.xml {
+    out.push(if vs.is_empty() { "  let _ = body" } else { "" })
+    out.push("  ${en}.Api(restxml.api_error(resp))")
+  } else {
+    out.push("  ${en}.Api(restjson.api_error(resp, body))")
+  }
   out.push("}")
   out.push("")
 }
@@ -759,7 +805,8 @@ fn emit_error_readers(g: G, var out: List[Str]) {
     }
     done.add(id)
     let t = xo_type(g, id)
-    out.push("fn read_error_${fn_key(g, id)}(resp: http.Response, body: json.Value) -> ${t} ! Str {")
+    let body_t = if g.xml { "xml.Element" } else { "json.Value" }
+    out.push("fn read_error_${fn_key(g, id)}(resp: http.Response, body: ${body_t}) -> ${t} ! Str {")
     out.push("  let _ = (resp, body)")
     out.push("  var out = ${t}{}")
     emit_read_members(g, s, out)
@@ -812,7 +859,12 @@ pub fn emit_restjson(g: G) -> Str {
     "const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}",
     "",
   ]
-  emit_json_fns(g, out)
+  if g.xml {
+    emit_xml_fns(g, out)
+    emit_xml_bodies(g, out)
+  } else {
+    emit_json_fns(g, out)
+  }
   emit_error_readers(g, out)
   for op in model.operations(g.m) {
     if !supported(g, op) {
@@ -832,7 +884,7 @@ pub fn emit_restjson(g: G) -> Str {
     doc_lines(out, s.traits, "")
     out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
     out.push("  let req = serialize_${name}(c.endpoint, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
-    out.push("  let resp = transport.send(c.transport, req, transport.Signing{service: SIGNING_NAME, region: c.region}, restjson.classify) ?? e => return Err(${en}.Send(e))")
+    out.push("  let resp = transport.send(c.transport, req, transport.Signing{service: SIGNING_NAME, region: c.region}, ${if g.xml { "restxml" } else { "restjson" }}.classify) ?? e => return Err(${en}.Send(e))")
     out.push("  if resp.status >= 300 {")
     out.push("    return Err(deserialize_${name}_error(resp))")
     out.push("  }")
@@ -841,4 +893,21 @@ pub fn emit_restjson(g: G) -> Str {
     out.push("")
   }
   out.join("\n")
+}
+
+/// For restXml payloads: the body bytes of each structure or union.
+fn emit_xml_bodies(g: G, var out: List[Str]) {
+  for id in json_shapes(g) {
+    let k = shape_of(g, id).kind
+    if !(k is model.Kind.Structure) && !(k is model.Kind.Union) {
+      continue
+    }
+    let key = fn_key(g, id)
+    out.push("fn xml_body_${key}(v: ${xo_type(g, id)}, name: Str, ns: List[(Str, Str)]) -> Bytes {")
+    out.push("  var w = xmlv.writer()")
+    out.push("  xml_write_${key}(w, v, name, ns)")
+    out.push("  xmlv.finish(w)")
+    out.push("}")
+    out.push("")
+  }
 }

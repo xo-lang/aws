@@ -130,7 +130,7 @@ fn eval_rules(rules: List[json.Value], scope: Map[Str, json.Value], parts: Parti
   Ok(None)
 }
 
-fn truthy(v: json.Value) -> Bool {
+pub fn truthy(v: json.Value) -> Bool {
   match v {
     json.Value.Null => false
     json.Value.Bool(b) => b
@@ -138,7 +138,7 @@ fn truthy(v: json.Value) -> Bool {
   }
 }
 
-fn text(v: json.Value) -> Str {
+pub fn text(v: json.Value) -> Str {
   match v {
     json.Value.Str(s) => s
     json.Value.Null => ""
@@ -254,7 +254,8 @@ fn opt(v: json.Value?) -> json.Value {
   v ?? json.Value.Null
 }
 
-fn call(f: Str, args: List[json.Value], parts: Partitions) -> json.Value ! RuleErr {
+/// One rules function applied to evaluated arguments.
+pub fn call(f: Str, args: List[json.Value], parts: Partitions) -> json.Value ! RuleErr {
   match f {
     "isSet" => Ok(json.Value.Bool(arg(args, 0) != json.Value.Null))
     "not" => Ok(json.Value.Bool(!arg_bool(args, 0)))
@@ -522,4 +523,77 @@ pub fn partition(parts: Partitions, region: Str) -> json.Value? {
   let p = chosen ?? return None
   let outputs = merge(p.get("outputs") ?? json.Value.Object([]), region_outputs)
   Some(outputs)
+}
+
+/// A parameter's value for compiled rules: the given one, else the
+/// default; an error when it is required and neither is set.
+pub fn param(params: List[(Str, json.Value)], name: Str, default: json.Value, required: Bool) -> json.Value ! RuleErr {
+  let given = match params.find(fn(p: (Str, json.Value)) -> Bool { p.0 == name }) {
+    Some((_, v)) => v
+    None => json.Value.Null
+  }
+  let v = if given == json.Value.Null { default } else { given }
+  if v == json.Value.Null && required {
+    return Err(RuleErr{msg: "missing required parameter ${name}"})
+  }
+  Ok(v)
+}
+
+fn headers_json(hs: List[(Str, List[Str])]) -> json.Value {
+  json.Value.Object(hs.map(fn(h: (Str, List[Str])) -> (Str, json.Value) {
+    (h.0, json.Value.List(h.1.map(fn(v: Str) -> json.Value { json.Value.Str(v) })))
+  }))
+}
+
+/// Compares a resolution with an endpointTests `expect` object: "" when
+/// it matches, else what differs.
+pub fn check(got: Result[Endpoint, RuleErr], expect: json.Value) -> Str {
+  match (expect.get("endpoint"), expect.get("error"), got) {
+    (Some(want), _, Ok(e)) => {
+      let url = text(want.get("url") ?? json.Value.Null)
+      let props = want.get("properties") ?? json.Value.Object([])
+      let hs = want.get("headers") ?? json.Value.Object([])
+      if e.url != url {
+        "url ${e.url}, want ${url}"
+      } else if !same(e.properties, props) {
+        "properties ${e.properties.encode()}, want ${props.encode()}"
+      } else if !same(headers_json(e.headers), hs) {
+        "headers ${headers_json(e.headers).encode()}, want ${hs.encode()}"
+      } else {
+        ""
+      }
+    }
+    (Some(_), _, Err(e)) => "error ${e.msg}, want an endpoint"
+    (None, Some(json.Value.Str(msg)), Err(e)) => if e.msg == msg { "" } else { "error ${e.msg}, want ${msg}" }
+    (None, Some(_), Ok(e)) => "endpoint ${e.url}, want an error"
+    _ => "test has no expectation"
+  }
+}
+
+/// JSON equality with objects compared as unordered.
+fn same(a: json.Value, b: json.Value) -> Bool {
+  match (a, b) {
+    (json.Value.Object(xs), json.Value.Object(ys)) => {
+      xs.len() == ys.len() && xs.all(fn(x: (Str, json.Value)) -> Bool {
+        match ys.find(fn(y: (Str, json.Value)) -> Bool { y.0 == x.0 }) {
+          Some(y) => same(x.1, y.1)
+          None => false
+        }
+      })
+    }
+    (json.Value.List(xs), json.Value.List(ys)) => {
+      if xs.len() != ys.len() {
+        return false
+      }
+      for i in 0..xs.len() {
+        if !same(xs[i], ys[i]) {
+          return false
+        }
+      }
+      true
+    }
+    (json.Value.Int(x), json.Value.Num(y)) => Float(x) == y
+    (json.Value.Num(x), json.Value.Int(y)) => x == Float(y)
+    _ => a == b
+  }
 }

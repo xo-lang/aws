@@ -114,8 +114,13 @@ headers with list and timestamp formats, prefix headers, payload members,
 `@httpResponseCode`), the body codecs, and error parsing per protocol
 (`__type` with its namespace and URI forms, `X-Amzn-Errortype`, XML
 `Error/Code`, query's `ErrorResponse`, EC2's `Response/Errors/Error`, S3's
-200 response with an error body). Later, Smithy RPC v2 CBOR (a CBOR codec;
-AWS has begun moving services to it): see 0006 item 6.
+200 response with an error body), and `awsQueryCompatible` (SQS,
+CloudWatch: JSON or CBOR bodies with the query error code taken from the
+`x-amzn-query-error` header). Smithy RPC v2 CBOR is needed too: 3 services
+speak only CBOR and 22 list it beside another protocol (0006 item 6); a
+service listing several protocols uses the first the core supports, in the
+order rpcv2Cbor, awsJson1_0, awsJson1_1, restJson1, restXml, awsQuery,
+ec2Query (to confirm against aws-sdk-go-v2's choice before it is fixed).
 
 ### Event streams (`eventstream`)
 

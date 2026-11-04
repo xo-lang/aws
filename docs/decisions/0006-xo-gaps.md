@@ -44,10 +44,12 @@ first prototypes will test before anything is asked of the Xo owners.
    only from DER. Workaround: build SEC 1 `ECPrivateKey` DER around the
    derived scalar and call `crypto.parse_private_key`. A
    `crypto.ecdsa_private_key(alg, d: Bytes)` would be cleaner.
-6. **CBOR codec** for Smithy RPC v2 CBOR, which AWS has started to use for
-   some services. Workaround: a CBOR encoder and decoder in the core when
-   the first service the owner wants needs it. A `std/cbor` would serve
-   other users too.
+6. **CBOR codec** for Smithy RPC v2 CBOR. Required for full coverage:
+   3 services speak only CBOR and 22 more (CloudWatch among them) list it
+   next to JSON or query (docs/reports/service-names-2026-11-04.md).
+   Workaround: a CBOR encoder and decoder in the core, written before the
+   generator reaches those 3 services. A `std/cbor` would serve other
+   users too.
 7. **Iteration protocol for user types.** `for x in` works on builtin
    collections, channels and ranges; a paginator cannot be iterated with
    `for page in pages`. Workaround: `has_more_pages()`/`next_page()`, as

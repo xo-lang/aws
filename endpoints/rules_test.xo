@@ -1,0 +1,65 @@
+use std/json
+
+test "functions" {
+  expect(substring("abcdef", 0, 3, false)) == Some("abc")
+  expect(substring("abcdef", 0, 3, true)) == Some("def")
+  expect(substring("ab", 0, 3, false)) == None
+  expect(substring("é∂ƒ", 0, 1, false)) == None
+  expect(valid_host_label("bucket-1", false)) == true
+  expect(valid_host_label("-bad", false)) == false
+  expect(valid_host_label("a.b", true)) == true
+  expect(virtual_hostable_bucket("my.bucket", true)) == true
+  expect(virtual_hostable_bucket("192.0.2.1", true)) == false
+  expect(virtual_hostable_bucket("Upper", false)) == false
+  expect(uri_encode("a b/c")) == "a%20b%2Fc"
+  let u = parse_url("https://example.com:8443/path")?
+  expect(u.get("authority")) == Some(json.Value.Str("example.com:8443"))
+  expect(u.get("normalizedPath")) == Some(json.Value.Str("/path/"))
+  expect(parse_url("https://example.com/?q=1")) == None
+  let arn = parse_arn("arn:aws:s3:us-west-2:123456789012:accesspoint/name")?
+  expect(get_attr(arn, "resourceId[1]")) == json.Value.Str("name")
+  expect(parse_arn("arn:aws:s3")) == None
+}
+
+test "partitions" {
+  let p = default_partitions()
+  expect(partition(p, "us-east-1")?.get("dnsSuffix")) == Some(json.Value.Str("amazonaws.com"))
+  expect(partition(p, "cn-north-1")?.get("name")) == Some(json.Value.Str("aws-cn"))
+  // an unlisted region that matches a partition's regex
+  expect(partition(p, "us-gov-east-9")?.get("name")) == Some(json.Value.Str("aws-us-gov"))
+  // anything else is aws
+  expect(partition(p, "mars-1")?.get("name")) == Some(json.Value.Str("aws"))
+}
+
+const RULES: Str = r"""{
+  "version": "1.0",
+  "parameters": {
+    "Region": {"type": "String", "builtIn": "AWS::Region"},
+    "UseFIPS": {"type": "Boolean", "default": false, "required": true}
+  },
+  "rules": [
+    {"conditions": [{"fn": "isSet", "argv": [{"ref": "Region"}]}, {"fn": "aws.partition", "argv": [{"ref": "Region"}], "assign": "P"}],
+     "type": "tree",
+     "rules": [
+       {"conditions": [{"fn": "booleanEquals", "argv": [{"ref": "UseFIPS"}, true]}],
+        "type": "endpoint", "endpoint": {"url": "https://svc-fips.{Region}.{P#dnsSuffix}", "properties": {"authSchemes": [{"name": "sigv4", "signingRegion": "{Region}"}]}, "headers": {}}},
+       {"conditions": [], "type": "endpoint", "endpoint": {"url": "https://svc.{Region}.{P#dnsSuffix}", "properties": {}, "headers": {"x-a": ["{{literal}}"]}}}
+     ]},
+    {"conditions": [], "type": "error", "error": "Invalid Configuration: Missing Region"}
+  ]
+}"""
+
+test "rules" {
+  let rules = json.parse_value(RULES)?
+  let p = default_partitions()
+  let e = resolve(rules, [("Region", json.Value.Str("eu-west-1"))], p)?
+  expect(e.url) == "https://svc.eu-west-1.amazonaws.com"
+  expect(e.headers) == [("x-a", ["{literal}"])]
+  let f = resolve(rules, [("Region", json.Value.Str("cn-north-1")), ("UseFIPS", json.Value.Bool(true))], p)?
+  expect(f.url) == "https://svc-fips.cn-north-1.amazonaws.com.cn"
+  expect(get_attr(f.properties, "authSchemes[0].signingRegion")) == json.Value.Str("cn-north-1")
+  match resolve(rules, [], p) {
+    Err(err) => expect(err.msg) == "Invalid Configuration: Missing Region"
+    Ok(_) => expect("resolved") == "an error"
+  }
+}

@@ -1,0 +1,75 @@
+// Runs every model's endpointTests against the rules interpreter
+// (decision 0003) and prints the totals and the failures.
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+use github.com/xo-lang/aws/endpoints
+use github.com/xo-lang/aws/protocol/protocoltest
+
+fn headers_json(hs: List[(Str, List[Str])]) -> json.Value {
+  json.Value.Object(hs.map(fn(h: (Str, List[Str])) -> (Str, json.Value) {
+    (h.0, json.Value.List(h.1.map(fn(v: Str) -> json.Value { json.Value.Str(v) })))
+  }))
+}
+
+fn main(os: Os) -> () ! Error {
+  let args = os.env.args()
+  let pattern = if args.len() > 0 { args[0] } else { "*" }
+  let files = os.fs.glob(".models/models/${pattern}/service/*/*.json")?.sort()
+  let parts = endpoints.default_partitions()
+  var pass = 0
+  var fail = 0
+  var shown = 0
+  for f in files {
+    let m = model.load(os.fs.read_text(f)?)?
+    let svc = m.shapes.get(m.service) ?? continue
+    let rules = model.trait_of(svc.traits, "smithy.rules#endpointRuleSet") ?? continue
+    let tests = match model.trait_of(svc.traits, "smithy.rules#endpointTests") {
+      Some(t) => match t.get("testCases") {
+        Some(json.Value.List(xs)) => xs
+        _ => []
+      }
+      None => []
+    }
+    for c in tests {
+      let params = match c.get("params") {
+        Some(json.Value.Object(fs)) => fs
+        _ => []
+      }
+      let expect = c.get("expect") ?? json.Value.Null
+      let got = endpoints.resolve(rules, params, parts)
+      let problem = match (expect.get("endpoint"), expect.get("error"), got) {
+        (Some(want), _, Ok(e)) => {
+          let url = match want.get("url") {
+            Some(json.Value.Str(u)) => u
+            _ => ""
+          }
+          if e.url != url {
+            "url ${e.url}, want ${url}"
+          } else if !protocoltest.json_equal(e.properties, want.get("properties") ?? json.Value.Object([])) {
+            "properties ${e.properties.encode()}, want ${(want.get("properties") ?? json.Value.Null).encode()}"
+          } else if !protocoltest.json_equal(headers_json(e.headers), want.get("headers") ?? json.Value.Object([])) {
+            "headers ${headers_json(e.headers).encode()}, want ${(want.get("headers") ?? json.Value.Null).encode()}"
+          } else {
+            ""
+          }
+        }
+        (Some(_), _, Err(e)) => "error ${e.msg}, want an endpoint"
+        (None, Some(json.Value.Str(msg)), Err(e)) => if e.msg == msg { "" } else { "error ${e.msg}, want ${msg}" }
+        (None, Some(_), Ok(e)) => "endpoint ${e.url}, want an error"
+        _ => "test has no expectation"
+      }
+      if problem == "" {
+        pass += 1
+      } else {
+        fail += 1
+        if shown < 40 {
+          shown += 1
+          os.stdio.println("FAIL ${model.name_of(m.service)}: ${(c.get("documentation") ?? json.Value.Null).encode()}: ${problem}")
+        }
+      }
+    }
+  }
+  os.stdio.println("endpoint tests: ${pass} passed, ${fail} failed")
+  Ok(())
+}

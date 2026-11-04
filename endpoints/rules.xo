@@ -1,0 +1,525 @@
+// Package endpoints resolves a service endpoint from its Smithy endpoint
+// rule set (decision 0003): the rules engine interpreter, with the
+// standard library (isSet, not, booleanEquals, stringEquals, getAttr,
+// substring, isValidHostLabel, parseURL, uriEncode) and the AWS functions
+// (aws.partition, aws.parseArn, aws.isVirtualHostableS3Bucket). Values
+// are json.Value; Null is "not set". The interpreter is also the oracle
+// for the compiled rules the generator will emit.
+
+use std/json
+use std/regexp
+
+/// A resolved endpoint.
+pub struct Endpoint {
+  pub url: Str
+  pub properties: json.Value = json.Value.Object([])
+  pub headers: List[(Str, List[Str])] = []
+}
+
+pub struct RuleErr {
+  pub msg: Str
+}
+
+pub fn (e: RuleErr) display() -> Str {
+  e.msg
+}
+
+/// Partition data, from partitions.json.
+pub struct Partitions {
+  pub doc: json.Value
+}
+
+const PARTITIONS_JSON: Str = embed("partitions.json")
+
+pub fn default_partitions() -> Partitions {
+  Partitions{doc: json.parse_value(PARTITIONS_JSON).ok() ?? json.Value.Null}
+}
+
+/// Resolves the endpoint of `rules` (an endpointRuleSet trait value) for
+/// `params`; parameters left out take their defaults.
+pub fn resolve(rules: json.Value, params: List[(Str, json.Value)], parts: Partitions) -> Endpoint ! RuleErr {
+  var scope: Map[Str, json.Value] = {}
+  match rules.get("parameters") {
+    Some(json.Value.Object(defs)) => {
+      for (name, def) in defs {
+        let given = match params.find(fn(p: (Str, json.Value)) -> Bool { p.0 == name }) {
+          Some((_, v)) => v
+          None => json.Value.Null
+        }
+        let v = if given == json.Value.Null { def.get("default") ?? json.Value.Null } else { given }
+        if v == json.Value.Null && def.get("required") == Some(json.Value.Bool(true)) {
+          return Err(RuleErr{msg: "missing required parameter ${name}"})
+        }
+        scope.put(name, v)
+      }
+    }
+    _ => {}
+  }
+  let list = match rules.get("rules") {
+    Some(json.Value.List(xs)) => xs
+    _ => []
+  }
+  match eval_rules(list, scope, parts)? {
+    Some(e) => Ok(e)
+    None => Err(RuleErr{msg: "no rule matched"})
+  }
+}
+
+/// The first matching rule's outcome; None when none matches.
+fn eval_rules(rules: List[json.Value], scope: Map[Str, json.Value], parts: Partitions) -> Endpoint? ! RuleErr {
+  for rule in rules {
+    var local = scope
+    var ok = true
+    match rule.get("conditions") {
+      Some(json.Value.List(conds)) => {
+        for c in conds {
+          let v = eval_expr(c, local, parts)?
+          if !truthy(v) {
+            ok = false
+            break
+          }
+          if let Some(json.Value.Str(name)) = c.get("assign") {
+            local.put(name, v)
+          }
+        }
+      }
+      _ => {}
+    }
+    if !ok {
+      continue
+    }
+    let kind = match rule.get("type") {
+      Some(json.Value.Str(t)) => t
+      _ => ""
+    }
+    match kind {
+      "endpoint" => {
+        let e = rule.get("endpoint") ?? json.Value.Null
+        let url = text(eval_expr(e.get("url") ?? json.Value.Null, local, parts)?)
+        let props = eval_value(e.get("properties") ?? json.Value.Object([]), local, parts)?
+        var headers: List[(Str, List[Str])] = []
+        if let Some(json.Value.Object(hs)) = e.get("headers") {
+          for (k, hv) in hs {
+            var vals: List[Str] = []
+            if let json.Value.List(items) = hv {
+              for it in items {
+                vals.push(text(eval_expr(it, local, parts)?))
+              }
+            }
+            headers.push((k, vals))
+          }
+        }
+        return Ok(Some(Endpoint{url: url, properties: props, headers: headers}))
+      }
+      "error" => return Err(RuleErr{msg: text(eval_expr(rule.get("error") ?? json.Value.Null, local, parts)?)})
+      "tree" => {
+        let sub = match rule.get("rules") {
+          Some(json.Value.List(xs)) => xs
+          _ => []
+        }
+        // a tree rule is terminal: when its conditions hold, one of its
+        // rules must match
+        return match eval_rules(sub, local, parts)? {
+          Some(e) => Ok(Some(e))
+          None => Err(RuleErr{msg: "rules in a matched tree rule were exhausted"})
+        }
+      }
+      _ => return Err(RuleErr{msg: "unknown rule type ${kind}"})
+    }
+  }
+  Ok(None)
+}
+
+fn truthy(v: json.Value) -> Bool {
+  match v {
+    json.Value.Null => false
+    json.Value.Bool(b) => b
+    _ => true
+  }
+}
+
+fn text(v: json.Value) -> Str {
+  match v {
+    json.Value.Str(s) => s
+    json.Value.Null => ""
+    _ => v.encode()
+  }
+}
+
+/// A value inside endpoint properties: objects and lists evaluated
+/// member by member, strings as templates.
+fn eval_value(v: json.Value, scope: Map[Str, json.Value], parts: Partitions) -> json.Value ! RuleErr {
+  match v {
+    json.Value.Object(fs) => {
+      if fs.any(fn(f: (Str, json.Value)) -> Bool { f.0 == "fn" || f.0 == "ref" }) {
+        return eval_expr(v, scope, parts)
+      }
+      var out: List[(Str, json.Value)] = []
+      for (k, x) in fs {
+        out.push((k, eval_value(x, scope, parts)?))
+      }
+      Ok(json.Value.Object(out))
+    }
+    json.Value.List(xs) => {
+      var out: List[json.Value] = []
+      for x in xs {
+        out.push(eval_value(x, scope, parts)?)
+      }
+      Ok(json.Value.List(out))
+    }
+    json.Value.Str(s) => Ok(json.Value.Str(template(s, scope)?))
+    _ => Ok(v)
+  }
+}
+
+/// A string template: `{Name}` and `{Name#path}` replaced, `{{` and `}}`
+/// escaped braces.
+fn template(s: Str, scope: Map[Str, json.Value]) -> Str ! RuleErr {
+  if !s.contains("{") && !s.contains("}") {
+    return Ok(s)
+  }
+  var out = StrBuilder.new()
+  let b = s.bytes()
+  var i = 0
+  while i < b.len() {
+    let c = Int(b[i])
+    if c == 123 && i + 1 < b.len() && Int(b[i + 1]) == 123 {
+      out.write("{")
+      i += 2
+      continue
+    }
+    if c == 125 && i + 1 < b.len() && Int(b[i + 1]) == 125 {
+      out.write("}")
+      i += 2
+      continue
+    }
+    if c == 123 {
+      var j = i + 1
+      while j < b.len() && Int(b[j]) != 125 {
+        j += 1
+      }
+      let inner = b[i + 1..j].to_str() ?? ""
+      let v = match inner.cut("#") {
+        Some((name, path)) => get_attr(scope.get(name) ?? json.Value.Null, path)
+        None => scope.get(inner) ?? json.Value.Null
+      }
+      out.write(text(v))
+      i = j + 1
+      continue
+    }
+    out.write(b[i..i + 1].to_str() ?? "")
+    i += 1
+  }
+  Ok(out.freeze())
+}
+
+fn eval_expr(e: json.Value, scope: Map[Str, json.Value], parts: Partitions) -> json.Value ! RuleErr {
+  match e {
+    json.Value.Str(s) => Ok(json.Value.Str(template(s, scope)?))
+    json.Value.Object(_) => {
+      if let Some(json.Value.Str(r)) = e.get("ref") {
+        return Ok(scope.get(r) ?? json.Value.Null)
+      }
+      if let Some(json.Value.Str(f)) = e.get("fn") {
+        var args: List[json.Value] = []
+        if let Some(json.Value.List(argv)) = e.get("argv") {
+          for a in argv {
+            args.push(eval_expr(a, scope, parts)?)
+          }
+        }
+        return call(f, args, parts)
+      }
+      eval_value(e, scope, parts)
+    }
+    _ => Ok(e)
+  }
+}
+
+fn arg(args: List[json.Value], i: Int) -> json.Value {
+  args.get(i) ?? json.Value.Null
+}
+
+fn arg_str(args: List[json.Value], i: Int) -> Str? {
+  match arg(args, i) {
+    json.Value.Str(s) => Some(s)
+    _ => None
+  }
+}
+
+fn arg_bool(args: List[json.Value], i: Int) -> Bool {
+  arg(args, i) == json.Value.Bool(true)
+}
+
+fn opt(v: json.Value?) -> json.Value {
+  v ?? json.Value.Null
+}
+
+fn call(f: Str, args: List[json.Value], parts: Partitions) -> json.Value ! RuleErr {
+  match f {
+    "isSet" => Ok(json.Value.Bool(arg(args, 0) != json.Value.Null))
+    "not" => Ok(json.Value.Bool(!arg_bool(args, 0)))
+    "booleanEquals" => Ok(json.Value.Bool(arg(args, 0) == arg(args, 1) && arg(args, 0) != json.Value.Null))
+    "stringEquals" => Ok(json.Value.Bool(arg_str(args, 0).is_some() && arg_str(args, 0) == arg_str(args, 1)))
+    "getAttr" => Ok(get_attr(arg(args, 0), arg_str(args, 1) ?? ""))
+    "substring" => {
+      let input = arg_str(args, 0) ?? return Ok(json.Value.Null)
+      let sub = substring(input, int_arg(args, 1), int_arg(args, 2), arg_bool(args, 3))
+      Ok(opt(sub.map(fn(x: Str) -> json.Value { json.Value.Str(x) })))
+    }
+    "isValidHostLabel" => Ok(json.Value.Bool(match arg_str(args, 0) {
+      Some(s) => valid_host_label(s, arg_bool(args, 1))
+      None => false
+    }))
+    "parseURL" => Ok(opt(parse_url(arg_str(args, 0) ?? return Ok(json.Value.Null))))
+    "uriEncode" => Ok(json.Value.Str(uri_encode(arg_str(args, 0) ?? "")))
+    "aws.partition" => Ok(opt(partition(parts, arg_str(args, 0) ?? return Ok(json.Value.Null))))
+    "aws.parseArn" => Ok(opt(parse_arn(arg_str(args, 0) ?? return Ok(json.Value.Null))))
+    "aws.isVirtualHostableS3Bucket" => Ok(json.Value.Bool(match arg_str(args, 0) {
+      Some(s) => virtual_hostable_bucket(s, arg_bool(args, 1))
+      None => false
+    }))
+    "split" => {
+      let s = arg_str(args, 0) ?? return Ok(json.Value.Null)
+      let d = arg_str(args, 1) ?? return Ok(json.Value.Null)
+      let limit = int_arg(args, 2)
+      let pieces = if limit > 0 { s.split_n(d, limit) } else { s.split(d) }
+      Ok(json.Value.List(pieces.map(fn(p: Str) -> json.Value { json.Value.Str(p) })))
+    }
+    "coalesce" => {
+      for a in args {
+        if a != json.Value.Null {
+          return Ok(a)
+        }
+      }
+      Ok(json.Value.Null)
+    }
+    "ite" => Ok(if arg_bool(args, 0) { arg(args, 1) } else { arg(args, 2) })
+    _ => Err(RuleErr{msg: "unknown function ${f}"})
+  }
+}
+
+fn int_arg(args: List[json.Value], i: Int) -> Int {
+  match arg(args, i) {
+    json.Value.Int(n) => n
+    json.Value.Num(f) => Int(f)
+    _ => 0
+  }
+}
+
+/// `getAttr`: a path of `.` separated names and `[n]` indexes.
+pub fn get_attr(v: json.Value, path: Str) -> json.Value {
+  var cur = v
+  for seg in path.split(".") {
+    var name = seg
+    var index: Int? = None
+    if let Some((n, rest)) = seg.cut("[") {
+      name = n
+      index = Int.parse(rest.cut_suffix("]") ?? rest)
+    }
+    if name != "" {
+      cur = cur.get(name) ?? json.Value.Null
+    }
+    if let Some(i) = index {
+      cur = match cur {
+        json.Value.List(xs) => xs.get(i) ?? json.Value.Null
+        _ => json.Value.Null
+      }
+    }
+  }
+  cur
+}
+
+fn is_ascii(s: Str) -> Bool {
+  s.bytes().len() == s.runes().len()
+}
+
+/// `substring`: ASCII only; None for a bad range.
+pub fn substring(s: Str, start: Int, stop: Int, reverse: Bool) -> Str? {
+  if !is_ascii(s) || start >= stop || s.len() < stop {
+    return None
+  }
+  let b = s.bytes()
+  let (a, z) = if reverse { (s.len() - stop, s.len() - start) } else { (start, stop) }
+  b[a..z].to_str()
+}
+
+fn alnum(c: Int) -> Bool {
+  (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57)
+}
+
+/// `isValidHostLabel`: 1 to 63 letters, digits and hyphens, starting with
+/// a letter or digit; with sub domains, each `.` separated label.
+pub fn valid_host_label(s: Str, allow_sub_domains: Bool) -> Bool {
+  if allow_sub_domains {
+    return s.split(".").all(fn(l: Str) -> Bool { valid_host_label(l, false) })
+  }
+  let b = s.bytes()
+  if b.len() < 1 || b.len() > 63 || !alnum(Int(b[0])) {
+    return false
+  }
+  for c in b {
+    if !alnum(Int(c)) && Int(c) != 45 {
+      return false
+    }
+  }
+  true
+}
+
+fn looks_like_ipv4(s: Str) -> Bool {
+  let parts = s.split(".")
+  parts.len() == 4 && parts.all(fn(p: Str) -> Bool {
+    match Int.parse(p) {
+      Some(n) => n >= 0 && n <= 255 && p.len() >= 1
+      None => false
+    }
+  })
+}
+
+/// `aws.isVirtualHostableS3Bucket`.
+pub fn virtual_hostable_bucket(s: Str, allow_sub_domains: Bool) -> Bool {
+  if s.len() < 3 || s.len() > 63 || s.to_lower() != s || looks_like_ipv4(s) {
+    return false
+  }
+  if allow_sub_domains {
+    return s.split(".").all(fn(l: Str) -> Bool { valid_host_label(l, false) })
+  }
+  valid_host_label(s, false)
+}
+
+/// `uriEncode`: everything but unreserved characters as %XX.
+pub fn uri_encode(s: Str) -> Str {
+  let hex = "0123456789ABCDEF".bytes()
+  var out = BytesBuilder.new()
+  for c in s.bytes() {
+    let k = Int(c)
+    if alnum(k) || k == 45 || k == 46 || k == 95 || k == 126 {
+      out.write_byte(c)
+    } else {
+      out.write_byte(37)
+      out.write_byte(hex[k >> 4])
+      out.write_byte(hex[k & 15])
+    }
+  }
+  out.freeze().to_str() ?? s
+}
+
+/// `parseURL`: scheme, authority, path, normalizedPath and isIp; None for
+/// a URL with a query or an unknown scheme.
+pub fn parse_url(u: Str) -> json.Value? {
+  if u.contains("?") || u.contains("#") {
+    return None
+  }
+  let (scheme, rest) = u.cut("://") ?? return None
+  if scheme != "http" && scheme != "https" {
+    return None
+  }
+  let (authority, path) = match rest.cut("/") {
+    Some((a, p)) => (a, "/${p}")
+    None => (rest, "")
+  }
+  if authority == "" {
+    return None
+  }
+  let host = if authority.starts_with("[") {
+    authority
+  } else {
+    (authority.cut(":") ?? (authority, "")).0
+  }
+  let is_ip = host.starts_with("[") || looks_like_ipv4(host)
+  let normalized = if path.ends_with("/") { path } else { "${path}/" }
+  Some(json.Value.Object([
+    ("scheme", json.Value.Str(scheme)),
+    ("authority", json.Value.Str(authority)),
+    ("path", json.Value.Str(path)),
+    ("normalizedPath", json.Value.Str(normalized)),
+    ("isIp", json.Value.Bool(is_ip)),
+  ]))
+}
+
+/// `aws.parseArn`: None unless `arn:partition:service:region:account:resource`
+/// with a partition, service and resource.
+pub fn parse_arn(s: Str) -> json.Value? {
+  let parts = s.split_n(":", 6)
+  if parts.len() != 6 || parts[0] != "arn" || parts[1] == "" || parts[2] == "" || parts[5] == "" {
+    return None
+  }
+  var ids: List[json.Value] = []
+  var cur = StrBuilder.new()
+  for r in parts[5].runes() {
+    if r == ':' || r == '/' {
+      ids.push(json.Value.Str(cur.freeze()))
+      cur = StrBuilder.new()
+    } else {
+      cur.write("${r}")
+    }
+  }
+  ids.push(json.Value.Str(cur.freeze()))
+  Some(json.Value.Object([
+    ("partition", json.Value.Str(parts[1])),
+    ("service", json.Value.Str(parts[2])),
+    ("region", json.Value.Str(parts[3])),
+    ("accountId", json.Value.Str(parts[4])),
+    ("resourceId", json.Value.List(ids)),
+  ]))
+}
+
+fn merge(base: json.Value, over: json.Value) -> json.Value {
+  match (base, over) {
+    (json.Value.Object(bs), json.Value.Object(os)) => {
+      var out = bs
+      for (k, v) in os {
+        var found = false
+        for i in 0..out.len() {
+          if out[i].0 == k {
+            out[i] = (k, v)
+            found = true
+          }
+        }
+        if !found {
+          out.push((k, v))
+        }
+      }
+      json.Value.Object(out)
+    }
+    _ => base
+  }
+}
+
+/// `aws.partition`: the partition that lists the region, else the one
+/// whose regionRegex matches it, else `aws`; its outputs with the
+/// region's overrides.
+pub fn partition(parts: Partitions, region: Str) -> json.Value? {
+  let list = match parts.doc.get("partitions") {
+    Some(json.Value.List(xs)) => xs
+    _ => return None
+  }
+  var chosen: json.Value? = None
+  var region_outputs = json.Value.Object([])
+  for p in list {
+    if let Some(json.Value.Object(regions)) = p.get("regions") {
+      if let Some((_, r)) = regions.find(fn(x: (Str, json.Value)) -> Bool { x.0 == region }) {
+        chosen = Some(p)
+        region_outputs = r
+        break
+      }
+    }
+  }
+  if chosen.is_none() {
+    for p in list {
+      if let Some(json.Value.Str(re)) = p.get("regionRegex") {
+        if let Ok(rx) = regexp.compile(re) {
+          if rx.is_match(region) {
+            chosen = Some(p)
+            break
+          }
+        }
+      }
+    }
+  }
+  if chosen.is_none() {
+    chosen = list.find(fn(p: json.Value) -> Bool { p.get("id") == Some(json.Value.Str("aws")) })
+  }
+  let p = chosen ?? return None
+  let outputs = merge(p.get("outputs") ?? json.Value.Object([]), region_outputs)
+  Some(outputs)
+}

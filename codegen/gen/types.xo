@@ -11,6 +11,8 @@ pub struct G {
   pub ids: List[Str]
   /// restXml bodies (else JSON).
   pub xml: Bool = false
+  /// Amazon S3 (sdkId "S3"): its customizations apply.
+  pub s3: Bool = false
 }
 
 pub fn new_g(m: model.Model) -> G {
@@ -20,7 +22,14 @@ pub fn new_g(m: model.Model) -> G {
     Some(x) => model.has_trait(x.traits, "aws.protocols#restXml")
     None => false
   }
-  G{m: m, names: plan_names(m, ids), ids: ids, xml: xml}
+  let s3 = match svc {
+    Some(x) => match model.trait_of(x.traits, "aws.api#service") {
+      Some(t) => t.get("sdkId") == Some(json.Value.Str("S3"))
+      None => false
+    }
+    None => false
+  }
+  G{m: m, names: plan_names(m, ids), ids: ids, xml: xml, s3: s3}
 }
 
 pub fn shape_of(g: G, id: Str) -> model.Shape {

@@ -597,3 +597,48 @@ fn same(a: json.Value, b: json.Value) -> Bool {
     _ => a == b
   }
 }
+
+/// The SigV4 signing name and region an endpoint asks for (its first
+/// `sigv4` or `sigv4a` auth scheme), when it names them.
+pub fn signing(e: Endpoint) -> (Str?, Str?) {
+  let schemes = match e.properties.get("authSchemes") {
+    Some(json.Value.List(xs)) => xs
+    _ => return (None, None)
+  }
+  for s in schemes {
+    let name = match s.get("name") {
+      Some(json.Value.Str(n)) => n
+      _ => ""
+    }
+    if name != "sigv4" && name != "sigv4a" && name != "sigv4-s3express" {
+      continue
+    }
+    let service = match s.get("signingName") {
+      Some(json.Value.Str(x)) => Some(x)
+      _ => None
+    }
+    let region = match s.get("signingRegion") {
+      Some(json.Value.Str(x)) => Some(x)
+      _ => match s.get("signingRegionSet") {
+        Some(json.Value.List(rs)) => match rs.get(0) {
+          Some(json.Value.Str(x)) => if x == "*" { None } else { Some(x) }
+          _ => None
+        }
+        _ => None
+      }
+    }
+    return (service, region)
+  }
+  (None, None)
+}
+
+/// An endpoint's headers as request header pairs.
+pub fn header_pairs(e: Endpoint) -> List[(Str, Str)] {
+  var out: List[(Str, Str)] = []
+  for (k, vs) in e.headers {
+    for v in vs {
+      out.push((k, v))
+    }
+  }
+  out
+}

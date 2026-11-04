@@ -358,6 +358,15 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
     match binding(m.traits, h.path, m.name) {
       Label(greedy) => {
         let f = field_name(m.name)
+        if g.s3 && m.name == "Bucket" {
+          // S3: the endpoint rules place the bucket (in the host, or the
+          // path for path-style addressing), so it leaves the path here
+          out.push("  if input.${f}.is_none() {")
+          out.push("    return Err(\"input member ${m.name} is required\")")
+          out.push("  }")
+          path = path.replace("/{Bucket}", "")
+          continue
+        }
         out.push("  let label_${f} = match input.${f} {")
         out.push("    Some(v) => ${text_expr(g, m, m.target, "v", "date-time")}")
         out.push("    None => return Err(\"input member ${m.name} is required\")")
@@ -370,6 +379,9 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       }
       _ => {}
     }
+  }
+  if path == "" {
+    path = "/"
   }
   var token_set: List[Str] = []
   for m in input.members {
@@ -577,7 +589,7 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   out.push("    scheme: ep.scheme,")
   out.push("    host: ${host},")
   out.push("    port: ep.port,")
-  out.push("    path: \"\${ep.path}${path}\",")
+  out.push("    path: rest.join_path(ep.path, \"${path}\"),")
   out.push("    query: rest.query(query),")
   out.push("    headers: headers,")
   out.push("    body: body,")
@@ -705,7 +717,10 @@ fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
   let has_payload = output.members.any(fn(m: model.Member) -> Bool { has(m.traits, "httpPayload") })
   let has_body = output.members.any(fn(m: model.Member) -> Bool { in_response_body(binding(m.traits, "", m.name)) })
   if !has_payload && has_body {
-    if g.xml {
+    if g.xml && has(s.traits, "aws.customizations#s3UnwrappedXmlOutput") {
+      // S3: the body's root is the output member itself
+      out.push("  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.wrap(xmlv.parse_body(resp.body)?) }")
+    } else if g.xml {
       out.push("  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }")
     } else {
       out.push("  let body = jsonv.parse_body(resp.body)?")
@@ -828,37 +843,8 @@ fn sigv4_name(g: G) -> Str {
 }
 
 pub fn emit_restjson(g: G) -> Str {
-  var out: List[Str] = [
-    "/// How a Client is made.",
-    "pub struct Options {",
-    "  /// The base endpoint, such as `http://localhost:4566` (endpoint",
-    "  /// rules come with decision 0003's endpoints step).",
-    "  pub endpoint: Str",
-    "  pub region: Str = \"us-east-1\"",
-    "  pub credentials: aws.CredentialsProvider",
-    "  pub max_attempts: Int = 3",
-    "}",
-    "",
-    "pub struct Client {",
-    "  pub endpoint: rest.Endpoint",
-    "  pub region: Str",
-    "  pub transport: transport.Client",
-    "  rand: Rand",
-    "}",
-    "",
-    "pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {",
-    "  let ep = rest.parse_endpoint(options.endpoint) ?? return Err(\"bad endpoint \${options.endpoint}\")",
-    "  Ok(Client{",
-    "    endpoint: ep,",
-    "    region: options.region,",
-    "    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),",
-    "    rand: rand,",
-    "  })",
-    "}",
-    "",
-    "const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}",
-    "",
-  ]
+  var out: List[Str] = []
+  emit_client_head(g, out)
   if g.xml {
     emit_xml_fns(g, out)
     emit_xml_bodies(g, out)
@@ -872,6 +858,7 @@ pub fn emit_restjson(g: G) -> Str {
       out.push("")
       continue
     }
+    emit_endpoint_params(g, op, out)
     emit_serializer(g, op, out)
     emit_deserializer(g, op, out)
     emit_errors(g, op, out)
@@ -883,8 +870,12 @@ pub fn emit_restjson(g: G) -> Str {
     let token = if needs_token(shape_of(g, s.input)) { "rest.uuid(c.rand)" } else { "\"\"" }
     doc_lines(out, s.traits, "")
     out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
-    out.push("  let req = serialize_${name}(c.endpoint, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
-    out.push("  let resp = transport.send(c.transport, req, transport.Signing{service: SIGNING_NAME, region: c.region}, ${if g.xml { "restxml" } else { "restjson" }}.classify) ?? e => return Err(${en}.Send(e))")
+    out.push("  let (ep, signing, extra) = c.route(endpoint_params_${name}(c.params_or_empty(), input)) ?? e => return Err(${en}.InvalidInput(e))")
+    out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
+    out.push("  for h in extra {")
+    out.push("    req.headers.push(h)")
+    out.push("  }")
+    out.push("  let resp = transport.send(c.transport, req, signing, ${if g.xml { "restxml" } else { "restjson" }}.classify) ?? e => return Err(${en}.Send(e))")
     out.push("  if resp.status >= 300 {")
     out.push("    return Err(deserialize_${name}_error(resp))")
     out.push("  }")

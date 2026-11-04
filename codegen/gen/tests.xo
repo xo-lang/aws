@@ -248,8 +248,16 @@ pub fn emit_protocol_tests(g: G, protocol: Str, skip: List[(Str, Str)]) -> Str {
         want.push("body_media_type: ${lit_str(str_field(c, "bodyMediaType"))}")
       }
       out.push("test ${test_name(id)} {")
-      out.push("  let ep = rest.parse_endpoint(${lit_str(base)}) ?? rest.Endpoint{host: \"example.com\"}")
-      out.push("  let req = serialize_${name}(ep, ${input}, TOKEN, 0)?")
+      if rules_of(g).is_some() {
+        // the endpoint comes from the rules, configured as the test says
+        out.push("  let input = ${input}")
+        out.push("  let e = resolve_endpoint(endpoint_params_${name}([${vendor_params(g, c).join(", ")}], input), endpoints.default_partitions())?")
+        out.push("  let ep = rest.parse_endpoint(e.url) ?? rest.Endpoint{host: \"example.com\"}")
+        out.push("  let req = serialize_${name}(ep, input, TOKEN, 0)?")
+      } else {
+        out.push("  let ep = rest.parse_endpoint(${lit_str(base)}) ?? rest.Endpoint{host: \"example.com\"}")
+        out.push("  let req = serialize_${name}(ep, ${input}, TOKEN, 0)?")
+      }
       out.push("  protocoltest.check_request(req, protocoltest.RequestWant{${want.join(", ")}})?")
       out.push("}")
       out.push("")
@@ -323,4 +331,56 @@ fn response_lit(c: json.Value) -> Str {
     _ => "b\"\""
   }
   "http.Response{status: ${code}, headers: ${headers}, body: ${body}}"
+}
+
+/// A request test's client configuration (its AwsConfig vendorParams)
+/// as endpoint rule parameters.
+fn vendor_params(g: G, c: json.Value) -> List[Str] {
+  let vp = c.get("vendorParams") ?? json.Value.Object([])
+  let client = (vp.get("scopedConfig") ?? json.Value.Null).get("client") ?? json.Value.Object([])
+  let region = match client.get("region") {
+    Some(json.Value.Str(r)) => r
+    _ => match vp.get("region") {
+      Some(json.Value.Str(r)) => r
+      _ => "us-east-1"
+    }
+  }
+  var out: List[Str] = []
+  if let Some(p) = param_of(g, "AWS::Region") {
+    out.push("(${lit_str(p)}, json.Value.Str(${lit_str(region)}))")
+  }
+  // operation scoped settings win over the client's
+  let op_s3 = ((vp.get("scopedConfig") ?? json.Value.Null).get("operation") ?? json.Value.Null).get("s3") ?? json.Value.Object([])
+  let client_s3 = client.get("s3") ?? json.Value.Object([])
+  let s3 = match (client_s3, op_s3) {
+    (json.Value.Object(a), json.Value.Object(b)) => {
+      var both = b
+      for f in a {
+        both.push(f)
+      }
+      json.Value.Object(both)
+    }
+    _ => client_s3
+  }
+  let flag = fn(builtin: Str, v: json.Value?) -> Str? {
+    match (param_of(g, builtin), v) {
+      (Some(p), Some(json.Value.Bool(b))) => Some("(${lit_str(p)}, json.Value.Bool(${b}))")
+      _ => None
+    }
+  }
+  if let Some(x) = flag("AWS::UseDualStack", s3.get("use_dualstack_endpoint")) {
+    out.push(x)
+  }
+  if let Some(x) = flag("AWS::S3::Accelerate", s3.get("use_accelerate_endpoint")) {
+    out.push(x)
+  }
+  if let Some(x) = flag("AWS::UseFIPS", client.get("use_fips_endpoint")) {
+    out.push(x)
+  }
+  if let Some(json.Value.Str(style)) = s3.get("addressing_style") {
+    if let Some(x) = flag("AWS::S3::ForcePathStyle", Some(json.Value.Bool(style == "path"))) {
+      out.push(x)
+    }
+  }
+  out
 }

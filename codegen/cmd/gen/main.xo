@@ -32,7 +32,24 @@ fn main(os: Os) -> () ! Error {
   }
   let tests = args[0] == "protocol-test"
   let m = if tests {
-    model.from_ast(protocol_test_ast(os)?, args[1])?
+    var pm = model.from_ast(protocol_test_ast(os)?, args[1])?
+    if args[1] == "com.amazonaws.s3#AmazonS3" {
+      // Smithy's S3 test service has no endpoint rules; its addressing
+      // cases are written against the real S3 service's
+      let found = os.fs.glob(".models/models/s3/service/*/*.json")?
+      if found.len() == 1 {
+        let real = model.load(os.fs.read_text(found[0])?)?
+        let rs = real.shapes.get(real.service) ?? return Ok(())
+        var svc = pm.shapes.get(pm.service) ?? return Ok(())
+        for (k, v) in rs.traits {
+          if k.starts_with("smithy.rules#") {
+            svc.traits.push((k, v))
+          }
+        }
+        pm.shapes.put(pm.service, svc)
+      }
+    }
+    pm
   } else {
     let found = os.fs.glob(".models/models/${args[1]}/service/*/*.json")?
     if found.len() != 1 {

@@ -1,0 +1,213 @@
+// The generated Client (decision 0003): Options with the endpoint rules'
+// builtins and client context parameters, endpoint resolution per call
+// (static and context parameters per operation), and signing from the
+// resolved endpoint's auth scheme.
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+/// The service's endpoint rule set, when it has one.
+pub fn rules_of(g: G) -> json.Value? {
+  model.trait_of(shape_of(g, g.m.service).traits, "smithy.rules#endpointRuleSet")
+}
+
+/// A rule parameter the client sets from its Options: (parameter name,
+/// Options field, Xo type, documentation).
+struct ClientParam {
+  name: Str
+  field: Str
+  bool: Bool
+  doc: Str
+}
+
+fn client_params(g: G) -> List[ClientParam] {
+  let rules = rules_of(g) ?? return []
+  let ccp = match model.trait_of(shape_of(g, g.m.service).traits, "smithy.rules#clientContextParams") {
+    Some(json.Value.Object(fs)) => fs.map(fn(f: (Str, json.Value)) -> Str { f.0 })
+    _ => []
+  }
+  var out: List[ClientParam] = []
+  if let Some(json.Value.Object(defs)) = rules.get("parameters") {
+    for (name, def) in defs {
+      let builtin = match def.get("builtIn") {
+        Some(json.Value.Str(b)) => b
+        _ => ""
+      }
+      if builtin == "AWS::Region" || builtin == "SDK::Endpoint" {
+        continue
+      }
+      if builtin == "" && !ccp.contains(name) {
+        continue
+      }
+      let ty = match def.get("type") {
+        Some(json.Value.Str(t)) => t.to_lower()
+        _ => "string"
+      }
+      if ty != "boolean" && ty != "string" {
+        continue
+      }
+      let doc = match def.get("documentation") {
+        Some(json.Value.Str(d)) => d
+        _ => ""
+      }
+      out.push(ClientParam{name: name, field: field_name(name), bool: ty == "boolean", doc: doc})
+    }
+  }
+  out
+}
+
+pub fn param_of(g: G, builtin: Str) -> Str? {
+  let rules = rules_of(g) ?? return None
+  if let Some(json.Value.Object(defs)) = rules.get("parameters") {
+    for (name, def) in defs {
+      if def.get("builtIn") == Some(json.Value.Str(builtin)) {
+        return Some(name)
+      }
+    }
+  }
+  None
+}
+
+pub fn emit_client_head(g: G, var out: List[Str]) {
+  let with_rules = rules_of(g).is_some()
+  out.push("/// How a Client is made.")
+  out.push("pub struct Options {")
+  if with_rules {
+    out.push("  /// A base endpoint to use instead of the resolved one, such as")
+    out.push("  /// `http://localhost:9000` for a local emulator.")
+    out.push("  pub endpoint: Str? = None")
+  } else {
+    out.push("  /// The base endpoint, such as `http://localhost:4566`.")
+    out.push("  pub endpoint: Str")
+  }
+  out.push("  pub region: Str = \"us-east-1\"")
+  out.push("  pub credentials: aws.CredentialsProvider")
+  out.push("  pub max_attempts: Int = 3")
+  for p in client_params(g) {
+    for l in wrap(strip_html(p.doc), 70) {
+      out.push("  /// ${l}")
+    }
+    out.push("  pub ${p.field}: ${if p.bool { "Bool" } else { "Str" }}? = None")
+  }
+  out.push("}")
+  out.push("")
+  out.push("pub struct Client {")
+  out.push("  pub region: Str")
+  out.push("  pub transport: transport.Client")
+  if with_rules {
+    out.push("  /// The endpoint rule parameters every call shares.")
+    out.push("  pub params: List[(Str, json.Value)]")
+    out.push("  partitions: endpoints.Partitions")
+  } else {
+    out.push("  pub endpoint: rest.Endpoint")
+  }
+  out.push("  rand: Rand")
+  out.push("}")
+  out.push("")
+  out.push("pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {")
+  if with_rules {
+    out.push("  var params: List[(Str, json.Value)] = []")
+    if let Some(r) = param_of(g, "AWS::Region") {
+      out.push("  params.push((${lit_str(r)}, json.Value.Str(options.region)))")
+    }
+    if let Some(e) = param_of(g, "SDK::Endpoint") {
+      out.push("  if let Some(e) = options.endpoint {")
+      out.push("    params.push((${lit_str(e)}, json.Value.Str(e)))")
+      out.push("  }")
+    }
+    for p in client_params(g) {
+      out.push("  if let Some(v) = options.${p.field} {")
+      out.push("    params.push((${lit_str(p.name)}, json.Value.${if p.bool { "Bool" } else { "Str" }}(v)))")
+      out.push("  }")
+    }
+  } else {
+    out.push("  let ep = rest.parse_endpoint(options.endpoint) ?? return Err(\"bad endpoint \${options.endpoint}\")")
+  }
+  out.push("  Ok(Client{")
+  if with_rules {
+    out.push("    params: params,")
+    out.push("    partitions: endpoints.default_partitions(),")
+  } else {
+    out.push("    endpoint: ep,")
+  }
+  out.push("    region: options.region,")
+  out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),")
+  out.push("    rand: rand,")
+  out.push("  })")
+  out.push("}")
+  out.push("")
+  out.push("fn (c: Client) params_or_empty() -> List[(Str, json.Value)] {")
+  out.push(if with_rules { "  c.params" } else { "  let _ = c\n  []" })
+  out.push("}")
+  out.push("")
+  out.push("const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}")
+  out.push("")
+  out.push("/// Where one call goes: the endpoint, how to sign, extra headers.")
+  out.push("fn (c: Client) route(params: List[(Str, json.Value)]) -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
+  if with_rules {
+    out.push("  let e = resolve_endpoint(params, c.partitions) ?? err => return Err(\"endpoint: \${err.msg}\")")
+    out.push("  let ep = rest.parse_endpoint(e.url) ?? return Err(\"bad endpoint \${e.url}\")")
+    out.push("  let (service, region) = endpoints.signing(e)")
+    out.push("  Ok((ep, transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${g.s3}}, endpoints.header_pairs(e)))")
+  } else {
+    out.push("  let _ = params")
+    out.push("  Ok((c.endpoint, transport.Signing{service: SIGNING_NAME, region: c.region, s3: ${g.s3}}, []))")
+  }
+  out.push("}")
+  out.push("")
+}
+
+/// The context parameters of input member `m` (its `contextParam`, or
+/// S3's Bucket label).
+fn context_param(g: G, m: model.Member) -> Str? {
+  if let Some(t) = model.trait_of(m.traits, "smithy.rules#contextParam") {
+    if let Some(json.Value.Str(n)) = t.get("name") {
+      return Some(n)
+    }
+  }
+  if g.s3 && m.name == "Bucket" {
+    return Some("Bucket")
+  }
+  None
+}
+
+/// `endpoint_params_<op>`: an operation's static and context parameters
+/// ahead of the client's.
+pub fn emit_endpoint_params(g: G, op: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let name = op_name(op)
+  let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
+  out.push("pub fn endpoint_params_${name}(base: List[(Str, json.Value)], input: ${in_t}) -> List[(Str, json.Value)] {")
+  out.push("  var ps: List[(Str, json.Value)] = []")
+  if let Some(json.Value.Object(fs)) = model.trait_of(s.traits, "smithy.rules#staticContextParams") {
+    for (k, v) in fs {
+      out.push("  ps.push((${lit_str(k)}, ${json_lit(v.get("value") ?? json.Value.Null)}))")
+    }
+  }
+  var used = false
+  if s.input != "smithy.api#Unit" {
+    for m in shape_of(g, s.input).members {
+      let p = context_param(g, m) ?? continue
+      let k = shape_of(g, m.target).kind
+      let expr = match k {
+        String => "json.Value.Str(x)"
+        Enum => "json.Value.Str(x.value())"
+        Boolean => "json.Value.Bool(x)"
+        _ => continue
+      }
+      used = true
+      out.push("  if let Some(x) = input.${field_name(m.name)} {")
+      out.push("    ps.push((${lit_str(p)}, ${expr}))")
+      out.push("  }")
+    }
+  }
+  if !used {
+    out.push("  let _ = input")
+  }
+  out.push("  for p in base {")
+  out.push("    ps.push(p)")
+  out.push("  }")
+  out.push("  ps")
+  out.push("}")
+  out.push("")
+}

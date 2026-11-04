@@ -1,6 +1,6 @@
 # 0003: The hand written core
 
-Status: Proposed (Xo AWS 1, 2026-11-04)
+Status: Accepted (owner, 2026-11-04; proposed by Xo AWS 1, 2026-11-04)
 
 ## Context
 

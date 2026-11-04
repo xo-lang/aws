@@ -4,9 +4,9 @@ A community AWS SDK for the Xo language. Not affiliated with or endorsed by
 Amazon Web Services. AWS and Amazon Web Services are trademarks of
 Amazon.com, Inc. or its affiliates.
 
-Status: design. The architecture is being decided in
+Status: early development. The design is in
 [docs/decisions](docs/decisions/README.md); no service client is generated
-yet.
+yet. Licensed under Apache-2.0 (LICENSE, NOTICE).
 
 ## Plan in one paragraph
 

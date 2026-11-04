@@ -1,6 +1,6 @@
 # 0002: The code generator, written in Xo, from AWS's Smithy JSON models
 
-Status: Proposed (Xo AWS 1, 2026-11-04)
+Status: Accepted (owner, 2026-11-04; proposed by Xo AWS 1, 2026-11-04)
 
 ## Context
 
@@ -54,7 +54,7 @@ endpoints, paginators, waiters)  ->  emit Xo text  ->  xo fmt  ->  write
    without emitting code:
    - Types and enum variants: `UpperCamel` (XO0101); struct fields and
      functions: `snake_case`, converted from the member name by the
-     word splitting in the open item below (`BucketName` is
+     word splitting rule below (`BucketName` is
      `bucket_name`).
    - Collisions after conversion (two members mapping to one field, a
      shape named like a generated helper, a field named like a keyword such
@@ -114,15 +114,28 @@ interpreter on the model's `endpointTests`.
   through the lead's heavy job wrapper; the result decides whether large
   services are split into several packages (0006 item 1).
 
-### Open item
+### Splitting member names into snake case (owner, 2026-11-04)
 
-The exact snake case splitting of AWS member names with acronyms
-(`SSEKMSKeyId`, `IAMRoleARN`, `DBInstanceIdentifier`) is a choice users
-will see everywhere. Proposal: split on lower to upper and on the last
-upper of an upper run before a lower (`SSEKMSKey` is `ssekms_key`,
-`DBInstance` is `db_instance`, `IAMRoleARN` is `iam_role_arn`), plus a
-small override table in the generator for names that split badly. The
-first S3 and DynamoDB output will show the result for review before any
+Each acronym run becomes its own word: `SSEKMSKeyId` is `sse_kms_key_id`,
+`IAMRoleARN` is `iam_role_arn`, `DBInstanceIdentifier` is
+`db_instance_identifier`, `BucketName` is `bucket_name`.
+
+1. Split the name into runs: an upper case run, a capitalized word
+   (`Key`), a lower case run, or a digit run. An upper run followed by a
+   lower case letter gives its last letter to the next word (`DBInstance`
+   is `DB` + `Instance`).
+2. An upper run of more than one known acronym is split along a fixed
+   acronym list in the generator (`SSE`, `KMS`, `ARN`, `IAM`, `DB`, `ID`,
+   `VPC`, `ACL`, `TLS`, `MFA`, ..., longest match first): `SSEKMS` is
+   `sse` + `kms`. A run the list cannot split whole stays one word.
+3. Digits stay with the word before them (`Ec2`, `S3Key` is `s3_key`,
+   `Ipv6Address` is `ipv6_address`).
+4. Words are lower cased and joined with `_`.
+
+Names the rules split badly, and every run rule 2 could not split, are
+listed per service in `RENAMES.md` with the name chosen; a fix to one is
+an entry in the generator's exception table, which `RENAMES.md` cites.
+The first S3 and DynamoDB output is reviewed for these before any
 service is published.
 
 ## Consequences

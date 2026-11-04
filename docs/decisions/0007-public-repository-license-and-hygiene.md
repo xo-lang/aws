@@ -1,6 +1,6 @@
 # 0007: Public repository: license, attribution, trademarks, hygiene
 
-Status: Proposed (Xo AWS 1, 2026-11-04; the license choice is the owner's)
+Status: Accepted (owner, 2026-11-04; proposed by Xo AWS 1, 2026-11-04)
 
 ## Context
 
@@ -14,8 +14,8 @@ logos.
 
 ## Decision
 
-- **License: Apache-2.0 for the whole repository** (proposed; the owner
-  decides). Reasons: the generated code and doc comments derive from
+- **License: Apache-2.0 for the whole repository** (owner, 2026-11-04).
+  Reasons: the generated code and doc comments derive from
   Apache-2.0 models; the copied test suites are Apache-2.0; aws-sdk-go-v2
   and smithy-go are Apache-2.0, which users expect of an AWS SDK; and
   Apache-2.0's patent grant suits an SDK companies will adopt. The Xo

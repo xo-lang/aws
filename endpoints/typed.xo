@@ -1,0 +1,213 @@
+// The typed side of the endpoint rules (decision 0003): what compiled
+// rule sets call and return. Each function is the rules engine's standard
+// or AWS function of the same name; the interpreter in rules.xo keeps its
+// own json.Value versions as the independent oracle.
+
+use std/json
+use std/regexp
+
+/// An `authSchemes` entry of a resolved endpoint.
+pub struct AuthScheme {
+  pub name: Str
+  pub signing_name: Str? = None
+  pub signing_region: Str? = None
+  pub signing_region_set: List[Str]? = None
+  pub disable_double_encoding: Bool? = None
+}
+
+/// A resolved endpoint.
+pub struct Endpoint {
+  pub url: Str
+  pub auth_schemes: List[AuthScheme] = []
+  /// S3 Express and S3 Control's `backend` property.
+  pub backend: Str? = None
+  /// The `metricValues` property (for the user agent).
+  pub metric_values: List[Str]? = None
+  pub headers: List[(Str, List[Str])] = []
+}
+
+/// What `aws.partition` answers.
+pub struct Partition {
+  pub name: Str
+  pub dns_suffix: Str
+  pub dual_stack_dns_suffix: Str
+  pub supports_fips: Bool
+  pub supports_dual_stack: Bool
+  pub implicit_global_region: Str
+}
+
+/// What `aws.parseArn` answers.
+pub struct Arn {
+  pub partition: Str
+  pub service: Str
+  pub region: Str
+  pub account_id: Str
+  pub resource_id: List[Str]
+}
+
+/// What `parseURL` answers.
+pub struct Url {
+  pub scheme: Str
+  pub authority: Str
+  pub path: Str
+  pub normalized_path: Str
+  pub is_ip: Bool
+}
+
+/// `aws.partition`: the partition listing the region, else the first whose
+/// regionRegex matches it, else `aws`.
+pub fn partition(region: Str) -> Partition? {
+  let table = partition_table()
+  for p in table {
+    if p.regions.contains(region) {
+      return Some(p.outputs)
+    }
+  }
+  for p in table {
+    if regexp.must(p.region_regex).is_match(region) {
+      return Some(p.outputs)
+    }
+  }
+  table.find(fn(p: PartitionData) -> Bool { p.id == "aws" }).map(fn(p: PartitionData) -> Partition { p.outputs })
+}
+
+/// `aws.parseArn`.
+pub fn parse_arn(s: Str) -> Arn? {
+  let v = parse_arn_json(s) ?? return None
+  Some(Arn{
+    partition: text(v.get("partition") ?? json.Value.Null),
+    service: text(v.get("service") ?? json.Value.Null),
+    region: text(v.get("region") ?? json.Value.Null),
+    account_id: text(v.get("accountId") ?? json.Value.Null),
+    resource_id: match v.get("resourceId") {
+      Some(json.Value.List(xs)) => xs.map(fn(x: json.Value) -> Str { text(x) })
+      _ => []
+    },
+  })
+}
+
+/// `parseURL`.
+pub fn parse_url(u: Str) -> Url? {
+  let v = parse_url_json(u) ?? return None
+  Some(Url{
+    scheme: text(v.get("scheme") ?? json.Value.Null),
+    authority: text(v.get("authority") ?? json.Value.Null),
+    path: text(v.get("path") ?? json.Value.Null),
+    normalized_path: text(v.get("normalizedPath") ?? json.Value.Null),
+    is_ip: v.get("isIp") == Some(json.Value.Bool(true)),
+  })
+}
+
+/// An optional string as template text: "" when unset.
+pub fn or_empty(s: Str?) -> Str {
+  s ?? ""
+}
+
+fn str_list(xs: List[Str]) -> json.Value {
+  json.Value.List(xs.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+/// The endpoint's properties as the rule set writes them (for comparing
+/// with endpointTests).
+pub fn properties_json(e: Endpoint) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if !e.auth_schemes.is_empty() {
+    fs.push(("authSchemes", json.Value.List(e.auth_schemes.map(fn(a: AuthScheme) -> json.Value {
+      var o: List[(Str, json.Value)] = [("name", json.Value.Str(a.name))]
+      if let Some(x) = a.signing_name {
+        o.push(("signingName", json.Value.Str(x)))
+      }
+      if let Some(x) = a.signing_region {
+        o.push(("signingRegion", json.Value.Str(x)))
+      }
+      if let Some(x) = a.signing_region_set {
+        o.push(("signingRegionSet", str_list(x)))
+      }
+      if let Some(x) = a.disable_double_encoding {
+        o.push(("disableDoubleEncoding", json.Value.Bool(x)))
+      }
+      json.Value.Object(o)
+    }))))
+  }
+  if let Some(b) = e.backend {
+    fs.push(("backend", json.Value.Str(b)))
+  }
+  if let Some(m) = e.metric_values {
+    fs.push(("metricValues", str_list(m)))
+  }
+  json.Value.Object(fs)
+}
+
+fn strs(v: json.Value) -> List[Str] ! RuleErr {
+  match v {
+    json.Value.List(xs) => Ok(xs.map(fn(x: json.Value) -> Str { text(x) }))
+    _ => Err(RuleErr{msg: "expected a list of strings, found ${v.encode()}"})
+  }
+}
+
+/// An endpoint from the interpreter's evaluated properties; a property
+/// this SDK does not model is an error, so a new one is noticed.
+pub fn from_properties(url: Str, props: json.Value, headers: List[(Str, List[Str])]) -> Endpoint ! RuleErr {
+  var e = Endpoint{url: url, headers: headers}
+  if let json.Value.Object(fs) = props {
+    for (k, v) in fs {
+      match k {
+        "authSchemes" => {
+          if let json.Value.List(xs) = v {
+            for x in xs {
+              var a = AuthScheme{name: text(x.get("name") ?? json.Value.Null)}
+              if let json.Value.Object(afs) = x {
+                for (ak, av) in afs {
+                  match ak {
+                    "name" => {}
+                    "signingName" => a.signing_name = Some(text(av))
+                    "signingRegion" => a.signing_region = Some(text(av))
+                    "signingRegionSet" => a.signing_region_set = Some(strs(av)?)
+                    "disableDoubleEncoding" => a.disable_double_encoding = Some(av == json.Value.Bool(true))
+                    _ => return Err(RuleErr{msg: "unmodeled auth scheme property ${ak}"})
+                  }
+                }
+              }
+              e.auth_schemes.push(a)
+            }
+          }
+        }
+        "backend" => e.backend = Some(text(v))
+        "metricValues" => e.metric_values = Some(strs(v)?)
+        _ => return Err(RuleErr{msg: "unmodeled endpoint property ${k}"})
+      }
+    }
+  }
+  Ok(e)
+}
+
+/// One line describing a resolution, for comparing two resolvers case by
+/// case.
+pub fn describe(r: Result[Endpoint, RuleErr]) -> Str {
+  match r {
+    Ok(e) => "url=${e.url} properties=${properties_json(e).encode()} headers=${e.headers:?}"
+    Err(err) => "error=${err.msg}"
+  }
+}
+
+/// The SigV4 signing name and region an endpoint asks for (its first
+/// `sigv4`, `sigv4a` or `sigv4-s3express` scheme), when it names them.
+pub fn signing(e: Endpoint) -> (Str?, Str?) {
+  for a in e.auth_schemes {
+    if a.name != "sigv4" && a.name != "sigv4a" && a.name != "sigv4-s3express" {
+      continue
+    }
+    let region = match a.signing_region {
+      Some(r) => Some(r)
+      None => match a.signing_region_set {
+        Some(rs) => match rs.get(0) {
+          Some(x) => if x == "*" { None } else { Some(x) }
+          None => None
+        }
+        None => None
+      }
+    }
+    return (a.signing_name, region)
+  }
+  (None, None)
+}

@@ -1,18 +1,56 @@
 // The endpoint rules compiler (decision 0003): a service's
-// endpointRuleSet becomes `resolve_endpoint`, nested `if`s over
-// json.Value, and its endpointTests become Xo tests. The interpreter in
-// package endpoints is the oracle: both run the same cases.
+// endpointRuleSet becomes a typed `EndpointParameters` struct and a
+// `resolve_endpoint` function of plain Xo (Bool conditions, `if let` for
+// isSet and for functions that may answer nothing, direct calls to the
+// typed functions of package endpoints), in the shape of aws-sdk-go-v2's
+// endpoints.go. Its endpointTests become Xo tests that compare each case
+// with the interpreter's answer (computed here, at generation time) and
+// with the model's expectation.
 
 use std/json
 use github.com/xo-lang/aws/codegen/model
+use github.com/xo-lang/aws/endpoints
 
-struct Ctx {
-  out: List[Str]
-  n: Int
+/// A compiled expression: its Xo code and type. `kind` is Str, Bool, Int,
+/// StrList, Partition, Arn or Url; `opt` when it may be unset.
+struct Val {
+  code: Str
+  kind: Str
+  opt: Bool
+  /// Usable as an operand without parentheses.
+  simple: Bool = true
 }
 
-fn line(var c: Ctx, indent: Str, s: Str) {
-  c.out.push("${indent}${s}")
+/// A name the rules can refer to: a parameter or an assigned result.
+struct Var {
+  name: Str
+  code: Str
+  kind: Str
+  opt: Bool
+}
+
+/// Compiled statements, relative to their block, and the locals they use.
+struct Block {
+  lines: List[Str]
+  used: List[Str]
+  /// Control never reaches the end of the block.
+  returns: Bool
+}
+
+const WIDTH: Int = 96
+
+fn list_of(v: json.Value?) -> List[json.Value] {
+  match v {
+    Some(json.Value.List(xs)) => xs
+    _ => []
+  }
+}
+
+fn str_of(v: json.Value?) -> Str {
+  match v {
+    Some(json.Value.Str(s)) => s
+    _ => ""
+  }
 }
 
 /// A Xo expression building `v` as a json.Value.
@@ -25,24 +63,100 @@ fn json_lit(v: json.Value) -> Str {
     json.Value.Str(s) => "json.Value.Str(${lit_str(s)})"
     json.Value.List(xs) => "json.Value.List([${xs.map(json_lit).join(", ")}])"
     json.Value.Object(fs) => "json.Value.Object([${fs.map(fn(f: (Str, json.Value)) -> Str { "(${lit_str(f.0)}, ${json_lit(f.1)})" }).join(", ")}])"
-    // pre-encoded JSON never comes from a parsed model
     _ => "json.Value.Null"
   }
 }
 
-fn lookup(vars: List[(Str, Str)], name: Str) -> Str {
-  var found = "json.Value.Null"
-  for (k, v) in vars {
-    if k == name {
-      found = v
+fn lookup(scope: List[Var], name: Str) -> Var? {
+  var found: Var? = None
+  for v in scope {
+    if v.name == name {
+      found = Some(v)
     }
   }
   found
 }
 
-/// A template string as a Xo Str expression.
-fn template(s: Str, vars: List[(Str, Str)]) -> Str {
-  var parts: List[Str] = []
+fn use_var(var used: List[Str], v: Var) {
+  // a local is a single identifier; parameters are `params.x`
+  if !v.code.contains(".") && !used.contains(v.code) {
+    used.push(v.code)
+  }
+}
+
+fn kind_of_param(def: json.Value) -> Str {
+  match str_of(def.get("type")).to_lower() {
+    "boolean" => "Bool"
+    "stringarray" => "StrList"
+    _ => "Str"
+  }
+}
+
+fn xo_kind(kind: Str) -> Str {
+  match kind {
+    "StrList" => "List[Str]"
+    _ => kind
+  }
+}
+
+/// Text inside a Xo string literal.
+fn lit_inner(s: Str) -> Str {
+  let q = lit_str(s)
+  q.bytes()[1..q.len() - 1].to_str() ?? ""
+}
+
+/// `getAttr` of `obj` at `path`.
+fn attr(obj: Val, path: Str) -> Val ! Str {
+  if obj.opt {
+    return Err("getAttr on an optional ${obj.kind}")
+  }
+  let o = obj.code
+  match obj.kind {
+    "Partition" => match path {
+      "name" => Ok(Val{code: "${o}.name", kind: "Str", opt: false})
+      "dnsSuffix" => Ok(Val{code: "${o}.dns_suffix", kind: "Str", opt: false})
+      "dualStackDnsSuffix" => Ok(Val{code: "${o}.dual_stack_dns_suffix", kind: "Str", opt: false})
+      "supportsFIPS" => Ok(Val{code: "${o}.supports_fips", kind: "Bool", opt: false})
+      "supportsDualStack" => Ok(Val{code: "${o}.supports_dual_stack", kind: "Bool", opt: false})
+      "implicitGlobalRegion" => Ok(Val{code: "${o}.implicit_global_region", kind: "Str", opt: false})
+      _ => Err("unknown partition attribute ${path}")
+    }
+    "Arn" => {
+      if let Some((name, rest)) = path.cut("[") {
+        if name != "resourceId" {
+          return Err("unknown arn attribute ${path}")
+        }
+        let i = Int.parse(rest.cut_suffix("]") ?? rest) ?? return Err("bad index ${path}")
+        return Ok(Val{code: "${o}.resource_id.get(${i})", kind: "Str", opt: true})
+      }
+      match path {
+        "partition" => Ok(Val{code: "${o}.partition", kind: "Str", opt: false})
+        "service" => Ok(Val{code: "${o}.service", kind: "Str", opt: false})
+        "region" => Ok(Val{code: "${o}.region", kind: "Str", opt: false})
+        "accountId" => Ok(Val{code: "${o}.account_id", kind: "Str", opt: false})
+        "resourceId" => Ok(Val{code: "${o}.resource_id", kind: "StrList", opt: false})
+        _ => Err("unknown arn attribute ${path}")
+      }
+    }
+    "Url" => match path {
+      "scheme" => Ok(Val{code: "${o}.scheme", kind: "Str", opt: false})
+      "authority" => Ok(Val{code: "${o}.authority", kind: "Str", opt: false})
+      "path" => Ok(Val{code: "${o}.path", kind: "Str", opt: false})
+      "normalizedPath" => Ok(Val{code: "${o}.normalized_path", kind: "Str", opt: false})
+      "isIp" => Ok(Val{code: "${o}.is_ip", kind: "Bool", opt: false})
+      _ => Err("unknown url attribute ${path}")
+    }
+    "StrList" => {
+      let i = Int.parse((path.cut_prefix("[") ?? path).cut_suffix("]") ?? path) ?? return Err("bad index ${path}")
+      Ok(Val{code: "${o}.get(${i})", kind: "Str", opt: true})
+    }
+    _ => Err("getAttr on ${obj.kind}")
+  }
+}
+
+/// The pieces of a template: literal text, or a reference with a path.
+fn template_parts(s: Str) -> List[(Bool, Str)] {
+  var parts: List[(Bool, Str)] = []
   var lit = StrBuilder.new()
   let b = s.bytes()
   var i = 0
@@ -58,16 +172,12 @@ fn template(s: Str, vars: List[(Str, Str)]) -> Str {
       while j < b.len() && Int(b[j]) != 125 {
         j += 1
       }
-      let inner = b[i + 1..j].to_str() ?? ""
       let pending = lit.freeze()
       if pending != "" {
-        parts.push(lit_str(pending))
+        parts.push((false, pending))
       }
       lit = StrBuilder.new()
-      parts.push(match inner.cut("#") {
-        Some((name, path)) => "endpoints.text(endpoints.get_attr(${lookup(vars, name)}, ${lit_str(path)}))"
-        None => "endpoints.text(${lookup(vars, inner)})"
-      })
+      parts.push((true, b[i + 1..j].to_str() ?? ""))
       i = j + 1
       continue
     }
@@ -79,173 +189,721 @@ fn template(s: Str, vars: List[(Str, Str)]) -> Str {
     i = k
   }
   let rest = lit.freeze()
-  if rest != "" || parts.is_empty() {
-    parts.push(lit_str(rest))
+  if rest != "" {
+    parts.push((false, rest))
   }
-  if parts.len() == 1 { parts[0] } else { "[${parts.join(", ")}].join(\"\")" }
+  parts
 }
 
-fn is_call(fs: List[(Str, json.Value)]) -> Bool {
-  fs.any(fn(f: (Str, json.Value)) -> Bool { f.0 == "fn" || f.0 == "ref" })
+/// A template string as a Xo string literal with interpolation.
+fn template(s: Str, scope: List[Var], var used: List[Str]) -> Str ! Str {
+  var out = StrBuilder.new()
+  out.write("\"")
+  for (is_ref, text) in template_parts(s) {
+    if !is_ref {
+      out.write(lit_inner(text))
+      continue
+    }
+    let (name, path) = text.cut("#") ?? (text, "")
+    let v = lookup(scope, name) ?? return Err("unknown reference ${name}")
+    use_var(used, v)
+    let base = Val{code: v.code, kind: v.kind, opt: v.opt}
+    let val = if path == "" { base } else { attr(base, path)? }
+    if val.kind != "Str" {
+      return Err("template value ${text} is ${val.kind}")
+    }
+    out.write(if val.opt { "\${endpoints.or_empty(${val.code})}" } else { "\${${val.code}}" })
+  }
+  out.write("\"")
+  Ok(out.freeze())
 }
 
-/// An expression (condition argument, url, error) as a Xo json.Value
-/// expression.
-fn expr(e: json.Value, vars: List[(Str, Str)]) -> Str {
+/// A Str-valued expression (a template or a reference) as Xo code.
+fn str_expr(e: json.Value, scope: List[Var], var used: List[Str]) -> Str ! Str {
+  let v = expr(e, scope, used)?
+  if v.kind != "Str" {
+    return Err("expected a string, found ${v.kind}")
+  }
+  Ok(if v.opt { "endpoints.or_empty(${v.code})" } else { v.code })
+}
+
+fn paren(v: Val) -> Str {
+  if v.simple { v.code } else { "(${v.code})" }
+}
+
+fn is_true(e: json.Value) -> Bool {
+  e == json.Value.Bool(true)
+}
+
+fn is_false(e: json.Value) -> Bool {
+  e == json.Value.Bool(false)
+}
+
+fn need(v: Val, kind: Str, f: Str) -> Str ! Str {
+  if v.kind != kind {
+    return Err("${f}: expected ${kind}, found ${v.kind}")
+  }
+  Ok(v.code)
+}
+
+/// A Str argument; an unset one is "" (the functions taking it answer as
+/// they do for "": false, or the empty encoding).
+fn str_arg(v: Val, f: Str) -> Str ! Str {
+  let c = need(v, "Str", f)?
+  Ok(if v.opt { "endpoints.or_empty(${c})" } else { c })
+}
+
+fn expr(e: json.Value, scope: List[Var], var used: List[Str]) -> Val ! Str {
   match e {
-    json.Value.Str(s) => "json.Value.Str(${template(s, vars)})"
-    json.Value.Object(fs) => {
-      if !is_call(fs) {
-        return value(e, vars)
-      }
+    json.Value.Str(s) => Ok(Val{code: template(s, scope, used)?, kind: "Str", opt: false})
+    json.Value.Bool(b) => Ok(Val{code: "${b}", kind: "Bool", opt: false})
+    json.Value.Int(n) => Ok(Val{code: "${n}", kind: "Int", opt: false})
+    json.Value.Object(_) => {
       if let Some(json.Value.Str(r)) = e.get("ref") {
-        return lookup(vars, r)
+        let v = lookup(scope, r) ?? return Err("unknown reference ${r}")
+        use_var(used, v)
+        return Ok(Val{code: v.code, kind: v.kind, opt: v.opt})
       }
-      let f = match e.get("fn") {
-        Some(json.Value.Str(x)) => x
-        _ => ""
+      let f = str_of(e.get("fn"))
+      let argv = list_of(e.get("argv"))
+      var args: List[Val] = []
+      for a in argv {
+        args.push(expr(a, scope, used)?)
       }
-      let args = match e.get("argv") {
-        Some(json.Value.List(xs)) => xs.map(fn(a: json.Value) -> Str { expr(a, vars) })
-        _ => []
-      }
-      let arg = fn(i: Int) -> Str { args.get(i) ?? "json.Value.Null" }
+      let a0 = args.get(0) ?? Val{code: "", kind: "", opt: false}
+      let a1 = args.get(1) ?? Val{code: "", kind: "", opt: false}
       match f {
-        "isSet" => "json.Value.Bool(${arg(0)} != json.Value.Null)"
-        "not" => "json.Value.Bool(!endpoints.truthy(${arg(0)}))"
-        "booleanEquals" => "json.Value.Bool(${arg(0)} == ${arg(1)} && ${arg(0)} != json.Value.Null)"
-        "getAttr" => match list_of(e.get("argv")).get(1) {
-          Some(json.Value.Str(path)) => "endpoints.get_attr(${arg(0)}, ${lit_str(path)})"
-          _ => "endpoints.call(\"getAttr\", [${args.join(", ")}], parts)?"
+        "isSet" => Ok(if a0.opt { Val{code: "${paren(a0)}.is_some()", kind: "Bool", opt: false} } else { Val{code: "true", kind: "Bool", opt: false} })
+        "not" => {
+          if a0.opt {
+            return Ok(Val{code: "${paren(a0)} != Some(true)", kind: "Bool", opt: false, simple: false})
+          }
+          // not(isSet(x)) reads as x.is_none()
+          if a0.code.ends_with(".is_some()") {
+            return Ok(Val{code: "${a0.code.cut_suffix(".is_some()") ?? a0.code}.is_none()", kind: "Bool", opt: false})
+          }
+          Ok(Val{code: "!${paren(a0)}", kind: "Bool", opt: false})
         }
-        _ => "endpoints.call(${lit_str(f)}, [${args.join(", ")}], parts)?"
+        "booleanEquals" => {
+          let (x, lit) = if argv.len() == 2 && (is_true(argv[0]) || is_false(argv[0])) { (a1, argv[0]) } else { (a0, argv.get(1) ?? json.Value.Null) }
+          if is_true(lit) {
+            return Ok(if x.opt { Val{code: "${paren(x)} == Some(true)", kind: "Bool", opt: false, simple: false} } else { x })
+          }
+          if is_false(lit) {
+            return Ok(if x.opt { Val{code: "${paren(x)} == Some(false)", kind: "Bool", opt: false, simple: false} } else { Val{code: "!${paren(x)}", kind: "Bool", opt: false} })
+          }
+          eq(a0, a1)
+        }
+        "stringEquals" => eq(a0, a1)
+        "getAttr" => attr(a0, str_of(argv.get(1)))
+        "substring" => {
+          if a0.opt {
+            return Err("substring of an optional")
+          }
+          Ok(Val{code: "endpoints.substring(${a0.code}, ${a1.code}, ${(args.get(2) ?? a1).code}, ${(args.get(3) ?? a1).code})", kind: "Str", opt: true})
+        }
+        "isValidHostLabel" => Ok(Val{code: "endpoints.is_valid_host_label(${str_arg(a0, f)?}, ${a1.code})", kind: "Bool", opt: false})
+        "aws.isVirtualHostableS3Bucket" => Ok(Val{code: "endpoints.is_virtual_hostable_s3_bucket(${str_arg(a0, f)?}, ${a1.code})", kind: "Bool", opt: false})
+        "uriEncode" => Ok(Val{code: "endpoints.uri_encode(${str_arg(a0, f)?})", kind: "Str", opt: false})
+        "parseURL" => {
+          if a0.opt {
+            return Err("parseURL of an optional")
+          }
+          Ok(Val{code: "endpoints.parse_url(${need(a0, "Str", f)?})", kind: "Url", opt: true})
+        }
+        "aws.partition" => {
+          if a0.opt {
+            return Err("aws.partition of an optional")
+          }
+          Ok(Val{code: "endpoints.partition(${need(a0, "Str", f)?})", kind: "Partition", opt: true})
+        }
+        "aws.parseArn" => {
+          if a0.opt {
+            return Err("aws.parseArn of an optional")
+          }
+          Ok(Val{code: "endpoints.parse_arn(${need(a0, "Str", f)?})", kind: "Arn", opt: true})
+        }
+        _ => Err("unsupported rules function ${f}")
       }
     }
-    _ => json_lit(e)
+    _ => Err("unsupported expression ${e.encode()}")
   }
 }
 
-/// A property value: objects and lists member by member, strings as
-/// templates.
-fn value(v: json.Value, vars: List[(Str, Str)]) -> Str {
-  match v {
-    json.Value.Object(fs) => {
-      if is_call(fs) {
-        return expr(v, vars)
+/// `a == b` of two values of one kind; an unset side never equals.
+fn eq(a: Val, b: Val) -> Val ! Str {
+  if a.kind != b.kind {
+    return Err("comparing ${a.kind} with ${b.kind}")
+  }
+  let code = match (a.opt, b.opt) {
+    (false, false) => "${a.code} == ${b.code}"
+    (true, false) => "${paren(a)} == Some(${b.code})"
+    (false, true) => "${paren(b)} == Some(${a.code})"
+    (true, true) => "${paren(a)}.is_some() && ${paren(a)} == ${paren(b)}"
+  }
+  Ok(Val{code: code, kind: "Bool", opt: false, simple: false})
+}
+
+/// A block that is one `if c { ... }` (no `if let`, no else): its
+/// condition and its body, one level out.
+fn single_if(lines: List[Str]) -> (Str, List[Str])? {
+  if lines.len() < 3 || lines[lines.len() - 1] != "}" {
+    return None
+  }
+  let first = lines[0]
+  if !first.starts_with("if ") || first.starts_with("if let ") || !first.ends_with(" {") {
+    return None
+  }
+  let inner = lines[1..lines.len() - 1]
+  if !inner.all(fn(l: Str) -> Bool { l == "" || l.starts_with("  ") }) {
+    return None
+  }
+  let cond = first.bytes()[3..first.len() - 2].to_str() ?? ""
+  Some((cond, inner.map(fn(l: Str) -> Str { if l == "" { l } else { l.bytes()[2..l.len()].to_str() ?? l } })))
+}
+
+/// `name` as a word in `lines`.
+fn mentions(lines: List[Str], name: Str) -> Bool {
+  for l in lines {
+    var rest = l
+    while {
+      let i = rest.find(name) ?? break
+      let b = rest.bytes()
+      let before = if i == 0 { 32 } else { Int(b[i - 1]) }
+      let after = if i + name.len() >= b.len() { 32 } else { Int(b[i + name.len()]) }
+      let word = fn(c: Int) -> Bool { (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c == 95 }
+      if !word(before) && !word(after) {
+        return true
       }
-      "json.Value.Object([${fs.map(fn(f: (Str, json.Value)) -> Str { "(${lit_str(f.0)}, ${value(f.1, vars)})" }).join(", ")}])"
-    }
-    json.Value.List(xs) => "json.Value.List([${xs.map(fn(x: json.Value) -> Str { value(x, vars) }).join(", ")}])"
-    json.Value.Str(s) => "json.Value.Str(${template(s, vars)})"
-    _ => json_lit(v)
-  }
-}
-
-fn list_of(v: json.Value?) -> List[json.Value] {
-  match v {
-    Some(json.Value.List(xs)) => xs
-    _ => []
-  }
-}
-
-/// Emits `rules` in order; answers true when the last emitted rule always
-/// returns (so nothing after it is reachable).
-fn emit_rules(var c: Ctx, rules: List[json.Value], vars: List[(Str, Str)], indent: Str) -> Bool {
-  for rule in rules {
-    if emit_rule(c, rule, vars, indent) {
-      return true
+      rest = b[i + name.len()..b.len()].to_str() ?? ""
     }
   }
   false
 }
 
-fn emit_rule(var c: Ctx, rule: json.Value, outer: List[(Str, Str)], indent: Str) -> Bool {
-  var vars = outer
-  var ind = indent
-  let conds = list_of(rule.get("conditions"))
-  for cond in conds {
-    let name = "c${c.n}"
-    c.n += 1
-    line(c, ind, "let ${name} = ${expr(cond, vars)}")
-    line(c, ind, "if endpoints.truthy(${name}) {")
-    if let Some(json.Value.Str(a)) = cond.get("assign") {
-      vars.push((a, name))
+/// `if cond { body }`, with a body that is itself one plain `if` merged
+/// into this condition with `&&`.
+fn guard(cond: Str, body: List[Str]) -> List[Str] {
+  if let Some((c2, inner)) = single_if(body) {
+    return guard("${cond} && ${c2}", inner)
+  }
+  var out = ["if ${cond} {"]
+  for l in indent(body) {
+    out.push(l)
+  }
+  out.push("}")
+  out
+}
+
+fn indent(lines: List[Str]) -> List[Str] {
+  lines.map(fn(l: Str) -> Str { if l == "" { l } else { "  ${l}" } })
+}
+
+fn merge_used(var into: List[Str], from: List[Str]) {
+  for u in from {
+    if !into.contains(u) {
+      into.push(u)
     }
-    ind = "${ind}  "
   }
-  let kind = match rule.get("type") {
-    Some(json.Value.Str(t)) => t
-    _ => ""
+}
+
+/// A local name for rule name `name` not already bound on this path.
+fn local_name(scope: List[Var], name: Str) -> Str {
+  let base = field_name(name)
+  var n = base
+  var i = 2
+  while scope.any(fn(v: Var) -> Bool { v.code == n }) || n == "params" {
+    n = "${base}_${i}"
+    i += 1
   }
-  match kind {
+  n
+}
+
+/// The top level `, ` separated parts of `s` (not inside brackets, braces
+/// or strings).
+fn split_top(s: Str) -> List[Str] {
+  var parts: List[Str] = []
+  var cur = StrBuilder.new()
+  var depth = 0
+  var quoted = false
+  let b = s.bytes()
+  var i = 0
+  while i < b.len() {
+    let ch = Int(b[i])
+    if ch == 34 && (i == 0 || Int(b[i - 1]) != 92) {
+      quoted = !quoted
+    } else if !quoted && (ch == 91 || ch == 123 || ch == 40) {
+      depth += 1
+    } else if !quoted && (ch == 93 || ch == 125 || ch == 41) {
+      depth -= 1
+    }
+    if !quoted && depth == 0 && ch == 44 && i + 1 < b.len() && Int(b[i + 1]) == 32 {
+      parts.push(cur.freeze())
+      cur = StrBuilder.new()
+      i += 2
+      continue
+    }
+    cur.write(b[i..i + 1].to_str() ?? "")
+    i += 1
+  }
+  parts.push(cur.freeze())
+  parts
+}
+
+fn lead_of(l: Str) -> Str {
+  let t = l.trim_start()
+  l.bytes()[0..l.len() - t.len()].to_str() ?? ""
+}
+
+/// Lines past the width rewritten over several lines: error messages and
+/// URLs as `+` joined pieces, auth schemes one field per line, `&&`
+/// conditions one clause per line.
+fn rewrap(lines: List[Str]) -> List[Str] {
+  var out: List[Str] = []
+  for l in lines {
+    if l.len() <= WIDTH {
+      out.push(l)
+      continue
+    }
+    let ind = lead_of(l)
+    let t = l.trim_start()
+    if let Some(msg) = t.cut_prefix("return Err(endpoints.RuleErr{msg: ").and_then(fn(r: Str) -> Str? { r.cut_suffix("})") }) {
+      let pieces = wrap_lit(msg, ind.len() + 7)
+      out.push("${ind}return Err(endpoints.RuleErr{")
+      for (k, p) in pieces.indexed() {
+        let head = if k == 0 { "  msg: " } else { "    " }
+        out.push("${ind}${head}${p}${if k + 1 == pieces.len() { "," } else { "" }}")
+      }
+      out.push("${ind}})")
+    } else if let Some(u) = t.cut_prefix("url: ").and_then(fn(r: Str) -> Str? { r.cut_suffix(",") }) {
+      let pieces = wrap_lit(u, ind.len() + 5)
+      for (k, p) in pieces.indexed() {
+        let head = if k == 0 { "url: " } else { "  " }
+        out.push("${ind}${head}${p}${if k + 1 == pieces.len() { "," } else { "" }}")
+      }
+    } else if let Some(fs) = t.cut_prefix("endpoints.AuthScheme{").and_then(fn(r: Str) -> Str? { r.cut_suffix("},") }) {
+      out.push("${ind}endpoints.AuthScheme{")
+      for f in split_top(fs) {
+        out.push("${ind}  ${f},")
+      }
+      out.push("${ind}},")
+    } else if t.starts_with("if let ") && t.contains(" = ") && t.ends_with(" {") {
+      let (head, rest) = t.cut(" = ") ?? (t, "")
+      out.push("${ind}${head} =")
+      out.push("${ind}    ${rest}")
+    } else if t.starts_with("if ") && t.ends_with(" {") && t.contains(" && ") {
+      let clauses = (t.bytes()[3..t.len() - 2].to_str() ?? "").split(" && ")
+      for (k, c) in clauses.indexed() {
+        let head = if k == 0 { "if " } else { "    " }
+        out.push("${ind}${head}${c}${if k + 1 == clauses.len() { " {" } else { " &&" }}")
+      }
+    } else {
+      out.push(l)
+    }
+  }
+  out
+}
+
+/// A string literal split at spaces into `+` joined pieces when its line
+/// would pass the width.
+fn wrap_lit(code: Str, lead: Int) -> List[Str] {
+  if lead + code.len() <= WIDTH || !code.starts_with("\"") || !code.ends_with("\"") {
+    return [code]
+  }
+  // segments end after a space, or a `.` or `/` of a URL, outside `${...}`
+  let inner = code.bytes()[1..code.len() - 1].to_str() ?? ""
+  var segs: List[Str] = []
+  var cur = StrBuilder.new()
+  var depth = 0
+  let b = inner.bytes()
+  var i = 0
+  while i < b.len() {
+    let ch = Int(b[i])
+    if ch == 36 && i + 1 < b.len() && Int(b[i + 1]) == 123 && (i == 0 || Int(b[i - 1]) != 92) {
+      depth += 1
+    } else if ch == 125 && depth > 0 {
+      depth -= 1
+    }
+    cur.write(b[i..i + 1].to_str() ?? "")
+    if (ch == 32 || ch == 46 || ch == 47) && depth == 0 {
+      segs.push(cur.freeze())
+      cur = StrBuilder.new()
+    }
+    i += 1
+  }
+  let last = cur.freeze()
+  if last != "" {
+    segs.push(last)
+  }
+  // pack segments greedily into pieces that fit after the indentation
+  let limit = if WIDTH - lead - 6 < 30 { 30 } else { WIDTH - lead - 6 }
+  var pieces: List[Str] = []
+  var piece = ""
+  for sg in segs {
+    if piece != "" && piece.len() + sg.len() > limit {
+      pieces.push(piece)
+      piece = ""
+    }
+    piece = "${piece}${sg}"
+  }
+  if piece != "" {
+    pieces.push(piece)
+  }
+  var out: List[Str] = []
+  for (k, p) in pieces.indexed() {
+    out.push(if k + 1 < pieces.len() { "\"${p}\" +" } else { "\"${p}\"" })
+  }
+  out
+}
+
+/// `field: value` lines of a struct literal; one line when it fits.
+fn struct_lit(head: Str, fields: List[Str], lead: Int) -> List[Str] {
+  let one = "${head}{${fields.join(", ")}}"
+  if lead + one.len() <= WIDTH {
+    return [one]
+  }
+  var out = ["${head}{"]
+  for f in fields {
+    out.push("  ${f},")
+  }
+  out.push("}")
+  out
+}
+
+fn auth_scheme(s: json.Value, scope: List[Var], var used: List[Str]) -> Str ! Str {
+  var fields: List[Str] = []
+  if let json.Value.Object(fs) = s {
+    for (k, v) in fs {
+      match k {
+        "name" => fields.push("name: ${template(str_of(Some(v)), scope, used)?}")
+        "signingName" => fields.push("signing_name: ${template(str_of(Some(v)), scope, used)?}")
+        "signingRegion" => fields.push("signing_region: ${template(str_of(Some(v)), scope, used)?}")
+        "disableDoubleEncoding" => fields.push("disable_double_encoding: ${is_true(v)}")
+        "signingRegionSet" => {
+          var xs: List[Str] = []
+          for x in list_of(Some(v)) {
+            xs.push(template(str_of(Some(x)), scope, used)?)
+          }
+          fields.push("signing_region_set: [${xs.join(", ")}]")
+        }
+        _ => return Err("unmodeled auth scheme property ${k}")
+      }
+    }
+  }
+  Ok("endpoints.AuthScheme{${fields.join(", ")}}")
+}
+
+fn outcome(rule: json.Value, scope: List[Var], var used: List[Str]) -> Block ! Str {
+  match str_of(rule.get("type")) {
     "endpoint" => {
       let e = rule.get("endpoint") ?? json.Value.Null
-      let url = "endpoints.text(${expr(e.get("url") ?? json.Value.Null, vars)})"
-      let props = value(e.get("properties") ?? json.Value.Object([]), vars)
-      var hs: List[Str] = []
-      if let Some(json.Value.Object(fs)) = e.get("headers") {
-        for (k, hv) in fs {
-          let vals = list_of(Some(hv)).map(fn(x: json.Value) -> Str { "endpoints.text(${expr(x, vars)})" })
-          hs.push("(${lit_str(k)}, [${vals.join(", ")}])")
+      var lines = ["return Ok(endpoints.Endpoint{"]
+      lines.push("  url: ${str_expr(e.get("url") ?? json.Value.Null, scope, used)?},")
+      if let Some(json.Value.Object(props)) = e.get("properties") {
+        for (k, v) in props {
+          match k {
+            "authSchemes" => {
+              lines.push("  auth_schemes: [")
+              for s in list_of(Some(v)) {
+                lines.push("    ${auth_scheme(s, scope, used)?},")
+              }
+              lines.push("  ],")
+            }
+            "backend" => lines.push("  backend: ${template(str_of(Some(v)), scope, used)?},")
+            "metricValues" => {
+              var xs: List[Str] = []
+              for x in list_of(Some(v)) {
+                xs.push(template(str_of(Some(x)), scope, used)?)
+              }
+              lines.push("  metric_values: [${xs.join(", ")}],")
+            }
+            _ => return Err("unmodeled endpoint property ${k}")
+          }
         }
       }
-      line(c, ind, "return Ok(endpoints.Endpoint{url: ${url}, properties: ${props}, headers: [${hs.join(", ")}]})")
+      if let Some(json.Value.Object(hs)) = e.get("headers") {
+        if !hs.is_empty() {
+          lines.push("  headers: [")
+          for (k, hv) in hs {
+            var xs: List[Str] = []
+            for x in list_of(Some(hv)) {
+              xs.push(template(str_of(Some(x)), scope, used)?)
+            }
+            lines.push("    (${lit_str(k)}, [${xs.join(", ")}]),")
+          }
+          lines.push("  ],")
+        }
+      }
+      lines.push("})")
+      Ok(Block{lines: lines, used: [], returns: true})
     }
-    "error" => line(c, ind, "return Err(endpoints.RuleErr{msg: endpoints.text(${expr(rule.get("error") ?? json.Value.Null, vars)})})")
+    "error" => {
+      let msg = str_expr(rule.get("error") ?? json.Value.Null, scope, used)?
+      Ok(Block{lines: ["return Err(endpoints.RuleErr{msg: ${msg}})"], used: [], returns: true})
+    }
     "tree" => {
-      if !emit_rules(c, list_of(rule.get("rules")), vars, ind) {
-        line(c, ind, "return Err(endpoints.RuleErr{msg: \"rules in a matched tree rule were exhausted\"})")
+      let b = rules_block(list_of(rule.get("rules")), scope)?
+      var lines = b.lines
+      if !b.returns {
+        lines.push("return Err(endpoints.RuleErr{msg: \"rules in a matched tree rule were exhausted\"})")
+      }
+      Ok(Block{lines: lines, used: b.used, returns: true})
+    }
+    t => Err("unknown rule type ${t}")
+  }
+}
+
+/// A rule's conditions from the `i`th on, then its outcome.
+fn conditions(rule: json.Value, conds: List[json.Value], i: Int, scope: List[Var]) -> Block ! Str {
+  if i == conds.len() {
+    var used: List[Str] = []
+    var b = outcome(rule, scope, used)?
+    merge_used(b.used, used)
+    return Ok(b)
+  }
+  let cond = conds[i]
+  // a function that answers nothing for an unset argument, given an
+  // unset reference: narrow the reference first, as isSet would
+  if ["aws.partition", "aws.parseArn", "parseURL", "substring"].contains(str_of(cond.get("fn"))) {
+    if let Some(json.Value.Str(r)) = list_of(cond.get("argv")).get(0).and_then(fn(a: json.Value) -> json.Value? { a.get("ref") }) {
+      if let Some(v) = lookup(scope, r) {
+        if v.opt {
+          var with_check = conds[0..i]
+          with_check.push(json.Value.Object([("fn", json.Value.Str("isSet")), ("argv", json.Value.List([json.Value.Object([("ref", json.Value.Str(r))])]))]))
+          for c in conds[i..conds.len()] {
+            with_check.push(c)
+          }
+          return conditions(rule, with_check, i, scope)
+        }
       }
     }
-    _ => line(c, ind, "return Err(endpoints.RuleErr{msg: ${lit_str("unknown rule type ${kind}")}})")
   }
-  for _ in conds {
-    ind = ind[0..ind.len() - 2]
-    line(c, ind, "}")
-  }
-  conds.is_empty()
-}
-
-/// `resolve_endpoint` for a rule set: the same signature as
-/// endpoints.resolve, without the rule set.
-pub fn emit_endpoint_rules(rules: json.Value) -> Str {
-  var c = Ctx{out: [], n: 0}
-  line(c, "", "/// Resolves this service's endpoint from its endpoint rules.")
-  line(c, "", "pub fn resolve_endpoint(params: List[(Str, json.Value)], parts: endpoints.Partitions) -> endpoints.Endpoint ! endpoints.RuleErr {")
-  var vars: List[(Str, Str)] = []
-  var names: List[Str] = ["parts"]
-  if let Some(json.Value.Object(defs)) = rules.get("parameters") {
-    for (name, def) in defs {
-      let v = "p${vars.len()}"
-      let required = def.get("required") == Some(json.Value.Bool(true))
-      line(c, "  ", "let ${v} = endpoints.param(params, ${lit_str(name)}, ${json_lit(def.get("default") ?? json.Value.Null)}, ${required})?")
-      vars.push((name, v))
-      names.push(v)
+  var used: List[Str] = []
+  let assign = str_of(cond.get("assign"))
+  // isSet of a reference narrows it in the rest of the rule
+  var narrowed: Var? = None
+  if str_of(cond.get("fn")) == "isSet" && assign == "" {
+    if let Some(json.Value.Str(r)) = list_of(cond.get("argv")).get(0).and_then(fn(a: json.Value) -> json.Value? { a.get("ref") }) {
+      let v = lookup(scope, r) ?? return Err("unknown reference ${r}")
+      if !v.opt {
+        // always set: no test
+        return conditions(rule, conds, i + 1, scope)
+      }
+      narrowed = Some(v)
     }
   }
-  line(c, "  ", "let _ = (${names.join(", ")})")
-  if !emit_rules(c, list_of(rules.get("rules")), vars, "  ") {
-    line(c, "  ", "Err(endpoints.RuleErr{msg: \"no rule matched\"})")
+  if let Some(v) = narrowed {
+    let local = local_name(scope, v.name)
+    var inner = scope
+    inner.push(Var{name: v.name, code: local, kind: v.kind, opt: false})
+    let body = conditions(rule, conds, i + 1, inner)?
+    var lines: List[Str] = []
+    if v.code != local {
+      use_var(used, v)
+    }
+    var done = false
+    if body.used.contains(local) && v.kind == "Bool" {
+      // an optional Bool tested once reads as `x == Some(true)`
+      if let Some((c2, inner)) = single_if(body.lines) {
+        if (c2 == local || c2 == "!${local}") && !mentions(inner, local) {
+          lines = guard("${v.code} == Some(${c2 == local})", inner)
+          done = true
+        }
+      }
+    }
+    if !done {
+      if body.used.contains(local) {
+        lines.push("if let Some(${local}) = ${v.code} {")
+        for l in indent(body.lines) {
+          lines.push(l)
+        }
+        lines.push("}")
+      } else {
+        lines = guard("${v.code}.is_some()", body.lines)
+      }
+    }
+    merge_used(used, body.used.filter(fn(u: Str) -> Bool { u != local }))
+    return Ok(Block{lines: lines, used: used, returns: false})
   }
-  line(c, "", "}")
-  c.out.join("\n") + "\n"
+  let val = expr(cond, scope, used)?
+  if val.code == "true" {
+    return conditions(rule, conds, i + 1, scope)
+  }
+  if assign != "" {
+    let local = local_name(scope, assign)
+    var inner = scope
+    inner.push(Var{name: assign, code: local, kind: val.kind, opt: false})
+    let body = conditions(rule, conds, i + 1, inner)?
+    let bound = body.used.contains(local)
+    var lines: List[Str] = []
+    var opened = true
+    if !bound && (val.opt || val.kind == "Bool") {
+      let c = if val.opt { "${paren(val)}.is_some()" } else { val.code }
+      merge_used(used, body.used)
+      return Ok(Block{lines: guard(c, body.lines), used: used, returns: false})
+    }
+    if val.opt {
+      lines.push("if let Some(${local}) = ${val.code} {")
+    } else if val.kind == "Bool" {
+      lines.push("let ${local} = ${val.code}")
+      lines.push("if ${local} {")
+    } else {
+      // a value that is always set: bound, no test
+      if bound {
+        lines.push("let ${local} = ${val.code}")
+      }
+      opened = false
+    }
+    for l in if opened { indent(body.lines) } else { body.lines } {
+      lines.push(l)
+    }
+    if opened {
+      lines.push("}")
+    }
+    merge_used(used, body.used.filter(fn(u: Str) -> Bool { u != local }))
+    return Ok(Block{lines: lines, used: used, returns: !opened && body.returns})
+  }
+  let check = if val.opt && val.kind == "Bool" {
+    "${paren(val)} == Some(true)"
+  } else if val.opt {
+    "${paren(val)}.is_some()"
+  } else if val.kind == "Bool" {
+    val.code
+  } else {
+    // a value that is always set is true
+    return conditions(rule, conds, i + 1, scope)
+  }
+  let body = conditions(rule, conds, i + 1, scope)?
+  let lines = guard(check, body.lines)
+  merge_used(used, body.used)
+  Ok(Block{lines: lines, used: used, returns: false})
 }
 
-/// The endpointTests as Xo tests of the compiled rules.
-pub fn emit_endpoint_tests(tests: json.Value) -> Str {
+fn rules_block(rules: List[json.Value], scope: List[Var]) -> Block ! Str {
+  var lines: List[Str] = []
+  var used: List[Str] = []
+  for rule in rules {
+    let b = conditions(rule, list_of(rule.get("conditions")), 0, scope)?
+    for l in b.lines {
+      lines.push(l)
+    }
+    merge_used(used, b.used)
+    if b.returns {
+      return Ok(Block{lines: lines, used: used, returns: true})
+    }
+  }
+  Ok(Block{lines: lines, used: used, returns: false})
+}
+
+/// A rule set parameter, as the struct field the generated code has.
+pub struct Param {
+  pub name: Str
+  pub field: Str
+  pub kind: Str
+  pub opt: Bool
+  pub default: json.Value
+  pub required: Bool
+  pub builtin: Str
+  pub doc: Str
+}
+
+pub fn rule_params(rules: json.Value) -> List[Param] {
+  var out: List[Param] = []
+  if let Some(json.Value.Object(defs)) = rules.get("parameters") {
+    for (name, def) in defs {
+      let default = def.get("default") ?? json.Value.Null
+      out.push(Param{
+        name: name,
+        field: field_name(name),
+        kind: kind_of_param(def),
+        opt: default == json.Value.Null,
+        default: default,
+        required: def.get("required") == Some(json.Value.Bool(true)),
+        builtin: str_of(def.get("builtIn")),
+        doc: str_of(def.get("documentation")),
+      })
+    }
+  }
+  out
+}
+
+/// A Xo literal of a parameter value.
+pub fn param_lit(p: Param, v: json.Value) -> Str {
+  match v {
+    json.Value.Str(s) => lit_str(s)
+    json.Value.Bool(b) => "${b}"
+    json.Value.List(xs) => "[${xs.map(fn(x: json.Value) -> Str { lit_str(str_of(Some(x))) }).join(", ")}]"
+    _ => if p.kind == "Bool" { "false" } else { "\"\"" }
+  }
+}
+
+/// `EndpointParameters` and `resolve_endpoint` for a rule set.
+pub fn emit_endpoint_rules(rules: json.Value) -> Str ! Str {
+  let params = rule_params(rules)
+  var out: List[Str] = [
+    "/// The endpoint rule parameters: what `resolve_endpoint` decides on.",
+    "pub struct EndpointParameters {",
+  ]
+  var scope: List[Var] = []
+  for p in params {
+    for l in wrap(strip_html(p.doc), 70) {
+      out.push("  /// ${l}")
+    }
+    if p.opt {
+      out.push("  pub ${p.field}: ${xo_kind(p.kind)}? = None")
+    } else {
+      out.push("  pub ${p.field}: ${xo_kind(p.kind)} = ${param_lit(p, p.default)}")
+    }
+    scope.push(Var{name: p.name, code: "params.${p.field}", kind: p.kind, opt: p.opt})
+  }
+  out.push("}")
+  out.push("")
+  out.push("/// Resolves the endpoint for `params` from the service's endpoint rules.")
+  out.push("pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endpoints.RuleErr {")
+  for p in params {
+    if p.required && p.opt {
+      out.push("  if params.${p.field}.is_none() {")
+      out.push("    return Err(endpoints.RuleErr{msg: ${lit_str("missing required parameter ${p.name}")}})")
+      out.push("  }")
+    }
+  }
+  let b = rules_block(list_of(rules.get("rules")), scope)?
+  for l in rewrap(indent(b.lines)) {
+    out.push(l)
+  }
+  if !b.returns {
+    out.push("  Err(endpoints.RuleErr{msg: \"no rule matched\"})")
+  }
+  out.push("}")
+  Ok(out.join("\n") + "\n")
+}
+
+/// The endpointTests as Xo tests: each case's compiled answer must equal
+/// the interpreter's (the oracle, run here) and the model's expectation.
+pub fn emit_endpoint_tests(rules: json.Value, tests: json.Value) -> Str {
+  let params = rule_params(rules)
+  let parts = endpoints.default_partitions()
   var out: List[Str] = []
   for (i, t) in list_of(tests.get("testCases")).indexed() {
-    let params = match t.get("params") {
+    let given = match t.get("params") {
       Some(json.Value.Object(fs)) => fs
       _ => []
     }
-    let doc = match t.get("documentation") {
-      Some(json.Value.Str(d)) => d
-      _ => ""
+    var fields: List[Str] = []
+    for (k, v) in given {
+      if let Some(p) = params.find(fn(p: Param) -> Bool { p.name == k }) {
+        if v != json.Value.Null {
+          fields.push("${p.field}: ${param_lit(p, v)}")
+        }
+      }
     }
-    let plist = params.map(fn(p: (Str, json.Value)) -> Str { "(${lit_str(p.0)}, ${json_lit(p.1)})" }).join(", ")
-    out.push("test ${lit_str("endpoint ${i}: ${doc}")} {")
-    out.push("  let got = resolve_endpoint([${plist}], endpoints.default_partitions())")
+    let oracle = endpoints.describe(endpoints.resolve(rules, given, parts))
+    out.push("test ${lit_str("endpoint ${i}: ${str_of(t.get("documentation"))}")} {")
+    for l in struct_lit("EndpointParameters", fields, 15) {
+      out.push(if l.starts_with("EndpointParameters") { "  let params = ${l}" } else { "  ${l}" })
+    }
+    out.push("  let got = resolve_endpoint(params)")
+    out.push("  expect(endpoints.describe(got)) == ${lit_str(oracle)}")
     out.push("  expect(endpoints.check(got, ${json_lit(t.get("expect") ?? json.Value.Null)})) == \"\"")
     out.push("}")
     out.push("")
@@ -254,14 +912,14 @@ pub fn emit_endpoint_tests(tests: json.Value) -> Str {
 }
 
 /// The endpoint files of a service, empty when it has no rule set.
-pub fn endpoint_files(m: model.Model, tests: Bool) -> List[File] {
-  let svc = m.shapes.get(m.service) ?? return []
-  let rules = model.trait_of(svc.traits, "smithy.rules#endpointRuleSet") ?? return []
-  var files = [File{path: "endpoint.xo", text: with_uses(emit_endpoint_rules(rules))}]
+pub fn endpoint_files(m: model.Model, tests: Bool) -> List[File] ! Str {
+  let svc = m.shapes.get(m.service) ?? return Ok([])
+  let rules = model.trait_of(svc.traits, "smithy.rules#endpointRuleSet") ?? return Ok([])
+  var files = [File{path: "endpoint.xo", text: with_uses(emit_endpoint_rules(rules)?)}]
   if tests {
     if let Some(t) = model.trait_of(svc.traits, "smithy.rules#endpointTests") {
-      files.push(File{path: "endpoint_test.xo", text: with_uses(emit_endpoint_tests(t))})
+      files.push(File{path: "endpoint_test.xo", text: with_uses(emit_endpoint_tests(rules, t))})
     }
   }
-  files
+  Ok(files)
 }

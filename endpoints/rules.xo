@@ -9,13 +9,6 @@
 use std/json
 use std/regexp
 
-/// A resolved endpoint.
-pub struct Endpoint {
-  pub url: Str
-  pub properties: json.Value = json.Value.Object([])
-  pub headers: List[(Str, List[Str])] = []
-}
-
 pub struct RuleErr {
   pub msg: Str
 }
@@ -109,7 +102,7 @@ fn eval_rules(rules: List[json.Value], scope: Map[Str, json.Value], parts: Parti
             headers.push((k, vals))
           }
         }
-        return Ok(Some(Endpoint{url: url, properties: props, headers: headers}))
+        return Ok(Some(from_properties(url, props, headers)?))
       }
       "error" => return Err(RuleErr{msg: text(eval_expr(rule.get("error") ?? json.Value.Null, local, parts)?)})
       "tree" => {
@@ -268,15 +261,15 @@ pub fn call(f: Str, args: List[json.Value], parts: Partitions) -> json.Value ! R
       Ok(opt(sub.map(fn(x: Str) -> json.Value { json.Value.Str(x) })))
     }
     "isValidHostLabel" => Ok(json.Value.Bool(match arg_str(args, 0) {
-      Some(s) => valid_host_label(s, arg_bool(args, 1))
+      Some(s) => is_valid_host_label(s, arg_bool(args, 1))
       None => false
     }))
-    "parseURL" => Ok(opt(parse_url(arg_str(args, 0) ?? return Ok(json.Value.Null))))
+    "parseURL" => Ok(opt(parse_url_json(arg_str(args, 0) ?? return Ok(json.Value.Null))))
     "uriEncode" => Ok(json.Value.Str(uri_encode(arg_str(args, 0) ?? "")))
-    "aws.partition" => Ok(opt(partition(parts, arg_str(args, 0) ?? return Ok(json.Value.Null))))
-    "aws.parseArn" => Ok(opt(parse_arn(arg_str(args, 0) ?? return Ok(json.Value.Null))))
+    "aws.partition" => Ok(opt(partition_json(parts, arg_str(args, 0) ?? return Ok(json.Value.Null))))
+    "aws.parseArn" => Ok(opt(parse_arn_json(arg_str(args, 0) ?? return Ok(json.Value.Null))))
     "aws.isVirtualHostableS3Bucket" => Ok(json.Value.Bool(match arg_str(args, 0) {
-      Some(s) => virtual_hostable_bucket(s, arg_bool(args, 1))
+      Some(s) => is_virtual_hostable_s3_bucket(s, arg_bool(args, 1))
       None => false
     }))
     "split" => {
@@ -350,9 +343,9 @@ fn alnum(c: Int) -> Bool {
 
 /// `isValidHostLabel`: 1 to 63 letters, digits and hyphens, starting with
 /// a letter or digit; with sub domains, each `.` separated label.
-pub fn valid_host_label(s: Str, allow_sub_domains: Bool) -> Bool {
+pub fn is_valid_host_label(s: Str, allow_sub_domains: Bool) -> Bool {
   if allow_sub_domains {
-    return s.split(".").all(fn(l: Str) -> Bool { valid_host_label(l, false) })
+    return s.split(".").all(fn(l: Str) -> Bool { is_valid_host_label(l, false) })
   }
   let b = s.bytes()
   if b.len() < 1 || b.len() > 63 || !alnum(Int(b[0])) {
@@ -377,14 +370,14 @@ fn looks_like_ipv4(s: Str) -> Bool {
 }
 
 /// `aws.isVirtualHostableS3Bucket`.
-pub fn virtual_hostable_bucket(s: Str, allow_sub_domains: Bool) -> Bool {
+pub fn is_virtual_hostable_s3_bucket(s: Str, allow_sub_domains: Bool) -> Bool {
   if s.len() < 3 || s.len() > 63 || s.to_lower() != s || looks_like_ipv4(s) {
     return false
   }
   if allow_sub_domains {
-    return s.split(".").all(fn(l: Str) -> Bool { valid_host_label(l, false) })
+    return s.split(".").all(fn(l: Str) -> Bool { is_valid_host_label(l, false) })
   }
-  valid_host_label(s, false)
+  is_valid_host_label(s, false)
 }
 
 /// `uriEncode`: everything but unreserved characters as %XX.
@@ -406,7 +399,7 @@ pub fn uri_encode(s: Str) -> Str {
 
 /// `parseURL`: scheme, authority, path, normalizedPath and isIp; None for
 /// a URL with a query or an unknown scheme.
-pub fn parse_url(u: Str) -> json.Value? {
+pub fn parse_url_json(u: Str) -> json.Value? {
   if u.contains("?") || u.contains("#") {
     return None
   }
@@ -439,7 +432,7 @@ pub fn parse_url(u: Str) -> json.Value? {
 
 /// `aws.parseArn`: None unless `arn:partition:service:region:account:resource`
 /// with a partition, service and resource.
-pub fn parse_arn(s: Str) -> json.Value? {
+pub fn parse_arn_json(s: Str) -> json.Value? {
   let parts = s.split_n(":", 6)
   if parts.len() != 6 || parts[0] != "arn" || parts[1] == "" || parts[2] == "" || parts[5] == "" {
     return None
@@ -489,7 +482,7 @@ fn merge(base: json.Value, over: json.Value) -> json.Value {
 /// `aws.partition`: the partition that lists the region, else the one
 /// whose regionRegex matches it, else `aws`; its outputs with the
 /// region's overrides.
-pub fn partition(parts: Partitions, region: Str) -> json.Value? {
+pub fn partition_json(parts: Partitions, region: Str) -> json.Value? {
   let list = match parts.doc.get("partitions") {
     Some(json.Value.List(xs)) => xs
     _ => return None
@@ -555,8 +548,8 @@ pub fn check(got: Result[Endpoint, RuleErr], expect: json.Value) -> Str {
       let hs = want.get("headers") ?? json.Value.Object([])
       if e.url != url {
         "url ${e.url}, want ${url}"
-      } else if !same(e.properties, props) {
-        "properties ${e.properties.encode()}, want ${props.encode()}"
+      } else if !same(properties_json(e), props) {
+        "properties ${properties_json(e).encode()}, want ${props.encode()}"
       } else if !same(headers_json(e.headers), hs) {
         "headers ${headers_json(e.headers).encode()}, want ${hs.encode()}"
       } else {
@@ -596,40 +589,6 @@ fn same(a: json.Value, b: json.Value) -> Bool {
     (json.Value.Num(x), json.Value.Int(y)) => x == Float(y)
     _ => a == b
   }
-}
-
-/// The SigV4 signing name and region an endpoint asks for (its first
-/// `sigv4` or `sigv4a` auth scheme), when it names them.
-pub fn signing(e: Endpoint) -> (Str?, Str?) {
-  let schemes = match e.properties.get("authSchemes") {
-    Some(json.Value.List(xs)) => xs
-    _ => return (None, None)
-  }
-  for s in schemes {
-    let name = match s.get("name") {
-      Some(json.Value.Str(n)) => n
-      _ => ""
-    }
-    if name != "sigv4" && name != "sigv4a" && name != "sigv4-s3express" {
-      continue
-    }
-    let service = match s.get("signingName") {
-      Some(json.Value.Str(x)) => Some(x)
-      _ => None
-    }
-    let region = match s.get("signingRegion") {
-      Some(json.Value.Str(x)) => Some(x)
-      _ => match s.get("signingRegionSet") {
-        Some(json.Value.List(rs)) => match rs.get(0) {
-          Some(json.Value.Str(x)) => if x == "*" { None } else { Some(x) }
-          _ => None
-        }
-        _ => None
-      }
-    }
-    return (service, region)
-  }
-  (None, None)
 }
 
 /// An endpoint's headers as request header pairs.

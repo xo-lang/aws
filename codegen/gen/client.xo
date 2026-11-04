@@ -96,8 +96,7 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  pub transport: transport.Client")
   if with_rules {
     out.push("  /// The endpoint rule parameters every call shares.")
-    out.push("  pub params: List[(Str, json.Value)]")
-    out.push("  partitions: endpoints.Partitions")
+    out.push("  pub params: EndpointParameters")
   } else {
     out.push("  pub endpoint: rest.Endpoint")
   }
@@ -106,18 +105,16 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("")
   out.push("pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {")
   if with_rules {
-    out.push("  var params: List[(Str, json.Value)] = []")
+    out.push("  var params = EndpointParameters{}")
     if let Some(r) = param_of(g, "AWS::Region") {
-      out.push("  params.push((${lit_str(r)}, json.Value.Str(options.region)))")
+      out.push("  params.${field_name(r)} = options.region")
     }
     if let Some(e) = param_of(g, "SDK::Endpoint") {
-      out.push("  if let Some(e) = options.endpoint {")
-      out.push("    params.push((${lit_str(e)}, json.Value.Str(e)))")
-      out.push("  }")
+      out.push("  params.${field_name(e)} = options.endpoint")
     }
     for p in client_params(g) {
       out.push("  if let Some(v) = options.${p.field} {")
-      out.push("    params.push((${lit_str(p.name)}, json.Value.${if p.bool { "Bool" } else { "Str" }}(v)))")
+      out.push("    params.${p.field} = v")
       out.push("  }")
     }
   } else {
@@ -126,7 +123,6 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  Ok(Client{")
   if with_rules {
     out.push("    params: params,")
-    out.push("    partitions: endpoints.default_partitions(),")
   } else {
     out.push("    endpoint: ep,")
   }
@@ -136,21 +132,18 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  })")
   out.push("}")
   out.push("")
-  out.push("fn (c: Client) params_or_empty() -> List[(Str, json.Value)] {")
-  out.push(if with_rules { "  c.params" } else { "  let _ = c\n  []" })
-  out.push("}")
-  out.push("")
   out.push("const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}")
   out.push("")
   out.push("/// Where one call goes: the endpoint, how to sign, extra headers.")
-  out.push("fn (c: Client) route(params: List[(Str, json.Value)]) -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
   if with_rules {
-    out.push("  let e = resolve_endpoint(params, c.partitions) ?? err => return Err(\"endpoint: \${err.msg}\")")
+    out.push("fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
+    out.push("  let e = resolve_endpoint(params) ?? err => return Err(\"endpoint: \${err.msg}\")")
     out.push("  let ep = rest.parse_endpoint(e.url) ?? return Err(\"bad endpoint \${e.url}\")")
     out.push("  let (service, region) = endpoints.signing(e)")
-    out.push("  Ok((ep, transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${g.s3}}, endpoints.header_pairs(e)))")
+    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${g.s3}}")
+    out.push("  Ok((ep, signing, endpoints.header_pairs(e)))")
   } else {
-    out.push("  let _ = params")
+    out.push("fn (c: Client) route() -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
     out.push("  Ok((c.endpoint, transport.Signing{service: SIGNING_NAME, region: c.region, s3: ${g.s3}}, []))")
   }
   out.push("}")
@@ -171,43 +164,52 @@ fn context_param(g: G, m: model.Member) -> Str? {
   None
 }
 
-/// `endpoint_params_<op>`: an operation's static and context parameters
-/// ahead of the client's.
+/// `endpoint_params_<op>`: the client's parameters with an operation's
+/// static and context parameters set (services with endpoint rules).
 pub fn emit_endpoint_params(g: G, op: Str, var out: List[Str]) {
+  let rules = rules_of(g) ?? return
+  let params = rule_params(rules)
   let s = shape_of(g, op)
   let name = op_name(op)
   let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
-  out.push("pub fn endpoint_params_${name}(base: List[(Str, json.Value)], input: ${in_t}) -> List[(Str, json.Value)] {")
-  out.push("  var ps: List[(Str, json.Value)] = []")
+  var body: List[Str] = []
   if let Some(json.Value.Object(fs)) = model.trait_of(s.traits, "smithy.rules#staticContextParams") {
     for (k, v) in fs {
-      out.push("  ps.push((${lit_str(k)}, ${json_lit(v.get("value") ?? json.Value.Null)}))")
+      if let Some(p) = params.find(fn(p: Param) -> Bool { p.name == k }) {
+        body.push("  p.${p.field} = ${param_lit(p, v.get("value") ?? json.Value.Null)}")
+      }
     }
   }
   var used = false
   if s.input != "smithy.api#Unit" {
     for m in shape_of(g, s.input).members {
-      let p = context_param(g, m) ?? continue
-      let k = shape_of(g, m.target).kind
-      let expr = match k {
-        String => "json.Value.Str(x)"
-        Enum => "json.Value.Str(x.value())"
-        Boolean => "json.Value.Bool(x)"
+      let pn = context_param(g, m) ?? continue
+      let p = params.find(fn(p: Param) -> Bool { p.name == pn }) ?? continue
+      let value = match shape_of(g, m.target).kind {
+        String => "x"
+        Enum => "x.value()"
+        Boolean => "x"
         _ => continue
       }
       used = true
-      out.push("  if let Some(x) = input.${field_name(m.name)} {")
-      out.push("    ps.push((${lit_str(p)}, ${expr}))")
-      out.push("  }")
+      body.push("  if let Some(x) = input.${field_name(m.name)} {")
+      body.push("    p.${p.field} = ${value}")
+      body.push("  }")
     }
   }
+  out.push("pub fn endpoint_params_${name}(base: EndpointParameters, input: ${in_t}) -> EndpointParameters {")
   if !used {
     out.push("  let _ = input")
   }
-  out.push("  for p in base {")
-  out.push("    ps.push(p)")
-  out.push("  }")
-  out.push("  ps")
+  if body.is_empty() {
+    out.push("  base")
+  } else {
+    out.push("  var p = base")
+    for l in body {
+      out.push(l)
+    }
+    out.push("  p")
+  }
   out.push("}")
   out.push("")
 }

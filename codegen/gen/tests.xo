@@ -250,7 +250,8 @@ pub fn emit_protocol_tests(g: G, protocol: Str, skip: List[(Str, Str)]) -> Str {
       if rules_of(g).is_some() {
         // the endpoint comes from the rules, configured as the test says
         out.push("  let input = ${input}")
-        out.push("  let e = resolve_endpoint(endpoint_params_${name}([${vendor_params(g, c).join(", ")}], input), endpoints.default_partitions())?")
+        out.push("  let base = EndpointParameters{${vendor_params(g, c).join(", ")}}")
+        out.push("  let e = resolve_endpoint(endpoint_params_${name}(base, input))?")
         out.push("  let ep = rest.parse_endpoint(e.url) ?? rest.Endpoint{host: \"example.com\"}")
         out.push("  let req = serialize_${name}(ep, input, TOKEN, 0)?")
       } else {
@@ -346,7 +347,7 @@ fn vendor_params(g: G, c: json.Value) -> List[Str] {
   }
   var out: List[Str] = []
   if let Some(p) = param_of(g, "AWS::Region") {
-    out.push("(${lit_str(p)}, json.Value.Str(${lit_str(region)}))")
+    out.push("${field_name(p)}: ${lit_str(region)}")
   }
   // operation scoped settings win over the client's
   let op_s3 = ((vp.get("scopedConfig") ?? json.Value.Null).get("operation") ?? json.Value.Null).get("s3") ?? json.Value.Object([])
@@ -363,7 +364,7 @@ fn vendor_params(g: G, c: json.Value) -> List[Str] {
   }
   let flag = fn(builtin: Str, v: json.Value?) -> Str? {
     match (param_of(g, builtin), v) {
-      (Some(p), Some(json.Value.Bool(b))) => Some("(${lit_str(p)}, json.Value.Bool(${b}))")
+      (Some(p), Some(json.Value.Bool(b))) => Some("${field_name(p)}: ${b}")
       _ => None
     }
   }

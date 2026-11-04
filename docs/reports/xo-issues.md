@@ -140,7 +140,7 @@ Workaround (removed): the generated tests passed map literals through
 `protocoltest.map_of`. Status: FIXED on xo main 0e4fa349e (golden
 optional_coll_lit).
 
-## 5. arm64: an inlined cross-module call fails as "runtime call" (cache order dependent)
+## 5. arm64: an inlined cross-module call fails as "runtime call" (cache order dependent, FIXED)
 
 Found 2026-11-04 (xo at 97c8b271b). `xo test ./internal/protocoltest/restjson`
 (generated RestJson client) stops in the arm64 backend:
@@ -172,9 +172,15 @@ awsJson suites inline `restjson.error_code` into generated
 is reused by the second and cannot be lowered there. The restxml variant
 (`restxml.error_code` inlined, "runtime call restxml.error_element") hit
 the shared cache after `error_element` was edited. Status: with Lang 1
-(repro handed over 2026-11-04); the gate builds internal/protocoltest/
-restjson and restxml with `--backend=llvm` until it is fixed
-(XO_GATE_LLVM).
+(repro handed over 2026-11-04). FIXED on xo main eb839dcfb
+(TestFrontCacheRootAndLibrary): the test package and protocol/restjson
+share the name `restjson`, so in that program protocol/restjson's
+functions are named by full path, while a front end cache entry for
+`error_code` recorded in a program with one `restjson` called them
+`restjson.sanitize_code`; the cache key now includes the path named
+modules (FE_CACHE_VERSION v15). Verified here with xo eb839dcfb: the two
+step repro passes (61, then 233) and the whole gate passes on the native
+backend (828); the gate's LLVM override is empty again.
 
 ## 6. Go backend: `field = (x ?? return Err(..))` into an optional field (FIXED)
 
@@ -230,7 +236,9 @@ cycle (it fires on pa -> pb -> pa across two modules), not a module
 requirement cycle; core 4.1 calls packages "modules" there, which reads
 as the xo.mod sense. Smaller: `xo get sts@v1.0.0` in the app prints
 "v1.1.0 => v1.0.0" while selection stays v1.1.0 (required by the root),
-and there is no `xo mod graph` to see the selection.
+and there is no `xo mod graph` to see the selection (added on xo main
+f53b79214: Go's edge format, cycles included, `--json` with the selected
+versions).
 Status: FIXED upstream in ec7332b77 (Lang 4, 2026-11-04): `xo check`
 reports XO1306 for an unrequired nested module, `xo mod tidy` keeps (or
 adds) the require, `xo get X@v` reports when a higher version stays

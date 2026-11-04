@@ -95,6 +95,18 @@ rule aws-sdk-go-v2 uses (`API Gateway` is `apigateway`, `ACM PCA` is
   tag and builds with no generator and no models. A model update is one
   commit per batch: the pinned models commit (0002), regenerated output,
   and changelog lines per service.
+- **Amended 2026-11-04 (lead, for the owner): when all services are
+  committed.** All 435 models generate and type check (6.33M lines, 234 MB
+  on disk, about 23 MB compressed in git), but the generator is not
+  feature complete: paginators, waiters, event streams, SigV4a and a docs
+  pass are still to come, and each would rewrite every generated line in
+  permanent history. So until then only the services with tests and
+  integration runs are committed (S3, DynamoDB, SQS, STS, Secrets
+  Manager, SNS, Lambda, EC2), and `scripts/check-all-services.sh`
+  regenerates all 435 into the untracked `.gencheck/all` and type checks
+  them on every generator change. When the generator is feature complete,
+  all services are committed in one commit, each first passing
+  `scripts/check-public.sh <dir>` (0007).
 
 ### Effects
 

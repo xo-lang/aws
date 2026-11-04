@@ -7,7 +7,7 @@ use github.com/xo-lang/aws/codegen/naming
 const KEYWORDS: List[Str] = ["as", "break", "const", "continue", "defer", "else", "ensures", "enum", "fn", "for", "if", "in", "interface", "invariant", "let", "match", "pub", "requires", "return", "select", "struct", "test", "type", "use", "uses", "var", "while", "true", "false", "self", "target", "fault", "dbg", "derive", "from", "loop"]
 
 /// Type names Xo or the generated package already use.
-const RESERVED_TYPES: List[Str] = ["Str", "Int", "Float", "Bool", "Bytes", "Time", "Duration", "List", "Map", "Set", "Option", "Result", "Error", "Some", "None", "Ok", "Err", "Rune", "UInt8", "Int8", "Int16", "Int32", "Int64", "Secret", "Mutex", "Atomic", "Client", "Options", "Display", "Debug", "Eq", "Os", "Net", "Fs", "Env", "Clock", "Rand"]
+const RESERVED_TYPES: List[Str] = ["Str", "Int", "Float", "Bool", "Bytes", "Time", "Duration", "List", "Map", "Set", "Option", "Result", "Error", "Some", "None", "Ok", "Err", "Rune", "UInt8", "Int8", "Int16", "Int32", "Int64", "Secret", "Mutex", "Atomic", "Client", "Options", "Display", "Debug", "Eq", "Os", "Net", "Fs", "Env", "Clock", "Rand", "Hash", "Json", "Ord", "SqlRow", "Float32", "UInt16", "UInt32", "UInt64", "StrBuilder", "BytesBuilder", "Chan", "Never"]
 
 pub struct Rename {
   pub what: Str
@@ -43,10 +43,12 @@ pub fn plan_names(m: model.Model, ids: List[Str]) -> Names {
       continue
     }
     var name = renames.get(id) ?? model.name_of(id)
-    if upper_first(name) != name {
-      // Xo type names are UpperCamel (EC2 has a shape named `scope`)
-      record(n, "type", id, upper_first(name), "Xo type names start upper case")
-      name = upper_first(name)
+    let camel = upper_camel(name)
+    if camel != name {
+      // Xo type names are UpperCamel (EC2's `scope`, MediaPackage's
+      // `__AdTriggersElement`, IoT Wireless's `AbpV1_0_x`)
+      record(n, "type", id, camel, "Xo type names are UpperCamel")
+      name = camel
     }
     if RESERVED_TYPES.contains(name) || taken.contains(name) {
       let base = name
@@ -115,4 +117,15 @@ pub fn service_dir(sdk_id: Str) -> Str {
   } else {
     name
   }
+}
+
+/// `name` as UpperCamel: underscores dropped, the letter after each one
+/// and the first letter upper cased (`__AdTriggersElement` is
+/// `AdTriggersElement`, `AbpV1_0_x` is `AbpV10X`).
+pub fn upper_camel(name: Str) -> Str {
+  var out = ""
+  for part in name.split("_") {
+    out = "${out}${upper_first(part)}"
+  }
+  if out == "" { name } else { out }
 }

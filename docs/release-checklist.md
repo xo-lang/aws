@@ -6,9 +6,9 @@ current as work finds new ones.
 1. **Requires.** Every module's xo.mod requires each module it imports
    from (core 4.2, XO1306). The root requires the service modules its
    packages use (`service/sts` for `credentials/stscreds` and `config`),
-   and each service module requires the root. Write them with `xo get`.
-   Do not run `xo mod tidy` in the root module until xo-issues entry 7
-   is fixed: tidy drops the root's require of a nested module.
+   and each service module requires the root. `xo mod tidy` writes them
+   (xo ec7332b77 or later; before it, tidy dropped the root's require of
+   a nested module, xo-issues entry 7).
 2. **Cycle order.** The root and service/sts require each other
    (decision 0003). Tag in order: the root first, then service/sts
    requiring that root tag, then a root tag requiring that sts tag.

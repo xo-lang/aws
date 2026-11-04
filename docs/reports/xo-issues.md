@@ -176,7 +176,7 @@ the shared cache after `error_element` was edited. Status: with Lang 1
 restjson and restxml with `--backend=llvm` until it is fixed
 (XO_GATE_LLVM).
 
-## 6. Go backend: `field = (x ?? return Err(..))` into an optional field
+## 6. Go backend: `field = (x ?? return Err(..))` into an optional field (FIXED)
 
 Found 2026-11-04 (xo at 97c8b271b). `xo test --backend=go
 ./internal/protocoltest/restjson` fails in `go build` ("a code generator
@@ -189,10 +189,13 @@ client.xo:7626: cannot use x_c3537 (variable of type int64) as rt.Option[int64] 
 from `out.header_byte = (Int.parse(hv) ?? return Err("..."))` where
 `header_byte: Int? = None`: the implicit `T` to `T?` wrap is missing when
 the right side is a `?? return` expression (also for `(s == "true")` into a
-`Bool?`, and Time). Native and LLVM accept it. Status: reported to the
-lead 2026-11-04.
+`Bool?`, and Time). Native and LLVM accept it. Status: FIXED upstream
+in 6c1839fc2 (Lang 4, 2026-11-04: a parenthesized value converted to `T?`
+is wrapped in Some in assignments, field inits, arguments and locals;
+golden optional_assign_go). Verified here with xo 9ee7f840f: `xo test
+--backend=go ./internal/protocoltest/restjson` passes 233/233.
 
-## 7. `xo mod tidy` drops the require of a nested module the parent imports
+## 7. `xo mod tidy` drops the require of a nested module the parent imports (FIXED)
 
 Found 2026-11-04 (xo at 97c8b271b) while checking the module cycle of
 decision 0003 (credentials/stscreds in the root module uses
@@ -228,4 +231,11 @@ requirement cycle; core 4.1 calls packages "modules" there, which reads
 as the xo.mod sense. Smaller: `xo get sts@v1.0.0` in the app prints
 "v1.1.0 => v1.0.0" while selection stays v1.1.0 (required by the root),
 and there is no `xo mod graph` to see the selection.
-Status: reported to the lead 2026-11-04.
+Status: FIXED upstream in ec7332b77 (Lang 4, 2026-11-04): `xo check`
+reports XO1306 for an unrequired nested module, `xo mod tidy` keeps (or
+adds) the require, `xo get X@v` reports when a higher version stays
+selected and why, and core 4.1/4.2 now say XO0604 is about packages and
+require cycles resolve by MVS. `xo mod graph` remains a later item. Verified
+here with xo 9ee7f840f: the repro now reports XO1306 in the root, tidy
+keeps the require, and `xo get` explains the higher selected version;
+the release checklist's workaround is removed.

@@ -32,7 +32,13 @@ work=$(mktemp)
 trap 'rm -f "$work"' EXIT
 for d in service/*/; do
   d=${d%/}
-  printf 'xo preview\nuse %s\nuse %s/%s\n' "$PWD" "$PWD" "$d" > "$work"
+  # service/sts too: the root requires it (decision 0003), and a module
+  # outside the workspace would be fetched at its tag
+  if [ "$d" = service/sts ]; then
+    printf 'xo preview\nuse %s\nuse %s/%s\n' "$PWD" "$PWD" "$d" > "$work"
+  else
+    printf 'xo preview\nuse %s\nuse %s/service/sts\nuse %s/%s\n' "$PWD" "$PWD" "$PWD" "$d" > "$work"
+  fi
   n=$(cat "$d"/*.xo | wc -l | tr -d ' ')
   big=$(find "$d" -name '*.xo' -size +512k | tr '\n' ' ')
   c=$(XO_WORK=$work "$xo" check "./$d" 2>&1 | grep -v '^  note\|^  fix')

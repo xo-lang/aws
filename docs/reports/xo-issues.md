@@ -385,7 +385,14 @@ same xo links and runs it, and a fresh private back-end cache does too.
 So a cached unit from another build is reused when it should not be;
 the compiler output itself is fine. The "0.39.0 links it" result above
 came from a different cache key, so it says nothing about a regression.
-Status: open, owned by xo-lang-4 (the bad cache entry is kept for them).
+Cause (xo-lang-4): a fault exit's shared zero value is emitted in the
+program when one of its own functions is built first (transport's
+functions that return a Request), while std's separately compiled
+object has a copy too; both were strong symbols. It shows only on the
+first build after std's variants are cached, so a rebuild or a fresh
+cache links. 0.39.0 has it too; there, set `XO_BACKEND_CACHE=off` or
+build again.
+Status: FIXED upstream in 842702e6d (xo-lang-4, 2026-11-05).
 
 ## 13. Native arm64: "reference counting of `Result[Output, Str]` (too many words)"
 

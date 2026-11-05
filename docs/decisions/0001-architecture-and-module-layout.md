@@ -107,6 +107,11 @@ rule aws-sdk-go-v2 uses (`API Gateway` is `apigateway`, `ACM PCA` is
   them on every generator change. When the generator is feature complete,
   all services are committed in one commit, each first passing
   `scripts/check-public.sh <dir>` (0007).
+- **Done 2026-11-05.** With paginators, waiters, event streams, SigV4a,
+  presign and the docs pass in, all 435 services are committed in one
+  commit. `scripts/generate-services.sh` writes them, and
+  `scripts/check-all-services.sh` now regenerates them in place, fails if
+  that changes anything tracked, and type checks every service module.
 
 ### Effects
 

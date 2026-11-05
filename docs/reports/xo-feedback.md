@@ -292,3 +292,15 @@ says what happened, not a general opinion. Bugs with repros go in
   fake network became full duplex (0e1d7b177) and `Select` was qualified
   (5dd0b3f4e), each with a regression test, so the input stream test
   runs offline in the normal suite.
+
+## 2026-11-05: all 435 services, real AWS
+
+- Liked: `XO_WORK=<file>` made the workaround for issue 11 a two-line
+  change; std had every flexible checksum (crc32 with Castagnoli, crc64
+  NVMe, sha1/256/512, md5) with Go's semantics, so S3 checksums need no
+  ported code; `binary.u64_be` takes the CRC64's negative Int as Go's
+  uint64 bits without a cast.
+- Didn't like: issue 11 (a 435-module workspace loads everything, 8.7
+  GB for one small check); `?` in a test cannot carry a plain struct
+  error (XO0202), so a non-Error error type needs `== Ok(..)` comparisons
+  in tests; `"${req.url}"` needed `:?` because `http.Url` has no Display.

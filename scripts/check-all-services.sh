@@ -1,39 +1,50 @@
 #!/bin/sh
-# Regenerates every pinned model into the untracked .gencheck/all/<model>
-# and type checks each one (decision 0001, amended 2026-11-04): run on
-# every generator change until all services are committed. Writes one
-# line per model (model, lines, result, first error) to
-# .gencheck/all-services.tsv and fails if any model fails, including one
-# with a generated file over 512 KiB (xo issue 8).
-# Usage: XO_CLI=/path/to/xo scripts/check-all-services.sh [model...]
+# Checks the committed clients of every pinned model (decision 0001):
+# regenerates them in place with scripts/generate-services.sh, fails if
+# that changes anything staged or committed under service/ or in
+# xo.work, or adds a file there (the committed output must be what the
+# generator writes), then type checks each service module. Writes one line per module (directory, lines,
+# result, first error) to .gencheck/all-services.tsv and fails if any
+# module fails, including one with a generated file over 512 KiB (xo
+# issue 8).
+# Usage: XO_CLI=/path/to/xo scripts/check-all-services.sh [--no-regenerate]
 set -u
 cd "$(dirname "$0")/.."
 xo=${XO_CLI:-xo}
-out=.gencheck/all-services.tsv
-mkdir -p .gencheck/all
-: > "$out"
-models=${*:-$(ls codegen/.models/models)}
-for m in $models; do
-  d=.gencheck/all/$m
-  rm -rf "$d"
-  g=$(cd codegen && "$xo" run ./cmd/gen -- aws "$m" "$d" 2>&1 | grep -v '^  note\|warnings in files\|^wrote' | head -3 | tr '\n\t' '  ')
-  if [ ! -d "$d" ]; then
-    printf '%s\t0\tgen-fail\t%s\n' "$m" "$g" >> "$out"
-    continue
+fail=0
+if [ "${1-}" != --no-regenerate ]; then
+  XO_CLI=$xo scripts/generate-services.sh || fail=1
+  # against the index, so staged output counts as committed
+  drift=$(git diff --name-only -- service xo.work; git ls-files --others --exclude-standard -- service)
+  if [ -n "$drift" ]; then
+    echo "check-all-services: the committed output is not what the generator writes:"
+    echo "$drift" | head -20
+    fail=1
   fi
+fi
+out=.gencheck/all-services.tsv
+mkdir -p .gencheck
+: > "$out"
+# each module is checked in a workspace of the core and itself: the full
+# xo.work lists every service, and xo loads every workspace module, about
+# 9 GB for one check (docs/reports/xo-issues.md entry 11)
+work=$(mktemp)
+trap 'rm -f "$work"' EXIT
+for d in service/*/; do
+  d=${d%/}
+  printf 'xo preview\nuse %s\nuse %s/%s\n' "$PWD" "$PWD" "$d" > "$work"
   n=$(cat "$d"/*.xo | wc -l | tr -d ' ')
-  # no generated file may pass 512 KiB (xo issue 8: the checker mixes up
-  # nodes between files over 1 MiB, so such a build is not trusted)
   big=$(find "$d" -name '*.xo' -size +512k | tr '\n' ' ')
-  c=$("$xo" check "./$d" 2>&1 | grep -v '^  note\|^  fix')
+  c=$(XO_WORK=$work "$xo" check "./$d" 2>&1 | grep -v '^  note\|^  fix')
   first=$(echo "$c" | grep ' error XO' | head -1 | cut -c1-200)
   if [ -n "$big" ]; then r=too-big; first="over 512 KiB: $big"
   elif echo "$c" | grep -q ' 0 error(s)'; then r=ok; else r=fail; fi
-  printf '%s\t%s\t%s\t%s\n' "$m" "$n" "$r" "$first$g" >> "$out"
+  printf '%s\t%s\t%s\t%s\n' "$d" "$n" "$r" "$first" >> "$out"
 done
 ok=$(grep -c '	ok	' "$out")
 total=$(wc -l < "$out" | tr -d ' ')
 lines=$(awk -F'\t' '{s+=$2} END {print s}' "$out")
-echo "check-all-services: $ok of $total models type check ($lines lines)"
+models=$(ls codegen/.models/models | wc -l | tr -d ' ')
+echo "check-all-services: $ok of $total service modules type check ($lines lines; $models pinned models)"
 grep -v '	ok	' "$out" | cut -f1,3,4
-[ "$ok" = "$total" ]
+[ "$ok" = "$total" ] && [ "$total" = "$models" ] && [ $fail -eq 0 ]

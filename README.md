@@ -8,8 +8,8 @@ Amazon.com, Inc. or its affiliates.
 
 Not yet released (no tags). What is true today:
 
-- **All 435 of AWS's published service models** generate a client that
-  type checks.
+- **All 435 of AWS's published service models** have a generated client
+  module, committed under `service/`, and every one type checks.
 - **Offline suites pass:** AWS's Smithy protocol compliance tests (741
   cases across restJson1, restXml, awsJson1_0, awsJson1_1, awsQuery and
   ec2Query), the SigV4 and SigV4a signing suites, the endpoint rule tests
@@ -160,7 +160,10 @@ xo run ./cmd/gen -- service s3 -          # writes ../service/s3
 xo run ./cmd/gen -- aws s3 /tmp/s3-check  # any directory
 ```
 
-`scripts/check-all-services.sh` generates and type checks every model.
+All 435 services are committed under `service/`.
+`scripts/generate-services.sh` regenerates them, and
+`scripts/check-all-services.sh` checks that the committed output is what
+the generator writes and type checks every service module.
 Generated files are cut at about 448 KiB, and the generator fails on any
 file over 512 KiB.
 

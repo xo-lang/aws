@@ -339,3 +339,16 @@ orders. Only Select fails, so the Scope and Listener models (EC2 and ECS
 included) are safe.
 FIXED in 5dd0b3f4e (Lang 1). Verified: the duplex test and the DynamoDB
 client share the integration build again, and the gate passes.
+
+## 11. Every workspace module is loaded, used or not (memory)
+
+With all 435 service modules listed in xo.work, `xo check
+./service/accessanalyzer` (a small service that imports only the core)
+peaks at 8.7 GB resident. The same check with `XO_WORK` naming a
+workspace of the core and that one service peaks at 0.63 GB, and reports
+"2 module(s), 0 error(s)". So xo loads (and seems to check) every module
+the workspace lists, not only those the checked package imports.
+Expected: a workspace only redirects module paths, so modules nobody
+imports cost nothing. Workaround: scripts/check-all-services.sh writes a
+two-module workspace per service. Repro: this repository at the 435
+service commit, `/usr/bin/time -l xo check ./service/accessanalyzer`.

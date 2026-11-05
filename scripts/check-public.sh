@@ -68,6 +68,16 @@ ALLOW_IPS='10\.0\.0\.0|10\.0\.1\.0|10\.1\.0\.0|10\.2\.0\.0|10\.3\.0\.0|10\.24\.3
 #   @example.com/.org/.net  reserved documentation domains (RFC 2606)
 ALLOW_EMAILS='Grantees@email\.com|xyz@amazon\.com|abc@amazon\.com|[A-Za-z0-9._%+-]+@example\.(com|org|net)'
 
+# the generated docs' other AWS values, exact, each cited to the pinned
+# models that carry it (scripts/public-placeholders.tsv, decision 0007)
+placeholders() {
+  grep -v '^#' scripts/public-placeholders.tsv | awk -F'\t' -v c="$1" '$1 == c {print $2}' | sed 's/[.+@%]/\\&/g' | paste -sd'|' -
+}
+ALLOW_ACCOUNTS="$ALLOW_ACCOUNTS|$(placeholders account)"
+ALLOW_IPS="$ALLOW_IPS|$(placeholders ip)"
+ALLOW_EMAILS="$ALLOW_EMAILS|$(placeholders email)"
+ALLOW_PATHS="$(placeholders path)"
+
 # lines with the allowed values blanked out (file:line: prefix kept)
 strip_allowed() { sed -E "s/$1//g"; }
 
@@ -79,7 +89,7 @@ hits=$(echo "$files" | xargs grep -n -I -E '[0-9]{12}' 2>/dev/null | strip_allow
 hits=$(echo "$files" | xargs grep -n -I -E '\b(AKIA|ASIA)[A-Z0-9]{16}\b' 2>/dev/null | grep -v -E 'EXAMPLE')
 [ -n "$hits" ] && report "access key ids" "$hits"
 
-hits=$(echo "$files" | xargs grep -n -I -E '/(Users|home)/[A-Za-z0-9._-]+' 2>/dev/null)
+hits=$(echo "$files" | xargs grep -n -I -E '/(Users|home)/[A-Za-z0-9._-]+' 2>/dev/null | sed -E "s#($ALLOW_PATHS)([^A-Za-z0-9._-]|$)#\\2#g" | grep -E '/(Users|home)/[A-Za-z0-9._-]+')
 [ -n "$hits" ] && report "home directory paths" "$hits"
 
 hits=$(echo "$files" | xargs grep -n -I -o -E '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 2>/dev/null | grep -v -E ':(127\.|0\.0\.0\.0|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|169\.254\.169\.254|169\.254\.170\.2)' | grep -v -E ":($ALLOW_IPS)$")

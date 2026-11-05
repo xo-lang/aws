@@ -27,3 +27,13 @@ current as work finds new ones.
    endpoint, credential or profile is used before that.
 7. **Public.** The repository is made public after the real AWS tests
    pass. Until then every push already runs check-public and gitleaks.
+8. **First release.** Every published module (the root and the 435
+   under `service/`) gets the same version at one commit: the root
+   requires `service/sts` at it and each service requires the root at
+   it (the generator keeps an existing xo.mod and gives a new service the
+   root version sts requires). `scripts/first-release.sh v0.1.0` checks
+   the tree and the requires and prints the tags; `--push` creates and
+   pushes them, the root first, then service/sts, then the rest. Check it
+   first against a scratch clone (`TAG_REMOTE` set to a bare clone, then
+   an app that gets the root and two services with no workspace). Later
+   releases use `scripts/tag-modules.sh`.

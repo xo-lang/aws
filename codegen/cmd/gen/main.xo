@@ -77,7 +77,15 @@ fn main(os: Os) -> () ! Error {
   if args[0] == "service" {
     let module = "github.com/xo-lang/aws/${dir}"
     os.fs.create_dir_all(out)?
-    os.fs.write("${out}/xo.mod", "module ${module}\nedition preview\n".bytes())?
+    // an existing xo.mod is kept: its require of the root is the release
+    // flow's (docs/release-checklist.md); a new service requires the
+    // root version service/sts requires
+    if !os.fs.exists("${out}/xo.mod")? {
+      let sts = os.fs.read_text("../service/sts/xo.mod").ok() ?? ""
+      let req = sts.lines().filter(fn(l: Str) -> Bool { l.starts_with("require github.com/xo-lang/aws ") }).join("\n")
+      let body = if req == "" { "" } else { "\n${req}\n" }
+      os.fs.write("${out}/xo.mod", "module ${module}\nedition preview\n${body}".bytes())?
+    }
     let work = os.fs.read_text("../xo.work")?
     if !work.contains("use ./${dir}\n") {
       os.fs.write("../xo.work", "${work}use ./${dir}\n".bytes())?

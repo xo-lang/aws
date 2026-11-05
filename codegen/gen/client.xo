@@ -101,6 +101,11 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  /// The token of bearer auth (`AWS_BEARER_TOKEN_${bearer_env(g)}` through")
     out.push(if bearer_auth(g) == "only" { "  /// `from_config`); every call needs it." } else { "  /// `from_config`): when set, calls use it instead of SigV4." })
     out.push("  pub bearer_token: Str? = None")
+    if bearer_auth(g) == "only" {
+      out.push("  /// Asked for a token when `bearer_token` is not set: the profile's")
+      out.push("  /// `sso_session` through `from_config`.")
+      out.push("  pub bearer_provider: aws.BearerTokenProvider? = None")
+    }
   }
   for p in client_params(g) {
     for l in wrap(strip_html(p.doc), 70) {
@@ -162,7 +167,8 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   }
   out.push("    region: options.region,")
   if bearer_auth(g) != "" {
-    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) }), trace_id: options.trace_id},")
+    let provider = if bearer_auth(g) == "only" { ", token_provider: options.bearer_provider" } else { "" }
+    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) })${provider}, trace_id: options.trace_id},")
   } else {
     out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},")
   }
@@ -322,6 +328,9 @@ fn emit_from_config(g: G, var out: List[Str]) {
   }
   if bearer_auth(g) != "" {
     out.push("  o.bearer_token = cfg.bearer_tokens.get(${lit_str(bearer_env(g))})")
+    if bearer_auth(g) == "only" {
+      out.push("  o.bearer_provider = cfg.bearer_token_provider")
+    }
   }
   out.push("  Ok(o)")
   out.push("}")

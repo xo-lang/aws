@@ -23,6 +23,9 @@ pub struct Options {
   /// The token of bearer auth (`AWS_BEARER_TOKEN_CODECATALYST` through
   /// `from_config`); every call needs it.
   pub bearer_token: Str? = None
+  /// Asked for a token when `bearer_token` is not set: the profile's
+  /// `sso_session` through `from_config`.
+  pub bearer_provider: aws.BearerTokenProvider? = None
   /// When true, send this request to the FIPS-compliant regional endpoint.
   /// If the configured endpoint does not have a FIPS compliant endpoint,
   /// dispatching the request will return an error.
@@ -47,7 +50,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) }), trace_id: options.trace_id},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) }), token_provider: options.bearer_provider, trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -69,6 +72,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   o.use_fips = Some(cfg.use_fips)
   o.trace_id = cfg.trace_id
   o.bearer_token = cfg.bearer_tokens.get("CODECATALYST")
+  o.bearer_provider = cfg.bearer_token_provider
   Ok(o)
 }
 

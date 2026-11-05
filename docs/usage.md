@@ -63,7 +63,10 @@ when `AWS_EC2_METADATA_V1_DISABLED` (or `ec2_metadata_v1_disabled`) is
 A profile can also name IAM Identity Center (`sso_session` with an
 `[sso-session NAME]` section, or the legacy `sso_start_url` and
 `sso_region`, plus `sso_account_id` and `sso_role_name`; log in with
-`aws sso login` first) or a `credential_process`.
+`aws sso login` first) or a `credential_process`. A profile with an
+`sso_session` also gives CodeCatalyst its bearer token (the session's
+access token, refreshed as it expires); `sso_account_id` and
+`sso_role_name` are needed only for credentials.
 
 Two kinds of credentials need a task on `os.tasks`, since a provider's
 `retrieve` can neither read files nor run programs:

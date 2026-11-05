@@ -523,14 +523,33 @@ test "an sso_session profile, a legacy SSO profile, and a role assumed from SSO"
   expect((admin.credentials ?? return Err("no provider")).retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
 }
 
-test "an SSO profile missing settings names them" {
+test "SSO settings: a legacy profile must name all four; a session profile needs account and role only for credentials" {
   sso_setup(os)?
-  match load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("broken")}) {
+  os.fs.write("/h/.aws/config", (SSO_CONFIG + "\n[profile legacy_broken]\nsso_start_url = https://example.awsapps.com/start\nsso_region = us-west-2\n").bytes())?
+  match load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("legacy_broken")}) {
     Err(ConfigErr.Invalid(s, _, m)) => {
       expect(s) == "sso_account_id"
-      expect(m) == "profile broken: is configured to use SSO but is missing required configuration: sso_account_id"
+      expect(m) == "profile legacy_broken: is configured to use SSO but is missing required configuration: sso_account_id, sso_role_name"
     }
     other => expect("${other:?}") == "Invalid"
+  }
+  let broken = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("broken")})?
+  match (broken.credentials ?? return Err("no provider")).retrieve() {
+    Err(aws.CredentialsErr.Fetch(m)) => expect(m.contains("needs sso_account_id and sso_role_name")) == true
+    other => expect("${other:?}") == "Fetch"
+  }
+  // its bearer token works without them
+  let t = (broken.bearer_token_provider ?? return Err("no bearer provider")).token()?
+  expect(t.reveal()) == "access-1"
+}
+
+test "before aws sso login the profile still loads, and a call says to log in" {
+  os.env.set("HOME", "/h")
+  os.fs.write("/h/.aws/config", SSO_CONFIG.bytes())?
+  let dev = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("dev")})?
+  match (dev.credentials ?? return Err("no provider")).retrieve() {
+    Err(aws.CredentialsErr.Fetch(m)) => expect(m.contains("run aws sso login")) == true
+    other => expect("${other:?}") == "Fetch"
   }
 }
 

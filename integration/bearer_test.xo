@@ -6,7 +6,10 @@
 use std/http
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/config
+use github.com/xo-lang/aws/credentials/ssocreds
 use github.com/xo-lang/aws/service/bedrockruntime
+use github.com/xo-lang/aws/service/codecatalyst
 use github.com/xo-lang/aws/service/sts
 
 test "Bedrock Runtime uses a bearer token when one is set, SigV4 otherwise" {
@@ -40,4 +43,20 @@ test "a configured trace id is sent as X-Amzn-Trace-Id" {
     trace_id: "Root=1-00000000-000000000000000000000000",
   }
   sts.from_config(os.net, os.clock, os.rand, cfg)?.get_caller_identity(sts.GetCallerIdentityRequest{})?
+}
+
+test "CodeCatalyst takes its bearer token from the profile's sso_session, refreshed through SSO OIDC" {
+  os.env.set("HOME", "/h")
+  os.fs.write("/h/.aws/config", b"[default]\nsso_session = corp\nregion = us-west-2\n\n[sso-session corp]\nsso_region = us-west-2\nsso_start_url = https://example.awsapps.com/start\n")?
+  os.fs.write(ssocreds.cache_path("/h", "corp"), b"{\"accessToken\":\"old\",\"expiresAt\":\"2025-12-31T00:00:00Z\",\"refreshToken\":\"r\",\"clientId\":\"c\",\"clientSecret\":\"s\"}")?
+  os.net.handle("POST https://oidc.us-west-2.amazonaws.com/token", fn(req: http.Request) -> http.Response {
+    http.text(200, "{\"accessToken\":\"fresh\",\"expiresIn\":3600}")
+  })
+  os.net.handle("GET https://codecatalyst.global.api.aws/session", fn(req: http.Request) -> http.Response {
+    expect(req.header("Authorization")) == Some("Bearer fresh")
+    http.text(200, "{\"identity\":\"user-1\"}").with_header("Content-Type", "application/json")
+  })
+  let cfg = config.load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  let cc = codecatalyst.from_config(os.net, os.clock, os.rand, cfg)?
+  expect(cc.verify_session(())?.identity) == Some("user-1")
 }

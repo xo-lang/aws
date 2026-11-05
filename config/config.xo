@@ -85,17 +85,17 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
   let endpoints = configured_endpoints(env, sc, p)
   let files = Mutex[List[aws.TokenFile]].new([])
   let procs = Mutex[List[aws.CredentialProcess]].new([])
+  let md = imds_options(env, p.props)?
+  let box = container_options(env, fs)?
+  let ctx = RoleContext{env: env, fs: fs, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md, container: box, token_files: files, processes: procs}
   let creds: aws.CredentialsProvider = match opts.credentials {
     Some(c) => c
     None => {
-      let md = imds_options(env, p.props)?
-      let box = container_options(env, fs)?
       if let Some(o) = box {
         if o.token.path != "" {
           files.with(fn(var l: List[aws.TokenFile]) { l.push(o.token) })
         }
       }
-      let ctx = RoleContext{env: env, fs: fs, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md, container: box, token_files: files, processes: procs}
       var chain: List[aws.CredentialsProvider] = [credentials.env_provider(env)]
       // AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN come after the
       // environment's keys and before the profile, unless a profile was
@@ -119,6 +119,15 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
     }
   }
 
+  // a profile with an sso_session also gives bearer tokens (CodeCatalyst)
+  let bearer: aws.BearerTokenProvider? = if non_empty(p.props.get("sso_session")).is_some() {
+    match sso_options(ctx, profile, p)? {
+      Some(o) => Some(ssocreds.bearer_provider(net, clock, o))
+      None => None
+    }
+  } else {
+    None
+  }
   let calc = checksum_setting("AWS_REQUEST_CHECKSUM_CALCULATION", "request_checksum_calculation", env, p.props)?
   let valid = checksum_setting("AWS_RESPONSE_CHECKSUM_VALIDATION", "response_checksum_validation", env, p.props)?
   Ok(aws.Config{
@@ -134,6 +143,7 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
     app_id: non_empty(env.get("AWS_SDK_UA_APP_ID")) ?? non_empty(p.props.get("sdk_ua_app_id")),
     profile: profile,
     bearer_tokens: bearer_tokens(env),
+    bearer_token_provider: bearer,
     account_id_endpoint_mode: non_empty(env.get("AWS_ACCOUNT_ID_ENDPOINT_MODE")) ?? non_empty(p.props.get("account_id_endpoint_mode")),
     trace_id: lambda_trace_id(env),
     request_checksum_calculation: calc,
@@ -197,13 +207,23 @@ struct RoleContext {
   processes: Mutex[List[aws.CredentialProcess]]
 }
 
-/// The profile's IAM Identity Center credentials, if it names SSO: an
-/// `sso_session` (with that section's `sso_region` and `sso_start_url`)
-/// or the legacy `sso_start_url` and `sso_region` on the profile, and
-/// `sso_account_id` and `sso_role_name`. The token cache is read now;
-/// a session's token is refreshed when it expires (aws-sdk-go-v2's
-/// validation and messages).
+/// The profile's IAM Identity Center credentials, if it names SSO.
 fn sso_provider(ctx: RoleContext, profile: Str, p: Section) -> aws.CredentialsProvider? ! ConfigErr uses (env, fs.read) {
+  match sso_options(ctx, profile, p)? {
+    Some(o) => Ok(Some(credentials.cache(ssocreds.provider(ctx.net, ctx.clock, o), ctx.clock)))
+    None => Ok(None)
+  }
+}
+
+/// The profile's SSO settings, if it names SSO: an `sso_session` (with
+/// that section's `sso_region` and `sso_start_url`) or the legacy
+/// `sso_start_url` and `sso_region` on the profile, with
+/// `sso_account_id` and `sso_role_name` (needed at load only by a legacy
+/// profile, as aws-sdk-go-v2; a session profile used only for bearer
+/// tokens leaves them out). The token cache is read now, or later by the
+/// watch if it is not there yet; one profile's cache is shared by its
+/// credentials and its bearer token.
+fn sso_options(ctx: RoleContext, profile: Str, p: Section) -> ssocreds.Options? ! ConfigErr uses (env, fs.read) {
   let session = non_empty(p.props.get("sso_session"))
   let legacy = ["sso_region", "sso_account_id", "sso_start_url", "sso_role_name"].any(fn(k: Str) -> Bool { non_empty(p.props.get(k)).is_some() })
   if session.is_none() && !legacy {
@@ -233,21 +253,30 @@ fn sso_provider(ctx: RoleContext, profile: Str, p: Section) -> aws.CredentialsPr
     start = ss
     key = name
   }
-  var missing: List[Str] = []
-  if region == "" { missing.push("sso_region") }
-  if start == "" { missing.push("sso_start_url") }
   let account = non_empty(p.props.get("sso_account_id")) ?? ""
   let role = non_empty(p.props.get("sso_role_name")) ?? ""
-  if account == "" { missing.push("sso_account_id") }
-  if role == "" { missing.push("sso_role_name") }
-  if !missing.is_empty() {
-    return Err(bad(missing[0], "is configured to use SSO but is missing required configuration: ${missing.join(", ")}"))
+  if session.is_none() {
+    var missing: List[Str] = []
+    if region == "" { missing.push("sso_region") }
+    if start == "" { missing.push("sso_start_url") }
+    if account == "" { missing.push("sso_account_id") }
+    if role == "" { missing.push("sso_role_name") }
+    if !missing.is_empty() {
+      return Err(bad(missing[0], "is configured to use SSO but is missing required configuration: ${missing.join(", ")}"))
+    }
   }
   let home = ctx.env.home() ?? e => return Err(bad("sso_start_url", "the SSO token cache is under the home directory: ${e.display()}"))
   let path = ssocreds.cache_path(home, key)
-  let token = aws.load_token_file(ctx.fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "sso_session", value: key, msg: "reading the SSO token cache (run aws sso login): ${e}"))
-  ctx.token_files.with(fn(var l: List[aws.TokenFile]) { l.push(token) })
-  Ok(Some(credentials.cache(ssocreds.provider(ctx.net, ctx.clock, ssocreds.Options{
+  let known = ctx.token_files.with_read(fn(l: List[aws.TokenFile]) -> aws.TokenFile? { l.find(fn(t: aws.TokenFile) -> Bool { t.path == path }) })
+  let token = match known {
+    Some(t) => t
+    None => {
+      let t = aws.token_file_or_empty(ctx.fs, path)
+      ctx.token_files.with(fn(var l: List[aws.TokenFile]) { l.push(t) })
+      t
+    }
+  }
+  Ok(Some(ssocreds.Options{
     region: region,
     account_id: account,
     role_name: role,
@@ -255,7 +284,7 @@ fn sso_provider(ctx: RoleContext, profile: Str, p: Section) -> aws.CredentialsPr
     refresh: session.is_some(),
     portal_endpoint: aws.endpoint_for(ctx.endpoints, "SSO") ?? "",
     oidc_endpoint: aws.endpoint_for(ctx.endpoints, "SSO OIDC") ?? "",
-  }), ctx.clock)))
+  }))
 }
 
 /// Assume `arn` with the web identity token in `path` (read now), over

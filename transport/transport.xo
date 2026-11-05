@@ -131,6 +131,8 @@ pub struct Client {
   pub user_agent: Str = "xo-lang-aws/0.1"
   /// The token of bearer auth (`Auth.Bearer`), such as a Bedrock API key.
   pub token: Secret[Str]? = None
+  /// Asked for a token when `token` is not set.
+  pub token_provider: aws.BearerTokenProvider? = None
   /// Sent as `X-Amzn-Trace-Id` when the request has none (inside Lambda).
   pub trace_id: Str? = None
   /// Local clock correction, from a skewed response's `Date`.
@@ -204,7 +206,13 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
     }
   }
   if signing.auth is Auth.Bearer {
-    let token = c.token ?? return Err(AttemptErr.Creds(aws.CredentialsErr.NotFound("no bearer token: set the client's bearer_token")))
+    let token = match c.token {
+      Some(t) => t
+      None => match c.token_provider {
+        Some(p) => p.token() ?? e => return Err(AttemptErr.Creds(e))
+        None => return Err(AttemptErr.Creds(aws.CredentialsErr.NotFound("no bearer token: set the client's bearer_token, or use a profile with an sso_session")))
+      }
+    }
     headers.push(("Authorization", "Bearer ${token.reveal()}"))
     return Ok((unsigned_request(c, req, headers), "", sigv4.Credentials{access_key_id: "", secret_access_key: Secret.new("")}, now))
   }

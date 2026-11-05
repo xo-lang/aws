@@ -422,3 +422,24 @@ Disliked:
 - `testing.FakeNet` is not `Net`: a helper that registers handlers must
   take `testing.FakeNet`, which the error (`Net` has no method
   `handle`) does not suggest.
+
+## 2026-11-05: Azure core, credentials (xo-lang/azure)
+
+Liked:
+- `jwt.sign` with `header` and `x5c` made the MSAL client assertion
+  (PS256, `x5t#S256`) a few lines.
+- `embed` keeps test data next to the test with no fs effect.
+- An interface value in a `List` (the policy chain) and a Mutex
+  `with` closure that carries effects (the shared bearer token) both
+  just worked.
+
+Disliked:
+- `embed("...")` works only as a `const` initializer; inside a test
+  body it is `function embed not found`, which does not point at the
+  rule. A const of type `Str` then needs `.bytes()` for a `Bytes` API;
+  `const X: Bytes = embed(...)` would fit binary files (a future .pfx).
+- Native RSA key generation is still missing (decision 0285), so a
+  test that signs with RSA needs a key on disk, which secret scanners
+  flag and the repo must allowlist.
+- A stored closure cannot carry effects, so the pager and poller hold
+  the pipeline plus pure decoders instead of a "fetch next" closure.

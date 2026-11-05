@@ -1,0 +1,162 @@
+// The harness for the real AWS tests (docs/real-aws-tests.md): which
+// target a run uses, the account guard, the per-run resource prefix, and
+// scrubbing of account IDs from output. Run only by
+// scripts/integration-aws.sh. With neither XO_AWS_REAL=1 nor
+// XO_AWS_EMULATOR set, `begin` returns None and every step does nothing.
+
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/config
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/sts
+
+/// Every resource a run creates starts with this, then 8 hex digits.
+pub const PREFIX: Str = "xo-lang-aws-it-"
+
+/// Where a run sends its requests.
+pub struct Target {
+  /// True against AWS, false against an emulator.
+  pub real: Bool
+  /// The network the clients use (loopback only for an emulator).
+  pub net: Net
+  pub cfg: aws.Config
+  /// The first region (the configuration's, us-east-1 by default) and a
+  /// second one for the multi-region step.
+  pub region: Str
+  pub region2: Str
+  /// This run's prefix: PREFIX and 8 hex digits.
+  pub prefix: Str
+  /// The account the credentials belong to.
+  pub account: Str
+}
+
+/// Whether `p` is PREFIX followed by exactly 8 lowercase hex digits.
+pub fn valid_prefix(p: Str) -> Bool {
+  let rest = p.cut_prefix(PREFIX) ?? return false
+  if rest.len() != 8 {
+    return false
+  }
+  for r in rest.runes() {
+    if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+      return false
+    }
+  }
+  true
+}
+
+/// `text` with the account ID replaced, for anything printed.
+pub fn scrub(text: Str, account: Str) -> Str {
+  if account == "" { text } else { text.replace(account, "<account>") }
+}
+
+/// The last four digits of an account ID, the most a message shows.
+pub fn tail4(account: Str) -> Str {
+  if account.len() <= 4 { account } else { account[account.len() - 4..account.len()] }
+}
+
+/// The target of this run, from the environment:
+/// - `XO_AWS_REAL=1`: AWS, with the default configuration chain, only
+///   when `XO_AWS_EXPECT_ACCOUNT` names the account the credentials
+///   belong to (checked with STS GetCallerIdentity before anything is
+///   created). Configured endpoint URLs are ignored.
+/// - `XO_AWS_EMULATOR=<url>`: an emulator on the loopback host, with
+///   invented credentials.
+/// - neither: None, and the steps do nothing.
+/// `XO_AWS_RUN_PREFIX` must be a valid prefix in both modes.
+pub fn begin(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand) -> Target? ! Str uses (env, fs.read, net.dial, clock, rand) {
+  let real = env.get("XO_AWS_REAL") == Some("1")
+  let emulator = env.get("XO_AWS_EMULATOR") ?? ""
+  if !real && emulator == "" {
+    return Ok(None)
+  }
+  if real && emulator != "" {
+    return Err("XO_AWS_REAL and XO_AWS_EMULATOR cannot both be set")
+  }
+  let prefix = env.get("XO_AWS_RUN_PREFIX") ?? ""
+  if !valid_prefix(prefix) {
+    return Err("XO_AWS_RUN_PREFIX must be ${PREFIX} and 8 lowercase hex digits")
+  }
+  // a real run names both regions explicitly (never the profile's), and
+  // never us-east-1, where the account's own resources live
+  let region = env.get("XO_AWS_REGION") ?? (if real { "" } else { "us-east-1" })
+  let region2 = env.get("XO_AWS_REGION2") ?? (if real { "" } else { "us-west-2" })
+  if region == "" || region2 == "" {
+    return Err("a real run needs XO_AWS_REGION and XO_AWS_REGION2")
+  }
+  if region == region2 {
+    return Err("XO_AWS_REGION and XO_AWS_REGION2 must differ")
+  }
+  if real && (region == "us-east-1" || region2 == "us-east-1") {
+    return Err("a real run never uses us-east-1")
+  }
+  let expect = env.get("XO_AWS_EXPECT_ACCOUNT") ?? ""
+  if real && expect == "" {
+    return Err("XO_AWS_EXPECT_ACCOUNT must name the account to test in")
+  }
+  let n = if real { net } else { net.only(["127.0.0.1", "localhost"]) }
+  var cfg = aws.Config{
+    region: Some(region),
+    credentials: Some(credentials.static_provider("AKIDTEST0000000000", "test")),
+    endpoints: aws.ConfiguredEndpoints{env_global: Some(emulator)},
+  }
+  if real {
+    let loaded = config.load_default_config(env, fs, net, clock, rand) ?? e => return Err("configuration: ${e.display()}")
+    cfg = loaded with {region: Some(region), endpoints: aws.ConfiguredEndpoints{ignore: true}}
+  }
+  let c = sts.from_config(n, clock, rand, cfg)?
+  let who = c.get_caller_identity(sts.GetCallerIdentityRequest{}) ?? e => return Err("STS GetCallerIdentity: ${e.display()}")
+  let account = who.account ?? ""
+  if real && account != expect {
+    return Err("the credentials belong to an account ending ${tail4(account)}, not the expected one; nothing was created")
+  }
+  Ok(Some(Target{real: real, net: n, cfg: cfg, region: region, region2: region2, prefix: prefix, account: account}))
+}
+
+/// The configuration for `region` instead of the first one.
+pub fn (t: Target) in_region(region: Str) -> aws.Config {
+  t.cfg with {region: Some(region)}
+}
+
+/// A name for this run's resource `what`: the prefix, a dash, `what`.
+pub fn (t: Target) name(what: Str) -> Str {
+  "${t.prefix}-${what}"
+}
+
+/// Cleanup failures, collected so every delete is tried and the step
+/// still fails at the end.
+pub struct Problems {
+  pub items: List[Str] = []
+}
+
+/// Records `r`'s error, unless `ok_codes` lists its text as expected
+/// (a resource that was never created).
+pub fn note[T, E](var p: Problems, what: Str, r: Result[T, E], ok_codes: List[Str] = []) {
+  match r {
+    Ok(_) => {}
+    Err(e) => {
+      let text = "${e:?}"
+      if !ok_codes.any(fn(c: Str) -> Bool { text.contains(c) }) {
+        p.items.push("${what}: ${text}")
+      }
+    }
+  }
+}
+
+/// Ok when nothing failed, else every failure, scrubbed.
+pub fn (p: Problems) check(account: Str) -> () ! Str {
+  if p.items.is_empty() {
+    return Ok(())
+  }
+  Err(scrub("cleanup failed:\n${p.items.join("\n")}", account))
+}
+
+/// Records a step's outcome other than a pass (`skipped: ...`,
+/// `timed out: ...`) in XO_AWS_REPORT_DIR, which the script prints at
+/// the end, since a test's own output is captured.
+pub fn report(env: Env, fs: Fs, step: Int, text: Str) uses (env, fs.write) {
+  if let Some(dir) = env.get("XO_AWS_REPORT_DIR") {
+    let n = if step < 10 { "0${step}" } else { "${step}" }
+    match fs.write("${dir}/step-${n}.txt", "${text}\n".bytes()) {
+      _ => {}
+    }
+  }
+}

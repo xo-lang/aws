@@ -4,15 +4,74 @@ A community AWS SDK for the Xo language. Not affiliated with or endorsed by
 Amazon Web Services. AWS and Amazon Web Services are trademarks of
 Amazon.com, Inc. or its affiliates.
 
-Status: early development, not yet released. Every one of AWS's 435
-published service models generates a client that type checks; the
-clients for S3, DynamoDB, SQS, SNS, STS, Secrets Manager, Lambda, EC2
-and Kinesis are tested against local emulators and AWS's protocol test
-suites, and Transcribe Streaming's input event stream against an
-in-process server on the test network. The
-design is in [docs/decisions](docs/decisions/README.md), and
+## Status
+
+Not yet released (no tags). What is true today:
+
+- **All 435 of AWS's published service models** generate a client that
+  type checks.
+- **Offline suites pass:** AWS's Smithy protocol compliance tests (741
+  cases across restJson1, restXml, awsJson1_0, awsJson1_1, awsQuery and
+  ec2Query), the SigV4 and SigV4a signing suites, the endpoint rule tests
+  carried in every model, the JMESPath compliance suite, and the event
+  stream codec vectors.
+- **LocalStack:** S3, DynamoDB, SQS, SNS, STS, Secrets Manager, Lambda,
+  EC2 and Kinesis, with S3 signature checking on.
+- **Real AWS, 2026-11-04** (ca-central-1, eu-north-1):
+  - S3: objects, multipart upload, CopyObject, paginators, waiters,
+    presigned PUT and GET, modeled errors;
+  - S3 Control and a Multi-Region Access Point, signed with SigV4a;
+  - DynamoDB, SQS, SNS, STS (including a presigned GetCallerIdentity),
+    Secrets Manager and EC2;
+  - Kinesis SubscribeToShard (an output event stream);
+  - Polly, and Transcribe Streaming (an input event stream with chained
+    signatures);
+  - Lambda InvokeWithResponseStream.
+
+Less tested: services that depend on hand-written customizations in the
+other AWS SDKs (checksums, endpoint discovery, cross-region presigned
+URLs, service-specific headers). Every service type checks, but only the
+services above have run against a server.
+
+The design is in [docs/decisions](docs/decisions/README.md), and
 [docs/usage.md](docs/usage.md) shows how to use it. Licensed under
 Apache-2.0 (LICENSE, NOTICE).
+
+## Requirements
+
+Xo 0.39.0 or later, except for two cases:
+
+- A program that uses DynamoDB together with `select` needs Xo 0.40 or
+  later (or main at or after 5dd0b3f4e). Earlier versions fail to build
+  it because DynamoDB's `Select` type clashes with a runtime name.
+- This repository's own tests need Xo main at or after 0e1d7b177, which
+  makes the test network full duplex.
+
+## Install
+
+Each service is its own module, next to the core module
+`github.com/xo-lang/aws`. Require the core and the services you use in
+your `xo.mod`:
+
+```
+module example.com/app
+edition preview
+
+require github.com/xo-lang/aws v0.1.0
+require github.com/xo-lang/aws/service/s3 v0.1.0
+require github.com/xo-lang/aws/service/dynamodb v0.1.0
+```
+
+Then import the packages you use:
+
+```
+use github.com/xo-lang/aws/config
+use github.com/xo-lang/aws/service/s3
+```
+
+Versions are git tags: `vX.Y.Z` for the core and `service/<name>/vX.Y.Z`
+for a service (`service/s3/v0.1.0`). No tag exists yet; the versions
+above show the form.
 
 ## Layout
 
@@ -107,8 +166,59 @@ file over 512 KiB.
 
 ## Testing policy
 
-Everything is tested offline: AWS's Smithy protocol compliance tests, the
-SigV4 and SigV4a signing test suites, the endpoint rules tests carried in
-each service model, and local emulators (MinIO, LocalStack or moto) in
-Docker with invented credentials. Nothing in this repository talks to real
-AWS endpoints.
+Every gate and every emulator script runs offline, with invented
+credentials:
+
+- AWS's Smithy protocol compliance tests;
+- the SigV4 and SigV4a signing test suites;
+- the endpoint rules tests carried in each service model;
+- tests on Xo's in-process test network;
+- local emulators (LocalStack, MinIO) in Docker.
+
+Real AWS is opt in. `scripts/integration-aws.sh` runs against AWS only
+when `XO_AWS_REAL=1` is set together with `XO_AWS_EXPECT_ACCOUNT`, the
+account the credentials must belong to. It is never part of a gate, and
+it cleans up everything it creates. See
+[docs/real-aws-tests.md](docs/real-aws-tests.md) for the steps and the
+guards, and [docs/real-aws-policy.json](docs/real-aws-policy.json) for an
+IAM policy limited to the resources the tests create.
+
+## Versioning and compatibility
+
+Each module follows semantic versioning on its own:
+
+- A service module's minor version goes up when AWS adds operations,
+  members or enum values to its model.
+- A service module's patch version goes up for a generator fix that
+  changes no API.
+- The core module's minor version goes up for new features (a credential
+  provider, a protocol detail). A major version goes up only for a
+  breaking API change.
+- Each service module requires the lowest core version it needs, and
+  your program builds with the highest core version any module requires.
+
+Before 1.0, a minor version may break the API. Breaking changes are
+listed in the release notes.
+
+## Reporting issues and security
+
+- **Bugs and requests:** open an issue at
+  https://github.com/xo-lang/aws/issues. Include the Xo version, the
+  service and operation, and the error.
+- **Never put credentials in an issue,** and none of: access keys,
+  session tokens, account IDs, ARNs, request signatures, or
+  configuration files. Replace them with placeholders.
+- **Security problems:** report them privately through GitHub's
+  "Report a vulnerability" on the repository's Security tab, not in a
+  public issue.
+
+## Contributing
+
+- Generated code (`service/`, `internal/protocoltest/`) is never edited
+  by hand. Change the generator in `codegen/` and regenerate (see
+  [Generating](#generating)).
+- Run `scripts/gate.sh` and `scripts/check-public.sh` before sending a
+  change.
+- Hand-written code (the core packages, the generator, the scripts) is
+  reviewed like any other code. Commits must carry no credentials or
+  private values; check-public and gitleaks enforce this.

@@ -1,0 +1,115 @@
+// The harness's guards, offline: a fake environment, a fake file system
+// and a fake network whose STS answers with an invented account. No
+// request leaves the process.
+
+use std/http
+use std/testing
+
+const IDENTITY_OK: Str = "<GetCallerIdentityResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\"><GetCallerIdentityResult><Account>111122223333</Account></GetCallerIdentityResult></GetCallerIdentityResponse>"
+
+fn fake_sts(n: testing.FakeNet, url: Str, calls: Atomic[Int]) {
+  n.handle("POST ${url}", fn(_req: http.Request) -> http.Response {
+    calls.add(1)
+    http.text(200, IDENTITY_OK).with_header("Content-Type", "text/xml")
+  })
+}
+
+fn real_env(e: testing.FakeEnv, expect: Str) {
+  e.set("XO_AWS_REAL", "1")
+  e.set("XO_AWS_EXPECT_ACCOUNT", expect)
+  e.set("XO_AWS_RUN_PREFIX", "xo-lang-aws-it-0123abcd")
+  e.set("AWS_ACCESS_KEY_ID", "AKIDTEST0000000000")
+  e.set("AWS_SECRET_ACCESS_KEY", "invented-secret")
+  e.set("HOME", "/nonexistent-xo-test-home")
+  e.set("XO_AWS_REGION", "ca-central-1")
+  e.set("XO_AWS_REGION2", "eu-north-1")
+}
+
+test "with neither mode set, begin does nothing" {
+  let calls = Atomic[Int].new(0)
+  fake_sts(os.net, "https://sts.ca-central-1.amazonaws.com/", calls)
+  expect(begin(os.env, os.fs, os.net, os.clock, os.rand)?.is_none()) == true
+  expect(calls.get()) == 0
+}
+
+test "prefixes are the fixed prefix and 8 lowercase hex digits" {
+  expect(valid_prefix("xo-lang-aws-it-0123abcd")) == true
+  expect(valid_prefix("xo-lang-aws-it-")) == false
+  expect(valid_prefix("xo-lang-aws-it-0123ABCD")) == false
+  expect(valid_prefix("xo-lang-aws-it-0123abcde")) == false
+  expect(valid_prefix("other-0123abcd")) == false
+}
+
+test "a real run needs the expected account and a valid prefix" {
+  real_env(os.env, "")
+  expect(begin(os.env, os.fs, os.net, os.clock, os.rand).is_err()) == true
+  real_env(os.env, "111122223333")
+  os.env.set("XO_AWS_RUN_PREFIX", "xo-lang-aws-it-*")
+  expect(begin(os.env, os.fs, os.net, os.clock, os.rand).is_err()) == true
+}
+
+test "real and emulator modes are exclusive" {
+  real_env(os.env, "111122223333")
+  os.env.set("XO_AWS_EMULATOR", "http://127.0.0.1:4566")
+  expect(begin(os.env, os.fs, os.net, os.clock, os.rand).is_err()) == true
+}
+
+test "credentials for another account stop the run after one STS call" {
+  let calls = Atomic[Int].new(0)
+  fake_sts(os.net, "https://sts.ca-central-1.amazonaws.com/", calls)
+  real_env(os.env, "444455556666")
+  match begin(os.env, os.fs, os.net, os.clock, os.rand) {
+    Err(msg) => {
+      expect(msg.contains("ending 3333")) == true
+      expect(msg.contains("111122223333")) == false
+    }
+    Ok(_) => expect("began") == "refused"
+  }
+  expect(calls.get()) == 1
+}
+
+test "the expected account begins a real run, ignoring configured endpoint URLs" {
+  let calls = Atomic[Int].new(0)
+  fake_sts(os.net, "https://sts.ca-central-1.amazonaws.com/", calls)
+  real_env(os.env, "111122223333")
+  os.env.set("AWS_ENDPOINT_URL", "http://elsewhere.test")
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Err("no target")
+  expect(t.real) == true
+  expect(t.region) == "ca-central-1"
+  expect(t.region2) == "eu-north-1"
+  expect(t.name("s3")) == "xo-lang-aws-it-0123abcd-s3"
+  expect(calls.get()) == 1
+  expect(scrub("arn:aws:iam::111122223333:user/x", t.account)) == "arn:aws:iam::<account>:user/x"
+}
+
+test "an emulator run uses invented credentials and the emulator's URL" {
+  let calls = Atomic[Int].new(0)
+  fake_sts(os.net, "http://127.0.0.1:4566/", calls)
+  os.env.set("XO_AWS_EMULATOR", "http://127.0.0.1:4566")
+  os.env.set("XO_AWS_RUN_PREFIX", "xo-lang-aws-it-0123abcd")
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Err("no target")
+  expect(t.real) == false
+  expect(calls.get()) == 1
+}
+
+test "cleanup problems are collected, expected misses ignored, accounts scrubbed" {
+  var p = Problems{}
+  let missing: Result[(), Str] = Err("NoSuchBucket")
+  let failed: Result[(), Str] = Err("AccessDenied for 111122223333")
+  note(p, "delete bucket", missing, ok_codes: ["NoSuchBucket"])
+  expect(p.check("111122223333").is_ok()) == true
+  note(p, "delete table", failed)
+  match p.check("111122223333") {
+    Err(msg) => expect(msg) == "cleanup failed:\ndelete table: \"AccessDenied for <account>\""
+    Ok(_) => expect("ok") == "failed"
+  }
+}
+
+test "a real run names both regions and never us-east-1" {
+  real_env(os.env, "111122223333")
+  os.env.set("XO_AWS_REGION", "us-east-1")
+  expect(begin(os.env, os.fs, os.net, os.clock, os.rand).is_err()) == true
+  os.env.set("XO_AWS_REGION", "ca-central-1")
+  os.env.set("XO_AWS_REGION2", "us-east-1")
+  expect(begin(os.env, os.fs, os.net, os.clock, os.rand).is_err()) == true
+}

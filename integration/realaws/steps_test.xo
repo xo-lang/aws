@@ -1,0 +1,634 @@
+// The steps of the real AWS test plan (docs/real-aws-tests.md), one test
+// each, run by scripts/integration-aws.sh. Each step creates resources
+// named from the run's prefix, checks the SDK against them, then deletes
+// them whatever happened; the script's closing sweep removes anything a
+// fault left. Without XO_AWS_REAL=1 or XO_AWS_EMULATOR every step returns
+// at once. Steps marked real only need services the emulator lacks.
+
+use std/http
+use std/archive
+use github.com/xo-lang/aws/service/cloudwatchlogs
+use github.com/xo-lang/aws/service/dynamodb
+use github.com/xo-lang/aws/service/ec2
+use github.com/xo-lang/aws/service/iam
+use github.com/xo-lang/aws/service/kinesis
+use github.com/xo-lang/aws/service/lambda
+use github.com/xo-lang/aws/service/polly
+use github.com/xo-lang/aws/service/s3
+use github.com/xo-lang/aws/service/s3control
+use github.com/xo-lang/aws/service/secretsmanager
+use github.com/xo-lang/aws/service/sns
+use github.com/xo-lang/aws/service/sqs
+use github.com/xo-lang/aws/service/sts
+use github.com/xo-lang/aws/service/transcribestreaming as ts
+
+/// Whether step `n` is selected: XO_AWS_STEPS is a comma separated list
+/// of step numbers, or unset for the default (non optional) steps.
+fn selected(env: Env, n: Int, optional: Bool) -> Bool uses env {
+  match env.get("XO_AWS_STEPS") {
+    Some(list) => list.split(",").map(fn(s: Str) -> Str { s.trim() }).contains("${n}")
+    None => !optional
+  }
+}
+
+/// Creates `bucket` in `region` (a location constraint outside
+/// us-east-1).
+fn make_bucket(c: s3.Client, bucket: Str, region: Str) -> () ! s3.CreateBucketErr uses (net.dial, clock, rand) {
+  if region == "us-east-1" {
+    c.create_bucket(s3.CreateBucketRequest{bucket: bucket})?
+    return Ok(())
+  }
+  let lc = match region {
+    "ca-central-1" => s3.BucketLocationConstraint.CaCentral1
+    "eu-north-1" => s3.BucketLocationConstraint.EuNorth1
+    "us-west-2" => s3.BucketLocationConstraint.UsWest2
+    other => s3.BucketLocationConstraint.Unknown(other)
+  }
+  c.create_bucket(s3.CreateBucketRequest{bucket: bucket, create_bucket_configuration: s3.CreateBucketConfiguration{location_constraint: lc}})?
+  Ok(())
+}
+
+test "aws step 01 sts: caller identity, header signed and presigned" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 1, false) {
+    return Ok(())
+  }
+  let c = sts.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let who = c.get_caller_identity(sts.GetCallerIdentityRequest{})?
+  expect(who.account) == Some(t.account)
+  let p = c.presign_get_caller_identity(sts.GetCallerIdentityRequest{}, expires: 5m)?
+  let resp = http.client(t.net).send(http.new_request(p.method, p.url, {}, b""))?
+  expect(resp.status) == 200
+  expect((resp.text() ?? "").contains("<Account>${t.account}</Account>")) == true
+}
+
+fn empty_bucket(c: s3.Client, bucket: Str, var p: Problems) uses (net.dial, clock, rand) {
+  var pages = s3.new_list_objects_v2_paginator(c, s3.ListObjectsV2Request{bucket: bucket})
+  while pages.has_more_pages() {
+    let page = match pages.next_page() {
+      Ok(x) => x
+      Err(e) => {
+        let failed: Result[(), s3.ListObjectsV2Err] = Err(e)
+        note(p, "list ${bucket}", failed, ok_codes: ["NoSuchBucket"])
+        return
+      }
+    }
+    for o in page.contents ?? [] {
+      note(p, "delete ${o.key ?? ""}", c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: o.key ?? ""}))
+    }
+  }
+}
+
+fn remove_bucket(c: s3.Client, bucket: Str, var p: Problems) uses (net.dial, clock, rand) {
+  empty_bucket(c, bucket, p)
+  note(p, "delete bucket ${bucket}", c.delete_bucket(s3.DeleteBucketRequest{bucket: bucket}), ok_codes: ["NoSuchBucket"])
+}
+
+fn s3_body(t: Target, c: s3.Client, bucket: Str) -> () ! Error uses (net.dial, clock, rand) {
+  make_bucket(c, bucket, t.region)?
+  s3.wait_until_bucket_exists(c, s3.HeadBucketRequest{bucket: bucket}, 60s, min_delay: 1s, max_delay: 5s)?
+  c.put_object(s3.PutObjectRequest{bucket: bucket, key: "dir/hello world.txt", body: b"hello from xo"})?
+  expect(c.get_object(s3.GetObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?.body) == Some(b"hello from xo")
+  expect(c.head_object(s3.HeadObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?.content_length) == Some(13)
+  c.copy_object(s3.CopyObjectRequest{bucket: bucket, key: "copy.txt", copy_source: "${bucket}/dir/hello%20world.txt"})?
+  // paginated, one key per page
+  for k in ["p/1", "p/2", "p/3"] {
+    c.put_object(s3.PutObjectRequest{bucket: bucket, key: k, body: b"x"})?
+  }
+  var pages = s3.new_list_objects_v2_paginator(c, s3.ListObjectsV2Request{bucket: bucket, prefix: "p/", max_keys: 1})
+  var seen: List[Str] = []
+  while pages.has_more_pages() {
+    for o in pages.next_page()?.contents ?? [] {
+      seen.push(o.key ?? "")
+    }
+  }
+  expect(seen) == ["p/1", "p/2", "p/3"]
+  // multipart: one 5 MiB part and a short last part
+  let up = c.create_multipart_upload(s3.CreateMultipartUploadRequest{bucket: bucket, key: "multi.bin"})?
+  let id = up.upload_id ?? ""
+  var big = BytesBuilder.new()
+  for _ in 0..5242880 / 64 {
+    big.write(b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+  }
+  let p1 = c.upload_part(s3.UploadPartRequest{bucket: bucket, key: "multi.bin", upload_id: id, part_number: 1, body: big.freeze()})?
+  let p2 = c.upload_part(s3.UploadPartRequest{bucket: bucket, key: "multi.bin", upload_id: id, part_number: 2, body: b"tail"})?
+  c.complete_multipart_upload(s3.CompleteMultipartUploadRequest{bucket: bucket, key: "multi.bin", upload_id: id, multipart_upload: s3.CompletedMultipartUpload{parts: [
+    s3.CompletedPart{e_tag: p1.e_tag, part_number: 1},
+    s3.CompletedPart{e_tag: p2.e_tag, part_number: 2},
+  ]}})?
+  expect(c.head_object(s3.HeadObjectRequest{bucket: bucket, key: "multi.bin"})?.content_length) == Some(5242884)
+  // presigned PUT and GET by a client without credentials
+  let plain = http.client(t.net)
+  let put = c.presign_put_object(s3.PutObjectRequest{bucket: bucket, key: "presigned.txt"}, expires: 5m)?
+  var put_req = http.new_request(put.method, put.url, {}, b"sent by URL")
+  for (k, v) in put.headers {
+    put_req = put_req.with_header(k, v)
+  }
+  expect(plain.send(put_req)?.status) == 200
+  let get = c.presign_get_object(s3.GetObjectRequest{bucket: bucket, key: "presigned.txt"})?
+  let fetched = plain.send(http.new_request(get.method, get.url, {}, b""))?
+  expect(fetched.status) == 200
+  expect(fetched.body) == b"sent by URL"
+  let bad = plain.send(http.new_request("GET", get.url.replace("X-Amz-Signature=", "X-Amz-Signature=0"), {}, b""))?
+  expect(bad.status) == 403
+  // modeled errors
+  match c.get_object(s3.GetObjectRequest{bucket: bucket, key: "missing"}) {
+    Err(s3.GetObjectErr.NoSuchKey(_)) => {}
+    other => expect("${other:?}") == "NoSuchKey"
+  }
+  match c.head_object(s3.HeadObjectRequest{bucket: bucket, key: "missing"}) {
+    Err(s3.HeadObjectErr.NotFound(_)) => {}
+    other => expect("${other:?}") == "NotFound"
+  }
+  Ok(())
+}
+
+test "aws step 02 s3: objects, paginator, multipart, presigned URLs, errors, waiters" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 2, false) {
+    return Ok(())
+  }
+  let c = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.cfg)? with {force_path_style: !t.real})?
+  let bucket = t.name("s3")
+  let r = s3_body(t, c, bucket)
+  var p = Problems{}
+  remove_bucket(c, bucket, p)
+  note(p, "bucket gone", s3.wait_until_bucket_not_exists(c, s3.HeadBucketRequest{bucket: bucket}, 60s, min_delay: 1s, max_delay: 5s))
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 03 s3 select (optional, real only): SelectObjectContent event stream" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !t.real || !selected(os.env, 3, true) {
+    return Ok(())
+  }
+  let c = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.cfg)?)?
+  let bucket = t.name("select")
+  // S3 Select is closed to new customers: an account without it skips
+  // the step (recorded, not a failure)
+  let r = fn() -> Bool ! Error {
+    make_bucket(c, bucket, t.region)?
+    s3.wait_until_bucket_exists(c, s3.HeadBucketRequest{bucket: bucket}, 60s, min_delay: 1s, max_delay: 5s)?
+    c.put_object(s3.PutObjectRequest{bucket: bucket, key: "data.csv", body: b"name,n\na,1\nb,2\n"})?
+    let started = c.select_object_content(s3.SelectObjectContentRequest{
+      bucket: bucket,
+      key: "data.csv",
+      expression: "SELECT s.name FROM S3Object s WHERE CAST(s.n AS INT) > 1",
+      expression_type: s3.ExpressionType.Sql,
+      input_serialization: s3.InputSerialization{csv: s3.CSVInput{file_header_info: s3.FileHeaderInfo.Use}},
+      output_serialization: s3.OutputSerialization{csv: s3.CSVOutput{}},
+    })
+    var events = match started {
+      Ok(x) => x
+      Err(e) => {
+        let text = "${e:?}"
+        if text.contains("AccessDenied") || text.contains("MethodNotAllowed") || text.contains("NotImplemented") || text.contains("not available") {
+          return Ok(false)
+        }
+        return Err(e)
+      }
+    }
+    var records = BytesBuilder.new()
+    var ended = false
+    while let Some(e) = events.next()? {
+      match e {
+        Records(x) => records.write(x.payload ?? b"")
+        End(_) => ended = true
+        _ => {}
+      }
+    }
+    expect(records.freeze()) == b"b\n"
+    expect(ended) == true
+    Ok(true)
+  }()
+  var p = Problems{}
+  remove_bucket(c, bucket, p)
+  let ran = r?
+  if !ran {
+    report(os.env, os.fs, 3, "skipped: the account has no access to S3 Select")
+  }
+  p.check(t.account)?
+}
+
+test "aws step 04 dynamodb: table waiters, items, scan paginator, errors" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 4, false) {
+    return Ok(())
+  }
+  let c = dynamodb.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let table = t.name("ddb")
+  let r = fn() -> () ! Error {
+    c.create_table(dynamodb.CreateTableInput{
+      table_name: table,
+      attribute_definitions: [dynamodb.AttributeDefinition{attribute_name: "pk", attribute_type: dynamodb.ScalarAttributeType.S}],
+      key_schema: [dynamodb.KeySchemaElement{attribute_name: "pk", key_type: dynamodb.KeyType.Hash}],
+      billing_mode: dynamodb.BillingMode.PayPerRequest,
+    })?
+    dynamodb.wait_until_table_exists(c, dynamodb.DescribeTableInput{table_name: table}, 5m, min_delay: 2s, max_delay: 10s)?
+    let item: Map[Str, dynamodb.AttributeValue] = {
+      "pk": dynamodb.AttributeValue.S("user#1"),
+      "n": dynamodb.AttributeValue.N("42"),
+      "raw": dynamodb.AttributeValue.B(b"\x00\x01\xff"),
+    }
+    c.put_item(dynamodb.PutItemInput{table_name: table, item: item})?
+    expect(c.get_item(dynamodb.GetItemInput{table_name: table, key: {"pk": dynamodb.AttributeValue.S("user#1")}, consistent_read: true})?.item) == Some(item)
+    for k in ["user#2", "user#3"] {
+      c.put_item(dynamodb.PutItemInput{table_name: table, item: {"pk": dynamodb.AttributeValue.S(k)}})?
+    }
+    var pages = dynamodb.new_scan_paginator(c, dynamodb.ScanInput{table_name: table, limit: 1})
+    var n = 0
+    while pages.has_more_pages() {
+      n += (pages.next_page()?.items ?? []).len()
+    }
+    expect(n) == 3
+    match c.get_item(dynamodb.GetItemInput{table_name: t.name("no-such-table"), key: {"pk": dynamodb.AttributeValue.S("x")}}) {
+      Err(dynamodb.GetItemErr.ResourceNotFoundException(_)) => {}
+      other => expect("${other:?}") == "ResourceNotFoundException"
+    }
+    Ok(())
+  }()
+  var p = Problems{}
+  note(p, "delete table", c.delete_table(dynamodb.DeleteTableInput{table_name: table}), ok_codes: ["ResourceNotFoundException"])
+  note(p, "table gone", dynamodb.wait_until_table_not_exists(c, dynamodb.DescribeTableInput{table_name: table}, 5m, min_delay: 2s, max_delay: 10s))
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 05 sqs: send, receive, delete" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 5, false) {
+    return Ok(())
+  }
+  let c = sqs.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let q = c.create_queue(sqs.CreateQueueRequest{queue_name: t.name("sqs")})?
+  let url = q.queue_url ?? ""
+  let r = fn() -> () ! Error {
+    c.send_message(sqs.SendMessageRequest{queue_url: url, message_body: "hello from xo"})?
+    var got: List[sqs.Message] = []
+    var tries = 0
+    while got.is_empty() && tries < 5 {
+      tries += 1
+      got = c.receive_message(sqs.ReceiveMessageRequest{queue_url: url, max_number_of_messages: 1, wait_time_seconds: 5})?.messages ?? []
+    }
+    expect(got.len()) == 1
+    expect(got[0].body) == Some("hello from xo")
+    c.delete_message(sqs.DeleteMessageRequest{queue_url: url, receipt_handle: got[0].receipt_handle ?? ""})?
+    match c.get_queue_url(sqs.GetQueueUrlRequest{queue_name: t.name("no-such-queue")}) {
+      Err(sqs.GetQueueUrlErr.QueueDoesNotExist(_)) => {}
+      other => expect("${other:?}") == "QueueDoesNotExist"
+    }
+    Ok(())
+  }()
+  var p = Problems{}
+  note(p, "delete queue", c.delete_queue(sqs.DeleteQueueRequest{queue_url: url}))
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 06 sns: topic, publish, delete" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 6, false) {
+    return Ok(())
+  }
+  let c = sns.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let arn = c.create_topic(sns.CreateTopicInput{name: t.name("sns")})?.topic_arn ?? ""
+  let r = fn() -> () ! Error {
+    expect(c.publish(sns.PublishInput{topic_arn: arn, message: "hello from xo"})?.message_id.is_some()) == true
+    Ok(())
+  }()
+  var p = Problems{}
+  note(p, "delete topic", c.delete_topic(sns.DeleteTopicInput{topic_arn: arn}))
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 07 secrets manager: create, read, force delete" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 7, false) {
+    return Ok(())
+  }
+  let c = secretsmanager.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let name = t.name("secret")
+  let r = fn() -> () ! Error {
+    c.create_secret(secretsmanager.CreateSecretRequest{name: name, secret_string: "invented value"})?
+    expect(c.get_secret_value(secretsmanager.GetSecretValueRequest{secret_id: name})?.secret_string) == Some("invented value")
+    Ok(())
+  }()
+  var p = Problems{}
+  note(p, "delete secret", c.delete_secret(secretsmanager.DeleteSecretRequest{secret_id: name, force_delete_without_recovery: true}), ok_codes: ["ResourceNotFoundException"])
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 08 ec2: regions and zones (ec2Query, nothing created)" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 8, false) {
+    return Ok(())
+  }
+  let c = ec2.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let regions = c.describe_regions(ec2.DescribeRegionsRequest{})?.regions ?? []
+  expect(regions.any(fn(r: ec2.Region) -> Bool { r.region_name == Some(t.region) })) == true
+  expect((c.describe_availability_zones(ec2.DescribeAvailabilityZonesRequest{})?.availability_zones ?? []).is_empty()) == false
+  c.describe_instances(ec2.DescribeInstancesRequest{max_results: 5})?
+}
+
+test "aws step 09 kinesis: SubscribeToShard event stream" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !selected(os.env, 9, false) {
+    return Ok(())
+  }
+  let c = kinesis.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let stream = t.name("kinesis")
+  let r = fn() -> () ! Error {
+    c.create_stream(kinesis.CreateStreamInput{stream_name: stream, shard_count: 1})?
+    kinesis.wait_until_stream_exists(c, kinesis.DescribeStreamInput{stream_name: stream}, 5m, min_delay: 2s, max_delay: 10s)?
+    for (i, text) in ["one", "two", "three"].indexed() {
+      c.put_record(kinesis.PutRecordInput{stream_name: stream, data: text.bytes(), partition_key: "k${i}"})?
+    }
+    let arn = match c.describe_stream_summary(kinesis.DescribeStreamSummaryInput{stream_name: stream})?.stream_description_summary {
+      Some(d) => d.stream_arn ?? ""
+      None => ""
+    }
+    let shards = c.list_shards(kinesis.ListShardsInput{stream_name: stream})?.shards ?? []
+    let consumer_arn = match c.register_stream_consumer(kinesis.RegisterStreamConsumerInput{stream_arn: arn, consumer_name: t.name("consumer")})?.consumer {
+      Some(x) => x.consumer_arn ?? ""
+      None => ""
+    }
+    var tries = 0
+    while tries < 60 {
+      tries += 1
+      let d = c.describe_stream_consumer(kinesis.DescribeStreamConsumerInput{consumer_arn: consumer_arn})?
+      let active = match d.consumer_description {
+        Some(x) => x.consumer_status == kinesis.ConsumerStatus.Active
+        None => false
+      }
+      if active {
+        break
+      }
+      os.clock.sleep(2s)
+    }
+    var events = c.subscribe_to_shard(kinesis.SubscribeToShardInput{
+      consumer_arn: consumer_arn,
+      shard_id: shards[0].shard_id ?? "",
+      starting_position: kinesis.StartingPosition{type_value: kinesis.ShardIteratorType.TrimHorizon},
+    })?
+    var got: List[Str] = []
+    var n = 0
+    while got.len() < 3 && n < 30 {
+      n += 1
+      match events.next()? {
+        Some(SubscribeToShardEvent(e)) => {
+          for rec in e.records ?? [] {
+            got.push((rec.data ?? b"").to_str() ?? "")
+          }
+        }
+        Some(_) => {}
+        None => break
+      }
+    }
+    events.close()
+    expect(got) == ["one", "two", "three"]
+    Ok(())
+  }()
+  var p = Problems{}
+  // enforce_consumer_deletion removes the consumer with the stream
+  note(p, "delete stream", c.delete_stream(kinesis.DeleteStreamInput{stream_name: stream, enforce_consumer_deletion: true}), ok_codes: ["ResourceNotFoundException"])
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 10 and 11 polly and transcribe streaming (real only): speech in, the sentence back" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !t.real || !(selected(os.env, 10, false) || selected(os.env, 11, false)) {
+    return Ok(())
+  }
+  let speech = polly.from_config(t.net, os.clock, os.rand, t.cfg)?.synthesize_speech(polly.SynthesizeSpeechInput{
+    engine: polly.Engine.Standard,
+    output_format: polly.OutputFormat.Pcm,
+    sample_rate: "16000",
+    text: "Hello from the Xo language.",
+    voice_id: polly.VoiceId.Joanna,
+  })?
+  let audio = speech.audio_stream ?? b""
+  expect(audio.len() > 16000) == true
+  let c = ts.from_config(t.net, os.clock, os.rand, t.cfg)?
+  // 100 ms chunks (3200 bytes of 16 bit mono at 16 kHz), then a second of
+  // silence so the last words are final
+  var chunks: List[Bytes] = []
+  var i = 0
+  while i < audio.len() {
+    let end = if i + 3200 > audio.len() { audio.len() } else { i + 3200 }
+    chunks.push(audio[i..end])
+    i = end
+  }
+  var silence = BytesBuilder.new()
+  for _ in 0..3200 {
+    silence.write_byte(UInt8(0))
+  }
+  for _ in 0..10 {
+    chunks.push(silence.freeze())
+  }
+  var st = c.start_stream_transcription(
+    ts.StartStreamTranscriptionRequest{language_code: ts.LanguageCode.EnUs, media_sample_rate_hertz: 16000, media_encoding: ts.MediaEncoding.Pcm},
+    first: [ts.AudioStream.AudioEvent(ts.AudioEvent{audio_chunk: chunks[0]})],
+  )?
+  for ch in chunks[1..] {
+    st.send(ts.AudioStream.AudioEvent(ts.AudioEvent{audio_chunk: ch}))?
+    os.clock.sleep(50ms)
+  }
+  st.close_send()?
+  var finals: List[Str] = []
+  while let Some(e) = st.next()? {
+    match e {
+      TranscriptEvent(x) => {
+        let results = match x.transcript {
+          Some(tr) => tr.results ?? []
+          None => []
+        }
+        for res in results {
+          if res.is_partial == Some(false) {
+            for alt in res.alternatives ?? [] {
+              finals.push(alt.transcript ?? "")
+            }
+          }
+        }
+      }
+      _ => {}
+    }
+  }
+  st.close()
+  let text = finals.join(" ").to_lower()
+  expect(text.contains("hello")) == true
+}
+
+/// The function's code: a Node.js handler that streams its response in
+/// two writes.
+const HANDLER: Str = "export const handler = awslambda.streamifyResponse(async (event, stream) => {\n  stream.write(\"hello \");\n  stream.write(\"from xo\");\n  stream.end();\n});\n"
+
+/// The role's trust policy: only Lambda may assume it.
+const TRUST: Str = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+
+const BASIC_EXECUTION: Str = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+/// Removes the step 12 role: its one managed policy, then the role.
+fn remove_role(c: iam.Client, role: Str, var p: Problems) uses (net.dial, clock, rand) {
+  note(p, "detach role policy", c.detach_role_policy(iam.DetachRolePolicyRequest{role_name: role, policy_arn: BASIC_EXECUTION}), ok_codes: ["NoSuchEntity"])
+  note(p, "delete role", c.delete_role(iam.DeleteRoleRequest{role_name: role}), ok_codes: ["NoSuchEntity"])
+}
+
+test "aws step 12 lambda (optional, real only): InvokeWithResponseStream event stream" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !t.real || !selected(os.env, 12, true) {
+    return Ok(())
+  }
+  let roles = iam.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let fns = lambda.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let logs = cloudwatchlogs.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let name = t.name("lambda")
+  let r = fn() -> () ! Error {
+    // the one IAM change: a role only Lambda can assume, with only the
+    // basic execution policy
+    let role = roles.create_role(iam.CreateRoleRequest{role_name: name, assume_role_policy_document: TRUST, description: "xo-lang/aws integration test, deleted by the test"})?.role
+    let role_arn = match role {
+      Some(x) => x.arn ?? ""
+      None => ""
+    }
+    roles.attach_role_policy(iam.AttachRolePolicyRequest{role_name: name, policy_arn: BASIC_EXECUTION})?
+    let zip = archive.zip([archive.file("index.mjs", HANDLER.bytes())])?
+    // a new role takes a few seconds to become assumable by Lambda
+    var tries = 0
+    var created = false
+    while !created {
+      tries += 1
+      match fns.create_function(lambda.CreateFunctionRequest{
+        function_name: name,
+        runtime: lambda.Runtime.Nodejs20X,
+        role: role_arn,
+        handler: "index.handler",
+        code: lambda.FunctionCode{zip_file: zip},
+        timeout: 10,
+        memory_size: 128,
+      }) {
+        Ok(_) => created = true
+        Err(lambda.CreateFunctionErr.InvalidParameterValueException(e)) => {
+          if tries >= 12 {
+            return Err(lambda.CreateFunctionErr.InvalidParameterValueException(e))
+          }
+          os.clock.sleep(5s)
+        }
+        Err(e) => return Err(e)
+      }
+    }
+    lambda.wait_until_function_active_v2(fns, lambda.GetFunctionRequest{function_name: name}, 5m)?
+    var events = fns.invoke_with_response_stream(lambda.InvokeWithResponseStreamRequest{function_name: name, payload: b"{}"})?
+    var body = BytesBuilder.new()
+    var completed = false
+    while let Some(e) = events.next()? {
+      match e {
+        PayloadChunk(x) => body.write(x.payload ?? b"")
+        InvokeComplete(x) => {
+          expect(x.error_code) == None
+          completed = true
+        }
+        _ => {}
+      }
+    }
+    expect(body.freeze()) == b"hello from xo"
+    expect(completed) == true
+    Ok(())
+  }()
+  var p = Problems{}
+  note(p, "delete function", fns.delete_function(lambda.DeleteFunctionRequest{function_name: name}), ok_codes: ["ResourceNotFoundException"])
+  note(p, "delete log group", logs.delete_log_group(cloudwatchlogs.DeleteLogGroupRequest{log_group_name: "/aws/lambda/${name}"}), ok_codes: ["ResourceNotFoundException"])
+  remove_role(roles, name, p)
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 13 sigv4a (optional, real only): a Multi-Region Access Point over two buckets" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if !t.real || !selected(os.env, 13, true) {
+    return Ok(())
+  }
+  let east = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.cfg)?)?
+  let west = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.in_region(t.region2))?)?
+  // the control plane for Multi-Region Access Points is in us-west-2;
+  // nothing is created there
+  let ctl = s3control.from_config(t.net, os.clock, os.rand, t.in_region("us-west-2"))?
+  let b1 = t.name("mrap-1")
+  let b2 = t.name("mrap-2")
+  let mrap = t.name("mrap")
+  let r = fn() -> () ! Error {
+    make_bucket(east, b1, t.region)?
+    make_bucket(west, b2, t.region2)?
+    ctl.create_multi_region_access_point(s3control.CreateMultiRegionAccessPointRequest{
+      account_id: t.account,
+      details: s3control.CreateMultiRegionAccessPointInput{name: mrap, regions: [s3control.Region{bucket: b1}, s3control.Region{bucket: b2}]},
+    })?
+    // creation is asynchronous; the wait is capped at 60 minutes
+    var alias = ""
+    var tries = 0
+    while alias == "" && tries < 120 {
+      tries += 1
+      os.clock.sleep(30s)
+      let ap = ctl.get_multi_region_access_point(s3control.GetMultiRegionAccessPointRequest{account_id: t.account, name: mrap})?.access_point
+      if let Some(x) = ap {
+        if x.status == Some(s3control.MultiRegionAccessPointStatus.Ready) {
+          alias = x.alias ?? ""
+        }
+      }
+    }
+    if alias == "" {
+      report(os.env, os.fs, 13, "timed out: the access point was not READY after 60 minutes; what existed was deleted")
+      return Err("the access point was not READY after 60 minutes")
+    }
+    let arn = "arn:aws:s3::${t.account}:accesspoint/${alias}"
+    // SigV4a: the endpoint rules choose it for a Multi-Region Access Point
+    east.put_object(s3.PutObjectRequest{bucket: arn, key: "through-mrap.txt", body: b"sigv4a"})?
+    expect(east.get_object(s3.GetObjectRequest{bucket: arn, key: "through-mrap.txt"})?.body) == Some(b"sigv4a")
+    let get = east.presign_get_object(s3.GetObjectRequest{bucket: arn, key: "through-mrap.txt"})?
+    expect(get.url.contains("X-Amz-Algorithm=AWS4-ECDSA-P256-SHA256")) == true
+    let fetched = http.client(t.net).send(http.new_request(get.method, get.url, {}, b""))?
+    expect(fetched.status) == 200
+    Ok(())
+  }()
+  var p = Problems{}
+  let deleting = ctl.delete_multi_region_access_point(s3control.DeleteMultiRegionAccessPointRequest{
+    account_id: t.account,
+    details: s3control.DeleteMultiRegionAccessPointInput{name: mrap},
+  })
+  if deleting.is_ok() {
+    // the buckets can go once the access point is deleted
+    var tries = 0
+    while tries < 120 {
+      tries += 1
+      match ctl.get_multi_region_access_point(s3control.GetMultiRegionAccessPointRequest{account_id: t.account, name: mrap}) {
+        Err(_) => break
+        Ok(_) => os.clock.sleep(30s)
+      }
+    }
+  }
+  note(p, "delete access point", deleting, ok_codes: ["NoSuchMultiRegionAccessPoint"])
+  remove_bucket(east, b1, p)
+  remove_bucket(west, b2, p)
+  r?
+  p.check(t.account)?
+}
+
+test "aws step 98 leftovers (emulator only): left for the sweep to remove" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  if t.real {
+    return Ok(())
+  }
+  let b = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.cfg)? with {force_path_style: true})?
+  b.create_bucket(s3.CreateBucketRequest{bucket: t.name("left")})?
+  b.put_object(s3.PutObjectRequest{bucket: t.name("left"), key: "a", body: b"x"})?
+  sqs.from_config(t.net, os.clock, os.rand, t.cfg)?.create_queue(sqs.CreateQueueRequest{queue_name: t.name("left")})?
+  dynamodb.from_config(t.net, os.clock, os.rand, t.cfg)?.create_table(dynamodb.CreateTableInput{
+    table_name: t.name("left"),
+    attribute_definitions: [dynamodb.AttributeDefinition{attribute_name: "pk", attribute_type: dynamodb.ScalarAttributeType.S}],
+    key_schema: [dynamodb.KeySchemaElement{attribute_name: "pk", key_type: dynamodb.KeyType.Hash}],
+    billing_mode: dynamodb.BillingMode.PayPerRequest,
+  })?
+}

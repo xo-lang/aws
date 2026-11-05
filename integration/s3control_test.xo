@@ -1,0 +1,23 @@
+// S3 Control on the fake network: the endpoint rules put the account in
+// the host, and the operation's hostPrefix is not applied a second time
+// (found by the first real AWS run: <account>.<account>.s3-control...),
+// and requests carry x-amz-content-sha256, which S3 Control requires.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3control
+
+test "S3 Control puts the account in the host once and sends the payload hash" {
+  let seen = Mutex[List[Str]].new([])
+  os.net.handle("GET https://111122223333.s3-control.us-west-2.amazonaws.com/v20180820/mrap/instances", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[Str]) { xs.push(req.header("X-Amz-Content-Sha256") ?? "") })
+    http.text(200, "<ListMultiRegionAccessPointsResult xmlns=\"http://awss3control.amazonaws.com/doc/2018-08-20/\"><AccessPoints></AccessPoints></ListMultiRegionAccessPointsResult>").with_header("Content-Type", "application/xml")
+  })
+  let c = s3control.new(os.net, os.clock, os.rand, s3control.Options{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+  })?
+  c.list_multi_region_access_points(s3control.ListMultiRegionAccessPointsRequest{account_id: "111122223333"})?
+  // and it is signed by S3's rules: the payload hash header is sent
+  expect(seen.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"]
+}

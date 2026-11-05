@@ -38,7 +38,10 @@ report() {
 #   012345678910  models/ec2: KmsKeyId docs (CopyImage, CopySnapshot,
 #                 CreateVolume, ImportImage, ImportSnapshot,
 #                 ModifyEbsDefaultKmsKeyId) example key ARNs
-ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777|999999999999|012345678910'
+#   987654321098  models/cloudwatch-logs: a policy document example
+#                 (`@aws.account IN [...]`)
+#   112233445566  models/iam: the root ARN example in a principal's docs
+ALLOW_ACCOUNTS='123456789012|111122223333|444455556666|555566667777|999999999999|012345678910|987654321098|112233445566'
 # AWS's documentation example addresses, all private (RFC 1918) or
 # shared (RFC 6598) ranges, allowed as exact values like the placeholders
 # above (decision 0007):

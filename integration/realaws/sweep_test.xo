@@ -1,0 +1,209 @@
+// The sweep (scripts/integration-aws.sh runs it after every run, and
+// alone with --sweep): lists the resources whose names start with
+// XO_AWS_SWEEP_PREFIX (this run's prefix, or PREFIX alone for every
+// run's leftovers), prints them with the account scrubbed, and deletes
+// them only when XO_AWS_SWEEP_DELETE=1. Nothing else is listed for
+// deletion: every name is checked against the prefix here, not only by
+// the service's filter.
+
+use github.com/xo-lang/aws/service/cloudwatchlogs
+use github.com/xo-lang/aws/service/dynamodb
+use github.com/xo-lang/aws/service/iam
+use github.com/xo-lang/aws/service/kinesis
+use github.com/xo-lang/aws/service/lambda
+use github.com/xo-lang/aws/service/s3
+use github.com/xo-lang/aws/service/s3control
+use github.com/xo-lang/aws/service/secretsmanager
+use github.com/xo-lang/aws/service/sns
+use github.com/xo-lang/aws/service/sqs
+
+/// A leftover: its service, its name, and what deletes it.
+struct Leftover {
+  kind: Str
+  name: Str
+  /// The region it lives in ("" for the first one).
+  region: Str = ""
+}
+
+/// Whether a name found by a listing is the sweep's to delete.
+pub fn sweepable(name: Str, prefix: Str) -> Bool {
+  (prefix == PREFIX || valid_prefix(prefix)) && name.starts_with(prefix)
+}
+
+fn last_segment(s: Str, sep: Str) -> Str {
+  let parts = s.split(sep)
+  parts[parts.len() - 1]
+}
+
+test "aws sweep: list, and with XO_AWS_SWEEP_DELETE=1 delete, prefixed leftovers" uses net, env, clock, fs {
+  let t = begin(os.env, os.fs, os.net, os.clock, os.rand)? ?? return Ok(())
+  let prefix = os.env.get("XO_AWS_SWEEP_PREFIX") ?? t.prefix
+  if !(prefix == PREFIX || valid_prefix(prefix)) {
+    return Err("XO_AWS_SWEEP_PREFIX must be ${PREFIX} or a run prefix")
+  }
+  let delete = os.env.get("XO_AWS_SWEEP_DELETE") == Some("1")
+  var found: List[Leftover] = []
+  // S3 (any region: ListBuckets names each bucket's region)
+  let s3c = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.cfg)? with {force_path_style: !t.real})?
+  var bp = s3.new_list_buckets_paginator(s3c, s3.ListBucketsRequest{prefix: prefix})
+  while bp.has_more_pages() {
+    for bk in bp.next_page()?.buckets ?? [] {
+      let n = bk.name ?? ""
+      if sweepable(n, prefix) {
+        found.push(Leftover{kind: "s3 bucket", name: n, region: bk.bucket_region ?? ""})
+      }
+    }
+  }
+  let ddb = dynamodb.from_config(t.net, os.clock, os.rand, t.cfg)?
+  var tp = dynamodb.new_list_tables_paginator(ddb, dynamodb.ListTablesInput{})
+  while tp.has_more_pages() {
+    for n in tp.next_page()?.table_names ?? [] {
+      if sweepable(n, prefix) {
+        found.push(Leftover{kind: "dynamodb table", name: n})
+      }
+    }
+  }
+  let q = sqs.from_config(t.net, os.clock, os.rand, t.cfg)?
+  var qp = sqs.new_list_queues_paginator(q, sqs.ListQueuesRequest{queue_name_prefix: prefix})
+  while qp.has_more_pages() {
+    for url in qp.next_page()?.queue_urls ?? [] {
+      if sweepable(last_segment(url, "/"), prefix) {
+        found.push(Leftover{kind: "sqs queue", name: url})
+      }
+    }
+  }
+  let topics = sns.from_config(t.net, os.clock, os.rand, t.cfg)?
+  var np = sns.new_list_topics_paginator(topics, sns.ListTopicsInput{})
+  while np.has_more_pages() {
+    for tp2 in np.next_page()?.topics ?? [] {
+      let arn = tp2.topic_arn ?? ""
+      if sweepable(last_segment(arn, ":"), prefix) {
+        found.push(Leftover{kind: "sns topic", name: arn})
+      }
+    }
+  }
+  let sm = secretsmanager.from_config(t.net, os.clock, os.rand, t.cfg)?
+  var sp = secretsmanager.new_list_secrets_paginator(sm, secretsmanager.ListSecretsRequest{})
+  while sp.has_more_pages() {
+    for e in sp.next_page()?.secret_list ?? [] {
+      let n = e.name ?? ""
+      if sweepable(n, prefix) {
+        found.push(Leftover{kind: "secret", name: n})
+      }
+    }
+  }
+  let k = kinesis.from_config(t.net, os.clock, os.rand, t.cfg)?
+  var kp = kinesis.new_list_streams_paginator(k, kinesis.ListStreamsInput{})
+  while kp.has_more_pages() {
+    for n in kp.next_page()?.stream_names ?? [] {
+      if sweepable(n, prefix) {
+        found.push(Leftover{kind: "kinesis stream", name: n})
+      }
+    }
+  }
+  var ctl: s3control.Client? = None
+  let roles = iam.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let fns = lambda.from_config(t.net, os.clock, os.rand, t.cfg)?
+  let logs = cloudwatchlogs.from_config(t.net, os.clock, os.rand, t.cfg)?
+  if t.real {
+    var rp = iam.new_list_roles_paginator(roles, iam.ListRolesRequest{})
+    while rp.has_more_pages() {
+      for role in rp.next_page()?.roles ?? [] {
+        let n = role.role_name ?? ""
+        if sweepable(n, prefix) {
+          found.push(Leftover{kind: "iam role", name: n})
+        }
+      }
+    }
+    var fp = lambda.new_list_functions_paginator(fns, lambda.ListFunctionsRequest{})
+    while fp.has_more_pages() {
+      for f in fp.next_page()?.functions ?? [] {
+        let n = f.function_name ?? ""
+        if sweepable(n, prefix) {
+          found.push(Leftover{kind: "lambda function", name: n})
+        }
+      }
+    }
+    var lp = cloudwatchlogs.new_describe_log_groups_paginator(logs, cloudwatchlogs.DescribeLogGroupsRequest{log_group_name_prefix: "/aws/lambda/${prefix}"})
+    while lp.has_more_pages() {
+      for g in lp.next_page()?.log_groups ?? [] {
+        let n = g.log_group_name ?? ""
+        if sweepable(n.cut_prefix("/aws/lambda/") ?? "", prefix) {
+          found.push(Leftover{kind: "log group", name: n})
+        }
+      }
+    }
+    let c = s3control.from_config(t.net, os.clock, os.rand, t.in_region("us-west-2"))?
+    var mp = s3control.new_list_multi_region_access_points_paginator(c, s3control.ListMultiRegionAccessPointsRequest{account_id: t.account})
+    while mp.has_more_pages() {
+      for ap in mp.next_page()?.access_points ?? [] {
+        let n = ap.name ?? ""
+        if sweepable(n, prefix) {
+          found.push(Leftover{kind: "multi-region access point", name: n})
+        }
+      }
+    }
+    ctl = Some(c)
+  }
+  let listing = found.map(fn(f: Leftover) -> Str { scrub("${f.kind} ${f.name}${if f.region == "" { "" } else { " (${f.region})" }}", t.account) })
+  // the test's output is captured, so the count is checked here
+  // (XO_AWS_SWEEP_EXPECT) and a listing that finds leftovers fails with
+  // their names
+  if let Some(n) = os.env.get("XO_AWS_SWEEP_EXPECT") {
+    if "${found.len()}" != n {
+      return Err("sweep: expected ${n} leftovers, found ${found.len()}:\n${listing.join("\n")}")
+    }
+  }
+  if !delete {
+    if found.is_empty() {
+      return Ok(())
+    }
+    return Err("sweep: ${found.len()} left (XO_AWS_SWEEP_DELETE=1 deletes them):\n${listing.join("\n")}")
+  }
+  var p = Problems{}
+  // access points before the buckets they front
+  for f in found {
+    if f.kind == "multi-region access point" {
+      if let Some(c) = ctl {
+        note(p, "delete ${f.name}", c.delete_multi_region_access_point(s3control.DeleteMultiRegionAccessPointRequest{
+          account_id: t.account,
+          details: s3control.DeleteMultiRegionAccessPointInput{name: f.name},
+        }))
+      }
+    }
+  }
+  for f in found {
+    match f.kind {
+      "s3 bucket" => {
+        let region = if f.region == "" { t.region } else { f.region }
+        let c = s3.new(t.net, os.clock, os.rand, s3.options_from_config(t.in_region(region))? with {force_path_style: !t.real})?
+        remove_bucket(c, f.name, p)
+      }
+      "dynamodb table" => note(p, "delete ${f.name}", ddb.delete_table(dynamodb.DeleteTableInput{table_name: f.name}))
+      "sqs queue" => note(p, "delete ${f.name}", q.delete_queue(sqs.DeleteQueueRequest{queue_url: f.name}))
+      "sns topic" => note(p, "delete ${f.name}", topics.delete_topic(sns.DeleteTopicInput{topic_arn: f.name}))
+      "secret" => note(p, "delete ${f.name}", sm.delete_secret(secretsmanager.DeleteSecretRequest{secret_id: f.name, force_delete_without_recovery: true}))
+      "lambda function" => note(p, "delete ${f.name}", fns.delete_function(lambda.DeleteFunctionRequest{function_name: f.name}))
+      "log group" => note(p, "delete ${f.name}", logs.delete_log_group(cloudwatchlogs.DeleteLogGroupRequest{log_group_name: f.name}))
+      "kinesis stream" => note(p, "delete ${f.name}", k.delete_stream(kinesis.DeleteStreamInput{stream_name: f.name, enforce_consumer_deletion: true}))
+      _ => {}
+    }
+  }
+  // roles last, after the functions that use them
+  for f in found {
+    if f.kind == "iam role" {
+      remove_role(roles, f.name, p)
+    }
+  }
+  p.check(t.account)?
+}
+
+test "the sweep takes only names with a valid prefix" {
+  expect(sweepable("xo-lang-aws-it-0123abcd-s3", "xo-lang-aws-it-0123abcd")) == true
+  expect(sweepable("xo-lang-aws-it-0123abcd-s3", PREFIX)) == true
+  expect(sweepable("my-bucket", PREFIX)) == false
+  expect(sweepable("my-bucket", "")) == false
+  expect(sweepable("xo-lang-aws-it-ffffffff-s3", "xo-lang-aws-it-0123abcd")) == false
+  // a prefix that is not one of ours never sweeps, even when it matches
+  expect(sweepable("my-bucket", "my-")) == false
+}

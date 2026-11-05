@@ -143,11 +143,11 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  let e = resolve_endpoint(params) ?? err => return Err(\"endpoint: \${err.msg}\")")
     out.push("  let ep = rest.parse_endpoint(e.url) ?? return Err(\"bad endpoint \${e.url}\")")
     out.push("  let (service, region) = endpoints.signing(e)")
-    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${g.s3}, region_set: endpoints.region_set(e)}")
+    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${s3_signing(g)}, region_set: endpoints.region_set(e)}")
     out.push("  Ok((ep, signing, endpoints.header_pairs(e)))")
   } else {
     out.push("fn (c: Client) route() -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
-    out.push("  Ok((c.endpoint, transport.Signing{service: SIGNING_NAME, region: c.region, s3: ${g.s3}}, []))")
+    out.push("  Ok((c.endpoint, transport.Signing{service: SIGNING_NAME, region: c.region, s3: ${s3_signing(g)}}, []))")
   }
   out.push("}")
   out.push("")
@@ -261,4 +261,11 @@ fn emit_from_config(g: G, var out: List[Str]) {
   out.push("  new(net, clock, rand, options_from_config(cfg)?)")
   out.push("}")
   out.push("")
+}
+
+/// Whether the service signs by S3's rules (the payload hash header sent,
+/// the path neither normalized nor escaped again): S3, and S3 Control,
+/// which refuses a request without `x-amz-content-sha256`.
+fn s3_signing(g: G) -> Bool {
+  g.s3 || g.m.service == "com.amazonaws.s3control#AWSS3ControlServiceV20180820"
 }

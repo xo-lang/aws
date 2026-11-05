@@ -415,3 +415,50 @@ shifted form or a scratch register. It fails the same way on 0.39.0 and
 on 5dd0b3f4e. Status: FIXED upstream in 7c86af664 (Xo Lang 1,
 2026-11-05); verified here: WAFV2 builds and runs natively. 0.39.0
 still needs `--backend=llvm`.
+
+## 15. Two packages' types with the same name, boxed into one interface
+
+Found 2026-11-05 while adding container credentials: the IMDS and
+container providers, both then named `Provider`, both become `aws.CredentialsProvider` in
+`config.load_default_config`. The native build fails with `error
+XO1510: a function disagrees with this build's definitions (a stale
+cached piece; decision 0342): ... closure xo.show[Provider] ... capture
+0 has the wrong type`, also with `XO_BACKEND_CACHE=off`, so it is not
+the cache. The LLVM backend builds the program and runs it wrongly: a
+`b.Provider{s: "ab"}` prints as `Provider{n: 4331386432}` and its
+method returns that number, so dispatch reads one type's value as the
+other's.
+
+Reproduction (no dependencies, xo 7c86af664 and 0.39.0): package `a`
+with `pub struct Provider { n: Int }` and package `b` with `pub struct
+Provider { s: Str }`, each with `fn (p: Provider) get() -> Int`; `main`
+pushes `a.make(1)` and `b.make("ab")` into a `List[Getter]` (an
+interface with `fn get(self) -> Int`). Boxing each in its own helper
+function fails the same way, so the collision is program wide, keyed by
+the short name. Renaming one type builds and runs correctly on both
+backends.
+
+What triggers it (each checked on both backends, xo 7c86af664): two
+same named structs or enums from different packages, each boxed into
+an interface anywhere in the program, even two different interfaces
+(native: XO1510; LLVM: wrong values, or a SIGSEGV). Error types that
+reach `main`'s `!` through `?` are not affected: a program whose SQS
+and SNS calls both fail with their own `AddPermissionErr` builds and
+reports the right service's error on both backends.
+
+Reach in v0.1.0: services declare no interfaces, and the SDK's own
+`aws.CredentialsProvider` implementers have distinct names, so the SDK
+alone never collides. But every program that passes credentials or
+calls `config.load_default_config` boxes `StaticProvider`,
+`FixedResult` (from `env_provider`), `Chain`, `Cache` and
+`AssumeRoleProvider`. An app that boxes its own type of one of those
+names into any interface hits the bug: checked against the v0.1.0 tag
+with an app `struct Cache` behind an app interface plus
+`load_default_config` (native XO1510 in `config.profile_provider`,
+LLVM SIGSEGV); renaming the app's type to `AppCache` builds and runs on
+both. Workarounds here: the unreleased providers are
+`imds.Ec2RoleProvider` and `container.EndpointProvider`, not
+`Provider`; an app on 0.39.0 renames its own type.
+Status: FIXED upstream in b7fcf7351 (xo-lang-4, 2026-11-05): interface
+type numbers and show thunks are keyed by module path when two program
+types share a name. 0.39.0 still needs the rename.

@@ -55,6 +55,15 @@ Each item names its reference and its test source (0005).
   (`AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` and `_FULL_URI` with the
   authorization token and its file); EC2 instance metadata (IMDSv2 token
   then role credentials, with IMDSv1 fallback off by default).
+  **Amended 2026-11-05 for token files:** aws-sdk-go-v2 reads the web
+  identity and EKS Pod Identity token files at every refresh, but
+  `retrieve` has no file effect, and adding one would put `fs.read` on
+  every operation of every service. A token file is an `aws.TokenFile`,
+  read when the configuration loads; `load_default_config` lists them
+  in `Config.token_files`, and `cfg.watch_token_files(os.tasks, os.fs,
+  os.clock)` rereads them every 5 minutes on the program's task group.
+  It is a separate call so `load_default_config` keeps its released
+  `uses (env, fs.read)`.
 - `credential_process` runs a command, so it needs the `Proc` capability;
   `load_default_config` takes an optional `proc: Proc?`, and without one a
   profile that names a process fails with an error saying so (no silent

@@ -34,18 +34,43 @@ change before `dynamodb.new` (`opts with {max_attempts: 5}`).
 | `credentials.Chain` | each provider in order; `NotFound` moves on, any other error stops |
 | `credentials.cache(p, clock, window)` | keeps credentials until `window` before they expire |
 | `imds.provider(os.net, os.clock, os.rand)` (`credentials/imds`) | EC2 instance metadata: an IMDSv2 token, the instance's role, its credentials (at most an hour; kept 5 to 15 minutes longer when a refresh fails). IMDSv1 only with `Options{allow_v1: true}` |
+| `container.provider(os.net, os.clock, opts)` (`credentials/container`) | ECS and EKS container credentials: a GET of `opts.uri` with `opts.token` as `Authorization` |
+| `stscreds.WebIdentityRoleProvider{client, input, token}` | AssumeRoleWithWebIdentity (unsigned) with the token from an `aws.TokenFile` (IRSA) |
 
 `config.load_default_config` builds the chain: the environment's keys,
 then the profile's static keys, or a role assumed through STS from
 `source_profile` or `credential_source` (`Environment` or
-`Ec2InstanceMetadata`), then EC2 instance metadata. Instance metadata is
+`Ec2InstanceMetadata` or `EcsContainer`) or `web_identity_token_file`
+with `role_arn`. Before the profile, unless one is named,
+`AWS_WEB_IDENTITY_TOKEN_FILE` with `AWS_ROLE_ARN` (and
+`AWS_ROLE_SESSION_NAME`) assume a role with a web identity (IRSA on
+EKS). After the profile come container credentials
+when `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` or
+`AWS_CONTAINER_CREDENTIALS_FULL_URI` is set (an http full URI only to
+loopback or the ECS and EKS agents; the token from
+`AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`, read when the configuration
+loads, or `AWS_CONTAINER_AUTHORIZATION_TOKEN`), else EC2 instance
+metadata. Instance metadata is
 skipped when `AWS_EC2_METADATA_DISABLED=true`; its endpoint comes from
 `AWS_EC2_METADATA_SERVICE_ENDPOINT` (or the profile's
 `ec2_metadata_service_endpoint`), its mode from
 `..._ENDPOINT_MODE` (IPv4 or IPv6), and the IMDSv1 fallback is on only
 when `AWS_EC2_METADATA_V1_DISABLED` (or `ec2_metadata_v1_disabled`) is
-`false`. SSO, web identity and container credentials are not
-implemented yet.
+`false`. SSO credentials are not implemented yet.
+
+Token files (the IRSA token, `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`)
+are read when the configuration loads. EKS rotates them, and they
+expire after 24 hours by default, so a long running program starts
+their refresh once:
+
+```
+let cfg = config.load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+cfg.watch_token_files(os.tasks, os.fs, os.clock)  // rereads them every 5 minutes
+```
+
+aws-sdk-go-v2 reads the file at every refresh; here a provider's
+`retrieve` has no file effect, so a background task on `os.tasks` does
+the reading.
 
 ### Settings from configuration
 

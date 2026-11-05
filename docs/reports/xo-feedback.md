@@ -351,3 +351,37 @@ Disliked:
   a compile-only check needs `--real` with the harness made inert.
 - `Rune` has no `to_str`; cutting a string at N characters takes
   summing `utf8_len` over the runes.
+
+## 2026-11-05: instance metadata, container and web identity credentials
+
+Liked:
+- `testing.FakeNet.handle` with a "METHOD URL" pattern made the IMDS
+  and container providers testable without a server: the token, the
+  role, a 401 that renews the token, a 503 that is retried, and the
+  clock advanced past expiry, all in one test file.
+- Effects kept the providers honest: `retrieve` declares `net.dial,
+  clock, rand`, so reading the EKS token file at every fetch (as
+  aws-sdk-go-v2 does) would have widened the interface. `os.tasks`
+  ("for services such as caches that refresh in the background") gave
+  the honest answer: a background task, started by a call that declares
+  `fs.read`, rereads the file, and `retrieve` stays as it was. The
+  spec's effect attribution for `spawn_background` (the spawner pays)
+  made the design obvious once found.
+
+Disliked:
+- Issue 15: two packages' types with the same short name
+  (`imds.Provider`, `container.Provider`) boxed into one interface fail
+  the native build with an error that blames a stale cache (XO1510,
+  "rebuild with XO_BACKEND_CACHE=off"), and the LLVM backend silently
+  runs the program wrongly. The message sent me to the cache first. A
+  per-package name is the normal Go habit, so this will hit others.
+- No `loop` expression that yields a value with `break v`; a retry loop
+  needs a `var got: T? = None` and a `while got.is_none()`.
+- A `pub` function's `uses` clause is part of its API: starting that
+  task inside `load_default_config` would have added `clock` to it and
+  broken callers that declare `uses (env, fs.read)`, so the refresh is a
+  separate call (`cfg.watch_token_files`). Right, but easy to miss; a
+  vet note on widening a published `uses` would help.
+- `testing.FakeNet` is not `Net`: a helper that registers handlers must
+  take `testing.FakeNet`, which the error (`Net` has no method
+  `handle`) does not suggest.

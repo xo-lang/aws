@@ -51,10 +51,12 @@ its test. The few items still open are listed there too.
 **Credentials:** static values, the environment (`AWS_ACCESS_KEY_ID`
 and the rest), the shared config and credentials files (including
 assume role through `source_profile` or `credential_source`), and EC2
-instance metadata (IMDSv2) on main since v0.1.0. Not yet: ECS and EKS
-container credentials, web identity, SSO and `credential_process`. On
-ECS, EKS or with an SSO login, pass credentials through the
-environment for now. Lambda works, since it sets the environment.
+instance metadata (IMDSv2), ECS and EKS container credentials, and web
+identity (IRSA), on main since v0.1.0. Not yet: SSO and
+`credential_process`. With an SSO login, pass credentials through the
+environment for now. On EKS, a program that runs longer than a day
+calls `cfg.watch_token_files(os.tasks, os.fs, os.clock)` (see
+[usage](docs/usage.md)). Lambda works, since it sets the environment.
 
 The design is in [docs/decisions](docs/decisions/README.md), and
 [docs/usage.md](docs/usage.md) shows how to use it. Licensed under
@@ -78,6 +80,17 @@ Xo 0.39.0 or later, except for two cases:
   _xo_f_zero__val_...`. Build again, or set `XO_BACKEND_CACHE=off`.
   Fixed on Xo main at 842702e6d ([xo-issues](docs/reports/xo-issues.md)
   entry 12).
+- Up to Xo 0.39.0 (and main at 7c86af664), two types with the same
+  name from different packages, both put behind an interface, break the
+  program: the native build fails with XO1510 (which wrongly blames a
+  stale cache) and the LLVM build runs wrongly. The SDK's credential
+  providers are behind `aws.CredentialsProvider`, so do not give a type
+  of your own that you put behind an interface one of these names:
+  `Cache`, `Chain`, `StaticProvider`, `FixedResult`,
+  `AssumeRoleProvider`, `Ec2RoleProvider`, `EndpointProvider`. Rename
+  yours instead (`AppCache`, for example). Fixed on Xo main at
+  b7fcf7351, so in the next Xo release
+  ([xo-issues](docs/reports/xo-issues.md) entry 15).
 
 Both were checked against the 0.39.0 release: it builds and passes
 everything else, fails to build DynamoDB with `select`
@@ -118,7 +131,7 @@ every service shares:
 | Package | What it does |
 |---|---|
 | `sigv4`, `sigv4a` | Signature Version 4 (HMAC) and 4a (ECDSA P-256, multi-region), and the chained event stream signer |
-| `credentials`, `config` | static, environment and cached credentials; shared config and credentials files; EC2 instance metadata (`credentials/imds`) |
+| `credentials`, `config` | static, environment and cached credentials; shared config and credentials files; EC2 instance metadata (`credentials/imds`); ECS and EKS containers (`credentials/container`) |
 | `endpoints` | the Smithy endpoint rules engine and its standard library |
 | `transport` | signing, retries (the standard retry mode), clock skew correction, streamed bodies |
 | `protocol` | restJson1, restXml, awsJson1_0 and 1_1, awsQuery, ec2Query |

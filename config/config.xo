@@ -4,6 +4,7 @@
 
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/credentials/container
 use github.com/xo-lang/aws/credentials/imds
 use github.com/xo-lang/aws/credentials/stscreds
 use github.com/xo-lang/aws/service/sts
@@ -38,8 +39,9 @@ pub fn (e: ConfigErr) display() -> Str {
 /// The default configuration: region, the credentials chain (the
 /// environment's keys, then the profile: its static keys, or a role
 /// assumed from `source_profile` or `credential_source = Environment`;
-/// then EC2 instance metadata; SSO, web identity and containers are
-/// added by later steps), retries, and configured endpoints. `net` and `rand`
+/// AWS_WEB_IDENTITY_TOKEN_FILE with AWS_ROLE_ARN, the profile's
+/// web_identity_token_file, then container credentials when the
+/// environment names them, else EC2 instance metadata; SSO comes later), retries, and configured endpoints. `net` and `rand`
 /// are kept for the role provider's STS calls; nothing is sent here.
 pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand, opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
   let explicit = opts.profile.is_some() || (env.get("AWS_PROFILE") ?? "") != ""
@@ -79,15 +81,35 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
   }
 
   let endpoints = configured_endpoints(env, sc, p)
+  let files = Mutex[List[aws.TokenFile]].new([])
   let creds: aws.CredentialsProvider = match opts.credentials {
     Some(c) => c
     None => {
       let md = imds_options(env, p.props)?
-      let ctx = RoleContext{env: env, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md}
-      let from_profile = profile_provider(ctx, profile, [])?
-      var chain: List[aws.CredentialsProvider] = [credentials.env_provider(env), from_profile]
-      // EC2 instance metadata last, as aws-sdk-go-v2, unless turned off
-      if !bool_setting(env.get("AWS_EC2_METADATA_DISABLED")) {
+      let box = container_options(env, fs)?
+      if let Some(o) = box {
+        if o.token.path != "" {
+          files.with(fn(var l: List[aws.TokenFile]) { l.push(o.token) })
+        }
+      }
+      let ctx = RoleContext{env: env, fs: fs, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md, container: box, token_files: files}
+      var chain: List[aws.CredentialsProvider] = [credentials.env_provider(env)]
+      // AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN come after the
+      // environment's keys and before the profile, unless a profile was
+      // named (aws-sdk-go-v2's order)
+      if !explicit {
+        if let Some(path) = non_empty(env.get("AWS_WEB_IDENTITY_TOKEN_FILE")) {
+          let arn = non_empty(env.get("AWS_ROLE_ARN")) ?? return Err(ConfigErr.Invalid(setting: "AWS_ROLE_ARN", value: "", msg: "AWS_WEB_IDENTITY_TOKEN_FILE is set but AWS_ROLE_ARN is not"))
+          chain.push(web_identity(ctx, path, arn, non_empty(env.get("AWS_ROLE_SESSION_NAME")), region)?)
+        }
+      }
+      chain.push(profile_provider(ctx, profile, [])?)
+      // then the container's credentials when the environment names
+      // them, else EC2 instance metadata unless turned off, as
+      // aws-sdk-go-v2
+      if let Some(o) = box {
+        chain.push(container.provider(net, clock, o))
+      } else if !bool_setting(env.get("AWS_EC2_METADATA_DISABLED")) {
         chain.push(imds.provider(net, clock, rand, md))
       }
       credentials.cache(credentials.Chain{providers: chain}, clock, opts.refresh_window)
@@ -99,6 +121,7 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
   Ok(aws.Config{
     region: region,
     credentials: creds,
+    token_files: files.with_read(fn(l: List[aws.TokenFile]) -> List[aws.TokenFile] { l }),
     retry_mode: retry_mode,
     max_attempts: max_attempts,
     endpoints: endpoints,
@@ -155,6 +178,7 @@ fn lambda_trace_id(env: Env) -> Str? uses env {
 /// What resolving a profile's credentials needs.
 struct RoleContext {
   env: Env
+  fs: Fs
   sc: SharedConfig
   net: Net
   clock: Clock
@@ -162,6 +186,51 @@ struct RoleContext {
   region: Str?
   endpoints: aws.ConfiguredEndpoints
   imds: imds.Options
+  container: container.Options?
+  /// Token files read so far, for `Options.tasks` to watch.
+  token_files: Mutex[List[aws.TokenFile]]
+}
+
+/// Assume `arn` with the web identity token in `path` (read now), over
+/// an unsigned STS call.
+fn web_identity(ctx: RoleContext, path: Str, arn: Str, session: Str?, region: Str?) -> aws.CredentialsProvider ! ConfigErr {
+  let token = aws.load_token_file(ctx.fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "web_identity_token_file", value: path, msg: e))
+  ctx.token_files.with(fn(var l: List[aws.TokenFile]) { l.push(token) })
+  let r = region ?? return Err(ConfigErr.Invalid(setting: "region", value: "", msg: "assuming role ${arn} with a web identity needs a region"))
+  let client = sts.new(ctx.net, ctx.clock, ctx.rand, sts.Options{
+    region: r,
+    endpoint: aws.endpoint_for(ctx.endpoints, "STS"),
+    // the call is unsigned; these are never used
+    credentials: credentials.static_provider("", ""),
+  }) ?? e => return Err(ConfigErr.Invalid(setting: "role_arn", value: arn, msg: e))
+  Ok(credentials.cache(stscreds.WebIdentityRoleProvider{
+    client: client,
+    input: sts.AssumeRoleWithWebIdentityRequest{role_arn: arn, role_session_name: session},
+    token: token,
+  }, ctx.clock))
+}
+
+/// The container credentials settings, when the environment names a
+/// URL: AWS_CONTAINER_CREDENTIALS_RELATIVE_URI (under the ECS agent),
+/// else AWS_CONTAINER_CREDENTIALS_FULL_URI (https, or http to loopback
+/// or the agents); the token from AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE
+/// (read now) or AWS_CONTAINER_AUTHORIZATION_TOKEN.
+fn container_options(env: Env, fs: Fs) -> container.Options? ! ConfigErr uses (env, fs.read) {
+  let uri = match non_empty(env.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")) {
+    Some(rel) => container.relative_uri(rel)
+    None => match non_empty(env.get("AWS_CONTAINER_CREDENTIALS_FULL_URI")) {
+      Some(full) => {
+        container.allowed_uri(full) ?? e => return Err(ConfigErr.Invalid(setting: "AWS_CONTAINER_CREDENTIALS_FULL_URI", value: full, msg: e))
+        full
+      }
+      None => return Ok(None)
+    }
+  }
+  let token = match non_empty(env.get("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE")) {
+    Some(path) => aws.load_token_file(fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", value: path, msg: e))
+    None => aws.fixed_token(env.get("AWS_CONTAINER_AUTHORIZATION_TOKEN") ?? "")
+  }
+  Ok(Some(container.Options{uri: uri, token: token}))
 }
 
 /// The instance metadata client's settings: the endpoint
@@ -207,6 +276,12 @@ fn profile_provider(ctx: RoleContext, profile: Str, seen: List[Str]) -> aws.Cred
   if source_profile.is_some() && credential_source.is_some() {
     return Err(ConfigErr.Invalid(setting: "credential_source", value: credential_source ?? "", msg: "profile ${profile} sets both source_profile and credential_source"))
   }
+  // web_identity_token_file, when no other source is named
+  if source_profile.is_none() && credential_source.is_none() {
+    if let Some(path) = non_empty(p.props.get("web_identity_token_file")) {
+      return web_identity(ctx, path, arn, non_empty(p.props.get("role_session_name")), non_empty(p.props.get("region")) ?? ctx.region)
+    }
+  }
   if non_empty(p.props.get("mfa_serial")).is_some() {
     return Err(ConfigErr.Invalid(setting: "mfa_serial", value: p.props.get("mfa_serial") ?? "", msg: "MFA token codes are not supported yet"))
   }
@@ -230,8 +305,12 @@ fn profile_provider(ctx: RoleContext, profile: Str, seen: List[Str]) -> aws.Cred
     None => match credential_source {
       Some("Environment") => credentials.env_provider(ctx.env)
       Some("Ec2InstanceMetadata") => credentials.cache(imds.provider(ctx.net, ctx.clock, ctx.rand, ctx.imds), ctx.clock)
-      Some(other) => return Err(ConfigErr.Invalid(setting: "credential_source", value: other, msg: "supported: Environment, Ec2InstanceMetadata (EcsContainer comes later)"))
-      None => return Err(ConfigErr.Invalid(setting: "role_arn", value: arn, msg: "profile ${profile} sets role_arn without source_profile or credential_source"))
+      Some("EcsContainer") => match ctx.container {
+        Some(o) => credentials.cache(container.provider(ctx.net, ctx.clock, o), ctx.clock)
+        None => return Err(ConfigErr.Invalid(setting: "credential_source", value: "EcsContainer", msg: "neither AWS_CONTAINER_CREDENTIALS_RELATIVE_URI nor AWS_CONTAINER_CREDENTIALS_FULL_URI is set"))
+      }
+      Some(other) => return Err(ConfigErr.Invalid(setting: "credential_source", value: other, msg: "supported: Environment, Ec2InstanceMetadata, EcsContainer"))
+      None => return Err(ConfigErr.Invalid(setting: "role_arn", value: arn, msg: "profile ${profile} sets role_arn without source_profile, credential_source or web_identity_token_file"))
     }
   }
   let region = non_empty(p.props.get("region")) ?? ctx.region ?? return Err(ConfigErr.Invalid(setting: "region", value: "", msg: "assuming role ${arn} needs a region"))

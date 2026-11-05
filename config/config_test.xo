@@ -375,3 +375,91 @@ test "with no keys anywhere the chain ends at EC2 instance metadata, unless it i
     other => expect("${other:?}") == "NotFound"
   }
 }
+
+test "a container credentials URL in the environment comes before instance metadata, with the token file read" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_CONTAINER_CREDENTIALS_FULL_URI", "http://169.254.170.23/v1/credentials")
+  os.env.set("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", "/var/run/token")
+  os.fs.write("/var/run/token", b"invented-auth\n")?
+  os.net.handle("GET http://169.254.170.23/v1/credentials", fn(req: http.Request) -> http.Response {
+    expect(req.header("Authorization")) == Some("invented-auth")
+    http.text(200, "{\"AccessKeyId\":\"ASIATEST0000000000\",\"SecretAccessKey\":\"s\",\"Token\":\"t\",\"Expiration\":\"2026-01-01T06:00:00Z\"}")
+  })
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  let c = (cfg.credentials ?? return Err("no provider")).retrieve()?
+  expect(c.source) == "CredentialsEndpointProvider"
+  os.env.set("AWS_CONTAINER_CREDENTIALS_FULL_URI", "http://example.com/creds")
+  match load_default_config(os.env, os.fs, os.net, os.clock, os.rand) {
+    Err(ConfigErr.Invalid(s, _, _)) => expect(s) == "AWS_CONTAINER_CREDENTIALS_FULL_URI"
+    other => expect("${other:?}") == "Invalid"
+  }
+}
+
+const WEB_OK: Str = "<AssumeRoleWithWebIdentityResponse><AssumeRoleWithWebIdentityResult><Credentials><AccessKeyId>ASIAWEBEXAMPLE00001</AccessKeyId><SecretAccessKey>invented-web-secret</SecretAccessKey><SessionToken>invented-web-token</SessionToken><Expiration>2026-01-01T01:00:00Z</Expiration></Credentials><AssumedRoleUser><Arn>arn:aws:sts::123456789012:assumed-role/Web/s</Arn><AssumedRoleId>AROAEXAMPLE:s</AssumedRoleId></AssumedRoleUser></AssumeRoleWithWebIdentityResult></AssumeRoleWithWebIdentityResponse>"
+
+/// A fake STS that answers AssumeRoleWithWebIdentity and records each
+/// token it was sent; it checks the call is unsigned.
+fn fake_web_sts(n: testing.FakeNet, seen: Mutex[List[Str]]) {
+  n.handle("POST https://sts.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    expect(req.header("Authorization")) == None
+    let body = req.body.to_str() ?? ""
+    expect(body.contains("Action=AssumeRoleWithWebIdentity")) == true
+    expect(body.contains("RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2FWeb")) == true
+    let tok = (body.split("&").filter(fn(kv: Str) -> Bool { kv.starts_with("WebIdentityToken=") }).first() ?? "").trim_prefix("WebIdentityToken=")
+    seen.with(fn(var l: List[Str]) { l.push(tok) })
+    http.text(200, WEB_OK).with_header("Content-Type", "text/xml")
+  })
+}
+
+test "AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN assume the role, unsigned, with the file's token" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_WEB_IDENTITY_TOKEN_FILE", "/var/run/irsa/token")
+  os.env.set("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/Web")
+  os.env.set("AWS_ROLE_SESSION_NAME", "s")
+  os.fs.write("/var/run/irsa/token", b"jwt-one\n")?
+  let seen = Mutex[List[Str]].new([])
+  fake_web_sts(os.net, seen)
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  let c = (cfg.credentials ?? return Err("no provider")).retrieve()?
+  expect(c.access_key_id) == "ASIAWEBEXAMPLE00001"
+  expect(c.source) == "WebIdentityCredentials"
+  expect(c.account_id) == Some("123456789012")
+  expect(seen.with_read(fn(l: List[Str]) -> List[Str] { l })) == ["jwt-one"]
+  expect(cfg.token_files.map(fn(t: aws.TokenFile) -> Str { t.path })) == ["/var/run/irsa/token"]
+}
+
+test "a rotated token file is read again by the watch" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_WEB_IDENTITY_TOKEN_FILE", "/var/run/irsa/token")
+  os.env.set("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/Web")
+  os.fs.write("/var/run/irsa/token", b"jwt-one")?
+  let seen = Mutex[List[Str]].new([])
+  fake_web_sts(os.net, seen)
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  cfg.watch_token_files(os.tasks, os.fs, os.clock)
+  os.fs.write("/var/run/irsa/token", b"jwt-two")?
+  os.clock.advance(6m)
+  // the old credentials expire; the refresh sends the new token
+  os.clock.advance(2h)
+  (cfg.credentials ?? return Err("no provider")).retrieve()?
+  expect(seen.with_read(fn(l: List[Str]) -> List[Str] { l })) == ["jwt-two"]
+}
+
+test "a profile's web_identity_token_file, and a missing role ARN" {
+  os.env.set("HOME", "/h")
+  os.fs.write("/h/.aws/config", b"[profile web]\nregion = us-west-2\nrole_arn = arn:aws:iam::123456789012:role/Web\nweb_identity_token_file = /tok\n")?
+  os.fs.write("/tok", b"jwt-p")?
+  let seen = Mutex[List[Str]].new([])
+  fake_web_sts(os.net, seen)
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("web")})?
+  expect((cfg.credentials ?? return Err("no provider")).retrieve()?.source) == "WebIdentityCredentials"
+  expect(seen.with_read(fn(l: List[Str]) -> List[Str] { l })) == ["jwt-p"]
+  os.env.set("AWS_WEB_IDENTITY_TOKEN_FILE", "/tok")
+  match load_default_config(os.env, os.fs, os.net, os.clock, os.rand) {
+    Err(ConfigErr.Invalid(s, _, _)) => expect(s) == "AWS_ROLE_ARN"
+    other => expect("${other:?}") == "Invalid"
+  }
+}

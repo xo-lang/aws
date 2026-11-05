@@ -39,3 +39,11 @@ current as work finds new ones.
    first against a scratch clone (`TAG_REMOTE` set to a bare clone, then
    an app that gets the root and two services with no workspace). Later
    releases use `scripts/tag-modules.sh`.
+9. **CI.** Push `.github/workflows/models.yml` only after the repository
+   is public, run it once by hand (a `workflow_dispatch` dry run) and
+   report its timings before the first scheduled Wednesday run
+   (decision 0008). After the first release, the weekly run tags the
+   modules that change; check the first such run's tags by hand.
+10. **Xo skips.** When an Xo release reaches a version in
+   `scripts/xo-skips.tsv`, remove that entry, and update the README's
+   requirements.

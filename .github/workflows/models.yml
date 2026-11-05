@@ -1,0 +1,166 @@
+# Weekly model update (decision 0008): moves the api-models-aws pin to its
+# newest commit, regenerates every client, and runs every check with the
+# newest public Xo release. Green: the update is merged and the changed
+# modules are tagged. Red: the update's pull request stays open and an
+# issue links the run. No AWS credentials and no calls to AWS.
+name: models
+
+on:
+  schedule:
+    - cron: "0 6 * * 3"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Check only: no pull request, merge, tag or issue"
+        type: boolean
+        default: true
+      update_models:
+        description: "Move the model pin to the newest api-models-aws commit"
+        type: boolean
+        default: true
+      xo_version:
+        description: "Xo release to use (empty: the newest)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: models
+  cancel-in-progress: false
+
+jobs:
+  models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      CI: "true"
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+      UPDATE_MODELS: ${{ github.event_name != 'workflow_dispatch' || inputs.update_models }}
+      XO_VERSION: ${{ inputs.xo_version }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CI_TIMINGS: ${{ github.workspace }}/.ci/timings.md
+      # integration-localstack.sh: Docker is already running on the runner
+      DOCKER_UP: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Xo
+        id: xo
+        run: |
+          bin=$(scripts/ci-step.sh "install xo" scripts/install-xo.sh "$RUNNER_TEMP/xo")
+          echo "$bin" >> "$GITHUB_PATH"
+          echo "XO_CLI=$bin/xo" >> "$GITHUB_ENV"
+          echo "version=$("$bin/xo" version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Xo builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/xo
+          key: xo-${{ steps.xo.outputs.version }}-${{ hashFiles('**/*.xo', '**/xo.mod', 'xo.work') }}
+          restore-keys: |
+            xo-${{ steps.xo.outputs.version }}-
+
+      - name: Cache models and protocol tests
+        uses: actions/cache@v4
+        with:
+          path: |
+            codegen/.models
+            codegen/.protocol-tests
+          key: models-${{ hashFiles('codegen/models.lock', 'codegen/protocol-tests.lock') }}
+          restore-keys: |
+            models-
+
+      - name: Leave out tests this Xo is too old for
+        run: scripts/apply-xo-skips.sh
+
+      - name: Fetch models
+        run: |
+          scripts/ci-step.sh "fetch models" codegen/fetch-models.sh
+          scripts/ci-step.sh "fetch protocol tests" codegen/fetch-protocol-tests.sh
+
+      - name: Update models
+        id: update
+        if: env.UPDATE_MODELS == 'true'
+        run: |
+          base=$(git rev-parse HEAD)
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          scripts/ci-step.sh "update models" scripts/update-models.sh | tee "$RUNNER_TEMP/update.txt"
+          if grep -q '^models: current' "$RUNNER_TEMP/update.txt"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "commit=$(awk '$1 == "commit" { print $2 }' codegen/models.lock)" >> "$GITHUB_OUTPUT"
+          fi
+          # staged, so check-all-services counts it as the committed output
+          git add -A service xo.work codegen/models.lock
+
+      - name: Gate
+        run: scripts/ci-step.sh gate scripts/gate.sh
+
+      - name: Every service regenerates unchanged and type checks
+        if: success() || failure()
+        run: scripts/ci-step.sh "all services" scripts/check-all-services.sh
+
+      - name: Endpoint rules tests
+        if: success() || failure()
+        run: scripts/ci-step.sh "endpoint tests" scripts/check-endpoints.sh
+
+      - name: LocalStack
+        if: success() || failure()
+        run: scripts/ci-step.sh localstack scripts/integration-localstack.sh
+
+      - name: Public hygiene
+        if: success() || failure()
+        run: |
+          gl=gitleaks_8.30.1_linux_x64.tar.gz
+          curl -fsSL -o "$RUNNER_TEMP/$gl" "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/$gl"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/$gl" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks-bin"
+          tar -xzf "$RUNNER_TEMP/$gl" -C "$RUNNER_TEMP/gitleaks-bin" gitleaks
+          # check-public runs gitleaks over the history and the working
+          # tree (the regenerated files included)
+          PATH="$RUNNER_TEMP/gitleaks-bin:$PATH" scripts/ci-step.sh "check public" scripts/check-public.sh
+
+      - name: Merge and tag
+        if: success() && env.DRY_RUN != 'true' && steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="models/${{ steps.update.outputs.commit }}"
+          git switch -c "$branch"
+          git commit -q -m "Models: api-models-aws ${{ steps.update.outputs.commit }}, every check green (run ${{ github.run_id }})"
+          git push -q origin "$branch"
+          gh pr create --base main --head "$branch" --title "Models: api-models-aws ${{ steps.update.outputs.commit }}" --body "Weekly model update. Every check passed in ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          gh pr merge "$branch" --squash --delete-branch
+          git switch -q main
+          git pull -q --ff-only origin main
+          scripts/tag-modules.sh "${{ steps.update.outputs.base }}" --push
+
+      - name: Report a red run
+        if: failure() && env.DRY_RUN != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          pr=""
+          if [ "${{ steps.update.outputs.changed }}" = true ]; then
+            branch="models/${{ steps.update.outputs.commit }}"
+            git switch -c "$branch"
+            git commit -q -m "Models: api-models-aws ${{ steps.update.outputs.commit }} (checks failed in run ${{ github.run_id }})"
+            git push -q -f origin "$branch"
+            pr=$(gh pr create --base main --head "$branch" --title "Models: api-models-aws ${{ steps.update.outputs.commit }} (checks failed)" --body "Checks failed: $run" || true)
+          fi
+          gh issue create --title "Weekly models run failed ($(date -u +%Y-%m-%d))" --body "$(printf 'The weekly models run failed: %s\n\nXo %s.%s\n\nTimings:\n\n%s\n' "$run" "${{ steps.xo.outputs.version }}" "${pr:+ Pull request: $pr}" "$(cat "$CI_TIMINGS" 2>/dev/null)")"
+
+      - name: Timings
+        if: always()
+        run: |
+          echo "## Xo ${{ steps.xo.outputs.version }}, models ${{ steps.update.outputs.changed == 'true' && 'updated' || 'unchanged' }}" >> "$GITHUB_STEP_SUMMARY"
+          cat "$CI_TIMINGS" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true

@@ -12,3 +12,4 @@ deleted.
 - [0005](0005-testing.md): testing without real AWS: fakes, signing suites, endpoint tests, Smithy protocol tests, emulators behind a localhost-only `Net` (Accepted)
 - [0006](0006-xo-gaps.md): Xo language, toolchain and std items for the lead, each with the workaround the SDK uses meanwhile (Accepted)
 - [0007](0007-public-repository-license-and-hygiene.md): Apache-2.0, NOTICE and attribution, trademark disclaimer, public repository hygiene (Accepted)
+- [0008](0008-continuous-integration.md): the weekly models workflow: newest Xo release, model update, every check, merge and tag on green, pull request and issue on red, no AWS in CI (Accepted)

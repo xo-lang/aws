@@ -207,24 +207,10 @@ pub fn encoded_len(algorithm: Str) -> Int {
 /// The size of one chunk of the aws-chunked encoding (aws-sdk-go-v2's).
 pub const CHUNK: Int = 65536
 
-fn hex(n: Int) -> Str {
-  if n == 0 {
-    return "0"
-  }
-  let digits = "0123456789abcdef"
-  var out = ""
-  var v = n
-  while v > 0 {
-    out = digits[v % 16..v % 16 + 1] + out
-    v = v / 16
-  }
-  out
-}
-
 /// One chunk of an unsigned aws-chunked body: its size in hex, CRLF, the
 /// data, CRLF.
 pub fn chunk(data: Bytes) -> Bytes {
-  "${hex(data.len())}\r\n".bytes() + data + b"\r\n"
+  "${data.len().to_str_base(16)}\r\n".bytes() + data + b"\r\n"
 }
 
 /// The end of an unsigned aws-chunked body: the zero chunk and the
@@ -241,7 +227,7 @@ pub fn chunked_length(decoded: Int, algorithm: Str) -> Int {
   var left = decoded
   while left > 0 {
     let c = if left > CHUNK { CHUNK } else { left }
-    n += hex(c).len() + 2 + c + 2
+    n += c.to_str_base(16).len() + 2 + c + 2
     left -= c
   }
   n + 3 + header_name(algorithm).len() + 1 + encoded_len(algorithm) + 2 + 2

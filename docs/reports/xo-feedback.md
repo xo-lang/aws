@@ -394,8 +394,8 @@ Disliked:
   works but every file upload needs a task group from the caller. A way
   to store a closure with its effects charged at the call site that made
   it would remove this (and the credential_process task too).
-- Small papercuts: no Int to hex string formatting (`${n:x}` or
-  `n.to_hex()`), and `if let Some(var x) = ...` is not a pattern, so a
+- Small papercuts: I missed `Int.to_str_base(16)` (Go's FormatInt) and
+  wrote my own hex helper; `xo doc Int` lists it, so check there first. And `if let Some(var x) = ...` is not a pattern, so a
   mutable copy needs `var x = h` first.
 - `xo check` accepts a closure with a `var` parameter
   (`fn(var l: List[Str], code: Str)`), but `xo test` on the native

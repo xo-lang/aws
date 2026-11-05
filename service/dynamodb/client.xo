@@ -118,7 +118,7 @@ fn (c: Client) with_account(base: EndpointParameters) -> EndpointParameters uses
 /// The discovered endpoint for this client's region (DescribeEndpoints,
 /// cached for the period it gives), or `found` when an endpoint was
 /// configured.
-fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {
+fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! transport.PrecallErr uses (net.dial, clock, rand) {
   if c.params.endpoint.is_some() {
     return Ok(found)
   }
@@ -126,10 +126,10 @@ fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.d
   let host = match c.discovered.get(c.region, now) {
     Some(h) => h
     None => {
-      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err("endpoint discovery: ${e:?}")
+      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err(precall_describe_endpoints(e))
       let all = out.endpoints ?? []
       if all.is_empty() {
-        return Err("endpoint discovery: DescribeEndpoints returned no endpoints")
+        return Err(transport.PrecallErr.Deserialize("endpoint discovery: DescribeEndpoints returned no endpoints"))
       }
       let h = discovery.host_of(all[0].address ?? "")
       c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)
@@ -137,6 +137,15 @@ fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.d
     }
   }
   Ok(found with {host: host, port: None})
+}
+
+fn precall_describe_endpoints(e: DescribeEndpointsErr) -> transport.PrecallErr {
+  match e {
+    DescribeEndpointsErr.Api(a) => transport.PrecallErr.Api(a)
+    DescribeEndpointsErr.Send(s) => transport.PrecallErr.Send(s)
+    DescribeEndpointsErr.InvalidInput(m) => transport.PrecallErr.InvalidInput(m)
+    DescribeEndpointsErr.Deserialize(m) => transport.PrecallErr.Deserialize(m)
+  }
 }
 
 const SIGNING_NAME: Str = "dynamodb"

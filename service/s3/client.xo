@@ -133,17 +133,17 @@ pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Clien
 }
 
 /// `signing` with the S3 Express session of its directory bucket, if any.
-fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing ! Str uses (net.dial, clock, rand) {
+fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing ! transport.PrecallErr uses (net.dial, clock, rand) {
   let bucket = signing.express_bucket ?? return Ok(signing)
-  let base = c.transport.credentials.retrieve() ?? e => return Err("S3 Express session: ${e.display()}")
+  let base = c.transport.credentials.retrieve() ?? e => return Err(transport.PrecallErr.Send(transport.SendErr.Credentials(e)))
   let mac = crypto.hmac_sha256(base.secret_access_key.reveal().bytes(), base.access_key_id.bytes()).to_hex()
   let key = "${mac}/${bucket}"
   let now = c.transport.clock.now()
   if let Some(s) = c.express_sessions.get(key, now, 1m) {
     return Ok(signing with {session: s})
   }
-  let made = c.create_session(CreateSessionRequest{bucket: bucket}) ?? e => return Err("S3 Express CreateSession for ${bucket}: ${e.display()}")
-  let sc = made.credentials ?? return Err("S3 Express CreateSession for ${bucket}: no credentials in the response")
+  let made = c.create_session(CreateSessionRequest{bucket: bucket}) ?? e => return Err(precall_create_session(e))
+  let sc = made.credentials ?? return Err(transport.PrecallErr.Deserialize("S3 Express CreateSession for ${bucket}: no credentials in the response"))
   let s = aws.Credentials{
     access_key_id: sc.access_key_id ?? "",
     secret_access_key: Secret.new(sc.secret_access_key ?? ""),
@@ -152,10 +152,20 @@ fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing 
     source: "S3ExpressSession",
   }
   if s.access_key_id == "" || sc.session_token.is_none() || sc.expiration.is_none() {
-    return Err("S3 Express CreateSession for ${bucket}: incomplete credentials")
+    return Err(transport.PrecallErr.Deserialize("S3 Express CreateSession for ${bucket}: incomplete credentials"))
   }
   let kept = c.express_sessions.put(key, s)
   Ok(signing with {session: kept})
+}
+
+fn precall_create_session(e: CreateSessionErr) -> transport.PrecallErr {
+  match e {
+    CreateSessionErr.NoSuchBucket(_) => transport.PrecallErr.Api(aws.ApiError{code: "NoSuchBucket", message: e.display()})
+    CreateSessionErr.Api(a) => transport.PrecallErr.Api(a)
+    CreateSessionErr.Send(s) => transport.PrecallErr.Send(s)
+    CreateSessionErr.InvalidInput(m) => transport.PrecallErr.InvalidInput(m)
+    CreateSessionErr.Deserialize(m) => transport.PrecallErr.Deserialize(m)
+  }
 }
 
 const SIGNING_NAME: Str = "s3"
@@ -14312,23 +14322,5 @@ fn xml_body_error_document(v: ErrorDocument, name: Str, ns: List[(Str, Str)]) ->
 fn xml_body_event_bridge_configuration(v: EventBridgeConfiguration, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_event_bridge_configuration(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_event_hold_duration(v: EventHoldDuration, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_event_hold_duration(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_existing_object_replication(v: ExistingObjectReplication, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_existing_object_replication(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_filter_rule(v: FilterRule, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_filter_rule(w, v, name, ns)
   xmlv.finish(w)
 }

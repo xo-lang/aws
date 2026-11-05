@@ -28,12 +28,24 @@ Not yet released (no tags). What is true today:
     signatures);
   - Lambda InvokeWithResponseStream.
 
-Less tested: services that depend on hand-written customizations in the
-other AWS SDKs (checksums, endpoint discovery, cross-region presigned
-URLs, service-specific headers). Every service type checks, but only the
-services above have run against a server.
-[docs/customizations.md](docs/customizations.md) lists each customization
-the other SDKs make and whether this one handles it yet.
+- **Real AWS read sweep, 2026-11-05** (ca-central-1): one free List,
+  Describe or Get call per service, chosen from the models, for the 366
+  services that have one needing no input. 243 succeeded. The other 123
+  returned errors that the SDK parsed into the operation's typed errors:
+  - 76 services are not offered in the region (DNS);
+  - 28 need access, an opt-in or a subscription;
+  - 16 rejected the request (the service wants input the model leaves
+    optional, or the account is not onboarded);
+  - 3 answered with no error code or with silence (one never answers).
+
+  No call failed to sign or to decode. The 69 services left out have no
+  read call that needs no input, or bill per call.
+
+Hand-written behavior from the other AWS SDKs (flexible checksums, S3
+Express sessions, account ID endpoints, endpoint discovery,
+cross-region presigned URLs, hand-written paginators and more) is
+listed in [docs/customizations.md](docs/customizations.md), each with
+its test. The few items still open are listed there too.
 
 The design is in [docs/decisions](docs/decisions/README.md), and
 [docs/usage.md](docs/usage.md) shows how to use it. Licensed under
@@ -48,6 +60,10 @@ Xo 0.39.0 or later, except for two cases:
   it because DynamoDB's `Select` type clashes with a runtime name.
 - This repository's own tests need Xo main at or after 0e1d7b177, which
   makes the test network full duplex.
+- On arm64, the native backend cannot build programs that use
+  MediaConvert or WAFV2 yet (in 0.39.0 and on main;
+  [xo-issues](docs/reports/xo-issues.md) entries 13 and 14). Build those
+  with `--backend=llvm`.
 
 Both were checked against the 0.39.0 release: it builds and passes
 everything else, fails to build DynamoDB with `select`

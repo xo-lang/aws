@@ -368,7 +368,7 @@ pub fn route_binding(g: G, op: Str, route: Str, en: Str) -> List[Str] {
     // a directory bucket signs with its session (S3 Express)
     var out = ["  let (${ep_name}, routed, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
     let authed = if auth != "Required" { "routed with {auth: transport.Auth.${auth}}" } else { "routed" }
-    out.push("  let signing = c.express_session(${authed}) ?? e => return Err(${en}.InvalidInput(e))")
+    for l in precall_match("signing", "c.express_session(${authed})", en) { out.push(l) }
     return out
   }
   var out = ["  let (${ep_name}, ${sig_name}, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
@@ -376,7 +376,7 @@ pub fn route_binding(g: G, op: Str, route: Str, en: Str) -> List[Str] {
     out.push("  let signing = routed with {auth: transport.Auth.${auth}}")
   }
   if discovered {
-    out.push("  let ep = c.discover(found) ?? e => return Err(${en}.InvalidInput(e))")
+    for l in precall_match("ep", "c.discover(found)", en) { out.push(l) }
   }
   out
 }
@@ -422,7 +422,7 @@ fn emit_discover(g: G, var out: List[Str]) {
   out.push("/// The discovered endpoint for this client's region (DescribeEndpoints,")
   out.push("/// cached for the period it gives), or `found` when an endpoint was")
   out.push("/// configured.")
-  out.push("fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {")
+  out.push("fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! transport.PrecallErr uses (net.dial, clock, rand) {")
   out.push("  if c.params.${endpoint_param}.is_some() {")
   out.push("    return Ok(found)")
   out.push("  }")
@@ -430,10 +430,10 @@ fn emit_discover(g: G, var out: List[Str]) {
   out.push("  let host = match c.discovered.get(c.region, now) {")
   out.push("    Some(h) => h")
   out.push("    None => {")
-  out.push("      let out = c.${op_name(op)}(${xo_type(g, s.input)}{}) ?? e => return Err(\"endpoint discovery: \${e:?}\")")
+  out.push("      let out = c.${op_name(op)}(${xo_type(g, s.input)}{}) ?? e => return Err(precall_${op_name(op)}(e))")
   out.push("      let all = out.endpoints ?? []")
   out.push("      if all.is_empty() {")
-  out.push("        return Err(\"endpoint discovery: DescribeEndpoints returned no endpoints\")")
+  out.push("        return Err(transport.PrecallErr.Deserialize(\"endpoint discovery: DescribeEndpoints returned no endpoints\"))")
   out.push("      }")
   out.push("      let h = discovery.host_of(all[0].address ?? \"\")")
   out.push("      c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)")
@@ -443,6 +443,40 @@ fn emit_discover(g: G, var out: List[Str]) {
   out.push("  Ok(found with {host: host, port: None})")
   out.push("}")
   out.push("")
+  emit_precall(g, op, out)
+}
+
+/// `precall_<op>`: the error of `op`, made before another operation, as a
+/// transport.PrecallErr (a modeled error becomes an API error with its
+/// name as the code).
+fn emit_precall(g: G, op: Str, var out: List[Str]) {
+  let en = op_err(op)
+  out.push("fn precall_${op_name(op)}(e: ${en}) -> transport.PrecallErr {")
+  out.push("  match e {")
+  for (sh, v) in err_variants(g, op) {
+    out.push("    ${en}.${v}(_) => transport.PrecallErr.Api(aws.ApiError{code: \"${model.name_of(sh)}\", message: e.display()})")
+  }
+  out.push("    ${en}.Api(a) => transport.PrecallErr.Api(a)")
+  out.push("    ${en}.Send(s) => transport.PrecallErr.Send(s)")
+  out.push("    ${en}.InvalidInput(m) => transport.PrecallErr.InvalidInput(m)")
+  out.push("    ${en}.Deserialize(m) => transport.PrecallErr.Deserialize(m)")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// `let <name> = <call>` for a call returning transport.PrecallErr, its
+/// error turned into the operation's error `en`.
+fn precall_match(name: Str, call: Str, en: Str) -> List[Str] {
+  [
+    "  let ${name} = match ${call} {",
+    "    Ok(v) => v",
+    "    Err(transport.PrecallErr.Send(e)) => return Err(${en}.Send(e))",
+    "    Err(transport.PrecallErr.Api(e)) => return Err(${en}.Api(e))",
+    "    Err(transport.PrecallErr.InvalidInput(m)) => return Err(${en}.InvalidInput(m))",
+    "    Err(transport.PrecallErr.Deserialize(m)) => return Err(${en}.Deserialize(m))",
+    "  }",
+  ]
 }
 
 /// The service's bearer auth (`smithy.api#httpBearerAuth`): "only" when
@@ -513,7 +547,7 @@ fn emit_with_account(g: G, var out: List[Str]) {
 /// with the base credentials (its endpoint rules say plain SigV4).
 fn emit_express_session(g: G, var out: List[Str]) {
   out.push("/// `signing` with the S3 Express session of its directory bucket, if any.")
-  out.push("fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing ! Str uses (net.dial, clock, rand) {")
+  out.push("fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing ! transport.PrecallErr uses (net.dial, clock, rand) {")
   if !model.operations(g.m).any(fn(o: Str) -> Bool { model.name_of(o) == "CreateSession" }) {
     // a model without CreateSession (the protocol tests' subset of S3)
     out.push("  Ok(signing)")
@@ -522,15 +556,15 @@ fn emit_express_session(g: G, var out: List[Str]) {
     return
   }
   out.push("  let bucket = signing.express_bucket ?? return Ok(signing)")
-  out.push("  let base = c.transport.credentials.retrieve() ?? e => return Err(\"S3 Express session: \${e.display()}\")")
+  out.push("  let base = c.transport.credentials.retrieve() ?? e => return Err(transport.PrecallErr.Send(transport.SendErr.Credentials(e)))")
   out.push("  let mac = crypto.hmac_sha256(base.secret_access_key.reveal().bytes(), base.access_key_id.bytes()).to_hex()")
   out.push("  let key = \"\${mac}/\${bucket}\"")
   out.push("  let now = c.transport.clock.now()")
   out.push("  if let Some(s) = c.express_sessions.get(key, now, 1m) {")
   out.push("    return Ok(signing with {session: s})")
   out.push("  }")
-  out.push("  let made = c.create_session(CreateSessionRequest{bucket: bucket}) ?? e => return Err(\"S3 Express CreateSession for \${bucket}: \${e.display()}\")")
-  out.push("  let sc = made.credentials ?? return Err(\"S3 Express CreateSession for \${bucket}: no credentials in the response\")")
+  out.push("  let made = c.create_session(CreateSessionRequest{bucket: bucket}) ?? e => return Err(precall_create_session(e))")
+  out.push("  let sc = made.credentials ?? return Err(transport.PrecallErr.Deserialize(\"S3 Express CreateSession for \${bucket}: no credentials in the response\"))")
   out.push("  let s = aws.Credentials{")
   out.push("    access_key_id: sc.access_key_id ?? \"\",")
   out.push("    secret_access_key: Secret.new(sc.secret_access_key ?? \"\"),")
@@ -539,10 +573,13 @@ fn emit_express_session(g: G, var out: List[Str]) {
   out.push("    source: \"S3ExpressSession\",")
   out.push("  }")
   out.push("  if s.access_key_id == \"\" || sc.session_token.is_none() || sc.expiration.is_none() {")
-  out.push("    return Err(\"S3 Express CreateSession for \${bucket}: incomplete credentials\")")
+  out.push("    return Err(transport.PrecallErr.Deserialize(\"S3 Express CreateSession for \${bucket}: incomplete credentials\"))")
   out.push("  }")
   out.push("  let kept = c.express_sessions.put(key, s)")
   out.push("  Ok(signing with {session: kept})")
   out.push("}")
   out.push("")
+  if let Some(cs) = model.operations(g.m).find(fn(o: Str) -> Bool { model.name_of(o) == "CreateSession" }) {
+    emit_precall(g, cs, out)
+  }
 }

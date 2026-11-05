@@ -90,7 +90,7 @@ pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Clien
 /// The discovered endpoint for this client's region (DescribeEndpoints,
 /// cached for the period it gives), or `found` when an endpoint was
 /// configured.
-fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {
+fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! transport.PrecallErr uses (net.dial, clock, rand) {
   if c.params.endpoint.is_some() {
     return Ok(found)
   }
@@ -98,10 +98,10 @@ fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.d
   let host = match c.discovered.get(c.region, now) {
     Some(h) => h
     None => {
-      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err("endpoint discovery: ${e:?}")
+      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err(precall_describe_endpoints(e))
       let all = out.endpoints ?? []
       if all.is_empty() {
-        return Err("endpoint discovery: DescribeEndpoints returned no endpoints")
+        return Err(transport.PrecallErr.Deserialize("endpoint discovery: DescribeEndpoints returned no endpoints"))
       }
       let h = discovery.host_of(all[0].address ?? "")
       c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)
@@ -109,6 +109,18 @@ fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.d
     }
   }
   Ok(found with {host: host, port: None})
+}
+
+fn precall_describe_endpoints(e: DescribeEndpointsErr) -> transport.PrecallErr {
+  match e {
+    DescribeEndpointsErr.InternalServerException(_) => transport.PrecallErr.Api(aws.ApiError{code: "InternalServerException", message: e.display()})
+    DescribeEndpointsErr.ThrottlingException(_) => transport.PrecallErr.Api(aws.ApiError{code: "ThrottlingException", message: e.display()})
+    DescribeEndpointsErr.ValidationException(_) => transport.PrecallErr.Api(aws.ApiError{code: "ValidationException", message: e.display()})
+    DescribeEndpointsErr.Api(a) => transport.PrecallErr.Api(a)
+    DescribeEndpointsErr.Send(s) => transport.PrecallErr.Send(s)
+    DescribeEndpointsErr.InvalidInput(m) => transport.PrecallErr.InvalidInput(m)
+    DescribeEndpointsErr.Deserialize(m) => transport.PrecallErr.Deserialize(m)
+  }
 }
 
 const SIGNING_NAME: Str = "timestream"
@@ -2826,7 +2838,13 @@ pub fn deserialize_cancel_query_error(resp: http.Response) -> CancelQueryErr {
 /// that the query has already been canceled. See code sample for details.
 pub fn (c: Client) cancel_query(input: CancelQueryRequest) -> CancelQueryResponse ! CancelQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_cancel_query(c.params, input)) ?? e => return Err(CancelQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(CancelQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(CancelQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(CancelQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(CancelQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(CancelQueryErr.Deserialize(m))
+  }
   var req = serialize_cancel_query(ep, input, "") ?? e => return Err(CancelQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2997,7 +3015,13 @@ pub fn deserialize_create_scheduled_query_error(resp: http.Response) -> CreateSc
 /// notification for your scheduled query operations.
 pub fn (c: Client) create_scheduled_query(input: CreateScheduledQueryRequest) -> CreateScheduledQueryResponse ! CreateScheduledQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_create_scheduled_query(c.params, input)) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(CreateScheduledQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(CreateScheduledQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(CreateScheduledQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(CreateScheduledQueryErr.Deserialize(m))
+  }
   var req = serialize_create_scheduled_query(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3119,7 +3143,13 @@ pub fn deserialize_delete_scheduled_query_error(resp: http.Response) -> DeleteSc
 /// Deletes a given scheduled query. This is an irreversible operation.
 pub fn (c: Client) delete_scheduled_query(input: DeleteScheduledQueryRequest) -> () ! DeleteScheduledQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_delete_scheduled_query(c.params, input)) ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DeleteScheduledQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DeleteScheduledQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DeleteScheduledQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DeleteScheduledQueryErr.Deserialize(m))
+  }
   var req = serialize_delete_scheduled_query(ep, input, "") ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3240,7 +3270,13 @@ pub fn deserialize_describe_account_settings_error(resp: http.Response) -> Descr
 /// your workloads.
 pub fn (c: Client) describe_account_settings(input: DescribeAccountSettingsRequest) -> DescribeAccountSettingsResponse ! DescribeAccountSettingsErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_describe_account_settings(c.params, input)) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DescribeAccountSettingsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DescribeAccountSettingsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DescribeAccountSettingsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DescribeAccountSettingsErr.Deserialize(m))
+  }
   var req = serialize_describe_account_settings(ep, input, "") ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3487,7 +3523,13 @@ pub fn deserialize_describe_scheduled_query_error(resp: http.Response) -> Descri
 /// Provides detailed information about a scheduled query.
 pub fn (c: Client) describe_scheduled_query(input: DescribeScheduledQueryRequest) -> DescribeScheduledQueryResponse ! DescribeScheduledQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_describe_scheduled_query(c.params, input)) ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DescribeScheduledQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DescribeScheduledQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DescribeScheduledQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DescribeScheduledQueryErr.Deserialize(m))
+  }
   var req = serialize_describe_scheduled_query(ep, input, "") ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3625,7 +3667,13 @@ pub fn deserialize_execute_scheduled_query_error(resp: http.Response) -> Execute
 /// queries in Amazon Timestream .
 pub fn (c: Client) execute_scheduled_query(input: ExecuteScheduledQueryRequest) -> () ! ExecuteScheduledQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_execute_scheduled_query(c.params, input)) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ExecuteScheduledQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ExecuteScheduledQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ExecuteScheduledQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ExecuteScheduledQueryErr.Deserialize(m))
+  }
   var req = serialize_execute_scheduled_query(ep, input, rest.uuid(c.rand)) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3756,7 +3804,13 @@ pub fn deserialize_list_scheduled_queries_error(resp: http.Response) -> ListSche
 /// Region. ListScheduledQueries is eventually consistent.
 pub fn (c: Client) list_scheduled_queries(input: ListScheduledQueriesRequest) -> ListScheduledQueriesResponse ! ListScheduledQueriesErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_list_scheduled_queries(c.params, input)) ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListScheduledQueriesErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListScheduledQueriesErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListScheduledQueriesErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListScheduledQueriesErr.Deserialize(m))
+  }
   var req = serialize_list_scheduled_queries(ep, input, "") ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3883,7 +3937,13 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
 /// List all tags on a Timestream query resource.
 pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> ListTagsForResourceResponse ! ListTagsForResourceErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListTagsForResourceErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListTagsForResourceErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListTagsForResourceErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListTagsForResourceErr.Deserialize(m))
+  }
   var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4016,7 +4076,13 @@ pub fn deserialize_prepare_query_error(resp: http.Response) -> PrepareQueryErr {
 /// supports using this operation with ValidateOnly set to true .
 pub fn (c: Client) prepare_query(input: PrepareQueryRequest) -> PrepareQueryResponse ! PrepareQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_prepare_query(c.params, input)) ?? e => return Err(PrepareQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(PrepareQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PrepareQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PrepareQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PrepareQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PrepareQueryErr.Deserialize(m))
+  }
   var req = serialize_prepare_query(ep, input, "") ?? e => return Err(PrepareQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4193,7 +4259,13 @@ pub fn deserialize_query_error(resp: http.Response) -> QueryErr {
 /// the query will fail with an Invalid pagination token error.
 pub fn (c: Client) query(input: QueryRequest) -> QueryResponse ! QueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_query(c.params, input)) ?? e => return Err(QueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(QueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(QueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(QueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(QueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(QueryErr.Deserialize(m))
+  }
   var req = serialize_query(ep, input, rest.uuid(c.rand)) ?? e => return Err(QueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4314,7 +4386,13 @@ pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
 /// Cost Management console for cost allocation tracking.
 pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceResponse ! TagResourceErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(TagResourceErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(TagResourceErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(TagResourceErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(TagResourceErr.Deserialize(m))
+  }
   var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4427,7 +4505,13 @@ pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr
 /// Removes the association of tags from a Timestream query resource.
 pub fn (c: Client) untag_resource(input: UntagResourceRequest) -> UntagResourceResponse ! UntagResourceErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UntagResourceErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UntagResourceErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UntagResourceErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UntagResourceErr.Deserialize(m))
+  }
   var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4566,7 +4650,13 @@ pub fn deserialize_update_account_settings_error(resp: http.Response) -> UpdateA
 /// scanned for query pricing.
 pub fn (c: Client) update_account_settings(input: UpdateAccountSettingsRequest) -> UpdateAccountSettingsResponse ! UpdateAccountSettingsErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_update_account_settings(c.params, input)) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateAccountSettingsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateAccountSettingsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateAccountSettingsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateAccountSettingsErr.Deserialize(m))
+  }
   var req = serialize_update_account_settings(ep, input, "") ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4691,7 +4781,13 @@ pub fn deserialize_update_scheduled_query_error(resp: http.Response) -> UpdateSc
 /// Update a scheduled query.
 pub fn (c: Client) update_scheduled_query(input: UpdateScheduledQueryRequest) -> () ! UpdateScheduledQueryErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_update_scheduled_query(c.params, input)) ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateScheduledQueryErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateScheduledQueryErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateScheduledQueryErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateScheduledQueryErr.Deserialize(m))
+  }
   var req = serialize_update_scheduled_query(ep, input, "") ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

@@ -352,3 +352,56 @@ Expected: a workspace only redirects module paths, so modules nobody
 imports cost nothing. Workaround: scripts/check-all-services.sh writes a
 two-module workspace per service. Repro: this repository at the 435
 service commit, `/usr/bin/time -l xo check ./service/accessanalyzer`.
+
+## 12. Native link: duplicate `zero` of `http.Request` in a program using S3
+
+Found 2026-11-05 (xo main at 5dd0b3f4e) while checking the first
+release from a scratch clone. A program (not a test) that uses
+`service/s3` fails to link on the native backend:
+
+```
+xo: link: duplicate symbol _xo_f_zero__val_2enative_2ehttp_2eRequest in prog-darwin.15.o and .../prog-darwin.3.o
+```
+
+Repro: a `main` that makes an S3 client with static credentials and
+presigns a GetObject (no network). The same failure appears in a
+workspace and with the modules fetched at a tag, so it is not about
+module resolution.
+
+- The Go backend runs it.
+- Xo 0.39.0 links and runs the same program from the same fetched
+  modules, so this is a regression after 0.39.0.
+- Programs using only STS or only DynamoDB link. The only user of
+  `http.Request` here is `transport` (`sign_attempt`, `signed_request`,
+  `unsigned_request`), so the zero helper seems to be emitted in a
+  second codegen unit when S3's larger program splits.
+- `xo test` (the gate, the integration suite) links, so no suite here
+  caught it.
+
+Expected: one definition (or a linkonce/weak one) per zero helper.
+
+Narrowed the same day with xo-lang-4: with `XO_BACKEND_CACHE=off` the
+same xo links and runs it, and a fresh private back-end cache does too.
+So a cached unit from another build is reused when it should not be;
+the compiler output itself is fine. The "0.39.0 links it" result above
+came from a different cache key, so it says nothing about a regression.
+Status: open, owned by xo-lang-4 (the bad cache entry is kept for them).
+
+## 13. Native arm64: "reference counting of `Result[Output, Str]` (too many words)"
+
+Found 2026-11-05 by the read-only AWS sweep (one ListX call per
+service). A test that calls the MediaConvert client fails to build:
+`xo: arm64 backend: reference counting of
+`Result[github.com/xo-lang/aws/service/mediaconvert.Output, Str]` (too
+many words)`. MediaConvert's `Output` struct is large. It fails the
+same way on the 0.39.0 release and on main at 5dd0b3f4e. The LLVM
+backend is the workaround. Status: open, owned by Xo Lang 1.
+
+## 14. Native arm64 assembler: `sub sp, sp, #5280`
+
+Found the same way, with WAFV2: `xo: assembler: line 9750: unsupported
+instruction: sub sp, sp, #5280`. An arm64 add/sub immediate is 12 bits
+(optionally shifted by 12), so a frame over 4095 bytes needs the
+shifted form or a scratch register. It fails the same way on 0.39.0 and
+on 5dd0b3f4e. The LLVM backend is the workaround. Status: open, owned
+by Xo Lang 1.

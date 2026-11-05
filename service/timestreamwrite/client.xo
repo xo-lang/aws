@@ -90,7 +90,7 @@ pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Clien
 /// The discovered endpoint for this client's region (DescribeEndpoints,
 /// cached for the period it gives), or `found` when an endpoint was
 /// configured.
-fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {
+fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! transport.PrecallErr uses (net.dial, clock, rand) {
   if c.params.endpoint.is_some() {
     return Ok(found)
   }
@@ -98,10 +98,10 @@ fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.d
   let host = match c.discovered.get(c.region, now) {
     Some(h) => h
     None => {
-      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err("endpoint discovery: ${e:?}")
+      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err(precall_describe_endpoints(e))
       let all = out.endpoints ?? []
       if all.is_empty() {
-        return Err("endpoint discovery: DescribeEndpoints returned no endpoints")
+        return Err(transport.PrecallErr.Deserialize("endpoint discovery: DescribeEndpoints returned no endpoints"))
       }
       let h = discovery.host_of(all[0].address ?? "")
       c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)
@@ -109,6 +109,18 @@ fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.d
     }
   }
   Ok(found with {host: host, port: None})
+}
+
+fn precall_describe_endpoints(e: DescribeEndpointsErr) -> transport.PrecallErr {
+  match e {
+    DescribeEndpointsErr.InternalServerException(_) => transport.PrecallErr.Api(aws.ApiError{code: "InternalServerException", message: e.display()})
+    DescribeEndpointsErr.ThrottlingException(_) => transport.PrecallErr.Api(aws.ApiError{code: "ThrottlingException", message: e.display()})
+    DescribeEndpointsErr.ValidationException(_) => transport.PrecallErr.Api(aws.ApiError{code: "ValidationException", message: e.display()})
+    DescribeEndpointsErr.Api(a) => transport.PrecallErr.Api(a)
+    DescribeEndpointsErr.Send(s) => transport.PrecallErr.Send(s)
+    DescribeEndpointsErr.InvalidInput(m) => transport.PrecallErr.InvalidInput(m)
+    DescribeEndpointsErr.Deserialize(m) => transport.PrecallErr.Deserialize(m)
+  }
 }
 
 const SIGNING_NAME: Str = "timestream"
@@ -2719,7 +2731,13 @@ pub fn deserialize_create_batch_load_task_error(resp: http.Response) -> CreateBa
 /// Service quotas apply . For details, see code sample .
 pub fn (c: Client) create_batch_load_task(input: CreateBatchLoadTaskRequest) -> CreateBatchLoadTaskResponse ! CreateBatchLoadTaskErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_create_batch_load_task(c.params, input)) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(CreateBatchLoadTaskErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(CreateBatchLoadTaskErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(CreateBatchLoadTaskErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(CreateBatchLoadTaskErr.Deserialize(m))
+  }
   var req = serialize_create_batch_load_task(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2866,7 +2884,13 @@ pub fn deserialize_create_database_error(resp: http.Response) -> CreateDatabaseE
 /// . Service quotas apply . For details, see code sample .
 pub fn (c: Client) create_database(input: CreateDatabaseRequest) -> CreateDatabaseResponse ! CreateDatabaseErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_create_database(c.params, input)) ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(CreateDatabaseErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(CreateDatabaseErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(CreateDatabaseErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(CreateDatabaseErr.Deserialize(m))
+  }
   var req = serialize_create_database(ep, input, "") ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3031,7 +3055,13 @@ pub fn deserialize_create_table_error(resp: http.Response) -> CreateTableErr {
 /// details.
 pub fn (c: Client) create_table(input: CreateTableRequest) -> CreateTableResponse ! CreateTableErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_create_table(c.params, input)) ?? e => return Err(CreateTableErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(CreateTableErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(CreateTableErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(CreateTableErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(CreateTableErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(CreateTableErr.Deserialize(m))
+  }
   var req = serialize_create_table(ep, input, "") ?? e => return Err(CreateTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3159,7 +3189,13 @@ pub fn deserialize_delete_database_error(resp: http.Response) -> DeleteDatabaseE
 /// code sample for details.
 pub fn (c: Client) delete_database(input: DeleteDatabaseRequest) -> () ! DeleteDatabaseErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_delete_database(c.params, input)) ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DeleteDatabaseErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DeleteDatabaseErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DeleteDatabaseErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DeleteDatabaseErr.Deserialize(m))
+  }
   var req = serialize_delete_database(ep, input, "") ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3289,7 +3325,13 @@ pub fn deserialize_delete_table_error(resp: http.Response) -> DeleteTableErr {
 /// code sample for details.
 pub fn (c: Client) delete_table(input: DeleteTableRequest) -> () ! DeleteTableErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_delete_table(c.params, input)) ?? e => return Err(DeleteTableErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DeleteTableErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DeleteTableErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DeleteTableErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DeleteTableErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DeleteTableErr.Deserialize(m))
+  }
   var req = serialize_delete_table(ep, input, "") ?? e => return Err(DeleteTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3417,7 +3459,13 @@ pub fn deserialize_describe_batch_load_task_error(resp: http.Response) -> Descri
 /// sample for details.
 pub fn (c: Client) describe_batch_load_task(input: DescribeBatchLoadTaskRequest) -> DescribeBatchLoadTaskResponse ! DescribeBatchLoadTaskErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_describe_batch_load_task(c.params, input)) ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DescribeBatchLoadTaskErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DescribeBatchLoadTaskErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DescribeBatchLoadTaskErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DescribeBatchLoadTaskErr.Deserialize(m))
+  }
   var req = serialize_describe_batch_load_task(ep, input, "") ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3551,7 +3599,13 @@ pub fn deserialize_describe_database_error(resp: http.Response) -> DescribeDatab
 /// within the database. Service quotas apply . See code sample for details.
 pub fn (c: Client) describe_database(input: DescribeDatabaseRequest) -> DescribeDatabaseResponse ! DescribeDatabaseErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_describe_database(c.params, input)) ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DescribeDatabaseErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DescribeDatabaseErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DescribeDatabaseErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DescribeDatabaseErr.Deserialize(m))
+  }
   var req = serialize_describe_database(ep, input, "") ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3803,7 +3857,13 @@ pub fn deserialize_describe_table_error(resp: http.Response) -> DescribeTableErr
 /// Service quotas apply . See code sample for details.
 pub fn (c: Client) describe_table(input: DescribeTableRequest) -> DescribeTableResponse ! DescribeTableErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_describe_table(c.params, input)) ?? e => return Err(DescribeTableErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(DescribeTableErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(DescribeTableErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(DescribeTableErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(DescribeTableErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(DescribeTableErr.Deserialize(m))
+  }
   var req = serialize_describe_table(ep, input, "") ?? e => return Err(DescribeTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3938,7 +3998,13 @@ pub fn deserialize_list_batch_load_tasks_error(resp: http.Response) -> ListBatch
 /// details.
 pub fn (c: Client) list_batch_load_tasks(input: ListBatchLoadTasksRequest) -> ListBatchLoadTasksResponse ! ListBatchLoadTasksErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_list_batch_load_tasks(c.params, input)) ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListBatchLoadTasksErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListBatchLoadTasksErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListBatchLoadTasksErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListBatchLoadTasksErr.Deserialize(m))
+  }
   var req = serialize_list_batch_load_tasks(ep, input, "") ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4069,7 +4135,13 @@ pub fn deserialize_list_databases_error(resp: http.Response) -> ListDatabasesErr
 /// code sample for details.
 pub fn (c: Client) list_databases(input: ListDatabasesRequest) -> ListDatabasesResponse ! ListDatabasesErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_list_databases(c.params, input)) ?? e => return Err(ListDatabasesErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ListDatabasesErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListDatabasesErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListDatabasesErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListDatabasesErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListDatabasesErr.Deserialize(m))
+  }
   var req = serialize_list_databases(ep, input, "") ?? e => return Err(ListDatabasesErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4209,7 +4281,13 @@ pub fn deserialize_list_tables_error(resp: http.Response) -> ListTablesErr {
 /// properties of each table. See code sample for details.
 pub fn (c: Client) list_tables(input: ListTablesRequest) -> ListTablesResponse ! ListTablesErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_list_tables(c.params, input)) ?? e => return Err(ListTablesErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ListTablesErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListTablesErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListTablesErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListTablesErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListTablesErr.Deserialize(m))
+  }
   var req = serialize_list_tables(ep, input, "") ?? e => return Err(ListTablesErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4329,7 +4407,13 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
 /// Lists all tags on a Timestream resource.
 pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> ListTagsForResourceResponse ! ListTagsForResourceErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListTagsForResourceErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListTagsForResourceErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListTagsForResourceErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListTagsForResourceErr.Deserialize(m))
+  }
   var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4450,7 +4534,13 @@ pub fn deserialize_resume_batch_load_task_error(resp: http.Response) -> ResumeBa
 
 pub fn (c: Client) resume_batch_load_task(input: ResumeBatchLoadTaskRequest) -> ResumeBatchLoadTaskResponse ! ResumeBatchLoadTaskErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_resume_batch_load_task(c.params, input)) ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ResumeBatchLoadTaskErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ResumeBatchLoadTaskErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ResumeBatchLoadTaskErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ResumeBatchLoadTaskErr.Deserialize(m))
+  }
   var req = serialize_resume_batch_load_task(ep, input, "") ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4571,7 +4661,13 @@ pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
 /// Cost Management console for cost allocation tracking.
 pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceResponse ! TagResourceErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(TagResourceErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(TagResourceErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(TagResourceErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(TagResourceErr.Deserialize(m))
+  }
   var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4690,7 +4786,13 @@ pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr
 /// Removes the association of tags from a Timestream resource.
 pub fn (c: Client) untag_resource(input: UntagResourceRequest) -> UntagResourceResponse ! UntagResourceErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UntagResourceErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UntagResourceErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UntagResourceErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UntagResourceErr.Deserialize(m))
+  }
   var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4834,7 +4936,13 @@ pub fn deserialize_update_database_error(resp: http.Response) -> UpdateDatabaseE
 /// UpdateDatabase requests, first writer wins. See code sample for details.
 pub fn (c: Client) update_database(input: UpdateDatabaseRequest) -> UpdateDatabaseResponse ! UpdateDatabaseErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_update_database(c.params, input)) ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateDatabaseErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateDatabaseErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateDatabaseErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateDatabaseErr.Deserialize(m))
+  }
   var req = serialize_update_database(ep, input, "") ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4985,7 +5093,13 @@ pub fn deserialize_update_table_error(resp: http.Response) -> UpdateTableErr {
 /// the memory store. See code sample for details.
 pub fn (c: Client) update_table(input: UpdateTableRequest) -> UpdateTableResponse ! UpdateTableErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_update_table(c.params, input)) ?? e => return Err(UpdateTableErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(UpdateTableErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateTableErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateTableErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateTableErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateTableErr.Deserialize(m))
+  }
   var req = serialize_update_table(ep, input, "") ?? e => return Err(UpdateTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5167,7 +5281,13 @@ pub fn deserialize_write_records_error(resp: http.Response) -> WriteRecordsErr {
 /// update requests would receive a RejectedRecordsException .
 pub fn (c: Client) write_records(input: WriteRecordsRequest) -> WriteRecordsResponse ! WriteRecordsErr uses (net.dial, clock, rand) {
   let (found, signing, extra) = c.route(endpoint_params_write_records(c.params, input)) ?? e => return Err(WriteRecordsErr.InvalidInput(e))
-  let ep = c.discover(found) ?? e => return Err(WriteRecordsErr.InvalidInput(e))
+  let ep = match c.discover(found) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(WriteRecordsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(WriteRecordsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(WriteRecordsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(WriteRecordsErr.Deserialize(m))
+  }
   var req = serialize_write_records(ep, input, "") ?? e => return Err(WriteRecordsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

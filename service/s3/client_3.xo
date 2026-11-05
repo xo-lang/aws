@@ -8,12 +8,535 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_get_object_tagging(base: EndpointParameters, input: GetObjectTaggingRequest) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.bucket {
+    p.bucket = x
+  }
+  p
+}
+
+/// The HTTP request of GetObjectTagging.
+pub fn serialize_get_object_tagging(ep: rest.Endpoint, input: GetObjectTaggingRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = [("tagging", "")]
+  if input.bucket.is_none() {
+    return Err("input member Bucket is required")
+  }
+  let label_key = match input.key {
+    Some(v) => v
+    None => return Err("input member Key is required")
+  }
+  if label_key == "" {
+    return Err("input member Key must not be empty")
+  }
+  if let Some(v) = input.version_id {
+    qs.push(("versionId", v))
+  }
+  if let Some(v) = input.expected_bucket_owner {
+    headers.push(("x-amz-expected-bucket-owner", v))
+  }
+  if let Some(v) = input.request_payer {
+    headers.push(("x-amz-request-payer", v.value()))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/${rest.escape(label_key, true)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+    error_in_2xx: true,
+  })
+}
+
+pub fn deserialize_get_object_tagging(resp: http.Response) -> GetObjectTaggingOutput ! Str {
+  var out = GetObjectTaggingOutput{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  if let Some(hv) = resp.header("x-amz-version-id") {
+    out.version_id = hv
+  }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "TagSet" => out.tag_set = xml_read_tag_set(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetObjectTagging.
+pub enum GetObjectTaggingErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetObjectTaggingErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_object_tagging_error(resp: http.Response) -> GetObjectTaggingErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  let _ = body
+  GetObjectTaggingErr.Api(restxml.api_error(resp))
+}
+
+/// This operation is not supported for directory buckets. Returns the
+/// tag-set of an object. You send the GET request against the tagging
+/// subresource associated with the object. To use this operation, you must
+/// have permission to perform the s3:GetObjectTagging action. By default,
+/// the GET action returns information about current version of an object.
+/// For a versioned bucket, you can have multiple versions of an object in
+/// your bucket. To retrieve tags of any other version, use the versionId
+/// query parameter. You also need permission for the
+/// s3:GetObjectVersionTagging action. By default, the bucket owner has this
+/// permission and can grant this permission to others. For information
+/// about the Amazon S3 object tagging feature, see Object Tagging . The
+/// following actions are related to GetObjectTagging : DeleteObjectTagging
+/// GetObjectAttributes PutObjectTagging You must URL encode any signed
+/// header values that contain spaces. For example, if your header value is
+/// my file.txt , containing two spaces after my , you must URL encode this
+/// value to my%20%20file.txt .
+pub fn (c: Client) get_object_tagging(input: GetObjectTaggingRequest) -> GetObjectTaggingOutput ! GetObjectTaggingErr uses (net.dial, clock, rand) {
+  let (ep, routed, extra) = c.route(endpoint_params_get_object_tagging(c.params, input)) ?? e => return Err(GetObjectTaggingErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(GetObjectTaggingErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(GetObjectTaggingErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(GetObjectTaggingErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(GetObjectTaggingErr.Deserialize(m))
+  }
+  var req = serialize_get_object_tagging(ep, input, "") ?? e => return Err(GetObjectTaggingErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetObjectTaggingErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_object_tagging_error(resp))
+  }
+  deserialize_get_object_tagging(resp) ?? e => Err(GetObjectTaggingErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_object_torrent(base: EndpointParameters, input: GetObjectTorrentRequest) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.bucket {
+    p.bucket = x
+  }
+  p
+}
+
+/// The HTTP request of GetObjectTorrent.
+pub fn serialize_get_object_torrent(ep: rest.Endpoint, input: GetObjectTorrentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = [("torrent", "")]
+  if input.bucket.is_none() {
+    return Err("input member Bucket is required")
+  }
+  let label_key = match input.key {
+    Some(v) => v
+    None => return Err("input member Key is required")
+  }
+  if label_key == "" {
+    return Err("input member Key must not be empty")
+  }
+  if let Some(v) = input.request_payer {
+    headers.push(("x-amz-request-payer", v.value()))
+  }
+  if let Some(v) = input.expected_bucket_owner {
+    headers.push(("x-amz-expected-bucket-owner", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/${rest.escape(label_key, true)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_object_torrent(resp: http.Response) -> GetObjectTorrentOutput ! Str {
+  var out = GetObjectTorrentOutput{}
+  if let Some(hv) = resp.header("x-amz-request-charged") {
+    out.request_charged = RequestCharged.from(hv)
+  }
+  if !resp.body.is_empty() {
+    out.body = resp.body
+  }
+  Ok(out)
+}
+
+/// The errors of GetObjectTorrent.
+pub enum GetObjectTorrentErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetObjectTorrentErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_object_torrent_error(resp: http.Response) -> GetObjectTorrentErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  let _ = body
+  GetObjectTorrentErr.Api(restxml.api_error(resp))
+}
+
+/// This operation is not supported for directory buckets. Returns torrent
+/// files from a bucket. BitTorrent can save you bandwidth when you're
+/// distributing large files. You can get torrent only for objects that are
+/// less than 5 GB in size, and that are not encrypted using server-side
+/// encryption with a customer-provided encryption key. To use GET, you must
+/// have READ access to the object. This functionality is not supported for
+/// Amazon S3 on Outposts. The following action is related to
+/// GetObjectTorrent : GetObject You must URL encode any signed header
+/// values that contain spaces. For example, if your header value is my
+/// file.txt , containing two spaces after my , you must URL encode this
+/// value to my%20%20file.txt .
+pub fn (c: Client) get_object_torrent(input: GetObjectTorrentRequest) -> GetObjectTorrentOutput ! GetObjectTorrentErr uses (net.dial, clock, rand) {
+  let (ep, routed, extra) = c.route(endpoint_params_get_object_torrent(c.params, input)) ?? e => return Err(GetObjectTorrentErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(GetObjectTorrentErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(GetObjectTorrentErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(GetObjectTorrentErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(GetObjectTorrentErr.Deserialize(m))
+  }
+  var req = serialize_get_object_torrent(ep, input, "") ?? e => return Err(GetObjectTorrentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetObjectTorrentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_object_torrent_error(resp))
+  }
+  deserialize_get_object_torrent(resp) ?? e => Err(GetObjectTorrentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_public_access_block(base: EndpointParameters, input: GetPublicAccessBlockRequest) -> EndpointParameters {
+  var p = base
+  p.use_s3_express_control_endpoint = true
+  if let Some(x) = input.bucket {
+    p.bucket = x
+  }
+  p
+}
+
+/// The HTTP request of GetPublicAccessBlock.
+pub fn serialize_get_public_access_block(ep: rest.Endpoint, input: GetPublicAccessBlockRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = [("publicAccessBlock", "")]
+  if input.bucket.is_none() {
+    return Err("input member Bucket is required")
+  }
+  if let Some(v) = input.expected_bucket_owner {
+    headers.push(("x-amz-expected-bucket-owner", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+    error_in_2xx: true,
+  })
+}
+
+pub fn deserialize_get_public_access_block(resp: http.Response) -> GetPublicAccessBlockOutput ! Str {
+  var out = GetPublicAccessBlockOutput{}
+  if !resp.body.is_empty() {
+    out.public_access_block_configuration = xml_read_public_access_block_configuration(xmlv.parse_body(resp.body)?)?
+  }
+  Ok(out)
+}
+
+/// The errors of GetPublicAccessBlock.
+pub enum GetPublicAccessBlockErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetPublicAccessBlockErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_public_access_block_error(resp: http.Response) -> GetPublicAccessBlockErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  let _ = body
+  GetPublicAccessBlockErr.Api(restxml.api_error(resp))
+}
+
+/// This operation is not supported for directory buckets. Retrieves the
+/// PublicAccessBlock configuration for an Amazon S3 bucket. This operation
+/// returns the bucket-level configuration only. To understand the effective
+/// public access behavior, you must also consider account-level settings
+/// (which may inherit from organization-level policies). To use this
+/// operation, you must have the s3:GetBucketPublicAccessBlock permission.
+/// For more information about Amazon S3 permissions, see Specifying
+/// Permissions in a Policy . When Amazon S3 evaluates the PublicAccessBlock
+/// configuration for a bucket or an object, it checks the PublicAccessBlock
+/// configuration for both the bucket (or the bucket that contains the
+/// object) and the bucket owner's account. Account-level settings
+/// automatically inherit from organization-level policies when present. If
+/// the PublicAccessBlock settings are different between the bucket and the
+/// account, Amazon S3 uses the most restrictive combination of the
+/// bucket-level and account-level settings. For more information about when
+/// Amazon S3 considers a bucket or an object public, see The Meaning of
+/// "Public" . The following operations are related to GetPublicAccessBlock
+/// : Using Amazon S3 Block Public Access PutPublicAccessBlock
+/// GetPublicAccessBlock DeletePublicAccessBlock You must URL encode any
+/// signed header values that contain spaces. For example, if your header
+/// value is my file.txt , containing two spaces after my , you must URL
+/// encode this value to my%20%20file.txt .
+pub fn (c: Client) get_public_access_block(input: GetPublicAccessBlockRequest) -> GetPublicAccessBlockOutput ! GetPublicAccessBlockErr uses (net.dial, clock, rand) {
+  let (ep, routed, extra) = c.route(endpoint_params_get_public_access_block(c.params, input)) ?? e => return Err(GetPublicAccessBlockErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(GetPublicAccessBlockErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(GetPublicAccessBlockErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(GetPublicAccessBlockErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(GetPublicAccessBlockErr.Deserialize(m))
+  }
+  var req = serialize_get_public_access_block(ep, input, "") ?? e => return Err(GetPublicAccessBlockErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetPublicAccessBlockErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_public_access_block_error(resp))
+  }
+  deserialize_get_public_access_block(resp) ?? e => Err(GetPublicAccessBlockErr.Deserialize(e))
+}
+
+pub fn endpoint_params_head_bucket(base: EndpointParameters, input: HeadBucketRequest) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.bucket {
+    p.bucket = x
+  }
+  p
+}
+
+/// The HTTP request of HeadBucket.
+pub fn serialize_head_bucket(ep: rest.Endpoint, input: HeadBucketRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if input.bucket.is_none() {
+    return Err("input member Bucket is required")
+  }
+  if let Some(v) = input.expected_bucket_owner {
+    headers.push(("x-amz-expected-bucket-owner", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "HEAD",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+    error_in_2xx: true,
+  })
+}
+
+pub fn deserialize_head_bucket(resp: http.Response) -> HeadBucketOutput ! Str {
+  var out = HeadBucketOutput{}
+  if let Some(hv) = resp.header("x-amz-bucket-arn") {
+    out.bucket_arn = hv
+  }
+  if let Some(hv) = resp.header("x-amz-bucket-location-type") {
+    out.bucket_location_type = LocationType.from(hv)
+  }
+  if let Some(hv) = resp.header("x-amz-bucket-location-name") {
+    out.bucket_location_name = hv
+  }
+  if let Some(hv) = resp.header("x-amz-bucket-region") {
+    out.bucket_region = hv
+  }
+  if let Some(hv) = resp.header("x-amz-access-point-alias") {
+    out.access_point_alias = (hv == "true")
+  }
+  Ok(out)
+}
+
+/// The errors of HeadBucket.
+pub enum HeadBucketErr {
+  NotFound(e: NotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: HeadBucketErr) display() -> Str {
+  match e {
+    NotFound(x) => "NotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_head_bucket_error(resp: http.Response) -> HeadBucketErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "NotFound" => match read_error_not_found(resp, body) {
+      Ok(x) => return HeadBucketErr.NotFound(x)
+      Err(msg) => return HeadBucketErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  HeadBucketErr.Api(restxml.api_error(resp))
+}
+
+/// You can use this operation to determine if a bucket exists and if you
+/// have permission to access it. The action returns a 200 OK HTTP status
+/// code if the bucket exists and you have permission to access it. You can
+/// make a HeadBucket call on any bucket name to any Region in the
+/// partition, and regardless of the permissions on the bucket, you will
+/// receive a response header with the correct bucket location so that you
+/// can then make a proper, signed request to the appropriate Regional
+/// endpoint. If the bucket doesn't exist or you don't have permission to
+/// access it, the HEAD request returns a generic 400 Bad Request , 403
+/// Forbidden , or 404 Not Found HTTP status code. A message body isn't
+/// included, so you can't determine the exception beyond these HTTP
+/// response codes. Authentication and authorization General purpose buckets
+/// - Request to public buckets that grant the s3:ListBucket permission
+/// publicly do not need to be signed. All other HeadBucket requests must be
+/// authenticated and signed by using IAM credentials (access key ID and
+/// secret access key for the IAM identities). All headers with the x-amz-
+/// prefix, including x-amz-copy-source , must be signed. For more
+/// information, see REST Authentication . Directory buckets - You must use
+/// IAM credentials to authenticate and authorize your access to the
+/// HeadBucket API operation, instead of using the temporary security
+/// credentials through the CreateSession API operation. Amazon Web Services
+/// CLI or SDKs handles authentication and authorization on your behalf.
+/// Permissions General purpose bucket permissions - To use this operation,
+/// you must have permissions to perform the s3:ListBucket action. The
+/// bucket owner has this permission by default and can grant this
+/// permission to others. For more information about permissions, see
+/// Managing access permissions to your Amazon S3 resources in the Amazon S3
+/// User Guide . Directory bucket permissions - You must have the
+/// s3express:CreateSession permission in the Action element of a policy. If
+/// no session mode is specified, the session will be created with the
+/// maximum allowable privilege, attempting ReadWrite first, then ReadOnly
+/// if ReadWrite is not permitted. If you want to explicitly restrict the
+/// access to be read-only, you can set the s3express:SessionMode condition
+/// key to ReadOnly on the bucket. For more information about example bucket
+/// policies, see Example bucket policies for S3 Express One Zone and Amazon
+/// Web Services Identity and Access Management (IAM) identity-based
+/// policies for S3 Express One Zone in the Amazon S3 User Guide . HTTP Host
+/// header syntax Directory buckets - The HTTP Host header syntax is
+/// Bucket-name .s3express- zone-id . region-code .amazonaws.com . You must
+/// make requests for this API operation to the Zonal endpoint. These
+/// endpoints support virtual-hosted-style requests in the format https://
+/// bucket-name .s3express- zone-id . region-code .amazonaws.com .
+/// Path-style requests are not supported. For more information about
+/// endpoints in Availability Zones, see Regional and Zonal endpoints for
+/// directory buckets in Availability Zones in the Amazon S3 User Guide .
+/// For more information about endpoints in Local Zones, see Concepts for
+/// directory buckets in Local Zones in the Amazon S3 User Guide . You must
+/// URL encode any signed header values that contain spaces. For example, if
+/// your header value is my file.txt , containing two spaces after my , you
+/// must URL encode this value to my%20%20file.txt .
+pub fn (c: Client) head_bucket(input: HeadBucketRequest) -> HeadBucketOutput ! HeadBucketErr uses (net.dial, clock, rand) {
+  let (ep, routed, extra) = c.route(endpoint_params_head_bucket(c.params, input)) ?? e => return Err(HeadBucketErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(HeadBucketErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(HeadBucketErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(HeadBucketErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(HeadBucketErr.Deserialize(m))
+  }
+  var req = serialize_head_bucket(ep, input, "") ?? e => return Err(HeadBucketErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(HeadBucketErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_head_bucket_error(resp))
+  }
+  deserialize_head_bucket(resp) ?? e => Err(HeadBucketErr.Deserialize(e))
+}
+
 /// HeadBucket as a presigned request: a URL (and the headers
 /// to send with it) that works without credentials until `expires`
 /// passes (at most 7 days).
 pub fn (c: Client) presign_head_bucket(input: HeadBucketRequest, expires: Duration = 15m) -> transport.Presigned ! HeadBucketErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_head_bucket(c.params, input)) ?? e => return Err(HeadBucketErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(HeadBucketErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(HeadBucketErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(HeadBucketErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(HeadBucketErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(HeadBucketErr.Deserialize(m))
+  }
   var req = serialize_head_bucket(ep, input, "") ?? e => return Err(HeadBucketErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -392,7 +915,13 @@ pub fn deserialize_head_object_error(resp: http.Response) -> HeadObjectErr {
 /// value to my%20%20file.txt .
 pub fn (c: Client) head_object(input: HeadObjectRequest) -> HeadObjectOutput ! HeadObjectErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_head_object(c.params, input)) ?? e => return Err(HeadObjectErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(HeadObjectErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(HeadObjectErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(HeadObjectErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(HeadObjectErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(HeadObjectErr.Deserialize(m))
+  }
   var req = serialize_head_object(ep, input, "") ?? e => return Err(HeadObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -409,7 +938,13 @@ pub fn (c: Client) head_object(input: HeadObjectRequest) -> HeadObjectOutput ! H
 /// passes (at most 7 days).
 pub fn (c: Client) presign_head_object(input: HeadObjectRequest, expires: Duration = 15m) -> transport.Presigned ! HeadObjectErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_head_object(c.params, input)) ?? e => return Err(HeadObjectErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(HeadObjectErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(HeadObjectErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(HeadObjectErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(HeadObjectErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(HeadObjectErr.Deserialize(m))
+  }
   var req = serialize_head_object(ep, input, "") ?? e => return Err(HeadObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -528,7 +1063,13 @@ pub fn deserialize_list_bucket_analytics_configurations_error(resp: http.Respons
 /// value to my%20%20file.txt .
 pub fn (c: Client) list_bucket_analytics_configurations(input: ListBucketAnalyticsConfigurationsRequest) -> ListBucketAnalyticsConfigurationsOutput ! ListBucketAnalyticsConfigurationsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_bucket_analytics_configurations(c.params, input)) ?? e => return Err(ListBucketAnalyticsConfigurationsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListBucketAnalyticsConfigurationsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListBucketAnalyticsConfigurationsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListBucketAnalyticsConfigurationsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListBucketAnalyticsConfigurationsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListBucketAnalyticsConfigurationsErr.Deserialize(m))
+  }
   var req = serialize_list_bucket_analytics_configurations(ep, input, "") ?? e => return Err(ListBucketAnalyticsConfigurationsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -652,7 +1193,13 @@ pub fn deserialize_list_bucket_intelligent_tiering_configurations_error(resp: ht
 /// value to my%20%20file.txt .
 pub fn (c: Client) list_bucket_intelligent_tiering_configurations(input: ListBucketIntelligentTieringConfigurationsRequest) -> ListBucketIntelligentTieringConfigurationsOutput ! ListBucketIntelligentTieringConfigurationsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_bucket_intelligent_tiering_configurations(c.params, input)) ?? e => return Err(ListBucketIntelligentTieringConfigurationsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListBucketIntelligentTieringConfigurationsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListBucketIntelligentTieringConfigurationsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListBucketIntelligentTieringConfigurationsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListBucketIntelligentTieringConfigurationsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListBucketIntelligentTieringConfigurationsErr.Deserialize(m))
+  }
   var req = serialize_list_bucket_intelligent_tiering_configurations(ep, input, "") ?? e => return Err(ListBucketIntelligentTieringConfigurationsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -793,7 +1340,13 @@ pub fn deserialize_list_bucket_inventory_configurations_error(resp: http.Respons
 /// value to my%20%20file.txt .
 pub fn (c: Client) list_bucket_inventory_configurations(input: ListBucketInventoryConfigurationsRequest) -> ListBucketInventoryConfigurationsOutput ! ListBucketInventoryConfigurationsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_bucket_inventory_configurations(c.params, input)) ?? e => return Err(ListBucketInventoryConfigurationsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListBucketInventoryConfigurationsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListBucketInventoryConfigurationsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListBucketInventoryConfigurationsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListBucketInventoryConfigurationsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListBucketInventoryConfigurationsErr.Deserialize(m))
+  }
   var req = serialize_list_bucket_inventory_configurations(ep, input, "") ?? e => return Err(ListBucketInventoryConfigurationsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -938,7 +1491,13 @@ pub fn deserialize_list_bucket_metrics_configurations_error(resp: http.Response)
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) list_bucket_metrics_configurations(input: ListBucketMetricsConfigurationsRequest) -> ListBucketMetricsConfigurationsOutput ! ListBucketMetricsConfigurationsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_bucket_metrics_configurations(c.params, input)) ?? e => return Err(ListBucketMetricsConfigurationsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListBucketMetricsConfigurationsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListBucketMetricsConfigurationsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListBucketMetricsConfigurationsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListBucketMetricsConfigurationsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListBucketMetricsConfigurationsErr.Deserialize(m))
+  }
   var req = serialize_list_bucket_metrics_configurations(ep, input, "") ?? e => return Err(ListBucketMetricsConfigurationsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1049,7 +1608,13 @@ pub fn deserialize_list_buckets_error(resp: http.Response) -> ListBucketsErr {
 /// my%20%20file.txt .
 pub fn (c: Client) list_buckets(input: ListBucketsRequest) -> ListBucketsOutput ! ListBucketsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_buckets(c.params, input)) ?? e => return Err(ListBucketsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListBucketsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListBucketsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListBucketsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListBucketsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListBucketsErr.Deserialize(m))
+  }
   var req = serialize_list_buckets(ep, input, "") ?? e => return Err(ListBucketsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1163,7 +1728,13 @@ pub fn deserialize_list_directory_buckets_error(resp: http.Response) -> ListDire
 /// value to my%20%20file.txt .
 pub fn (c: Client) list_directory_buckets(input: ListDirectoryBucketsRequest) -> ListDirectoryBucketsOutput ! ListDirectoryBucketsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_directory_buckets(c.params, input)) ?? e => return Err(ListDirectoryBucketsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListDirectoryBucketsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListDirectoryBucketsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListDirectoryBucketsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListDirectoryBucketsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListDirectoryBucketsErr.Deserialize(m))
+  }
   var req = serialize_list_directory_buckets(ep, input, "") ?? e => return Err(ListDirectoryBucketsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1366,7 +1937,13 @@ pub fn deserialize_list_multipart_uploads_error(resp: http.Response) -> ListMult
 /// my%20%20file.txt .
 pub fn (c: Client) list_multipart_uploads(input: ListMultipartUploadsRequest) -> ListMultipartUploadsOutput ! ListMultipartUploadsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_multipart_uploads(c.params, input)) ?? e => return Err(ListMultipartUploadsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListMultipartUploadsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListMultipartUploadsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListMultipartUploadsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListMultipartUploadsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListMultipartUploadsErr.Deserialize(m))
+  }
   var req = serialize_list_multipart_uploads(ep, input, "") ?? e => return Err(ListMultipartUploadsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1520,7 +2097,13 @@ pub fn deserialize_list_object_annotations_error(resp: http.Response) -> ListObj
 /// PutObjectAnnotation GetObjectAnnotation DeleteObjectAnnotation
 pub fn (c: Client) list_object_annotations(input: ListObjectAnnotationsRequest) -> ListObjectAnnotationsOutput ! ListObjectAnnotationsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_object_annotations(c.params, input)) ?? e => return Err(ListObjectAnnotationsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListObjectAnnotationsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListObjectAnnotationsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListObjectAnnotationsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListObjectAnnotationsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListObjectAnnotationsErr.Deserialize(m))
+  }
   var req = serialize_list_object_annotations(ep, input, "") ?? e => return Err(ListObjectAnnotationsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1677,7 +2260,13 @@ pub fn deserialize_list_object_versions_error(resp: http.Response) -> ListObject
 /// after my , you must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) list_object_versions(input: ListObjectVersionsRequest) -> ListObjectVersionsOutput ! ListObjectVersionsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_object_versions(c.params, input)) ?? e => return Err(ListObjectVersionsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListObjectVersionsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListObjectVersionsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListObjectVersionsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListObjectVersionsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListObjectVersionsErr.Deserialize(m))
+  }
   var req = serialize_list_object_versions(ep, input, "") ?? e => return Err(ListObjectVersionsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1833,7 +2422,13 @@ pub fn deserialize_list_objects_error(resp: http.Response) -> ListObjectsErr {
 /// encode this value to my%20%20file.txt .
 pub fn (c: Client) list_objects(input: ListObjectsRequest) -> ListObjectsOutput ! ListObjectsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_objects(c.params, input)) ?? e => return Err(ListObjectsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListObjectsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListObjectsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListObjectsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListObjectsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListObjectsErr.Deserialize(m))
+  }
   var req = serialize_list_objects(ep, input, "") ?? e => return Err(ListObjectsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2037,7 +2632,13 @@ pub fn deserialize_list_objects_v2_error(resp: http.Response) -> ListObjectsV2Er
 /// value to my%20%20file.txt .
 pub fn (c: Client) list_objects_v2(input: ListObjectsV2Request) -> ListObjectsV2Output ! ListObjectsV2Err uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_objects_v2(c.params, input)) ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListObjectsV2Err.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListObjectsV2Err.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListObjectsV2Err.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListObjectsV2Err.Deserialize(m))
+  }
   var req = serialize_list_objects_v2(ep, input, "") ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2230,7 +2831,13 @@ pub fn deserialize_list_parts_error(resp: http.Response) -> ListPartsErr {
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) list_parts(input: ListPartsRequest) -> ListPartsOutput ! ListPartsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_list_parts(c.params, input)) ?? e => return Err(ListPartsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(ListPartsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(ListPartsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(ListPartsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(ListPartsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(ListPartsErr.Deserialize(m))
+  }
   var req = serialize_list_parts(ep, input, "") ?? e => return Err(ListPartsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2333,7 +2940,13 @@ pub fn (c: Client) put_bucket_abac(given: PutBucketAbacRequest) -> () ! PutBucke
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums && given.content_md5.is_none() { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_abac(c.params, input)) ?? e => return Err(PutBucketAbacErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketAbacErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketAbacErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketAbacErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketAbacErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketAbacErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_abac(ep, input, "") ?? e => return Err(PutBucketAbacErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2450,7 +3063,13 @@ pub fn (c: Client) put_bucket_accelerate_configuration(given: PutBucketAccelerat
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_accelerate_configuration(c.params, input)) ?? e => return Err(PutBucketAccelerateConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketAccelerateConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketAccelerateConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketAccelerateConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketAccelerateConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketAccelerateConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_accelerate_configuration(ep, input, "") ?? e => return Err(PutBucketAccelerateConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2638,7 +3257,13 @@ pub fn deserialize_put_bucket_acl_error(resp: http.Response) -> PutBucketAclErr 
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_acl(input: PutBucketAclRequest) -> () ! PutBucketAclErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_acl(c.params, input)) ?? e => return Err(PutBucketAclErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketAclErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketAclErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketAclErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketAclErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketAclErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_acl(ep, input, "") ?? e => return Err(PutBucketAclErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2763,7 +3388,13 @@ pub fn deserialize_put_bucket_analytics_configuration_error(resp: http.Response)
 /// after my , you must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_analytics_configuration(input: PutBucketAnalyticsConfigurationRequest) -> () ! PutBucketAnalyticsConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_analytics_configuration(c.params, input)) ?? e => return Err(PutBucketAnalyticsConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketAnalyticsConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketAnalyticsConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketAnalyticsConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketAnalyticsConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketAnalyticsConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_analytics_configuration(ep, input, "") ?? e => return Err(PutBucketAnalyticsConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2887,7 +3518,13 @@ pub fn deserialize_put_bucket_cors_error(resp: http.Response) -> PutBucketCorsEr
 /// my%20%20file.txt .
 pub fn (c: Client) put_bucket_cors(input: PutBucketCorsRequest) -> () ! PutBucketCorsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_cors(c.params, input)) ?? e => return Err(PutBucketCorsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketCorsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketCorsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketCorsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketCorsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketCorsErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_cors(ep, input, "") ?? e => return Err(PutBucketCorsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3057,7 +3694,13 @@ pub fn deserialize_put_bucket_encryption_error(resp: http.Response) -> PutBucket
 /// after my , you must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_encryption(input: PutBucketEncryptionRequest) -> () ! PutBucketEncryptionErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_encryption(c.params, input)) ?? e => return Err(PutBucketEncryptionErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketEncryptionErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketEncryptionErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketEncryptionErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketEncryptionErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketEncryptionErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_encryption(ep, input, "") ?? e => return Err(PutBucketEncryptionErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3183,7 +3826,13 @@ pub fn deserialize_put_bucket_intelligent_tiering_configuration_error(resp: http
 /// value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_intelligent_tiering_configuration(input: PutBucketIntelligentTieringConfigurationRequest) -> () ! PutBucketIntelligentTieringConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_intelligent_tiering_configuration(c.params, input)) ?? e => return Err(PutBucketIntelligentTieringConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketIntelligentTieringConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketIntelligentTieringConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketIntelligentTieringConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketIntelligentTieringConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketIntelligentTieringConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_intelligent_tiering_configuration(ep, input, "") ?? e => return Err(PutBucketIntelligentTieringConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3338,7 +3987,13 @@ pub fn deserialize_put_bucket_inventory_configuration_error(resp: http.Response)
 /// value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_inventory_configuration(input: PutBucketInventoryConfigurationRequest) -> () ! PutBucketInventoryConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_inventory_configuration(c.params, input)) ?? e => return Err(PutBucketInventoryConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketInventoryConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketInventoryConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketInventoryConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketInventoryConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketInventoryConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_inventory_configuration(ep, input, "") ?? e => return Err(PutBucketInventoryConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3507,7 +4162,13 @@ pub fn deserialize_put_bucket_lifecycle_configuration_error(resp: http.Response)
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_lifecycle_configuration(input: PutBucketLifecycleConfigurationRequest) -> PutBucketLifecycleConfigurationOutput ! PutBucketLifecycleConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_lifecycle_configuration(c.params, input)) ?? e => return Err(PutBucketLifecycleConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketLifecycleConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketLifecycleConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketLifecycleConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketLifecycleConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketLifecycleConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_lifecycle_configuration(ep, input, "") ?? e => return Err(PutBucketLifecycleConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3641,7 +4302,13 @@ pub fn deserialize_put_bucket_logging_error(resp: http.Response) -> PutBucketLog
 /// encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_logging(input: PutBucketLoggingRequest) -> () ! PutBucketLoggingErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_logging(c.params, input)) ?? e => return Err(PutBucketLoggingErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketLoggingErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketLoggingErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketLoggingErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketLoggingErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketLoggingErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_logging(ep, input, "") ?? e => return Err(PutBucketLoggingErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3774,7 +4441,13 @@ pub fn deserialize_put_bucket_metrics_configuration_error(resp: http.Response) -
 /// .
 pub fn (c: Client) put_bucket_metrics_configuration(input: PutBucketMetricsConfigurationRequest) -> () ! PutBucketMetricsConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_metrics_configuration(c.params, input)) ?? e => return Err(PutBucketMetricsConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketMetricsConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketMetricsConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketMetricsConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketMetricsConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketMetricsConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_metrics_configuration(ep, input, "") ?? e => return Err(PutBucketMetricsConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3905,7 +4578,13 @@ pub fn deserialize_put_bucket_notification_configuration_error(resp: http.Respon
 /// value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_notification_configuration(input: PutBucketNotificationConfigurationRequest) -> () ! PutBucketNotificationConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_notification_configuration(c.params, input)) ?? e => return Err(PutBucketNotificationConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketNotificationConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketNotificationConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketNotificationConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketNotificationConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketNotificationConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_notification_configuration(ep, input, "") ?? e => return Err(PutBucketNotificationConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4010,7 +4689,13 @@ pub fn deserialize_put_bucket_ownership_controls_error(resp: http.Response) -> P
 /// value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_ownership_controls(input: PutBucketOwnershipControlsRequest) -> () ! PutBucketOwnershipControlsErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_ownership_controls(c.params, input)) ?? e => return Err(PutBucketOwnershipControlsErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketOwnershipControlsErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketOwnershipControlsErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketOwnershipControlsErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketOwnershipControlsErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketOwnershipControlsErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_ownership_controls(ep, input, "") ?? e => return Err(PutBucketOwnershipControlsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4153,7 +4838,13 @@ pub fn deserialize_put_bucket_policy_error(resp: http.Response) -> PutBucketPoli
 /// .
 pub fn (c: Client) put_bucket_policy(input: PutBucketPolicyRequest) -> () ! PutBucketPolicyErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_policy(c.params, input)) ?? e => return Err(PutBucketPolicyErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketPolicyErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketPolicyErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketPolicyErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketPolicyErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketPolicyErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_policy(ep, input, "") ?? e => return Err(PutBucketPolicyErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4294,7 +4985,13 @@ pub fn deserialize_put_bucket_replication_error(resp: http.Response) -> PutBucke
 /// after my , you must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_replication(input: PutBucketReplicationRequest) -> () ! PutBucketReplicationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_replication(c.params, input)) ?? e => return Err(PutBucketReplicationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketReplicationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketReplicationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketReplicationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketReplicationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketReplicationErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_replication(ep, input, "") ?? e => return Err(PutBucketReplicationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4398,7 +5095,13 @@ pub fn deserialize_put_bucket_request_payment_error(resp: http.Response) -> PutB
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_request_payment(input: PutBucketRequestPaymentRequest) -> () ! PutBucketRequestPaymentErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_request_payment(c.params, input)) ?? e => return Err(PutBucketRequestPaymentErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketRequestPaymentErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketRequestPaymentErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketRequestPaymentErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketRequestPaymentErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketRequestPaymentErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_request_payment(ep, input, "") ?? e => return Err(PutBucketRequestPaymentErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4526,7 +5229,13 @@ pub fn deserialize_put_bucket_tagging_error(resp: http.Response) -> PutBucketTag
 /// my%20%20file.txt .
 pub fn (c: Client) put_bucket_tagging(input: PutBucketTaggingRequest) -> () ! PutBucketTaggingErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_tagging(c.params, input)) ?? e => return Err(PutBucketTaggingErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketTaggingErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketTaggingErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketTaggingErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketTaggingErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketTaggingErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_tagging(ep, input, "") ?? e => return Err(PutBucketTaggingErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4654,7 +5363,13 @@ pub fn deserialize_put_bucket_versioning_error(resp: http.Response) -> PutBucket
 /// encode this value to my%20%20file.txt .
 pub fn (c: Client) put_bucket_versioning(input: PutBucketVersioningRequest) -> () ! PutBucketVersioningErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_versioning(c.params, input)) ?? e => return Err(PutBucketVersioningErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketVersioningErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketVersioningErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketVersioningErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketVersioningErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketVersioningErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_versioning(ep, input, "") ?? e => return Err(PutBucketVersioningErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4778,7 +5493,13 @@ pub fn deserialize_put_bucket_website_error(resp: http.Response) -> PutBucketWeb
 /// my%20%20file.txt .
 pub fn (c: Client) put_bucket_website(input: PutBucketWebsiteRequest) -> () ! PutBucketWebsiteErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_bucket_website(c.params, input)) ?? e => return Err(PutBucketWebsiteErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutBucketWebsiteErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutBucketWebsiteErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutBucketWebsiteErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutBucketWebsiteErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutBucketWebsiteErr.Deserialize(m))
+  }
   var req = serialize_put_bucket_website(ep, input, "") ?? e => return Err(PutBucketWebsiteErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5198,7 +5919,13 @@ pub fn (c: Client) put_object(given: PutObjectRequest) -> PutObjectOutput ! PutO
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums && given.content_md5.is_none() && given.checksum_crc32.is_none() && given.checksum_crc32_c.is_none() && given.checksum_crc64_nvme.is_none() && given.checksum_sha1.is_none() && given.checksum_sha256.is_none() && given.checksum_sha512.is_none() && given.checksum_md5.is_none() && given.checksum_xxhash64.is_none() && given.checksum_xxhash3.is_none() && given.checksum_xxhash128.is_none() { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
   let (ep, routed, extra) = c.route(endpoint_params_put_object(c.params, input)) ?? e => return Err(PutObjectErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectErr.Deserialize(m))
+  }
   var req = serialize_put_object(ep, input, "") ?? e => return Err(PutObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5215,7 +5942,13 @@ pub fn (c: Client) put_object(given: PutObjectRequest) -> PutObjectOutput ! PutO
 /// passes (at most 7 days).
 pub fn (c: Client) presign_put_object(input: PutObjectRequest, expires: Duration = 15m) -> transport.Presigned ! PutObjectErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_object(c.params, input)) ?? e => return Err(PutObjectErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectErr.Deserialize(m))
+  }
   var req = serialize_put_object(ep, input, "") ?? e => return Err(PutObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5428,7 +6161,13 @@ pub fn deserialize_put_object_acl_error(resp: http.Response) -> PutObjectAclErr 
 /// value to my%20%20file.txt .
 pub fn (c: Client) put_object_acl(input: PutObjectAclRequest) -> PutObjectAclOutput ! PutObjectAclErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_object_acl(c.params, input)) ?? e => return Err(PutObjectAclErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectAclErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectAclErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectAclErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectAclErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectAclErr.Deserialize(m))
+  }
   var req = serialize_put_object_acl(ep, input, "") ?? e => return Err(PutObjectAclErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5689,7 +6428,13 @@ pub fn (c: Client) put_object_annotation(given: PutObjectAnnotationRequest) -> P
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums && given.checksum_crc32.is_none() && given.checksum_crc32_c.is_none() && given.checksum_crc64_nvme.is_none() && given.checksum_sha1.is_none() && given.checksum_sha256.is_none() && given.checksum_sha512.is_none() && given.checksum_md5.is_none() && given.checksum_xxhash64.is_none() && given.checksum_xxhash3.is_none() && given.checksum_xxhash128.is_none() && given.content_md5.is_none() { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
   let (ep, routed, extra) = c.route(endpoint_params_put_object_annotation(c.params, input)) ?? e => return Err(PutObjectAnnotationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectAnnotationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectAnnotationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectAnnotationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectAnnotationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectAnnotationErr.Deserialize(m))
+  }
   var req = serialize_put_object_annotation(ep, input, "") ?? e => return Err(PutObjectAnnotationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5805,7 +6550,13 @@ pub fn deserialize_put_object_legal_hold_error(resp: http.Response) -> PutObject
 /// .
 pub fn (c: Client) put_object_legal_hold(input: PutObjectLegalHoldRequest) -> PutObjectLegalHoldOutput ! PutObjectLegalHoldErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_object_legal_hold(c.params, input)) ?? e => return Err(PutObjectLegalHoldErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectLegalHoldErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectLegalHoldErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectLegalHoldErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectLegalHoldErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectLegalHoldErr.Deserialize(m))
+  }
   var req = serialize_put_object_legal_hold(ep, input, "") ?? e => return Err(PutObjectLegalHoldErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5919,7 +6670,13 @@ pub fn deserialize_put_object_lock_configuration_error(resp: http.Response) -> P
 /// encode this value to my%20%20file.txt .
 pub fn (c: Client) put_object_lock_configuration(input: PutObjectLockConfigurationRequest) -> PutObjectLockConfigurationOutput ! PutObjectLockConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_object_lock_configuration(c.params, input)) ?? e => return Err(PutObjectLockConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectLockConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectLockConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectLockConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectLockConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectLockConfigurationErr.Deserialize(m))
+  }
   var req = serialize_put_object_lock_configuration(ep, input, "") ?? e => return Err(PutObjectLockConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6041,7 +6798,13 @@ pub fn deserialize_put_object_retention_error(resp: http.Response) -> PutObjectR
 /// value to my%20%20file.txt .
 pub fn (c: Client) put_object_retention(input: PutObjectRetentionRequest) -> PutObjectRetentionOutput ! PutObjectRetentionErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_object_retention(c.params, input)) ?? e => return Err(PutObjectRetentionErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectRetentionErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectRetentionErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectRetentionErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectRetentionErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectRetentionErr.Deserialize(m))
+  }
   var req = serialize_put_object_retention(ep, input, "") ?? e => return Err(PutObjectRetentionErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6176,7 +6939,13 @@ pub fn deserialize_put_object_tagging_error(resp: http.Response) -> PutObjectTag
 /// my%20%20file.txt .
 pub fn (c: Client) put_object_tagging(input: PutObjectTaggingRequest) -> PutObjectTaggingOutput ! PutObjectTaggingErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_object_tagging(c.params, input)) ?? e => return Err(PutObjectTaggingErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutObjectTaggingErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutObjectTaggingErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutObjectTaggingErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutObjectTaggingErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutObjectTaggingErr.Deserialize(m))
+  }
   var req = serialize_put_object_tagging(ep, input, "") ?? e => return Err(PutObjectTaggingErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6289,7 +7058,13 @@ pub fn deserialize_put_public_access_block_error(resp: http.Response) -> PutPubl
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) put_public_access_block(input: PutPublicAccessBlockRequest) -> () ! PutPublicAccessBlockErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_put_public_access_block(c.params, input)) ?? e => return Err(PutPublicAccessBlockErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(PutPublicAccessBlockErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(PutPublicAccessBlockErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(PutPublicAccessBlockErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(PutPublicAccessBlockErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(PutPublicAccessBlockErr.Deserialize(m))
+  }
   var req = serialize_put_public_access_block(ep, input, "") ?? e => return Err(PutPublicAccessBlockErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6455,7 +7230,13 @@ pub fn deserialize_rename_object_error(resp: http.Response) -> RenameObjectErr {
 /// URL encode this value to my%20%20file.txt .
 pub fn (c: Client) rename_object(input: RenameObjectRequest) -> RenameObjectOutput ! RenameObjectErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_rename_object(c.params, input)) ?? e => return Err(RenameObjectErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(RenameObjectErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(RenameObjectErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(RenameObjectErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(RenameObjectErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(RenameObjectErr.Deserialize(m))
+  }
   var req = serialize_rename_object(ep, input, rest.uuid(c.rand)) ?? e => return Err(RenameObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6670,7 +7451,13 @@ pub fn (c: Client) restore_object(given: RestoreObjectRequest) -> RestoreObjectO
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
   let (ep, routed, extra) = c.route(endpoint_params_restore_object(c.params, input)) ?? e => return Err(RestoreObjectErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(RestoreObjectErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(RestoreObjectErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(RestoreObjectErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(RestoreObjectErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(RestoreObjectErr.Deserialize(m))
+  }
   var req = serialize_restore_object(ep, input, "") ?? e => return Err(RestoreObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6850,7 +7637,13 @@ pub fn deserialize_select_object_content_error(resp: http.Response) -> SelectObj
 /// must URL encode this value to my%20%20file.txt .
 pub fn (c: Client) select_object_content(input: SelectObjectContentRequest) -> SelectObjectContentEvents ! SelectObjectContentErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_select_object_content(c.params, input)) ?? e => return Err(SelectObjectContentErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(SelectObjectContentErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(SelectObjectContentErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(SelectObjectContentErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(SelectObjectContentErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(SelectObjectContentErr.Deserialize(m))
+  }
   var req = serialize_select_object_content(ep, input, "") ?? e => return Err(SelectObjectContentErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6971,7 +7764,13 @@ pub fn deserialize_update_bucket_metadata_annotation_table_configuration_error(r
 /// CreateBucketMetadataConfiguration GetBucketMetadataConfiguration
 pub fn (c: Client) update_bucket_metadata_annotation_table_configuration(input: UpdateBucketMetadataAnnotationTableConfigurationRequest) -> () ! UpdateBucketMetadataAnnotationTableConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_update_bucket_metadata_annotation_table_configuration(c.params, input)) ?? e => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.Deserialize(m))
+  }
   var req = serialize_update_bucket_metadata_annotation_table_configuration(ep, input, "") ?? e => return Err(UpdateBucketMetadataAnnotationTableConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7086,7 +7885,13 @@ pub fn deserialize_update_bucket_metadata_inventory_table_configuration_error(re
 /// encode this value to my%20%20file.txt .
 pub fn (c: Client) update_bucket_metadata_inventory_table_configuration(input: UpdateBucketMetadataInventoryTableConfigurationRequest) -> () ! UpdateBucketMetadataInventoryTableConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_update_bucket_metadata_inventory_table_configuration(c.params, input)) ?? e => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.Deserialize(m))
+  }
   var req = serialize_update_bucket_metadata_inventory_table_configuration(ep, input, "") ?? e => return Err(UpdateBucketMetadataInventoryTableConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7194,7 +7999,13 @@ pub fn deserialize_update_bucket_metadata_journal_table_configuration_error(resp
 /// encode this value to my%20%20file.txt .
 pub fn (c: Client) update_bucket_metadata_journal_table_configuration(input: UpdateBucketMetadataJournalTableConfigurationRequest) -> () ! UpdateBucketMetadataJournalTableConfigurationErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_update_bucket_metadata_journal_table_configuration(c.params, input)) ?? e => return Err(UpdateBucketMetadataJournalTableConfigurationErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UpdateBucketMetadataJournalTableConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateBucketMetadataJournalTableConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateBucketMetadataJournalTableConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateBucketMetadataJournalTableConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateBucketMetadataJournalTableConfigurationErr.Deserialize(m))
+  }
   var req = serialize_update_bucket_metadata_journal_table_configuration(ep, input, "") ?? e => return Err(UpdateBucketMetadataJournalTableConfigurationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7406,7 +8217,13 @@ pub fn deserialize_update_object_encryption_error(resp: http.Response) -> Update
 /// retention period applied to them.
 pub fn (c: Client) update_object_encryption(input: UpdateObjectEncryptionRequest) -> UpdateObjectEncryptionResponse ! UpdateObjectEncryptionErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_update_object_encryption(c.params, input)) ?? e => return Err(UpdateObjectEncryptionErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UpdateObjectEncryptionErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UpdateObjectEncryptionErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UpdateObjectEncryptionErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UpdateObjectEncryptionErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UpdateObjectEncryptionErr.Deserialize(m))
+  }
   var req = serialize_update_object_encryption(ep, input, "") ?? e => return Err(UpdateObjectEncryptionErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7725,7 +8542,13 @@ pub fn (c: Client) upload_part(given: UploadPartRequest) -> UploadPartOutput ! U
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums && given.content_md5.is_none() && given.checksum_crc32.is_none() && given.checksum_crc32_c.is_none() && given.checksum_crc64_nvme.is_none() && given.checksum_sha1.is_none() && given.checksum_sha256.is_none() && given.checksum_sha512.is_none() && given.checksum_md5.is_none() && given.checksum_xxhash64.is_none() && given.checksum_xxhash3.is_none() && given.checksum_xxhash128.is_none() { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
   let (ep, routed, extra) = c.route(endpoint_params_upload_part(c.params, input)) ?? e => return Err(UploadPartErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UploadPartErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UploadPartErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UploadPartErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UploadPartErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UploadPartErr.Deserialize(m))
+  }
   var req = serialize_upload_part(ep, input, "") ?? e => return Err(UploadPartErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7742,7 +8565,13 @@ pub fn (c: Client) upload_part(given: UploadPartRequest) -> UploadPartOutput ! U
 /// passes (at most 7 days).
 pub fn (c: Client) presign_upload_part(input: UploadPartRequest, expires: Duration = 15m) -> transport.Presigned ! UploadPartErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_upload_part(c.params, input)) ?? e => return Err(UploadPartErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UploadPartErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UploadPartErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UploadPartErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UploadPartErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UploadPartErr.Deserialize(m))
+  }
   var req = serialize_upload_part(ep, input, "") ?? e => return Err(UploadPartErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8007,7 +8836,13 @@ pub fn deserialize_upload_part_copy_error(resp: http.Response) -> UploadPartCopy
 /// URL encode this value to my%20%20file.txt .
 pub fn (c: Client) upload_part_copy(input: UploadPartCopyRequest) -> UploadPartCopyOutput ! UploadPartCopyErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_upload_part_copy(c.params, input)) ?? e => return Err(UploadPartCopyErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(UploadPartCopyErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(UploadPartCopyErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(UploadPartCopyErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(UploadPartCopyErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(UploadPartCopyErr.Deserialize(m))
+  }
   var req = serialize_upload_part_copy(ep, input, "") ?? e => return Err(UploadPartCopyErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8268,7 +9103,13 @@ pub fn deserialize_write_get_object_response_error(resp: http.Response) -> Write
 /// my%20%20file.txt .
 pub fn (c: Client) write_get_object_response(input: WriteGetObjectResponseRequest) -> () ! WriteGetObjectResponseErr uses (net.dial, clock, rand) {
   let (ep, routed, extra) = c.route(endpoint_params_write_get_object_response(c.params, input)) ?? e => return Err(WriteGetObjectResponseErr.InvalidInput(e))
-  let signing = c.express_session(routed) ?? e => return Err(WriteGetObjectResponseErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(WriteGetObjectResponseErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(WriteGetObjectResponseErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(WriteGetObjectResponseErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(WriteGetObjectResponseErr.Deserialize(m))
+  }
   var req = serialize_write_get_object_response(ep, input, "") ?? e => return Err(WriteGetObjectResponseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

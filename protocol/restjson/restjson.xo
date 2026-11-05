@@ -47,9 +47,12 @@ pub fn error_message(body: json.Value) -> Str {
 /// The service error of a response, for unmodeled codes.
 pub fn api_error(resp: http.Response, body: json.Value) -> aws.ApiError {
   let code = error_code(resp, body)
+  let msg = error_message(body)
   aws.ApiError{
     code: if code == "" { "UnknownError" } else { code },
-    message: error_message(body),
+    // with neither a code nor a message, the start of the body says
+    // what answered (a proxy's page, a plain text error)
+    message: if code == "" && msg == "" { body_hint(resp.body) } else { msg },
     status: resp.status,
     request_id: resp.header("X-Amzn-Requestid") ?? "",
   }
@@ -60,4 +63,19 @@ pub fn classify(resp: http.Response) -> retry.Failure {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Null
   let code = error_code(resp, body)
   retry.classify_response(resp.status, if code == "" { None } else { Some(code) })
+}
+
+/// Up to 200 characters of a body that has no error code, on one line
+/// (empty for an empty or non-UTF-8 body).
+pub fn body_hint(b: Bytes) -> Str {
+  let t = (b.to_str() ?? "").trim().replace("\n", " ").replace("\r", " ")
+  let rs = t.runes()
+  if rs.len() <= 200 {
+    return t
+  }
+  var end = 0
+  for r in rs[0..200] {
+    end += r.utf8_len()
+  }
+  "${t[0..end]}..."
 }

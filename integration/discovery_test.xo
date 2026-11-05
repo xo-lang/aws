@@ -60,3 +60,20 @@ test "an InvalidEndpointException drops the cached address, so the next call dis
   c.write_records(input)?
   expect(describes.with_read(fn(n: Int) -> Int { n })) == 2
 }
+
+test "a failed DescribeEndpoints is the operation's Send or Api error, not invalid input" {
+  // no handler: the discovery request is never answered
+  let c = timestreamwrite.new(os.net, os.clock, os.rand, timestreamwrite.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let input = timestreamwrite.WriteRecordsRequest{database_name: "db", table_name: "t", records: []}
+  match c.write_records(input) {
+    Err(timestreamwrite.WriteRecordsErr.Send(_)) => {}
+    other => expect("${other:?}") == "Send"
+  }
+  os.net.handle("POST https://ingest.timestream.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    http.text(400, "{\"__type\":\"AccessDeniedException\",\"Message\":\"no\"}").with_header("Content-Type", "application/x-amz-json-1.0")
+  })
+  match c.write_records(input) {
+    Err(timestreamwrite.WriteRecordsErr.Api(e)) => expect(e.code) == "AccessDeniedException"
+    other => expect("${other:?}") == "Api AccessDeniedException"
+  }
+}

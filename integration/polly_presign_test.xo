@@ -1,0 +1,20 @@
+// Polly's presigned SynthesizeSpeech (as aws-sdk-go-v2's
+// PresignSynthesizeSpeech): a GET of /v1/speech with the input in the
+// query and the signature in the query too.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/polly
+
+test "Polly presigns SynthesizeSpeech as a GET with the input in the query" {
+  let c = polly.new(os.net, os.clock, os.rand, polly.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let p = c.presign_synthesize_speech(polly.SynthesizeSpeechInput{text: "hello world", voice_id: polly.VoiceId.Joanna, output_format: polly.OutputFormat.Mp3}, expires: 5m)?
+  expect(p.method) == "GET"
+  expect(p.url.starts_with("https://polly.us-west-2.amazonaws.com/v1/speech?")) == true
+  expect(p.url.contains("Text=hello%20world")) == true
+  expect(p.url.contains("VoiceId=Joanna")) == true
+  expect(p.url.contains("OutputFormat=mp3")) == true
+  expect(p.url.contains("X-Amz-Algorithm=AWS4-HMAC-SHA256")) == true
+  expect(p.url.contains("X-Amz-Expires=300")) == true
+  expect(p.url.contains("X-Amz-Signature=")) == true
+  expect(p.headers.any(fn(h: (Str, Str)) -> Bool { h.0.to_lower() == "content-type" })) == false
+}

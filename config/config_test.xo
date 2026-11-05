@@ -307,3 +307,19 @@ test "credential_source Environment and a configured STS endpoint" {
   let local = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
   expect(local.credentials?.retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
 }
+
+test "bearer tokens and the Lambda trace id come from the environment" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_ACCESS_KEY_ID", "AKIDTEST0000000000")
+  os.env.set("AWS_SECRET_ACCESS_KEY", "invented-secret")
+  os.env.set("AWS_BEARER_TOKEN_BEDROCK", "invented-bedrock-key")
+  os.env.set("_X_AMZN_TRACE_ID", "Root=1-00000000-000000000000000000000000")
+  let outside = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  expect(outside.bearer_tokens.get("BEDROCK")) == Some("invented-bedrock-key")
+  // only inside Lambda is the trace id taken
+  expect(outside.trace_id) == None
+  os.env.set("AWS_LAMBDA_FUNCTION_NAME", "f")
+  let inside = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  expect(inside.trace_id) == Some("Root=1-00000000-000000000000000000000000")
+}

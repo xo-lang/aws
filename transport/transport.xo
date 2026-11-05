@@ -84,6 +84,9 @@ pub enum Auth {
   Required
   Optional
   None
+  /// `Authorization: Bearer <token>` with the client's token
+  /// (`smithy.api#httpBearerAuth`), not SigV4.
+  Bearer
 }
 
 pub enum SendErr {
@@ -116,6 +119,10 @@ pub struct Client {
   pub retryer: retry.Standard
   pub credentials: aws.CredentialsProvider
   pub user_agent: Str = "xo-lang-aws/0.1"
+  /// The token of bearer auth (`Auth.Bearer`), such as a Bedrock API key.
+  pub token: Secret[Str]? = None
+  /// Sent as `X-Amzn-Trace-Id` when the request has none (inside Lambda).
+  pub trace_id: Str? = None
   /// Local clock correction, from a skewed response's `Date`.
   skew_ms: Atomic[Int]
 }
@@ -181,7 +188,18 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
   var headers = req.headers
   headers.push(("Host", host_header(req)))
   headers.push(("Amz-Sdk-Request", "attempt=${attempt}; max=${max}"))
+  if let Some(t) = c.trace_id {
+    if !headers.any(fn(h: (Str, Str)) -> Bool { h.0.to_lower() == "x-amzn-trace-id" }) {
+      headers.push(("X-Amzn-Trace-Id", t))
+    }
+  }
+  if signing.auth is Auth.Bearer {
+    let token = c.token ?? return Err(AttemptErr.Creds(aws.CredentialsErr.NotFound("no bearer token: set the client's bearer_token")))
+    headers.push(("Authorization", "Bearer ${token.reveal()}"))
+    return Ok((unsigned_request(c, req, headers), "", sigv4.Credentials{access_key_id: "", secret_access_key: Secret.new("")}, now))
+  }
   let found = match signing.auth {
+    Auth.Bearer => None
     Auth.None => None
     Auth.Optional => c.credentials.retrieve().ok()
     Auth.Required => match c.credentials.retrieve() {

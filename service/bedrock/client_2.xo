@@ -8,6 +8,22 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn from_json_model_configuration(v: json.Value) -> ModelConfiguration ! Str {
+  var out = ModelConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "modelId" => out.model_id = jsonv.read_str(fv)?
+      "inferenceConfig" => out.inference_config = from_json_inference_configuration(fv)?
+      "additionalModelRequestFields" => out.additional_model_request_fields = from_json_additional_model_request_fields(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_model_configurations(v: List[ModelConfiguration]) -> json.Value {
   json.Value.List(v.map(fn(x: ModelConfiguration) -> json.Value { json_of_model_configuration(x) }))
 }
@@ -11034,18 +11050,4 @@ pub enum GetMarketplaceModelEndpointErr {
   InvalidInput(msg: Str)
   /// The response is not what the protocol says.
   Deserialize(msg: Str)
-}
-
-pub fn (e: GetMarketplaceModelEndpointErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
 }

@@ -103,3 +103,70 @@ pub fn endpoint_rewrite(g: G, op: Str, input: model.Shape) -> Str? {
   }
   None
 }
+
+/// Integrity checks of a response, as aws-sdk-go-v2 makes them by
+/// default: lines run before deserializing (over `resp`) and after (over
+/// `input` and `out`), each returning `<Op>Err.Deserialize` on a
+/// mismatch.
+/// - DynamoDB: the body's CRC32 against `X-Amz-Crc32`;
+/// - SQS: each message body's MD5 against the MD5 the service computed
+///   (SendMessage, SendMessageBatch, ReceiveMessage).
+pub fn response_checks(g: G, op: Str, en: Str) -> (List[Str], List[Str]) {
+  let id = sdk_id(g)
+  let name = model.name_of(op)
+  if id == "DynamoDB" {
+    return ([
+      "  if let Some(want) = resp.header(\"X-Amz-Crc32\") {",
+      "    let got = crc32.checksum(resp.body)",
+      "    if Int.parse(want) != Some(got) {",
+      "      return Err(${en}.Deserialize(\"response CRC32 \${got} does not match X-Amz-Crc32 \${want}\"))",
+      "    }",
+      "  }",
+    ], [])
+  }
+  if id != "SQS" {
+    return ([], [])
+  }
+  let md5 = "crypto.digest(crypto.Hash.Md5, b.bytes()).to_hex()"
+  if name == "SendMessage" {
+    return ([], [
+      "  if let Some(b) = input.message_body {",
+      "    if let Some(want) = out.md5_of_message_body {",
+      "      if ${md5} != want {",
+      "        return Err(${en}.Deserialize(\"the MD5 of the message body does not match the service's \${want}\"))",
+      "      }",
+      "    }",
+      "  }",
+    ])
+  }
+  if name == "SendMessageBatch" {
+    return ([], [
+      "  for r in out.successful ?? [] {",
+      "    let sent = (input.entries ?? []).find(fn(e: SendMessageBatchRequestEntry) -> Bool { e.id == r.id })",
+      "    if let Some(e) = sent {",
+      "      if let Some(b) = e.message_body {",
+      "        if let Some(want) = r.md5_of_message_body {",
+      "          if ${md5} != want {",
+      "            return Err(${en}.Deserialize(\"the MD5 of batch entry \${r.id ?? \"\"}'s body does not match the service's \${want}\"))",
+      "          }",
+      "        }",
+      "      }",
+      "    }",
+      "  }",
+    ])
+  }
+  if name == "ReceiveMessage" {
+    return ([], [
+      "  for m in out.messages ?? [] {",
+      "    if let Some(b) = m.body {",
+      "      if let Some(want) = m.md5_of_body {",
+      "        if ${md5} != want {",
+      "          return Err(${en}.Deserialize(\"the MD5 of message \${m.message_id ?? \"\"}'s body does not match the service's \${want}\"))",
+      "        }",
+      "      }",
+      "    }",
+      "  }",
+    ])
+  }
+  ([], [])
+}

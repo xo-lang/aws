@@ -18,6 +18,11 @@ pub struct Options {
   pub region: Str = "us-east-1"
   pub credentials: aws.CredentialsProvider
   pub max_attempts: Int = 3
+  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
+  pub trace_id: Str? = None
+  /// The token of bearer auth (`AWS_BEARER_TOKEN_CODECATALYST` through
+  /// `from_config`); every call needs it.
+  pub bearer_token: Str? = None
   /// When true, send this request to the FIPS-compliant regional endpoint.
   /// If the configured endpoint does not have a FIPS compliant endpoint,
   /// dispatching the request will return an error.
@@ -42,7 +47,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) }), trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -62,6 +67,8 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
     endpoint: aws.endpoint_for(cfg.endpoints, "CODECATALYST"),
   }
   o.use_fips = Some(cfg.use_fips)
+  o.trace_id = cfg.trace_id
+  o.bearer_token = cfg.bearer_tokens.get("CODECATALYST")
   Ok(o)
 }
 
@@ -77,7 +84,7 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   let e = resolve_endpoint(params) ?? err => return Err("endpoint: ${err.msg}")
   let ep = rest.parse_endpoint(e.url) ?? return Err("bad endpoint ${e.url}")
   let (service, region) = endpoints.signing(e)
-  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e)}
+  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e), auth: transport.Auth.Bearer}
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 

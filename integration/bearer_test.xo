@@ -1,0 +1,43 @@
+// Bearer auth and the Lambda trace id on the test network: a Bedrock
+// Runtime client with a bearer token (a Bedrock API key) sends
+// `Authorization: Bearer` and no SigV4; without one it signs with SigV4.
+// A configured trace id is sent as X-Amzn-Trace-Id.
+
+use std/http
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/bedrockruntime
+use github.com/xo-lang/aws/service/sts
+
+test "Bedrock Runtime uses a bearer token when one is set, SigV4 otherwise" {
+  let seen = Mutex[List[Str]].new([])
+  os.net.handle("POST https://bedrock-runtime.us-west-2.amazonaws.com/model/m1/invoke", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[Str]) { xs.push(req.header("Authorization") ?? "") })
+    http.text(200, "{}").with_header("Content-Type", "application/json")
+  })
+  let cfg = aws.Config{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    bearer_tokens: {"BEDROCK": "invented-bedrock-key"},
+  }
+  let with_key = bedrockruntime.from_config(os.net, os.clock, os.rand, cfg)?
+  with_key.invoke_model(bedrockruntime.InvokeModelRequest{model_id: "m1", body: b"{}"})?
+  let signed = bedrockruntime.from_config(os.net, os.clock, os.rand, cfg with {bearer_tokens: {}})?
+  signed.invoke_model(bedrockruntime.InvokeModelRequest{model_id: "m1", body: b"{}"})?
+  let got = seen.with_read(fn(xs: List[Str]) -> List[Str] { xs })
+  expect(got[0]) == "Bearer invented-bedrock-key"
+  expect(got[1].starts_with("AWS4-HMAC-SHA256 Credential=AKIDTEST0000000000/")) == true
+}
+
+test "a configured trace id is sent as X-Amzn-Trace-Id" {
+  os.net.handle("POST https://sts.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    expect(req.header("X-Amzn-Trace-Id")) == Some("Root=1-00000000-000000000000000000000000")
+    http.text(200, IDENTITY).with_header("Content-Type", "text/xml")
+  })
+  let cfg = aws.Config{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    trace_id: "Root=1-00000000-000000000000000000000000",
+  }
+  sts.from_config(os.net, os.clock, os.rand, cfg)?.get_caller_identity(sts.GetCallerIdentityRequest{})?
+}

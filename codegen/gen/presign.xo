@@ -1,6 +1,6 @@
 // Presigned requests: `presign_<op>` for the operations aws-sdk-go-v2's
 // presign clients cover (S3's object and bucket calls, STS
-// GetCallerIdentity). The request is built and routed as the operation's
+// GetCallerIdentity, Polly SynthesizeSpeech). The request is built and routed as the operation's
 // own, then signed in its query instead of sent.
 
 use github.com/xo-lang/aws/codegen/model
@@ -15,6 +15,7 @@ const PRESIGNED: List[(Str, Str)] = [
   ("com.amazonaws.s3#AmazonS3", "HeadBucket"),
   ("com.amazonaws.s3#AmazonS3", "DeleteBucket"),
   ("com.amazonaws.sts#AWSSecurityTokenServiceV20110615", "GetCallerIdentity"),
+  ("com.amazonaws.polly#Parrot_v1", "SynthesizeSpeech"),
 ]
 
 pub fn presigned(g: G, op: Str) -> Bool {
@@ -41,6 +42,34 @@ pub fn emit_presign(g: G, op: Str, route: Str, token: Str, in_t: Str, var out: L
     out.push("  req = req with {")
     out.push("    method: \"GET\",")
     out.push("    query: req.body.to_str() ?? \"\",")
+    out.push("    body: b\"\",")
+    out.push("    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != \"content-type\" }),")
+    out.push("  }")
+  }
+  if !g.query && !g.xml && http_of(shape_of(g, op)).method == "POST" {
+    // a JSON body becomes a GET's query, member by member, as
+    // aws-sdk-go-v2 presigns Polly's SynthesizeSpeech
+    out.push("  var qs: List[(Str, Str)] = []")
+    for m in shape_of(g, shape_of(g, op).input).members {
+      let f = field_name(m.name)
+      let t = shape_of(g, m.target)
+      let key = lit_str(m.name)
+      match t.kind {
+        List => {
+          let et = shape_of(g, t.members[0].target)
+          let v = if et.kind is model.Kind.Enum { "x.value()" } else { "x" }
+          out.push("  for x in input.${f} ?? [] {")
+          out.push("    qs.push((${key}, ${v}))")
+          out.push("  }")
+        }
+        Enum => out.push("  if let Some(x) = input.${f} { qs.push((${key}, x.value())) }")
+        String => out.push("  if let Some(x) = input.${f} { qs.push((${key}, x)) }")
+        _ => out.push("  if let Some(x) = input.${f} { qs.push((${key}, \"\${x}\")) }")
+      }
+    }
+    out.push("  req = req with {")
+    out.push("    method: \"GET\",")
+    out.push("    query: rest.query(qs),")
     out.push("    body: b\"\",")
     out.push("    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != \"content-type\" }),")
     out.push("  }")

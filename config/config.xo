@@ -97,7 +97,30 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
     use_dualstack: bool_setting(env.get("AWS_USE_DUALSTACK_ENDPOINT") ?? p.props.get("use_dualstack_endpoint")),
     app_id: non_empty(env.get("AWS_SDK_UA_APP_ID")) ?? non_empty(p.props.get("sdk_ua_app_id")),
     profile: profile,
+    bearer_tokens: bearer_tokens(env),
+    trace_id: lambda_trace_id(env),
   })
+}
+
+/// `AWS_BEARER_TOKEN_<NAME>` values by NAME (empty ones left out).
+fn bearer_tokens(env: Env) -> Map[Str, Str] uses env {
+  var out: Map[Str, Str] = {}
+  for (name, value) in env.vars().entries() {
+    if let Some(suffix) = name.cut_prefix("AWS_BEARER_TOKEN_") {
+      if value != "" {
+        out.put(suffix, value)
+      }
+    }
+  }
+  out
+}
+
+/// The trace id of the Lambda invocation this runs in, if any.
+fn lambda_trace_id(env: Env) -> Str? uses env {
+  if non_empty(env.get("AWS_LAMBDA_FUNCTION_NAME")).is_none() {
+    return None
+  }
+  non_empty(env.get("_X_AMZN_TRACE_ID"))
 }
 
 /// What resolving a profile's credentials needs.

@@ -18,6 +18,8 @@ pub struct Options {
   pub region: Str = "us-east-1"
   pub credentials: aws.CredentialsProvider
   pub max_attempts: Int = 3
+  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
+  pub trace_id: Str? = None
   /// When true, use the dual-stack endpoint. If the configured endpoint
   /// does not support dual-stack, dispatching the request MAY return an
   /// error.
@@ -49,7 +51,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -70,6 +72,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   }
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
+  o.trace_id = cfg.trace_id
   Ok(o)
 }
 
@@ -13868,27 +13871,4 @@ pub fn deserialize_delete_lens_share_error(resp: http.Response) -> DeleteLensSha
     _ => {}
   }
   DeleteLensShareErr.Api(restjson.api_error(resp, body))
-}
-
-/// Delete a lens share. After the lens share is deleted, Amazon Web
-/// Services accounts, users, organizations, and organizational units (OUs)
-/// that you shared the lens with can continue to use it, but they will no
-/// longer be able to apply it to new workloads. Disclaimer By sharing your
-/// custom lenses with other Amazon Web Services accounts, you acknowledge
-/// that Amazon Web Services will make your custom lenses available to those
-/// other accounts. Those other accounts may continue to access and use your
-/// shared custom lenses even if you delete the custom lenses from your own
-/// Amazon Web Services account or terminate your Amazon Web Services
-/// account.
-pub fn (c: Client) delete_lens_share(input: DeleteLensShareInput) -> () ! DeleteLensShareErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_lens_share(c.params, input)) ?? e => return Err(DeleteLensShareErr.InvalidInput(e))
-  var req = serialize_delete_lens_share(ep, input, rest.uuid(c.rand)) ?? e => return Err(DeleteLensShareErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteLensShareErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_lens_share_error(resp))
-  }
-  deserialize_delete_lens_share(resp) ?? e => Err(DeleteLensShareErr.Deserialize(e))
 }

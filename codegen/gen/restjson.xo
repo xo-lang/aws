@@ -1001,7 +1001,19 @@ pub fn emit_restjson(g: G) -> Str {
     out.push("  if resp.status >= 300 {")
     out.push("    return Err(deserialize_${name}_error(resp))")
     out.push("  }")
-    out.push("  deserialize_${name}(resp) ?? e => Err(${en}.Deserialize(e))")
+    let (before, after) = response_checks(g, op, en)
+    for l in before {
+      out.push(l)
+    }
+    if after.is_empty() {
+      out.push("  deserialize_${name}(resp) ?? e => Err(${en}.Deserialize(e))")
+    } else {
+      out.push("  let out = deserialize_${name}(resp) ?? e => return Err(${en}.Deserialize(e))")
+      for l in after {
+        out.push(l)
+      }
+      out.push("  Ok(out)")
+    }
     out.push("}")
     out.push("")
     if presigned(g, op) {

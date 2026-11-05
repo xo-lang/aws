@@ -83,6 +83,13 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  pub region: Str = \"us-east-1\"")
   out.push("  pub credentials: aws.CredentialsProvider")
   out.push("  pub max_attempts: Int = 3")
+  out.push("  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).")
+  out.push("  pub trace_id: Str? = None")
+  if bearer_auth(g) != "" {
+    out.push("  /// The token of bearer auth (`AWS_BEARER_TOKEN_${bearer_env(g)}` through")
+    out.push(if bearer_auth(g) == "only" { "  /// `from_config`); every call needs it." } else { "  /// `from_config`): when set, calls use it instead of SigV4." })
+    out.push("  pub bearer_token: Str? = None")
+  }
   for p in client_params(g) {
     for l in wrap(strip_html(p.doc), 70) {
       out.push("  /// ${l}")
@@ -132,7 +139,11 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("    endpoint: ep,")
   }
   out.push("    region: options.region,")
-  out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),")
+  if bearer_auth(g) != "" {
+    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) }), trace_id: options.trace_id},")
+  } else {
+    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},")
+  }
   out.push("    rand: rand,")
   if discovery_op(g).is_some() {
     out.push("    discovered: discovery.new_cache(),")
@@ -153,11 +164,11 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  let e = resolve_endpoint(params) ?? err => return Err(\"endpoint: \${err.msg}\")")
     out.push("  let ep = rest.parse_endpoint(e.url) ?? return Err(\"bad endpoint \${e.url}\")")
     out.push("  let (service, region) = endpoints.signing(e)")
-    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${s3_signing(g)}, region_set: endpoints.region_set(e)}")
+    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${s3_signing(g)}, region_set: endpoints.region_set(e)${bearer_signing(g)}}")
     out.push("  Ok((ep, signing, endpoints.header_pairs(e)))")
   } else {
     out.push("fn (c: Client) route() -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
-    out.push("  Ok((c.endpoint, transport.Signing{service: SIGNING_NAME, region: c.region, s3: ${s3_signing(g)}}, []))")
+    out.push("  Ok((c.endpoint, transport.Signing{service: SIGNING_NAME, region: c.region, s3: ${s3_signing(g)}${bearer_signing(g)}}, []))")
   }
   out.push("}")
   out.push("")
@@ -262,6 +273,10 @@ fn emit_from_config(g: G, var out: List[Str]) {
   }
   if let Some(d) = param_of(g, "AWS::UseDualStack") {
     out.push("  o.${field_name(d)} = Some(cfg.use_dualstack)")
+  }
+  out.push("  o.trace_id = cfg.trace_id")
+  if bearer_auth(g) != "" {
+    out.push("  o.bearer_token = cfg.bearer_tokens.get(${lit_str(bearer_env(g))})")
   }
   out.push("  Ok(o)")
   out.push("}")
@@ -382,4 +397,33 @@ fn emit_discover(g: G, var out: List[Str]) {
   out.push("  Ok(found with {host: host, port: None})")
   out.push("}")
   out.push("")
+}
+
+/// The service's bearer auth (`smithy.api#httpBearerAuth`): "only" when
+/// it has no SigV4 (CodeCatalyst), "also" when it has both (Bedrock: the
+/// token is used when one is set, as aws-sdk-go-v2 prefers it), "" when
+/// it has none.
+pub fn bearer_auth(g: G) -> Str {
+  let svc = g.m.shapes.get(g.m.service) ?? return ""
+  if model.trait_of(svc.traits, "httpBearerAuth").is_none() {
+    return ""
+  }
+  if model.trait_of(svc.traits, "aws.auth#sigv4").is_none() { "only" } else { "also" }
+}
+
+/// The `auth:` field of the route's Signing for a bearer service.
+fn bearer_signing(g: G) -> Str {
+  match bearer_auth(g) {
+    "only" => ", auth: transport.Auth.Bearer"
+    "also" => ", auth: if c.transport.token.is_some() { transport.Auth.Bearer } else { transport.Auth.Required }"
+    _ => ""
+  }
+}
+
+/// The NAME of a bearer service's `AWS_BEARER_TOKEN_<NAME>`: its SigV4
+/// signing name upper cased (BEDROCK for both Bedrock clients), else its
+/// sdkId's endpoint suffix (CODECATALYST).
+fn bearer_env(g: G) -> Str {
+  let n = sigv4_name(g)
+  if n == "" { endpoint_suffix(g) } else { n.to_upper().replace("-", "_") }
 }

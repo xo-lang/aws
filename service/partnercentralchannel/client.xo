@@ -18,6 +18,8 @@ pub struct Options {
   pub region: Str = "us-east-1"
   pub credentials: aws.CredentialsProvider
   pub max_attempts: Int = 3
+  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
+  pub trace_id: Str? = None
   /// When true, send this request to the FIPS-compliant regional endpoint.
   /// If the configured endpoint does not have a FIPS compliant endpoint,
   /// dispatching the request will return an error.
@@ -42,7 +44,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -62,6 +64,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
     endpoint: aws.endpoint_for(cfg.endpoints, "PARTNERCENTRAL_CHANNEL"),
   }
   o.use_fips = Some(cfg.use_fips)
+  o.trace_id = cfg.trace_id
   Ok(o)
 }
 

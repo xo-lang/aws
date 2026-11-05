@@ -24,7 +24,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | SigV4, and S3's variant (no path normalization, `X-Amz-Content-Sha256`) | all; S3, S3 Control | Yes | `sigv4/sigv4_test.xo` (the suite); `integration/s3control_test.xo` |
 | SigV4a when the endpoint rules choose it (Multi-Region Access Points, EventBridge global endpoints, CloudFront KeyValueStore, SESv2) | S3, EventBridge, CloudFront KVS, SESv2 and others | Yes (Rules) | `sigv4a/sigv4a_test.xo`; `transport/transport_test.xo`; real AWS step 13 |
 | No auth (`smithy.api#auth: []`) and optional auth: sent unsigned | STS AssumeRoleWithWebIdentity and AssumeRoleWithSAML, Cognito Identity and Identity Provider, SSO, SSO OIDC, Sign-In | Yes | `integration/auth_test.xo`; `transport/transport_test.xo` "auth None and Optional" |
-| Bearer token auth (`smithy.api#httpBearerAuth`; Bedrock API keys from `AWS_BEARER_TOKEN_BEDROCK`) | Bedrock, Bedrock Runtime, CodeCatalyst | No | a `token` provider in `Options` and `Signing.auth = Bearer`, sending `Authorization: Bearer` |
+| Bearer token auth (`smithy.api#httpBearerAuth`; Bedrock API keys from `AWS_BEARER_TOKEN_BEDROCK`) | Bedrock, Bedrock Runtime (used when a token is set), CodeCatalyst (always) | Yes | `integration/bearer_test.xo`; `config/config_test.xo` "bearer tokens". Next: CodeCatalyst tokens from an SSO session |
 | S3 Express One Zone session auth (CreateSession credentials, `sigv4-s3express`) | S3 directory buckets | No | a session cache keyed by bucket, signing with `x-amz-s3session-token` |
 | Retry: IDPCommunicationError retryable | STS | Yes | `retry/retry_test.xo` |
 | Clock skew correction | all | Yes | `transport/transport_test.xo` "clock skew" |
@@ -33,7 +33,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | `Expect: 100-continue` for large S3 uploads | S3 PutObject, UploadPart | No | not needed for correctness; an optimization once std/http supports it |
 | Request compression (`requestCompression`, gzip) | CloudWatch PutMetricData | Yes | protocol tests (`internal/protocoltest`) |
 | Idempotency tokens filled in | all with `idempotencyToken` | Yes | protocol tests |
-| Lambda recursion detection (`X-Amzn-Trace-Id` from `_X_AMZN_TRACE_ID` inside Lambda) | all | No | read the variable in `from_config` and add the header |
+| Lambda recursion detection (`X-Amzn-Trace-Id` from `_X_AMZN_TRACE_ID` inside Lambda) | all | Yes | `config/config_test.xo`; `integration/bearer_test.xo` "trace id" |
 | User agent features and metrics | all | No (only a plain user agent) | not needed for correctness |
 
 ## Checksums and integrity
@@ -44,8 +44,8 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | `Content-MD5` for `httpChecksumRequired` | S3 Control | Yes | generated serializers |
 | Response checksum validation (`ChecksumMode: ENABLED`) | S3 GetObject, HeadObject | No (`checksum.validate` exists) | wrap the streamed body to check at its end |
 | Trailing checksums with aws-chunked encoding for streamed uploads | S3 | No | needed only for unsized streams |
-| DynamoDB response CRC32 (`X-Amz-Crc32`) | DynamoDB | No | check the header against the body before decoding |
-| SQS message MD5 checks (SendMessage, SendMessageBatch, ReceiveMessage) | SQS | No | compare `MD5OfMessageBody` and the attributes' MD5 |
+| DynamoDB response CRC32 (`X-Amz-Crc32`) | DynamoDB | Yes | `integration/integrity_test.xo` |
+| SQS message MD5 checks (SendMessage, SendMessageBatch, ReceiveMessage) | SQS | Yes (bodies, as aws-sdk-go-v2) | `integration/integrity_test.xo` |
 | Glacier tree hash and `X-Amz-Content-Sha256` | Glacier | Yes | `checksum/checksum_test.xo` "tree hash"; `integration/customize_test.xo` |
 
 ## Endpoints and request shape
@@ -67,7 +67,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | S3 GetBucketLocation's unwrapped root element | S3 | No test yet | a test with an empty and a set constraint |
 | S3 `Expires`: an unparseable date does not fail the response | S3 GetObject, HeadObject | No test yet | a test with a bad date |
 | Presigned URLs | S3 (GetObject, PutObject, ...), STS GetCallerIdentity | Yes | `transport/transport_test.xo`, LocalStack, real AWS steps 1 and 2 |
-| Polly SynthesizeSpeech presigned URL | Polly | No | add it to the presign list |
+| Polly SynthesizeSpeech presigned URL (a GET with the input in the query) | Polly | Yes | `integration/polly_presign_test.xo` |
 | S3 presigned POST | S3 | No | a form policy signer |
 | Event streams (signed input streams, output streams) | S3 Select, Kinesis, Transcribe Streaming, Lambda, Bedrock Runtime and others | Yes | `eventstream/`, real AWS steps 3, 9, 10, 11, 12 |
 

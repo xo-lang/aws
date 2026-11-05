@@ -9,6 +9,29 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn json_of_list_time_series_request(v: ListTimeSeriesRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.asset_id {
+    fs.push(("assetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.alias_prefix {
+    fs.push(("aliasPrefix", json.Value.Str(x)))
+  }
+  if let Some(x) = v.time_series_type {
+    fs.push(("timeSeriesType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.workspace_name {
+    fs.push(("workspaceName", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
 fn from_json_list_time_series_request(v: json.Value) -> ListTimeSeriesRequest ! Str {
   var out = ListTimeSeriesRequest{}
   for (k, fv) in jsonv.fields(v)? {
@@ -11936,28 +11959,4 @@ pub fn (e: DescribeAssetCompositeModelErr) display() -> Str {
     InvalidInput(msg) => "invalid input: ${msg}"
     Deserialize(msg) => "cannot read the response: ${msg}"
   }
-}
-
-pub fn deserialize_describe_asset_composite_model_error(resp: http.Response) -> DescribeAssetCompositeModelErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InternalFailureException" => match read_error_internal_failure_exception(resp, body) {
-      Ok(x) => return DescribeAssetCompositeModelErr.InternalFailureException(x)
-      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return DescribeAssetCompositeModelErr.InvalidRequestException(x)
-      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DescribeAssetCompositeModelErr.ResourceNotFoundException(x)
-      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return DescribeAssetCompositeModelErr.ThrottlingException(x)
-      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeAssetCompositeModelErr.Api(restjson.api_error(resp, body))
 }

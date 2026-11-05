@@ -20,6 +20,8 @@ pub struct Options {
   pub region: Str = "us-east-1"
   pub credentials: aws.CredentialsProvider
   pub max_attempts: Int = 3
+  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
+  pub trace_id: Str? = None
   /// When true, use the dual-stack endpoint. If the configured endpoint
   /// does not support dual-stack, dispatching the request MAY return an
   /// error.
@@ -51,7 +53,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -72,6 +74,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   }
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
+  o.trace_id = cfg.trace_id
   Ok(o)
 }
 
@@ -3634,4 +3637,36 @@ pub fn (c: Client) synthesize_speech(input: SynthesizeSpeechInput) -> Synthesize
     return Err(deserialize_synthesize_speech_error(resp))
   }
   deserialize_synthesize_speech(resp) ?? e => Err(SynthesizeSpeechErr.Deserialize(e))
+}
+
+/// SynthesizeSpeech as a presigned request: a URL (and the headers
+/// to send with it) that works without credentials until `expires`
+/// passes (at most 7 days).
+pub fn (c: Client) presign_synthesize_speech(input: SynthesizeSpeechInput, expires: Duration = 15m) -> transport.Presigned ! SynthesizeSpeechErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_synthesize_speech(c.params, input)) ?? e => return Err(SynthesizeSpeechErr.InvalidInput(e))
+  var req = serialize_synthesize_speech(ep, input, "") ?? e => return Err(SynthesizeSpeechErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  var qs: List[(Str, Str)] = []
+  if let Some(x) = input.engine { qs.push(("Engine", x.value())) }
+  if let Some(x) = input.language_code { qs.push(("LanguageCode", x.value())) }
+  for x in input.lexicon_names ?? [] {
+    qs.push(("LexiconNames", x))
+  }
+  if let Some(x) = input.output_format { qs.push(("OutputFormat", x.value())) }
+  if let Some(x) = input.sample_rate { qs.push(("SampleRate", x)) }
+  for x in input.speech_mark_types ?? [] {
+    qs.push(("SpeechMarkTypes", x.value()))
+  }
+  if let Some(x) = input.text { qs.push(("Text", x)) }
+  if let Some(x) = input.text_type { qs.push(("TextType", x.value())) }
+  if let Some(x) = input.voice_id { qs.push(("VoiceId", x.value())) }
+  req = req with {
+    method: "GET",
+    query: rest.query(qs),
+    body: b"",
+    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" }),
+  }
+  transport.presign(c.transport, req, signing, expires) ?? e => Err(SynthesizeSpeechErr.Send(e))
 }

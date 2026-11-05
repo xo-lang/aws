@@ -16,6 +16,8 @@ pub struct Options {
   pub region: Str = "us-east-1"
   pub credentials: aws.CredentialsProvider
   pub max_attempts: Int = 3
+  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
+  pub trace_id: Str? = None
   /// When true, use the dual-stack endpoint. If the configured endpoint
   /// does not support dual-stack, dispatching the request MAY return an
   /// error.
@@ -47,7 +49,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -68,6 +70,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   }
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
+  o.trace_id = cfg.trace_id
   Ok(o)
 }
 
@@ -13787,33 +13790,4 @@ fn from_json_media_package_output_settings(v: json.Value) -> MediaPackageOutputS
     }
   }
   Ok(out)
-}
-
-fn json_of_media_package_v2_ab_watermarker_irdeto_settings(v: MediaPackageV2AbWatermarkerIrdetoSettings) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.additional_destinations_alternate_destinations {
-    fs.push(("additionalDestinationsAlternateDestinations", json_of_list_of_output_location_ref(x)))
-  }
-  if let Some(x) = v.alternate_destination {
-    fs.push(("alternateDestination", json_of_output_location_ref(x)))
-  }
-  if let Some(x) = v.custom_profile {
-    fs.push(("customProfile", json_of_ab_watermarking_custom_profile(x)))
-  }
-  if let Some(x) = v.license {
-    fs.push(("license", json.Value.Str(x)))
-  }
-  if let Some(x) = v.operator_id {
-    fs.push(("operatorId", json.Value.Int(x)))
-  }
-  if let Some(x) = v.poly_period {
-    fs.push(("polyPeriod", json.Value.Int(x)))
-  }
-  if let Some(x) = v.profile {
-    fs.push(("profile", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.watermark_id_length {
-    fs.push(("watermarkIdLength", json.Value.Str(x.value())))
-  }
-  json.Value.Object(fs)
 }

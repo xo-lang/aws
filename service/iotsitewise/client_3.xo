@@ -8,6 +8,30 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_describe_asset_composite_model_error(resp: http.Response) -> DescribeAssetCompositeModelErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalFailureException" => match read_error_internal_failure_exception(resp, body) {
+      Ok(x) => return DescribeAssetCompositeModelErr.InternalFailureException(x)
+      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return DescribeAssetCompositeModelErr.InvalidRequestException(x)
+      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DescribeAssetCompositeModelErr.ResourceNotFoundException(x)
+      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DescribeAssetCompositeModelErr.ThrottlingException(x)
+      Err(msg) => return DescribeAssetCompositeModelErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeAssetCompositeModelErr.Api(restjson.api_error(resp, body))
+}
+
 /// Retrieves information about an asset composite model (also known as an
 /// asset component). An AssetCompositeModel is an instance of an
 /// AssetModelCompositeModel . If you want to see information about the
@@ -10723,43 +10747,4 @@ pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceRespons
     return Err(deserialize_tag_resource_error(resp))
   }
   deserialize_tag_resource(resp) ?? e => Err(TagResourceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_untag_resource(base: EndpointParameters, input: UntagResourceRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UntagResource.
-pub fn serialize_untag_resource(ep: rest.Endpoint, input: UntagResourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.resource_arn {
-    qs.push(("resourceArn", v))
-  }
-  if let Some(xs) = input.tag_keys {
-    for x in xs {
-      qs.push(("tagKeys", x))
-    }
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: "api.${ep.host}",
-    port: ep.port,
-    path: rest.join_path(ep.path, "/tags"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_untag_resource(resp: http.Response) -> UntagResourceResponse ! Str {
-  var out = UntagResourceResponse{}
-  Ok(out)
 }

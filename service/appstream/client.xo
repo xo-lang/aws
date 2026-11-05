@@ -18,6 +18,8 @@ pub struct Options {
   pub region: Str = "us-east-1"
   pub credentials: aws.CredentialsProvider
   pub max_attempts: Int = 3
+  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
+  pub trace_id: Str? = None
   /// When true, use the dual-stack endpoint. If the configured endpoint
   /// does not support dual-stack, dispatching the request MAY return an
   /// error.
@@ -49,7 +51,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
   })
 }
@@ -70,6 +72,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   }
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
+  o.trace_id = cfg.trace_id
   Ok(o)
 }
 
@@ -13027,20 +13030,4 @@ pub fn serialize_delete_stack(ep: rest.Endpoint, input: DeleteStackRequest, idem
 pub fn deserialize_delete_stack(resp: http.Response) -> DeleteStackResult ! Str {
   var out = DeleteStackResult{}
   Ok(out)
-}
-
-/// The errors of DeleteStack.
-pub enum DeleteStackErr {
-  ConcurrentModificationException(e: ConcurrentModificationException)
-  OperationNotPermittedException(e: OperationNotPermittedException)
-  ResourceInUseException(e: ResourceInUseException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
 }

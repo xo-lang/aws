@@ -1,0 +1,56 @@
+// Response integrity checks on the test network, on by default as in
+// aws-sdk-go-v2: DynamoDB's X-Amz-Crc32 over the body, and SQS's MD5 of
+// each message body. A mismatch is a Deserialize error, never data.
+
+use std/crc32
+use std/crypto
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/dynamodb
+use github.com/xo-lang/aws/service/sqs
+
+fn test_creds() -> credentials.StaticProvider {
+  credentials.static_provider("AKIDTEST0000000000", "invented-secret")
+}
+
+test "DynamoDB checks the body's CRC32" {
+  let body = "{\"Item\":{\"pk\":{\"S\":\"a\"}}}"
+  let good = crc32.checksum(body.bytes())
+  let n = Mutex[Int].new(0)
+  os.net.handle("POST https://dynamodb.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let i = n.with(fn(var x: Int) -> Int { x += 1; x })
+    // the first answer is right, every later one claims another CRC
+    http.text(200, body).with_header("Content-Type", "application/x-amz-json-1.0").with_header("X-Amz-Crc32", "${if i == 1 { good } else { good + 1 }}")
+  })
+  let c = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: test_creds()})?
+  let input = dynamodb.GetItemInput{table_name: "t", key: {"pk": dynamodb.AttributeValue.S("a")}}
+  c.get_item(input)?
+  match c.get_item(input) {
+    Err(dynamodb.GetItemErr.Deserialize(msg)) => expect(msg.contains("CRC32")) == true
+    _ => return Err("a CRC32 mismatch must fail")
+  }
+}
+
+test "SQS checks the MD5 of sent and received message bodies" {
+  let sent_md5 = crypto.digest(crypto.Hash.Md5, b"hello").to_hex()
+  os.net.handle("POST https://sqs.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let target = req.header("X-Amz-Target") ?? ""
+    let text = if target.ends_with("SendMessage") {
+      "{\"MessageId\":\"m1\",\"MD5OfMessageBody\":\"${sent_md5}\"}"
+    } else {
+      "{\"Messages\":[{\"MessageId\":\"m2\",\"Body\":\"hello\",\"MD5OfBody\":\"00000000000000000000000000000000\"}]}"
+    }
+    http.text(200, text).with_header("Content-Type", "application/x-amz-json-1.0")
+  })
+  let c = sqs.new(os.net, os.clock, os.rand, sqs.Options{region: "us-west-2", credentials: test_creds()})?
+  let q = "https://sqs.us-west-2.amazonaws.com/123456789012/q"
+  c.send_message(sqs.SendMessageRequest{queue_url: q, message_body: "hello"})?
+  match c.send_message(sqs.SendMessageRequest{queue_url: q, message_body: "changed on the way"}) {
+    Err(sqs.SendMessageErr.Deserialize(msg)) => expect(msg.contains("MD5")) == true
+    _ => return Err("an MD5 mismatch on send must fail")
+  }
+  match c.receive_message(sqs.ReceiveMessageRequest{queue_url: q}) {
+    Err(sqs.ReceiveMessageErr.Deserialize(msg)) => expect(msg.contains("m2")) == true
+    _ => return Err("an MD5 mismatch on receive must fail")
+  }
+}

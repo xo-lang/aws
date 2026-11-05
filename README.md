@@ -66,38 +66,13 @@ Apache-2.0 (LICENSE, NOTICE).
 
 ## Requirements
 
-Xo 0.39.0 or later, except for two cases:
-
-- A program that uses DynamoDB together with `select` needs Xo 0.40 or
-  later (or main at or after 5dd0b3f4e). Earlier versions fail to build
-  it because DynamoDB's `Select` type clashes with a runtime name.
-- This repository's own tests need Xo main at or after 0e1d7b177, which
-  makes the test network full duplex.
-- With Xo 0.39.0 on arm64, the native backend cannot build programs
-  that use MediaConvert or WAFV2; build those with `--backend=llvm`.
-  Fixed on Xo main at 7c86af664 ([xo-issues](docs/reports/xo-issues.md)
-  entries 13 and 14).
-- With Xo 0.39.0, the first native build of a program after Xo has
-  cached its std can fail to link with `duplicate symbol
-  _xo_f_zero__val_...`. Build again, or set `XO_BACKEND_CACHE=off`.
-  Fixed on Xo main at 842702e6d ([xo-issues](docs/reports/xo-issues.md)
-  entry 12).
-- Up to Xo 0.39.0 (and main at 7c86af664), two types with the same
-  name from different packages, both put behind an interface, break the
-  program: the native build fails with XO1510 (which wrongly blames a
-  stale cache) and the LLVM build runs wrongly. The SDK's credential
-  providers are behind `aws.CredentialsProvider`, so do not give a type
-  of your own that you put behind an interface one of these names:
-  `Cache`, `Chain`, `StaticProvider`, `FixedResult`,
-  `AssumeRoleProvider`, `Ec2RoleProvider`, `EndpointProvider`. Rename
-  yours instead (`AppCache`, for example). Fixed on Xo main at
-  b7fcf7351, so in the next Xo release
-  ([xo-issues](docs/reports/xo-issues.md) entry 15).
-
-Both were checked against the 0.39.0 release: it builds and passes
-everything else, fails to build DynamoDB with `select`
-(`integration/dynamodb_select_test.xo`), and deadlocks in the duplex
-test.
+Xo 0.40.0 or later. Xo 0.39.0 has problems that 0.40.0 fixes
+([xo-issues](docs/reports/xo-issues.md) entries 12 to 15): a duplicate
+symbol at a program's first native link, native arm64 builds of
+MediaConvert and WAFV2, two same named types from different packages
+behind interfaces (an app type named `Cache` or `Chain` collides with
+the SDK's credential providers), and DynamoDB together with `select`;
+this repository's tests also need 0.40.0's full duplex test network.
 
 ## Install
 

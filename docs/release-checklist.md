@@ -46,5 +46,4 @@ current as work finds new ones.
    modules that change; check the first such run's tags by hand.
 10. **Xo skips.** When an Xo release reaches a version in
    `scripts/xo-skips.tsv`, remove that entry, and update the README's
-   requirements. At 0.40.0, also drop `XO_BACKEND_CACHE: "off"` from
-   the workflow's program step (xo-issues 12).
+   requirements.

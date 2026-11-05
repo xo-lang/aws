@@ -443,3 +443,14 @@ Disliked:
   flag and the repo must allowlist.
 - A stored closure cannot carry effects, so the pager and poller hold
   the pipeline plus pure decoders instead of a "fetch next" closure.
+- Correction (retested on xo 9f557bad4): "a stored closure cannot carry
+  effects" was too broad. A struct with an effect parameter
+  (`Body[fx: Effects]`) works when the variable is threaded through
+  explicitly (`send[fx: Effects](req: Request[fx]) uses (..., fx)`).
+  What really fails is an interface method with a fixed `uses`: a
+  provider holding a `proc` closure cannot implement
+  `retrieve(self) uses (net.dial, clock)` (XO0701). That is the shape
+  behind credential_process, the SSO write-back, and Azure's
+  TokenCredential and Policy. Threading the variable through 435
+  generated clients is the other cost, and the XO0701 note for an
+  omitted effect argument could suggest the `[fx: Effects]` form.

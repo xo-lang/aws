@@ -1,0 +1,47 @@
+// S3 presigned POST (aws-sdk-go-v2's PresignPostObject): the bucket's URL
+// and the form fields, with a policy that names the bucket, the key and
+// the caller's conditions, signed with the day's key over the policy text.
+
+use std/base64
+use std/crypto
+use std/json
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+use github.com/xo-lang/aws/sigv4
+
+fn field(fs: List[(Str, Str)], name: Str) -> Str {
+  for (k, v) in fs {
+    if k == name {
+      return v
+    }
+  }
+  ""
+}
+
+test "presign_post_object signs a policy for the bucket, the key and the caller's conditions" {
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let range = json.Value.List([json.Value.Str("content-length-range"), json.Value.Int(1), json.Value.Int(1048576)])
+  let p = c.presign_post_object(s3.PutObjectRequest{bucket: "bucket", key: "uploads/a.txt"}, expires: 10m, conditions: [range])?
+  expect(p.url) == "https://bucket.s3.us-west-2.amazonaws.com"
+  expect(p.fields.map(fn(f: (Str, Str)) -> Str { f.0 })) == ["key", "x-amz-algorithm", "x-amz-credential", "x-amz-date", "policy", "x-amz-signature"]
+  expect(field(p.fields, "key")) == "uploads/a.txt"
+  expect(field(p.fields, "x-amz-credential")) == "AKIDTEST0000000000/20260101/us-west-2/s3/aws4_request"
+  let policy = field(p.fields, "policy")
+  let doc = (base64.decode(policy).ok() ?? b"").to_str() ?? ""
+  expect(doc.contains("\"expiration\":\"2026-01-01T00:10:00Z\"")) == true
+  expect(doc.contains("{\"bucket\":\"bucket\"}")) == true
+  expect(doc.contains("[\"content-length-range\",1,1048576]")) == true
+  expect(doc.contains("{\"key\":\"uploads/a.txt\"}")) == true
+  let key = sigv4.signing_key(Secret.new("invented-secret"), "20260101", "us-west-2", "s3")
+  expect(field(p.fields, "x-amz-signature")) == crypto.hmac_sha256(key, policy.bytes()).to_hex()
+}
+
+test "a starts-with condition on the key replaces the exact key" {
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret", "invented-token")})?
+  let prefix = json.Value.List([json.Value.Str("starts-with"), json.Value.Str("$key"), json.Value.Str("uploads/")])
+  let p = c.presign_post_object(s3.PutObjectRequest{bucket: "bucket", key: "uploads/${"$"}{filename}"}, conditions: [prefix])?
+  let doc = (base64.decode(field(p.fields, "policy")).ok() ?? b"").to_str() ?? ""
+  expect(doc.contains("{\"key\":")) == false
+  expect(doc.contains("{\"x-amz-security-token\":\"invented-token\"}")) == true
+  expect(field(p.fields, "x-amz-security-token")) == "invented-token"
+}

@@ -3,7 +3,9 @@
 // path, raw query, ordered headers) so it is pure: the signing time is an
 // argument, and the caller's transport turns the result into a request.
 
+use std/base64
 use std/crypto
+use std/json
 use std/url
 
 /// Credentials for signing. The secret and the session token are
@@ -273,4 +275,67 @@ pub fn canonical_headers(headers: List[(Str, Str)]) -> (Str, Str) {
 
 fn collapse_spaces(s: Str) -> Str {
   s.fields().join(" ")
+}
+
+/// The form fields of an S3 presigned POST (aws-sdk-go-v2's
+/// PresignPostObject): a policy document (base64 JSON) that expires at
+/// `expires_at`, with the algorithm, bucket, credential, date and, for
+/// temporary credentials, the token as conditions, then the caller's
+/// `conditions`, then the key unless a condition already checks it
+/// (`["starts-with", "$key", ...]` or `{"key": ...}`); signed with the
+/// day's signing key over the policy text. Fields in order: key,
+/// x-amz-algorithm, x-amz-credential, x-amz-date, x-amz-security-token
+/// (when set), policy, x-amz-signature. S3 matches the names without
+/// case; they are lower case as botocore sends them, which LocalStack
+/// requires (aws-sdk-go-v2 writes `X-Amz-...`).
+pub fn post_policy(creds: Credentials, region: Str, service: Str, now: Time, expires_at: Time, bucket: Str, key: Str, conditions: List[json.Value] = []) -> List[(Str, Str)] {
+  let date = amz_date(now)
+  let credential = "${creds.access_key_id}/${date[0..8]}/${region}/${service}/aws4_request"
+  let one = fn(k: Str, v: Str) -> json.Value { json.Value.Object([(k, json.Value.Str(v))]) }
+  var conds: List[json.Value] = [
+    one("x-amz-algorithm", ALGORITHM),
+    one("bucket", bucket),
+    one("x-amz-credential", credential),
+    one("x-amz-date", date),
+  ]
+  if let Some(tok) = creds.session_token {
+    if tok.reveal() != "" {
+      conds.push(one("x-amz-security-token", tok.reveal()))
+    }
+  }
+  for c in conditions {
+    conds.push(c)
+  }
+  if !conds.any(checks_key) {
+    conds.push(one("key", key))
+  }
+  let doc = json.Value.Object([
+    ("conditions", json.Value.List(conds)),
+    ("expiration", json.Value.Str(Time.from_unix(expires_at.unix()).format_rfc3339())),
+  ])
+  let policy = base64.encode(doc.encode().bytes())
+  let sig = crypto.hmac_sha256(signing_key(creds.secret_access_key, date[0..8], region, service), policy.bytes()).to_hex()
+  var fields: List[(Str, Str)] = [
+    ("key", key),
+    ("x-amz-algorithm", ALGORITHM),
+    ("x-amz-credential", credential),
+    ("x-amz-date", date),
+  ]
+  if let Some(tok) = creds.session_token {
+    if tok.reveal() != "" {
+      fields.push(("x-amz-security-token", tok.reveal()))
+    }
+  }
+  fields.push(("policy", policy))
+  fields.push(("x-amz-signature", sig))
+  fields
+}
+
+/// Whether a policy condition already checks the key.
+fn checks_key(c: json.Value) -> Bool {
+  match c {
+    json.Value.List(xs) => xs.len() >= 2 && xs[0] == json.Value.Str("starts-with") && xs[1] == json.Value.Str("$key")
+    json.Value.Object(fs) => fs.any(fn(f: (Str, json.Value)) -> Bool { f.0 == "key" })
+    _ => false
+  }
 }

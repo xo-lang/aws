@@ -4,6 +4,7 @@
 // gets a Net that reaches only the loopback host.
 
 use std/http
+use std/multipart
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/service/s3
 
@@ -54,6 +55,19 @@ test "s3 round trip against MinIO" uses net, env, clock {
     expect(bad.status) == 403
   }
   c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: "presigned.txt"})?
+  // a presigned POST: the form fields, then the file, posted by a plain client
+  let post = c.presign_post_object(s3.PutObjectRequest{bucket: bucket, key: "posted.txt"}, expires: 5m)?
+  var parts: List[multipart.Part] = []
+  for (k, v) in post.fields {
+    parts.push(multipart.Part{name: k, filename: None, headers: {}, data: v.bytes()})
+  }
+  parts.push(multipart.Part{name: "file", filename: "posted.txt", headers: {"Content-Type": "text/plain"}, data: b"sent by form"})
+  let boundary = multipart.random_boundary(os.rand)
+  let form = http.new_request("POST", post.url, {"Content-Type": multipart.form_data_content_type(boundary)}, multipart.write(parts, boundary))
+  let posted = plain.send(form)?
+  expect(posted.status >= 200 && posted.status < 300) == true
+  expect(c.get_object(s3.GetObjectRequest{bucket: bucket, key: "posted.txt"})?.body) == Some(b"sent by form")
+  c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: "posted.txt"})?
   // three more objects, listed one per page
   for k in ["p/1", "p/2", "p/3"] {
     c.put_object(s3.PutObjectRequest{bucket: bucket, key: k, body: b"x"})?

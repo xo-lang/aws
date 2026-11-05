@@ -68,7 +68,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | S3 `Expires`: an unparseable date does not fail the response | S3 GetObject, HeadObject | Rules: the pinned model types it as a string | none needed |
 | Presigned URLs | S3 (GetObject, PutObject, ...), STS GetCallerIdentity | Yes | `transport/transport_test.xo`, LocalStack, real AWS steps 1 and 2 |
 | Polly SynthesizeSpeech presigned URL (a GET with the input in the query) | Polly | Yes | `integration/polly_presign_test.xo` |
-| S3 presigned POST | S3 | No | a form policy signer |
+| S3 presigned POST (a signed policy with the bucket, the key unless a condition checks it, and the caller's conditions; field names in lower case as botocore sends them, since LocalStack looks for those) | S3 | Yes (`presign_post_object`, `sigv4.post_policy`) | `integration/presign_post_test.xo`; the LocalStack S3 round trip uploads a file through the form with signature checking on. Next: a real AWS upload in step 2 |
 | Event streams (signed input streams, output streams) | S3 Select, Kinesis, Transcribe Streaming, Lambda, Bedrock Runtime and others | Yes | `eventstream/`, real AWS steps 3, 9, 10, 11, 12 |
 
 ## Model fixes

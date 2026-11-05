@@ -77,4 +77,29 @@ pub fn emit_presign(g: G, op: Str, route: Str, token: Str, in_t: Str, var out: L
   out.push("  transport.presign(c.transport, req, signing, expires) ?? e => Err(${en}.Send(e))")
   out.push("}")
   out.push("")
+  if g.s3 && model.name_of(op) == "PutObject" {
+    emit_presign_post(g, op, route, in_t, out)
+  }
+}
+
+/// S3's presigned POST (aws-sdk-go-v2's PresignPostObject): the form
+/// fields a browser posts to upload the input's key, under a signed
+/// policy. The URL is the bucket's endpoint, without the key.
+fn emit_presign_post(g: G, op: Str, route: Str, in_t: Str, var out: List[Str]) {
+  let en = op_err(op)
+  out.push("/// PutObject as a presigned POST: the URL and form fields with which a")
+  out.push("/// browser uploads `input.key` without credentials until `expires`")
+  out.push("/// passes (at most 7 days). `conditions` are added to the policy (S3's")
+  out.push("/// POST policy conditions, such as `[\"content-length-range\", 1, 1048576]`).")
+  out.push("pub fn (c: Client) presign_post_object(input: ${in_t}, expires: Duration = 15m, conditions: List[json.Value] = []) -> transport.PresignedPost ! ${en} uses (net.dial, clock, rand) {")
+  for l in route_binding(g, op, route, en) { out.push(l) }
+  out.push("  if !extra.is_empty() {")
+  out.push("    return Err(${en}.InvalidInput(\"a presigned POST cannot carry the endpoint's headers\"))")
+  out.push("  }")
+  out.push("  let bucket = input.bucket ?? return Err(${en}.InvalidInput(\"a presigned POST needs a bucket\"))")
+  out.push("  let key = input.key ?? return Err(${en}.InvalidInput(\"a presigned POST needs a key\"))")
+  out.push("  let port = ep.port.map(fn(p: Int) -> Str { \":\${p}\" }) ?? \"\"")
+  out.push("  transport.presign_post(c.transport, \"\${ep.scheme}://\${ep.host}\${port}\${ep.path}\", signing, bucket, key, expires, conditions) ?? e => Err(${en}.Send(e))")
+  out.push("}")
+  out.push("")
 }

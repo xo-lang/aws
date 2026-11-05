@@ -4,6 +4,7 @@
 // build the request and read the response; generated clients call them.
 
 use std/http
+use std/json
 use std/time
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/eventstream
@@ -490,4 +491,25 @@ pub enum PrecallErr {
   Api(e: aws.ApiError)
   InvalidInput(msg: Str)
   Deserialize(msg: Str)
+}
+
+/// An S3 presigned POST: the form's target and its fields, in order.
+pub struct PresignedPost {
+  pub url: Str
+  pub fields: List[(Str, Str)]
+}
+
+/// The form fields that let a browser upload `key` to `bucket` with a
+/// POST to `url` until `expires` passes (at most 7 days), under the
+/// policy's `conditions` (sigv4.post_policy).
+pub fn presign_post(c: Client, url: Str, signing: Signing, bucket: Str, key: Str, expires: Duration, conditions: List[json.Value]) -> PresignedPost ! SendErr uses (net.dial, clock, rand) {
+  let creds = if let Some(sc) = signing.session { sc } else { match c.credentials.retrieve() {
+    Ok(v) => v
+    Err(e) => return Err(SendErr.Credentials(e))
+  } }
+  let ttl = if expires > MAX_PRESIGN { MAX_PRESIGN } else { expires }
+  let now = Time.from_unix_millis(c.clock.now().unix_millis() + c.skew_ms.get())
+  let at = Time.from_unix_millis(now.unix_millis() + ttl.millis())
+  let screds = sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token}
+  Ok(PresignedPost{url: url, fields: sigv4.post_policy(screds, signing.region, signing.service, now, at, bucket, key, conditions)})
 }

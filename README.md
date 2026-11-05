@@ -61,10 +61,10 @@ Xo 0.39.0 or later, except for two cases:
   it because DynamoDB's `Select` type clashes with a runtime name.
 - This repository's own tests need Xo main at or after 0e1d7b177, which
   makes the test network full duplex.
-- On arm64, the native backend cannot build programs that use
-  MediaConvert or WAFV2 yet (in 0.39.0 and on main;
-  [xo-issues](docs/reports/xo-issues.md) entries 13 and 14). Build those
-  with `--backend=llvm`.
+- With Xo 0.39.0 on arm64, the native backend cannot build programs
+  that use MediaConvert or WAFV2; build those with `--backend=llvm`.
+  Fixed on Xo main at 7c86af664 ([xo-issues](docs/reports/xo-issues.md)
+  entries 13 and 14).
 - With Xo 0.39.0, the first native build of a program after Xo has
   cached its std can fail to link with `duplicate symbol
   _xo_f_zero__val_...`. Build again, or set `XO_BACKEND_CACHE=off`.

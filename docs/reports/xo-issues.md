@@ -402,7 +402,9 @@ service). A test that calls the MediaConvert client fails to build:
 `Result[github.com/xo-lang/aws/service/mediaconvert.Output, Str]` (too
 many words)`. MediaConvert's `Output` struct is large. It fails the
 same way on the 0.39.0 release and on main at 5dd0b3f4e. The LLVM
-backend is the workaround. Status: open, owned by Xo Lang 1.
+backend is the workaround. Status: FIXED upstream in 7c86af664 (Xo Lang 1,
+2026-11-05, native arm64 large values); verified here: MediaConvert
+builds and runs natively. 0.39.0 still needs `--backend=llvm`.
 
 ## 14. Native arm64 assembler: `sub sp, sp, #5280`
 
@@ -410,5 +412,6 @@ Found the same way, with WAFV2: `xo: assembler: line 9750: unsupported
 instruction: sub sp, sp, #5280`. An arm64 add/sub immediate is 12 bits
 (optionally shifted by 12), so a frame over 4095 bytes needs the
 shifted form or a scratch register. It fails the same way on 0.39.0 and
-on 5dd0b3f4e. The LLVM backend is the workaround. Status: open, owned
-by Xo Lang 1.
+on 5dd0b3f4e. Status: FIXED upstream in 7c86af664 (Xo Lang 1,
+2026-11-05); verified here: WAFV2 builds and runs natively. 0.39.0
+still needs `--backend=llvm`.

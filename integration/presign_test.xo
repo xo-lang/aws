@@ -1,0 +1,43 @@
+// Presigned requests on the fake network: the URL alone, sent with no
+// credentials, reaches the service with every parameter signed.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/sts
+use github.com/xo-lang/aws/sigv4
+
+const STS_IDENTITY: Str = "<GetCallerIdentityResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\"><GetCallerIdentityResult><Account>123456789012</Account></GetCallerIdentityResult></GetCallerIdentityResponse>"
+
+test "STS GetCallerIdentity presigns as a GET with the form in the signed query" {
+  let seen = Mutex[List[http.Request]].new([])
+  os.net.handle("GET http://sts-presign.test/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[http.Request]) { xs.push(req) })
+    http.text(200, STS_IDENTITY)
+  })
+  let c = sts.new(os.net, os.clock, os.rand, sts.Options{
+    region: "eu-west-1",
+    endpoint: "http://sts-presign.test",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+  })?
+  let p = c.presign_get_caller_identity(sts.GetCallerIdentityRequest{}, expires: 5m)?
+  expect(p.method) == "GET"
+  let (base, query) = p.url.cut("?") ?? ("", "")
+  expect(base) == "http://sts-presign.test/"
+  expect(query.starts_with("Action=GetCallerIdentity&Version=2011-06-15&X-Amz-Algorithm=AWS4-HMAC-SHA256&")) == true
+  expect(query.contains("X-Amz-Credential=AKIDTEST0000000000%2F20260101%2Feu-west-1%2Fsts%2Faws4_request&")) == true
+  expect(query.contains("X-Amz-Expires=300&")) == true
+  // the signature is SigV4's over the GET, the host and an empty body
+  let want = sigv4.sign_query(
+    sigv4.Request{method: "GET", path: "/", query: "Action=GetCallerIdentity&Version=2011-06-15", headers: [("Host", "sts-presign.test")]},
+    sigv4.Credentials{access_key_id: "AKIDTEST0000000000", secret_access_key: Secret.new("invented-secret")},
+    sigv4.Options{service: "sts", region: "eu-west-1", payload_hash: sigv4.EMPTY_PAYLOAD_HASH},
+    Time.from_unix(1767225600),
+    5m,
+  )
+  expect(query) == want.query
+  // anyone with the URL can send it, without credentials
+  let resp = http.client(os.net).send(http.new_request(p.method, p.url, {}, b""))?
+  expect(resp.status) == 200
+  let req = seen.with_read(fn(xs: List[http.Request]) -> List[http.Request] { xs })[0]
+  expect(req.header("Authorization")) == None
+}

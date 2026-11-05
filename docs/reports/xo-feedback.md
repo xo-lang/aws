@@ -245,3 +245,50 @@ says what happened, not a general opinion. Bugs with repros go in
   appears when a large module gains one more package dependency. It
   shows only when the code is reachable (`--real`), so `xo check` and the
   ordinary tests stay green while the emulator run fails to build.
+
+## 2026-11-04: input streams, issue 9, SigV4a
+
+- Liked: std/crypto had everything SigV4a needs. `parse_private_key`
+  takes a SEC 1 key with no public point and computes the point,
+  `marshal_public_key` gives the X and Y to compare, and `sign` and
+  `verify` speak ASN.1 DER ECDSA. Deriving the key took about 100 lines,
+  and all 38 aws-c-auth v4a cases pass.
+- Liked: `XO0501` ("method `sign` mutates `signer`, which is captured by
+  a closure; closures capture by value") named the exact problem and the
+  rule. Moving the `var` inside the closure fixed it.
+- Liked: the deadlock fault (`XO-F001: every task is blocked and no
+  timer is pending`) makes a hung streaming test fail at once instead of
+  timing out, and the Go backend names the blocked task and its line.
+- Disliked: issue 9, which turned out not to be a bug. The fake network
+  (`os.net.listen(":0")`, `http.client(os.net)`) reads a whole request
+  before the handler runs, so a full duplex exchange deadlocks there, and
+  the spec did not say so. The same test passes on a loopback socket
+  (`uses net`, `--real`). Lang 3 is documenting the limit and making the
+  fake path duplex. The deadlock fault was immediate, but it did not say
+  "the fake network is not duplex", which would have saved the report.
+- Disliked: issue 10, a native build fault (`rt.select_new returns a
+  Select` in `http.PipeWriter.write`) that appears only when the duplex
+  test and the DynamoDB client share a build. It is the second build
+  fault (after issue 8) that depends on what else is in the program, so
+  one test passes alone and fails in the suite.
+- Disliked: `XO1201` "function values with `var` parameters" on the
+  native backends. A local helper closure that takes the stream as
+  `var` had to become a top-level function.
+- Disliked: `derive Json` field names must be snake_case, and I found no
+  rename attribute, so a JSON object with keys `X` and `Y` has to be read
+  as a `json.Value`. A `json(name: "X")` field attribute would help.
+- Disliked: `Bytes` has no `to_list` or iterator of `UInt8`, so adding
+  one to a big endian number is an index loop over a `List[Int]`.
+- Disliked: `x ?? return Err("...")` as a struct literal field value
+  takes the rest of the literal as the return's operand. `XO0177` then
+  points at Go's `return a, b` and the fields after it go missing, which
+  is confusing for a typo-free line. Ending a `return` operand at the
+  field's comma (or a targeted hint) would help; a `let` binding first
+  works around it.
+- Liked: config tests on the fake network need no environment, files or
+  sockets: an `aws.Config` value, `os.net.handle`, and the generated
+  client.
+- Liked: both stream blockers were fixed upstream the same evening. The
+  fake network became full duplex (0e1d7b177) and `Select` was qualified
+  (5dd0b3f4e), each with a regression test, so the input stream test
+  runs offline in the normal suite.

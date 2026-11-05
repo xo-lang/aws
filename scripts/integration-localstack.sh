@@ -24,12 +24,14 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
-id=$(docker run -d -p "127.0.0.1:$port:4566" -e SERVICES=s3,sts,sqs,dynamodb,secretsmanager,sns,lambda,ec2,kinesis "$image")
+id=$(docker run -d -p "127.0.0.1:$port:4566" -e SERVICES=s3,sts,sqs,dynamodb,secretsmanager,sns,lambda,ec2,kinesis -e S3_SKIP_SIGNATURE_VALIDATION=0 "$image")
 status=1
 if [ -n "$id" ]; then
   i=0
   while [ $i -lt 120 ] && ! curl -sf "http://127.0.0.1:$port/_localstack/health" | grep -q '"s3": "\(available\|running\)"'; do sleep 1; i=$((i + 1)); done
-  (cd integration && XO_AWS_TEST_S3_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_KEY_ID=AKIDTEST0000000000 XO_AWS_TEST_SECRET=xo-lang-aws-test-secret-not-real "$xo" test --real ${XO_INTEGRATION_FLAGS-} .)
+  # LocalStack checks S3 signatures (S3_SKIP_SIGNATURE_VALIDATION=0)
+  # against its fixed dummy secret, "test", so the invented secret is that
+  (cd integration && XO_AWS_TEST_S3_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_KEY_ID=AKIDTEST0000000000 XO_AWS_TEST_SECRET=test XO_AWS_TEST_CHECKS_SIGNATURES=1 "$xo" test --real ${XO_INTEGRATION_FLAGS-} .)
   status=$?
 fi
 exit $status

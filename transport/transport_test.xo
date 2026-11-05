@@ -2,6 +2,8 @@ use std/http
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/retry
+use github.com/xo-lang/aws/sigv4
+use github.com/xo-lang/aws/sigv4a
 
 fn test_client(net: Net, clock: Clock, rand: Rand) -> Client {
   new_client(net, clock, rand, credentials.static_provider("AKIDTEST0000000000", "invented-secret"), retry.standard())
@@ -163,4 +165,64 @@ test "open streams a 2xx body and reads an error body whole" {
     }
     Done(resp) => expect(resp.text()) == Some("<Error><Code>Bad</Code></Error>")
   }
+}
+
+test "signs with SigV4a when the endpoint asks for a region set" {
+  let seen = Mutex[List[http.Request]].new([])
+  os.net.handle("POST https://sts.test/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[http.Request]) { xs.push(req) })
+    http.text(200, "<ok/>")
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let signing = Signing{service: "sts", region: "us-east-1", region_set: Some(["us-east-1", "us-west-2"])}
+  send(c, sts_request(), signing, status_failure)?
+  let req = seen.with_read(fn(xs: List[http.Request]) -> List[http.Request] { xs })[0]
+  let auth = req.header("Authorization") ?? ""
+  let prefix = "AWS4-ECDSA-P256-SHA256 Credential=AKIDTEST0000000000/20260101/sts/aws4_request, SignedHeaders="
+  expect(auth.starts_with(prefix)) == true
+  expect(req.header("X-Amz-Region-Set")) == Some("us-east-1,us-west-2")
+  // the server's side: rebuild the string to sign from what arrived and
+  // check the signature under the key derived from the same credentials
+  let (names, sig) = auth[prefix.len()..].cut(", Signature=") ?? ("", "")
+  var hs: List[(Str, Str)] = []
+  for n in names.split(";") {
+    hs.push((n, if n == "host" { "sts.test" } else { req.header(n) ?? "" }))
+  }
+  let (canon, _) = sigv4.canonical_headers(hs)
+  let creq = "POST\n/\n\n${canon}\n${names}\n${sigv4.payload_hash(req.body)}"
+  let sts = sigv4a.string_to_sign("20260101T000000Z", "20260101/sts/aws4_request", creq)
+  let key = sigv4a.derive_key(sigv4.Credentials{access_key_id: "AKIDTEST0000000000", secret_access_key: Secret.new("invented-secret")})?
+  expect(sigv4a.verify(key.public_key(), sts, sig)) == true
+  expect(sigv4a.verify(key.public_key(), "${sts}x", sig)) == false
+}
+
+test "presigns in the query: S3 signs UNSIGNED-PAYLOAD and the host only" {
+  let c = test_client(os.net, os.clock, os.rand)
+  let req = Request{method: "GET", host: "bkt.s3.test", path: "/dir/a%20b.txt"}
+  let p = presign(c, req, Signing{service: "s3", region: "us-east-1", s3: true}, 15m)?
+  expect(p.method) == "GET"
+  expect(p.headers) == []
+  let want = sigv4.sign_query(
+    sigv4.Request{method: "GET", path: "/dir/a%20b.txt", headers: [("Host", "bkt.s3.test")]},
+    sigv4.Credentials{access_key_id: "AKIDTEST0000000000", secret_access_key: Secret.new("invented-secret")},
+    sigv4.Options{service: "s3", region: "us-east-1", payload_hash: sigv4.UNSIGNED_PAYLOAD, normalize_path: false, double_escape_path: false},
+    Time.from_unix(1767225600),
+    15m,
+  )
+  expect(p.url) == "https://bkt.s3.test/dir/a%20b.txt?${want.query}"
+  expect(p.url.contains("X-Amz-Expires=900&")) == true
+  expect(p.url.contains("X-Amz-SignedHeaders=host&")) == true
+}
+
+test "a presigned URL is valid for at most 7 days" {
+  let c = test_client(os.net, os.clock, os.rand)
+  let p = presign(c, Request{method: "GET", host: "bkt.s3.test", path: "/k"}, Signing{service: "s3", region: "us-east-1", s3: true}, 720h)?
+  expect(p.url.contains("X-Amz-Expires=604800&")) == true
+}
+
+test "presigning with a region set uses SigV4a" {
+  let c = test_client(os.net, os.clock, os.rand)
+  let p = presign(c, Request{method: "GET", host: "mrap.accesspoint.s3-global.test", path: "/k"}, Signing{service: "s3", region: "us-east-1", s3: true, region_set: Some(["*"])}, 15m)?
+  expect(p.url.contains("X-Amz-Algorithm=AWS4-ECDSA-P256-SHA256&")) == true
+  expect(p.url.contains("X-Amz-Region-Set=%2A&")) == true
 }

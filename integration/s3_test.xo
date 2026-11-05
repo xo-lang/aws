@@ -3,6 +3,7 @@
 // invented credentials and sets the XO_AWS_TEST_* variables. The client
 // gets a Net that reaches only the loopback host.
 
+use std/http
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/service/s3
 
@@ -34,6 +35,25 @@ test "s3 round trip against MinIO" uses net, env, clock {
     Err(s3.HeadObjectErr.NotFound(_)) => {}
     other => expect("${other:?}") == "NotFound"
   }
+  // presigned PUT and GET, sent with no credentials by a plain client
+  let plain = http.client(os.net.only(["127.0.0.1", "localhost"]))
+  let put = c.presign_put_object(s3.PutObjectRequest{bucket: bucket, key: "presigned.txt"}, expires: 5m)?
+  var put_req = http.new_request(put.method, put.url, {}, b"sent by URL")
+  for (k, v) in put.headers {
+    put_req = put_req.with_header(k, v)
+  }
+  expect(plain.send(put_req)?.status) == 200
+  let get = c.presign_get_object(s3.GetObjectRequest{bucket: bucket, key: "presigned.txt"})?
+  let fetched = plain.send(http.new_request(get.method, get.url, {}, b""))?
+  expect(fetched.status) == 200
+  expect(fetched.body) == b"sent by URL"
+  // a tampered signature is refused (MinIO checks signatures; LocalStack
+  // does not by default, so its script leaves this unset)
+  if os.env.get("XO_AWS_TEST_CHECKS_SIGNATURES") == Some("1") {
+    let bad = plain.send(http.new_request("GET", get.url.replace("X-Amz-Signature=", "X-Amz-Signature=0"), {}, b""))?
+    expect(bad.status) == 403
+  }
+  c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: "presigned.txt"})?
   // three more objects, listed one per page
   for k in ["p/1", "p/2", "p/3"] {
     c.put_object(s3.PutObjectRequest{bucket: bucket, key: k, body: b"x"})?

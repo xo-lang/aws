@@ -282,3 +282,60 @@ Verified here with xo 7e82ae5c6: the repro builds and fails only at run
 time, as expected with no emulator. The generator now also cuts every
 file at about 448 KiB (split_file) and fails on one over 512 KiB, and
 the gate and scripts/check-all-services.sh check that limit.
+
+## 9. A full duplex HTTP/1.1 exchange on the test network deadlocks
+
+xo 7e82ae5c6, native and Go backends. The spec's recipe for a
+bidirectional stream (std 4.x, decisions 0433 and 0444): a
+`handle_stream` route answers with `http.stream(...).with_full_duplex()`
+and echoes each body piece as it reads it; the client writes a first
+piece into an `http.pipe()`, `Client.open`s the request with
+`with_body_reader`, reads the echo, writes the next piece, and so on.
+On `os.net.listen(":0")` with `http.client(os.net)` the test faults
+with `XO-F001: deadlock: every task is blocked and no timer is pending`
+(the Go backend names only the server task, blocked in serve). The
+input event stream clients (Transcribe, Bedrock bidirectional, Lex, and
+others) depend on exactly this exchange. A 25 line repro is fd_test.xo
+(with its xo.mod) in the lead's notes, issue9.
+Status: reported to Xo Lang 1 (2026-11-04).
+
+Update (2026-11-04, Xo Lang 3): not a std bug. The fake network's
+`Client.open` reads the whole request body before the handler runs and
+returns the whole response, so a full duplex exchange cannot run on it.
+On a real loopback socket (`uses net`, `xo test --real`,
+`listen("127.0.0.1:0")`) the repro passes. Lang 3 is documenting the
+limit and making the fake path duplex.
+FIXED in 0e1d7b177 (Lang 3): `Client.open` with an `http.pipe` body is full
+duplex on the fake network. Verified: the Transcribe input stream test
+passes there, in the integration module, without `--real`.
+
+## 10. Native: `rt.select_new` returns a `Select` in `http.PipeWriter.write`
+
+xo 7e82ae5c6, arm64 and LLVM backends, `xo test --real`. The full duplex
+test from issue 9 builds and passes on its own and next to any other
+integration test, except DynamoDB's (dynamodb_test.xo). With those two
+files in the integration module, the build fails with
+`std/native/http.xo:3267:5: in http.PipeWriter.write: arm64 backend: the
+runtime call rt.select_new returns a Select`. Neither file fails without
+the other. The repro (repro.sh, zz_fd_test.xo) is in the lead's notes,
+issue10.
+Cause (Xo Lang 1): the runtime handle of `select` is registered under
+the bare type name `Select`, and DynamoDB's generated `enum Select` takes
+that name, so `rt.select_new` appears to return the enum. The bug dates
+back to at least xo 0.38.1, and it always fails at build time, never as
+a silent miscompile. The fix gives program types named like a runtime
+handle their module path. The four bare handle names are Scope, Select,
+Listener and Conn (Lang 1). Scope, Listener and Conn are also prelude
+types, so a program type with one of those names already got its module
+path. In the generated SDK, `Select` is DynamoDB's (a value enum),
+`Scope` occurs in 13 models (EC2 and ECS among them), `Listener` in 5,
+and `Conn` in none. Names are kept as aws-sdk-go-v2 has
+them; the duplex test has its own module until the fix lands.
+Lang 1's matrix on 0.38.1 covered Scope, Listener, Conn, Select, Task and
+Group, each as a struct, an enum, a newtype, a value enum, and a value
+enum with a catch-all. Every program also used scope, spawn, a group,
+select, listen and dial, on arm64, LLVM and amd64, in both declaration
+orders. Only Select fails, so the Scope and Listener models (EC2 and ECS
+included) are safe.
+FIXED in 5dd0b3f4e (Lang 1). Verified: the duplex test and the DynamoDB
+client share the integration build again, and the gate passes.

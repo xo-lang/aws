@@ -1,0 +1,246 @@
+// Package sigv4a signs HTTP requests with AWS Signature Version 4a
+// (AWS4-ECDSA-P256-SHA256): an ECDSA P-256 signature, by a key derived
+// from the access key pair, over a string to sign whose credential scope
+// has no region; the regions the signature is good for go in
+// X-Amz-Region-Set. Multi-Region Access Points and global endpoints
+// need it. Canonicalization is SigV4's (package sigv4).
+
+use std/crypto
+use github.com/xo-lang/aws/sigv4
+
+pub const ALGORITHM: Str = "AWS4-ECDSA-P256-SHA256"
+
+/// Where and how to sign; as sigv4.Options, with a region set in place
+/// of the region.
+pub struct Options {
+  pub service: Str
+  /// The regions the signature is valid in ("*" for every region).
+  pub region_set: List[Str]
+  pub payload_hash: Str
+  pub normalize_path: Bool = true
+  pub double_escape_path: Bool = true
+  pub add_content_sha256_header: Bool = false
+  pub sign_session_token: Bool = true
+}
+
+fn v4_opts(o: Options) -> sigv4.Options {
+  sigv4.Options{
+    service: o.service,
+    region: "",
+    payload_hash: o.payload_hash,
+    normalize_path: o.normalize_path,
+    double_escape_path: o.double_escape_path,
+  }
+}
+
+/// Why a key could not be derived or used.
+pub struct SignErr {
+  pub msg: Str
+}
+
+pub fn (e: SignErr) display() -> Str {
+  "sigv4a: ${e.msg}"
+}
+
+/// The order of P-256 minus two, big endian: a derived candidate must be
+/// below it (FIPS 186-4 B.4.2).
+const N_MINUS_TWO: Str = "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc63254f"
+
+/// a < b for big endian numbers of the same length.
+fn less(a: Bytes, b: Bytes) -> Bool {
+  for i in 0..a.len() {
+    if a[i] != b[i] {
+      return a[i] < b[i]
+    }
+  }
+  false
+}
+
+/// a + 1, big endian (a is below n - 2, so it does not carry out).
+fn plus_one(a: Bytes) -> Bytes {
+  var out: List[Int] = []
+  for i in 0..a.len() {
+    out.push(Int(a[i]))
+  }
+  var i = out.len() - 1
+  while i >= 0 {
+    if out[i] < 255 {
+      out[i] += 1
+      break
+    }
+    out[i] = 0
+    i -= 1
+  }
+  var b = BytesBuilder.new()
+  for n in out {
+    b.write_byte(UInt8(n))
+  }
+  b.freeze()
+}
+
+fn u32_be(n: Int) -> Bytes {
+  var b = BytesBuilder.new()
+  b.write_byte(UInt8((n >> 24) & 255))
+  b.write_byte(UInt8((n >> 16) & 255))
+  b.write_byte(UInt8((n >> 8) & 255))
+  b.write_byte(UInt8(n & 255))
+  b.freeze()
+}
+
+/// NIST SP 800-108 counter mode KDF with HMAC-SHA256, one block (256
+/// bits), as aws-sdk-go-v2's HMACKeyDerivation.
+fn kdf(key: Bytes, label: Str, context: Bytes) -> Bytes {
+  var b = BytesBuilder.new()
+  b.write(u32_be(1))
+  b.write(label.bytes())
+  b.write_byte(UInt8(0))
+  b.write(context)
+  b.write(u32_be(256))
+  crypto.hmac_sha256(key, b.freeze())
+}
+
+/// The private scalar for an access key pair, 32 bytes big endian: the
+/// first KDF candidate below n - 2 (counter 1 to 255), plus one.
+pub fn derive_scalar(access_key_id: Str, secret: Secret[Str]) -> Bytes ! SignErr {
+  let input = "AWS4A${secret.reveal()}".bytes()
+  let limit = Bytes.from_hex(N_MINUS_TWO) ?? b""
+  for counter in 1..256 {
+    var ctx = BytesBuilder.new()
+    ctx.write(access_key_id.bytes())
+    ctx.write_byte(UInt8(counter))
+    let k = kdf(input, ALGORITHM, ctx.freeze())
+    if less(k, limit) {
+      return Ok(plus_one(k))
+    }
+  }
+  Err(SignErr{msg: "exhausted single byte external counter"})
+}
+
+/// A SEC 1 ECPrivateKey (RFC 5915) for P-256 scalar `d`, without the
+/// optional public key, which the parser computes.
+fn sec1(d: Bytes) -> Bytes {
+  var b = BytesBuilder.new()
+  b.write(Bytes.from_hex("30310201010420") ?? b"")
+  b.write(d)
+  b.write(Bytes.from_hex("a00a06082a8648ce3d030107") ?? b"")
+  b.freeze()
+}
+
+/// The P-256 signing key for an access key pair.
+pub fn derive_key(creds: sigv4.Credentials) -> crypto.PrivateKey ! SignErr {
+  let d = derive_scalar(creds.access_key_id, creds.secret_access_key)?
+  crypto.parse_private_key(sec1(d)).map_err(fn(e: crypto.KeyErr) -> SignErr { SignErr{msg: e.msg} })
+}
+
+/// The uncompressed public point (X and Y, 32 bytes each) of `k`.
+pub fn public_xy(k: crypto.PrivateKey) -> (Bytes, Bytes) {
+  let der = crypto.marshal_public_key(k.public_key())
+  let p = der[der.len() - 64..der.len()]
+  (p[0..32], p[32..64])
+}
+
+fn credential_scope(date: Str, opts: Options) -> Str {
+  "${date[0..8]}/${opts.service}/aws4_request"
+}
+
+/// The string to sign for canonical request `creq`.
+pub fn string_to_sign(date: Str, cscope: Str, creq: Str) -> Str {
+  "${ALGORITHM}\n${date}\n${cscope}\n${crypto.sha256(creq.bytes()).to_hex()}"
+}
+
+fn canonical_request(req: sigv4.Request, opts: Options, query: Str, headers: List[(Str, Str)]) -> (Str, Str) {
+  let (canon, names) = sigv4.canonical_headers(headers)
+  let uri = sigv4.canonical_uri(req.path, v4_opts(opts))
+  ("${req.method}\n${uri}\n${sigv4.canonical_query(query)}\n${canon}\n${names}\n${opts.payload_hash}", names)
+}
+
+/// The hex ASN.1 DER ECDSA signature of `sts` by `key`.
+pub fn signature(r: Rand, key: crypto.PrivateKey, sts: Str) -> Str ! SignErr uses rand {
+  let sig = crypto.sign(r, key, crypto.Hash.Sha256, sts.bytes()).map_err(fn(e: crypto.KeyErr) -> SignErr { SignErr{msg: e.msg} })?
+  Ok(sig.to_hex())
+}
+
+/// Whether hex signature `sig` of `sts` verifies under `key`'s public key.
+pub fn verify(key: crypto.PublicKey, sts: Str, sig: Str) -> Bool {
+  match Bytes.from_hex(sig) {
+    Some(b) => crypto.verify(key, crypto.Hash.Sha256, sts.bytes(), b)
+    None => false
+  }
+}
+
+/// Signs `req` with an `Authorization` header (and `X-Amz-Date`,
+/// `X-Amz-Region-Set`, `X-Amz-Security-Token`, and optionally
+/// `X-Amz-Content-Sha256`).
+pub fn sign_header(r: Rand, req: sigv4.Request, creds: sigv4.Credentials, opts: Options, now: Time) -> sigv4.Signed ! SignErr uses rand {
+  let key = derive_key(creds)?
+  let date = sigv4.amz_date(now)
+  let cscope = credential_scope(date, opts)
+  var headers = req.headers
+  headers.push(("X-Amz-Date", date))
+  headers.push(("X-Amz-Region-Set", opts.region_set.join(",")))
+  if opts.add_content_sha256_header {
+    headers.push(("X-Amz-Content-Sha256", opts.payload_hash))
+  }
+  var late: List[(Str, Str)] = []
+  if let Some(tok) = creds.session_token {
+    if opts.sign_session_token {
+      headers.push(("X-Amz-Security-Token", tok.reveal()))
+    } else {
+      late.push(("X-Amz-Security-Token", tok.reveal()))
+    }
+  }
+  let (creq, names) = canonical_request(req, opts, req.query, headers)
+  let sts = string_to_sign(date, cscope, creq)
+  let sig = signature(r, key, sts)?
+  var out = req.headers
+  for h in late {
+    out.push(h)
+  }
+  for h in headers[req.headers.len()..] {
+    out.push(h)
+  }
+  out.push(("Authorization", "${ALGORITHM} Credential=${creds.access_key_id}/${cscope}, SignedHeaders=${names}, Signature=${sig}"))
+  Ok(sigv4.Signed{headers: out, query: req.query, canonical_request: creq, string_to_sign: sts, signature: sig})
+}
+
+/// Presigns `req` in its query, valid for `expires` from `now`.
+pub fn sign_query(r: Rand, req: sigv4.Request, creds: sigv4.Credentials, opts: Options, now: Time, expires: Duration) -> sigv4.Signed ! SignErr uses rand {
+  let key = derive_key(creds)?
+  let date = sigv4.amz_date(now)
+  let cscope = credential_scope(date, opts)
+  let (_, names) = sigv4.canonical_headers(req.headers)
+  var params: List[(Str, Str)] = [
+    ("X-Amz-Algorithm", ALGORITHM),
+    ("X-Amz-Credential", "${creds.access_key_id}/${cscope}"),
+    ("X-Amz-Date", date),
+    ("X-Amz-SignedHeaders", names),
+    ("X-Amz-Expires", "${expires.millis() / 1000}"),
+    ("X-Amz-Region-Set", opts.region_set.join(",")),
+  ]
+  var late: List[(Str, Str)] = []
+  if let Some(tok) = creds.session_token {
+    if opts.sign_session_token {
+      params.push(("X-Amz-Security-Token", tok.reveal()))
+    } else {
+      late.push(("X-Amz-Security-Token", tok.reveal()))
+    }
+  }
+  var added = StrBuilder.new()
+  for (k, v) in params {
+    if added.len() > 0 {
+      added.write("&")
+    }
+    added.write("${sigv4.uri_encode(k, false)}=${sigv4.uri_encode(v, false)}")
+  }
+  let signed_query = if req.query == "" { added.freeze() } else { "${req.query}&${added.freeze()}" }
+  let (creq, _) = canonical_request(req, opts, signed_query, req.headers)
+  let sts = string_to_sign(date, cscope, creq)
+  let sig = signature(r, key, sts)?
+  var q = StrBuilder.new()
+  q.write(signed_query)
+  for (k, v) in late {
+    q.write("&${sigv4.uri_encode(k, false)}=${sigv4.uri_encode(v, false)}")
+  }
+  q.write("&X-Amz-Signature=${sig}")
+  Ok(sigv4.Signed{headers: req.headers, query: q.freeze(), canonical_request: creq, string_to_sign: sts, signature: sig})
+}

@@ -8,6 +8,63 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_deprovision_byoip_cidr(resp: http.Response) -> DeprovisionByoipCidrResult ! Str {
+  var out = DeprovisionByoipCidrResult{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "byoipCidr" => out.byoip_cidr = xml_read_byoip_cidr(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeprovisionByoipCidr.
+pub enum DeprovisionByoipCidrErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeprovisionByoipCidrErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_deprovision_byoip_cidr_error(resp: http.Response) -> DeprovisionByoipCidrErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  let _ = body
+  DeprovisionByoipCidrErr.Api(restxml.api_error(resp))
+}
+
+/// Releases the specified address range that you provisioned for use with
+/// your Amazon Web Services resources through bring your own IP addresses
+/// (BYOIP) and deletes the corresponding address pool. Before you can
+/// release an address range, you must stop advertising it and you must not
+/// have any IP addresses allocated from its address range.
+pub fn (c: Client) deprovision_byoip_cidr(input: DeprovisionByoipCidrRequest) -> DeprovisionByoipCidrResult ! DeprovisionByoipCidrErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_deprovision_byoip_cidr(c.params, input)) ?? e => return Err(DeprovisionByoipCidrErr.InvalidInput(e))
+  var req = serialize_deprovision_byoip_cidr(ep, input, "") ?? e => return Err(DeprovisionByoipCidrErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeprovisionByoipCidrErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_deprovision_byoip_cidr_error(resp))
+  }
+  deserialize_deprovision_byoip_cidr(resp) ?? e => Err(DeprovisionByoipCidrErr.Deserialize(e))
+}
+
 pub fn endpoint_params_deprovision_ipam_byoasn(base: EndpointParameters, input: DeprovisionIpamByoasnRequest) -> EndpointParameters {
   let _ = input
   base
@@ -11022,78 +11079,4 @@ pub enum DescribeManagedPrefixListsErr {
   InvalidInput(msg: Str)
   /// The response is not what the protocol says.
   Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeManagedPrefixListsErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_managed_prefix_lists_error(resp: http.Response) -> DescribeManagedPrefixListsErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  let _ = body
-  DescribeManagedPrefixListsErr.Api(restxml.api_error(resp))
-}
-
-/// Describes your managed prefix lists and any Amazon Web Services-managed
-/// prefix lists.
-pub fn (c: Client) describe_managed_prefix_lists(input: DescribeManagedPrefixListsRequest) -> DescribeManagedPrefixListsResult ! DescribeManagedPrefixListsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_managed_prefix_lists(c.params, input)) ?? e => return Err(DescribeManagedPrefixListsErr.InvalidInput(e))
-  var req = serialize_describe_managed_prefix_lists(ep, input, "") ?? e => return Err(DescribeManagedPrefixListsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DescribeManagedPrefixListsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_managed_prefix_lists_error(resp))
-  }
-  deserialize_describe_managed_prefix_lists(resp) ?? e => Err(DescribeManagedPrefixListsErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_moving_addresses(base: EndpointParameters, input: DescribeMovingAddressesRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeMovingAddresses.
-pub fn serialize_describe_moving_addresses(ep: rest.Endpoint, input: DescribeMovingAddressesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("DescribeMovingAddresses", "2016-11-15")
-  if let Some(x) = input.dry_run {
-    query.add(f, query.key("", "DryRun"), "${x}")
-  }
-  if let Some(x) = input.public_ips {
-    query_put_value_string_list(f, query.key("", "PublicIp"), x, false)
-  }
-  if let Some(x) = input.next_token {
-    query.add(f, query.key("", "NextToken"), x)
-  }
-  if let Some(x) = input.filters {
-    query_put_filter_list(f, query.key("", "Filter"), x, false)
-  }
-  if let Some(x) = input.max_results {
-    query.add(f, query.key("", "MaxResults"), "${x}")
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

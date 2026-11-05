@@ -9,6 +9,7 @@ use github.com/xo-lang/aws
 use github.com/xo-lang/aws/eventstream
 use github.com/xo-lang/aws/retry
 use github.com/xo-lang/aws/sigv4
+use github.com/xo-lang/aws/sigv4a
 
 /// An HTTP request as the SDK builds it, before signing.
 pub struct Request {
@@ -51,6 +52,8 @@ pub struct Signing {
   pub s3: Bool = false
   /// Send `UNSIGNED-PAYLOAD` instead of the body's hash.
   pub unsigned_payload: Bool = false
+  /// Sign with SigV4a for these regions (the endpoint chose `sigv4a`).
+  pub region_set: List[Str]? = None
 }
 
 pub enum SendErr {
@@ -154,19 +157,33 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
   headers.push(("Amz-Sdk-Request", "attempt=${attempt}; max=${max}"))
   let payload = payload_override ?? if signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
   let screds = sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token}
-  let signed = sigv4.sign_header(
-    sigv4.Request{method: req.method, path: req.path, query: req.query, headers: headers},
-    screds,
-    sigv4.Options{
-      service: signing.service,
-      region: signing.region,
-      payload_hash: payload,
-      normalize_path: !signing.s3,
-      double_escape_path: !signing.s3,
-      add_content_sha256_header: signing.s3 || payload_override.is_some(),
-    },
-    now,
-  )
+  let sreq = sigv4.Request{method: req.method, path: req.path, query: req.query, headers: headers}
+  let signed = match signing.region_set {
+    Some(set) => {
+      let opts = sigv4a.Options{
+        service: signing.service,
+        region_set: set,
+        payload_hash: payload,
+        normalize_path: !signing.s3,
+        double_escape_path: !signing.s3,
+        add_content_sha256_header: signing.s3 || payload_override.is_some(),
+      }
+      sigv4a.sign_header(c.rand, sreq, screds, opts, now) ?? e => return Err(AttemptErr.Creds(aws.CredentialsErr.Invalid(e.display())))
+    }
+    None => sigv4.sign_header(
+      sreq,
+      screds,
+      sigv4.Options{
+        service: signing.service,
+        region: signing.region,
+        payload_hash: payload,
+        normalize_path: !signing.s3,
+        double_escape_path: !signing.s3,
+        add_content_sha256_header: signing.s3 || payload_override.is_some(),
+      },
+      now,
+    )
+  }
   var hreq = http.new_request(req.method, url_of(req), {}, req.body)
   for (name, value) in signed.headers {
     // std/http writes Host and Content-Length itself (the same values)
@@ -321,4 +338,56 @@ pub fn open_stream(c: Client, req: Request, signing: Signing, body: http.BodyRea
   }
   st.close()
   Ok(StreamStart{opened: Opened.Done(resp: http.Response{status: head.status, headers: head.headers, body: rest}), signer: signer})
+}
+
+/// A presigned request: anyone holding it can send it until it expires,
+/// with no credentials. `headers` are the ones that were signed besides
+/// Host and must be sent as they are.
+pub struct Presigned {
+  pub method: Str
+  pub url: Str
+  pub headers: List[(Str, Str)]
+}
+
+/// The longest a SigV4 presigned URL may be valid (7 days).
+pub const MAX_PRESIGN: Duration = 168h
+
+/// Presigns `req` in its query (SigV4, or SigV4a when the endpoint asked
+/// for a region set), valid for `expires` from now. S3 signs
+/// `UNSIGNED-PAYLOAD`; other services sign the body's hash.
+pub fn presign(c: Client, req: Request, signing: Signing, expires: Duration) -> Presigned ! SendErr uses (net.dial, clock, rand) {
+  let creds = match c.credentials.retrieve() {
+    Ok(v) => v
+    Err(e) => return Err(SendErr.Credentials(e))
+  }
+  let ttl = if expires > MAX_PRESIGN { MAX_PRESIGN } else { expires }
+  let now = Time.from_unix_millis(c.clock.now().unix_millis() + c.skew_ms.get())
+  // the holder of the URL chooses the body, so its length is not signed
+  let kept = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-length" })
+  var headers = kept
+  headers.push(("Host", host_header(req)))
+  let payload = if signing.s3 || signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
+  let screds = sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token}
+  let sreq = sigv4.Request{method: req.method, path: req.path, query: req.query, headers: headers}
+  let signed = match signing.region_set {
+    Some(set) => {
+      let opts = sigv4a.Options{
+        service: signing.service,
+        region_set: set,
+        payload_hash: payload,
+        normalize_path: !signing.s3,
+        double_escape_path: !signing.s3,
+      }
+      sigv4a.sign_query(c.rand, sreq, screds, opts, now, ttl) ?? e => return Err(SendErr.Credentials(aws.CredentialsErr.Invalid(e.display())))
+    }
+    None => sigv4.sign_query(sreq, screds, sigv4.Options{
+      service: signing.service,
+      region: signing.region,
+      payload_hash: payload,
+      normalize_path: !signing.s3,
+      double_escape_path: !signing.s3,
+    }, now, ttl)
+  }
+  let url = url_of(req with {query: signed.query})
+  Ok(Presigned{method: req.method, url: url, headers: kept})
 }

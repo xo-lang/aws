@@ -31,7 +31,7 @@ status=1
 if [ -n "$id" ]; then
   i=0
   while [ $i -lt 60 ] && ! curl -sf "http://127.0.0.1:$port/minio/health/live" >/dev/null; do sleep 1; i=$((i + 1)); done
-  (cd integration && XO_AWS_TEST_S3_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_KEY_ID=$user XO_AWS_TEST_SECRET=$secret "$xo" test --real .)
+  (cd integration && XO_AWS_TEST_S3_ENDPOINT="http://127.0.0.1:$port" XO_AWS_TEST_KEY_ID=$user XO_AWS_TEST_SECRET=$secret XO_AWS_TEST_CHECKS_SIGNATURES=1 "$xo" test --real --run MinIO .)
   status=$?
 fi
 exit $status

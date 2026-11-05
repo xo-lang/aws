@@ -8,6 +8,93 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+/// The HTTP request of DisableInstanceSqlHaStandbyDetections.
+pub fn serialize_disable_instance_sql_ha_standby_detections(ep: rest.Endpoint, input: DisableInstanceSqlHaStandbyDetectionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var f = query.form("DisableInstanceSqlHaStandbyDetections", "2016-11-15")
+  if let Some(x) = input.instance_ids {
+    query_put_instance_id_update_string_list(f, query.key("", "InstanceId"), x, false)
+  }
+  if let Some(x) = input.dry_run {
+    query.add(f, query.key("", "DryRun"), "${x}")
+  }
+  body = query.encode(f).bytes()
+  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disable_instance_sql_ha_standby_detections(resp: http.Response) -> DisableInstanceSqlHaStandbyDetectionsResult ! Str {
+  var out = DisableInstanceSqlHaStandbyDetectionsResult{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "instanceSet" => out.instances = xml_read_registered_instance_list(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DisableInstanceSqlHaStandbyDetections.
+pub enum DisableInstanceSqlHaStandbyDetectionsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisableInstanceSqlHaStandbyDetectionsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disable_instance_sql_ha_standby_detections_error(resp: http.Response) -> DisableInstanceSqlHaStandbyDetectionsErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  let _ = body
+  DisableInstanceSqlHaStandbyDetectionsErr.Api(restxml.api_error(resp))
+}
+
+/// Disable Amazon EC2 instances running in an SQL Server High Availability
+/// cluster from SQL Server High Availability instance standby detection
+/// monitoring. Once disabled, Amazon Web Services no longer monitors the
+/// metadata for the instances to determine whether they are active or
+/// standby nodes in the SQL Server High Availability cluster.
+pub fn (c: Client) disable_instance_sql_ha_standby_detections(input: DisableInstanceSqlHaStandbyDetectionsRequest) -> DisableInstanceSqlHaStandbyDetectionsResult ! DisableInstanceSqlHaStandbyDetectionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disable_instance_sql_ha_standby_detections(c.params, input)) ?? e => return Err(DisableInstanceSqlHaStandbyDetectionsErr.InvalidInput(e))
+  var req = serialize_disable_instance_sql_ha_standby_detections(ep, input, "") ?? e => return Err(DisableInstanceSqlHaStandbyDetectionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DisableInstanceSqlHaStandbyDetectionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disable_instance_sql_ha_standby_detections_error(resp))
+  }
+  deserialize_disable_instance_sql_ha_standby_detections(resp) ?? e => Err(DisableInstanceSqlHaStandbyDetectionsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_disable_ipam_organization_admin_account(base: EndpointParameters, input: DisableIpamOrganizationAdminAccountRequest) -> EndpointParameters {
   let _ = input
   base
@@ -10839,97 +10926,6 @@ pub fn serialize_get_network_insights_access_scope_analysis_findings(ep: rest.En
   }
   if let Some(x) = input.next_token {
     query.add(f, query.key("", "NextToken"), x)
-  }
-  if let Some(x) = input.dry_run {
-    query.add(f, query.key("", "DryRun"), "${x}")
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_get_network_insights_access_scope_analysis_findings(resp: http.Response) -> GetNetworkInsightsAccessScopeAnalysisFindingsResult ! Str {
-  var out = GetNetworkInsightsAccessScopeAnalysisFindingsResult{}
-  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "networkInsightsAccessScopeAnalysisId" => out.network_insights_access_scope_analysis_id = c.text()
-      "analysisStatus" => out.analysis_status = AnalysisStatus.from(c.text())
-      "analysisFindingSet" => out.analysis_findings = xml_read_access_scope_analysis_finding_list(c)?
-      "nextToken" => out.next_token = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of GetNetworkInsightsAccessScopeAnalysisFindings.
-pub enum GetNetworkInsightsAccessScopeAnalysisFindingsErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: GetNetworkInsightsAccessScopeAnalysisFindingsErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_get_network_insights_access_scope_analysis_findings_error(resp: http.Response) -> GetNetworkInsightsAccessScopeAnalysisFindingsErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  let _ = body
-  GetNetworkInsightsAccessScopeAnalysisFindingsErr.Api(restxml.api_error(resp))
-}
-
-/// Gets the findings for the specified Network Access Scope analysis.
-pub fn (c: Client) get_network_insights_access_scope_analysis_findings(input: GetNetworkInsightsAccessScopeAnalysisFindingsRequest) -> GetNetworkInsightsAccessScopeAnalysisFindingsResult ! GetNetworkInsightsAccessScopeAnalysisFindingsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_network_insights_access_scope_analysis_findings(c.params, input)) ?? e => return Err(GetNetworkInsightsAccessScopeAnalysisFindingsErr.InvalidInput(e))
-  var req = serialize_get_network_insights_access_scope_analysis_findings(ep, input, "") ?? e => return Err(GetNetworkInsightsAccessScopeAnalysisFindingsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetNetworkInsightsAccessScopeAnalysisFindingsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_get_network_insights_access_scope_analysis_findings_error(resp))
-  }
-  deserialize_get_network_insights_access_scope_analysis_findings(resp) ?? e => Err(GetNetworkInsightsAccessScopeAnalysisFindingsErr.Deserialize(e))
-}
-
-pub fn endpoint_params_get_network_insights_access_scope_content(base: EndpointParameters, input: GetNetworkInsightsAccessScopeContentRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of GetNetworkInsightsAccessScopeContent.
-pub fn serialize_get_network_insights_access_scope_content(ep: rest.Endpoint, input: GetNetworkInsightsAccessScopeContentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("GetNetworkInsightsAccessScopeContent", "2016-11-15")
-  if let Some(x) = input.network_insights_access_scope_id {
-    query.add(f, query.key("", "NetworkInsightsAccessScopeId"), x)
   }
   if let Some(x) = input.dry_run {
     query.add(f, query.key("", "DryRun"), "${x}")

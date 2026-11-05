@@ -1,0 +1,129 @@
+// An input event stream end to end on the test network (no emulator):
+// an in-process HTTP server reads the StartStreamTranscription request's
+// body as it arrives, checks each message's chained signature from the
+// request's own (seed) signature, and answers each audio chunk with a
+// transcript event while the client is still sending.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/eventstream
+use github.com/xo-lang/aws/service/transcribestreaming as ts
+use github.com/xo-lang/aws/sigv4
+
+const KEY_ID: Str = "AKIDTEST0000000000"
+const SECRET: Str = "invented-secret"
+
+fn transcript_event(text: Str) -> Bytes {
+  eventstream.encode(eventstream.Message{
+    headers: [
+      eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")},
+      eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("TranscriptEvent")},
+      eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/json")},
+    ],
+    payload: "{\"Transcript\":{\"Results\":[{\"IsPartial\":false,\"Alternatives\":[{\"Transcript\":\"${text}\"}]}]}}".bytes(),
+  })
+}
+
+/// The seed: the Signature= part of the request's Authorization header.
+fn seed_of(req: http.Request) -> Bytes {
+  let auth = req.header("Authorization") ?? ""
+  let parts = auth.split("Signature=")
+  Bytes.from_hex(parts[parts.len() - 1]) ?? b""
+}
+
+fn transcribe_server(var r: http.Router, checked: Atomic[Int], bad: Atomic[Int]) {
+  r.handle_stream("POST /stream-transcription", fn(req: http.Request, body: http.BodyReader) -> http.Response ! IoErr {
+    if req.header("X-Amz-Content-Sha256") != Some(sigv4.STREAMING_EVENTS_PAYLOAD) {
+      return Ok(http.text(400, "want a streaming payload hash"))
+    }
+    let seed = seed_of(req)
+    Ok(http.stream(200, fn(w: http.BodyWriter) -> () ! IoErr {
+      var signer = sigv4.StreamSigner{
+        creds: sigv4.Credentials{access_key_id: KEY_ID, secret_access_key: Secret.new(SECRET)},
+        region: "us-east-1",
+        service: "transcribe",
+        prev: seed,
+      }
+      var dec = eventstream.decoder()
+      var ended = false
+      while !ended {
+        let piece = body.read()? ?? break
+        dec.feed(piece)
+        while let Some(env) = dec.next().ok() ?? None {
+          let date = match env.header(":date") {
+            Some(eventstream.HeaderValue.Timestamp(ms)) => ms
+            _ => 0
+          }
+          let want = signer.sign(eventstream.encode_headers([eventstream.Header{name: ":date", value: eventstream.HeaderValue.Timestamp(date)}]), env.payload, Time.from_unix_millis(date))
+          if env.header(":chunk-signature") == Some(eventstream.HeaderValue.ByteArray(want)) {
+            checked.add(1)
+          } else {
+            bad.add(1)
+          }
+          if env.payload.is_empty() {
+            ended = true
+            break
+          }
+          let inner = eventstream.decode(env.payload).ok() ?? continue
+          if inner.header_str(":event-type") == "AudioEvent" {
+            w.write(transcript_event(inner.payload.to_str() ?? ""))?
+            w.flush()?
+          }
+        }
+      }
+      Ok(())
+    }).with_full_duplex())
+  })
+}
+
+/// Reads one output event, adding its transcripts to `got`.
+fn take(var st: ts.StartStreamTranscriptionStream, var got: List[Str]) -> () ! ts.TranscriptResultStreamErr uses net.dial {
+  match st.next()? {
+    Some(TranscriptEvent(e)) => {
+      let results = match e.transcript {
+        Some(t) => t.results ?? []
+        None => []
+      }
+      for res in results {
+        for alt in res.alternatives ?? [] {
+          got.push(alt.transcript ?? "")
+        }
+      }
+    }
+    _ => {}
+  }
+  Ok(())
+}
+
+test "Transcribe StartStreamTranscription: signed input events, output events" {
+  let checked = Atomic[Int].new(0)
+  let bad = Atomic[Int].new(0)
+  var r = http.router()
+  transcribe_server(r, checked, bad)
+  let l = os.net.listen(":0")?
+  let srv = http.server(l, r)
+  scope s {
+    s.spawn_background(fn() { srv.serve() })
+    let c = ts.new(os.net, os.clock, os.rand, ts.Options{
+      region: "us-east-1",
+      endpoint: "http://${srv.addr()}",
+      credentials: credentials.static_provider(KEY_ID, SECRET),
+    })?
+    var st = c.start_stream_transcription(
+      ts.StartStreamTranscriptionRequest{language_code: ts.LanguageCode.EnUs, media_sample_rate_hertz: 16000, media_encoding: ts.MediaEncoding.Pcm},
+      first: [ts.AudioStream.AudioEvent(ts.AudioEvent{audio_chunk: b"hello"})],
+    )?
+    var got: List[Str] = []
+    // each chunk's transcript arrives before the next chunk is sent
+    take(st, got)?
+    st.send(ts.AudioStream.AudioEvent(ts.AudioEvent{audio_chunk: b"world"}))?
+    take(st, got)?
+    st.close_send()?
+    expect(st.next()?.is_none()) == true
+    st.close()
+    expect(got) == ["hello", "world"]
+  }
+  // two audio events and the end message, each signed in the chain
+  expect(checked.get()) == 3
+  expect(bad.get()) == 0
+}

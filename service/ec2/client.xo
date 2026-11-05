@@ -52,6 +52,30 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   })
 }
 
+/// Options from shared configuration (`config.load_default_config`):
+/// its region, credentials, attempts, FIPS and dual stack settings,
+/// and a configured endpoint URL (`AWS_ENDPOINT_URL_EC2`,
+/// `AWS_ENDPOINT_URL`, or the profile's). Change fields with `with`
+/// before calling `new`.
+pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
+  let creds = cfg.credentials ?? return Err("no credentials in the configuration")
+  let region = cfg.region ?? return Err("no region in the configuration")
+  var o = Options{
+    credentials: creds,
+    region: region,
+    max_attempts: cfg.max_attempts,
+    endpoint: aws.endpoint_for(cfg.endpoints, "EC2"),
+  }
+  o.use_fips = Some(cfg.use_fips)
+  o.use_dual_stack = Some(cfg.use_dualstack)
+  Ok(o)
+}
+
+/// A client from shared configuration: `new` with `options_from_config`.
+pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
+  new(net, clock, rand, options_from_config(cfg)?)
+}
+
 const SIGNING_NAME: Str = "ec2"
 
 /// Where one call goes: the endpoint, how to sign, extra headers.
@@ -59,7 +83,7 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   let e = resolve_endpoint(params) ?? err => return Err("endpoint: ${err.msg}")
   let ep = rest.parse_endpoint(e.url) ?? return Err("bad endpoint ${e.url}")
   let (service, region) = endpoints.signing(e)
-  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false}
+  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e)}
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
@@ -13674,30 +13698,6 @@ fn xml_read_create_launch_template_request(e: xml.Element) -> CreateLaunchTempla
       "LaunchTemplateData" => out.launch_template_data = xml_read_request_launch_template_data(c)?
       "Operator" => out.operator = xml_read_operator_request(c)?
       "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_launch_template_result(var w: xmlv.Writer, v: CreateLaunchTemplateResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.launch_template {
-    xml_write_launch_template(w, x, "launchTemplate", [])
-  }
-  if let Some(x) = v.warning {
-    xml_write_validation_warning(w, x, "warning", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_launch_template_result(e: xml.Element) -> CreateLaunchTemplateResult ! Str {
-  var out = CreateLaunchTemplateResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "launchTemplate" => out.launch_template = xml_read_launch_template(c)?
-      "warning" => out.warning = xml_read_validation_warning(c)?
       _ => {}
     }
   }

@@ -61,6 +61,30 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   })
 }
 
+/// Options from shared configuration (`config.load_default_config`):
+/// its region, credentials, attempts, FIPS and dual stack settings,
+/// and a configured endpoint URL (`AWS_ENDPOINT_URL_STS`,
+/// `AWS_ENDPOINT_URL`, or the profile's). Change fields with `with`
+/// before calling `new`.
+pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
+  let creds = cfg.credentials ?? return Err("no credentials in the configuration")
+  let region = cfg.region ?? return Err("no region in the configuration")
+  var o = Options{
+    credentials: creds,
+    region: region,
+    max_attempts: cfg.max_attempts,
+    endpoint: aws.endpoint_for(cfg.endpoints, "STS"),
+  }
+  o.use_fips = Some(cfg.use_fips)
+  o.use_dual_stack = Some(cfg.use_dualstack)
+  Ok(o)
+}
+
+/// A client from shared configuration: `new` with `options_from_config`.
+pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
+  new(net, clock, rand, options_from_config(cfg)?)
+}
+
 const SIGNING_NAME: Str = "sts"
 
 /// Where one call goes: the endpoint, how to sign, extra headers.
@@ -68,7 +92,7 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   let e = resolve_endpoint(params) ?? err => return Err("endpoint: ${err.msg}")
   let ep = rest.parse_endpoint(e.url) ?? return Err("bad endpoint ${e.url}")
   let (service, region) = endpoints.signing(e)
-  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false}
+  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e)}
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
@@ -3121,6 +3145,26 @@ pub fn (c: Client) get_caller_identity(input: GetCallerIdentityRequest) -> GetCa
     return Err(deserialize_get_caller_identity_error(resp))
   }
   deserialize_get_caller_identity(resp) ?? e => Err(GetCallerIdentityErr.Deserialize(e))
+}
+
+/// GetCallerIdentity as a presigned request: a URL (and the headers
+/// to send with it) that works without credentials until `expires`
+/// passes (at most 7 days).
+/// The form parameters are sent as the query of a GET, as aws-sdk-go-v2
+/// presigns query protocol calls.
+pub fn (c: Client) presign_get_caller_identity(input: GetCallerIdentityRequest, expires: Duration = 15m) -> transport.Presigned ! GetCallerIdentityErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_caller_identity(c.params, input)) ?? e => return Err(GetCallerIdentityErr.InvalidInput(e))
+  var req = serialize_get_caller_identity(ep, input, "") ?? e => return Err(GetCallerIdentityErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  req = req with {
+    method: "GET",
+    query: req.body.to_str() ?? "",
+    body: b"",
+    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" }),
+  }
+  transport.presign(c.transport, req, signing, expires) ?? e => Err(GetCallerIdentityErr.Send(e))
 }
 
 pub fn endpoint_params_get_delegated_access_token(base: EndpointParameters, input: GetDelegatedAccessTokenRequest) -> EndpointParameters {

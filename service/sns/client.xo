@@ -55,6 +55,30 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   })
 }
 
+/// Options from shared configuration (`config.load_default_config`):
+/// its region, credentials, attempts, FIPS and dual stack settings,
+/// and a configured endpoint URL (`AWS_ENDPOINT_URL_SNS`,
+/// `AWS_ENDPOINT_URL`, or the profile's). Change fields with `with`
+/// before calling `new`.
+pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
+  let creds = cfg.credentials ?? return Err("no credentials in the configuration")
+  let region = cfg.region ?? return Err("no region in the configuration")
+  var o = Options{
+    credentials: creds,
+    region: region,
+    max_attempts: cfg.max_attempts,
+    endpoint: aws.endpoint_for(cfg.endpoints, "SNS"),
+  }
+  o.use_fips = Some(cfg.use_fips)
+  o.use_dual_stack = Some(cfg.use_dualstack)
+  Ok(o)
+}
+
+/// A client from shared configuration: `new` with `options_from_config`.
+pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
+  new(net, clock, rand, options_from_config(cfg)?)
+}
+
 const SIGNING_NAME: Str = "sns"
 
 /// Where one call goes: the endpoint, how to sign, extra headers.
@@ -62,7 +86,7 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   let e = resolve_endpoint(params) ?? err => return Err("endpoint: ${err.msg}")
   let ep = rest.parse_endpoint(e.url) ?? return Err("bad endpoint ${e.url}")
   let (service, region) = endpoints.signing(e)
-  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false}
+  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e)}
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 

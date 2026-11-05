@@ -7,6 +7,18 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+/// HeadObject as a presigned request: a URL (and the headers
+/// to send with it) that works without credentials until `expires`
+/// passes (at most 7 days).
+pub fn (c: Client) presign_head_object(input: HeadObjectRequest, expires: Duration = 15m) -> transport.Presigned ! HeadObjectErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_head_object(c.params, input)) ?? e => return Err(HeadObjectErr.InvalidInput(e))
+  var req = serialize_head_object(ep, input, "") ?? e => return Err(HeadObjectErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  transport.presign(c.transport, req, signing, expires) ?? e => Err(HeadObjectErr.Send(e))
+}
+
 pub fn endpoint_params_list_bucket_analytics_configurations(base: EndpointParameters, input: ListBucketAnalyticsConfigurationsRequest) -> EndpointParameters {
   var p = base
   p.use_s3_express_control_endpoint = true
@@ -4715,6 +4727,18 @@ pub fn (c: Client) put_object(input: PutObjectRequest) -> PutObjectOutput ! PutO
   deserialize_put_object(resp) ?? e => Err(PutObjectErr.Deserialize(e))
 }
 
+/// PutObject as a presigned request: a URL (and the headers
+/// to send with it) that works without credentials until `expires`
+/// passes (at most 7 days).
+pub fn (c: Client) presign_put_object(input: PutObjectRequest, expires: Duration = 15m) -> transport.Presigned ! PutObjectErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_put_object(c.params, input)) ?? e => return Err(PutObjectErr.InvalidInput(e))
+  var req = serialize_put_object(ep, input, "") ?? e => return Err(PutObjectErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  transport.presign(c.transport, req, signing, expires) ?? e => Err(PutObjectErr.Send(e))
+}
+
 pub fn endpoint_params_put_object_acl(base: EndpointParameters, input: PutObjectAclRequest) -> EndpointParameters {
   var p = base
   if let Some(x) = input.bucket {
@@ -7179,6 +7203,18 @@ pub fn (c: Client) upload_part(input: UploadPartRequest) -> UploadPartOutput ! U
     return Err(deserialize_upload_part_error(resp))
   }
   deserialize_upload_part(resp) ?? e => Err(UploadPartErr.Deserialize(e))
+}
+
+/// UploadPart as a presigned request: a URL (and the headers
+/// to send with it) that works without credentials until `expires`
+/// passes (at most 7 days).
+pub fn (c: Client) presign_upload_part(input: UploadPartRequest, expires: Duration = 15m) -> transport.Presigned ! UploadPartErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_upload_part(c.params, input)) ?? e => return Err(UploadPartErr.InvalidInput(e))
+  var req = serialize_upload_part(ep, input, "") ?? e => return Err(UploadPartErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  transport.presign(c.transport, req, signing, expires) ?? e => Err(UploadPartErr.Send(e))
 }
 
 pub fn endpoint_params_upload_part_copy(base: EndpointParameters, input: UploadPartCopyRequest) -> EndpointParameters {

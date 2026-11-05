@@ -1,0 +1,44 @@
+// Clients built from shared configuration (aws.Config, as
+// config.load_default_config returns it), on the fake network.
+
+use std/http
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/sts
+
+const IDENTITY: Str = "<GetCallerIdentityResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\"><GetCallerIdentityResult><Arn>arn:aws:iam::123456789012:user/Alice</Arn><UserId>EXAMPLE</UserId><Account>123456789012</Account></GetCallerIdentityResult></GetCallerIdentityResponse>"
+
+test "options_from_config carries region, credentials, attempts, FIPS, dual stack and the endpoint" {
+  let cfg = aws.Config{
+    region: "eu-west-1",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    max_attempts: 5,
+    use_fips: true,
+    endpoints: aws.ConfiguredEndpoints{env_service: {"STS": "http://sts-config.test"}},
+  }
+  let o = sts.options_from_config(cfg)?
+  expect(o.region) == "eu-west-1"
+  expect(o.max_attempts) == 5
+  expect(o.use_fips) == Some(true)
+  expect(o.use_dual_stack) == Some(false)
+  expect(o.endpoint) == Some("http://sts-config.test")
+  expect(sts.options_from_config(aws.Config{region: "eu-west-1"}).is_err()) == true
+}
+
+test "from_config sends to the configured endpoint, signed for the configured region" {
+  let seen = Mutex[List[http.Request]].new([])
+  os.net.handle("POST http://sts-config.test/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[http.Request]) { xs.push(req) })
+    http.text(200, IDENTITY).with_header("Content-Type", "text/xml")
+  })
+  let cfg = aws.Config{
+    region: "eu-west-1",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    endpoints: aws.ConfiguredEndpoints{env_global: "http://sts-config.test"},
+  }
+  let c = sts.from_config(os.net, os.clock, os.rand, cfg)?
+  let out = c.get_caller_identity(sts.GetCallerIdentityRequest{})?
+  expect(out.account) == Some("123456789012")
+  let req = seen.with_read(fn(xs: List[http.Request]) -> List[http.Request] { xs })[0]
+  expect((req.header("Authorization") ?? "").contains("/eu-west-1/sts/aws4_request")) == true
+}

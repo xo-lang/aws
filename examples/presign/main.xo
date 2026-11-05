@@ -1,0 +1,22 @@
+// Presigned URLs for S3 GetObject and STS GetCallerIdentity, made with
+// no network and invented credentials, and a DynamoDB client. It is
+// built with the native backend and run by scripts/check-programs.sh,
+// so a program (not only a test) of several services links.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/dynamodb
+use github.com/xo-lang/aws/service/s3
+use github.com/xo-lang/aws/service/sts
+
+fn main(os: Os) -> () ! Error {
+  let creds = credentials.static_provider("AKIDEXAMPLE000000000", "invented-secret")
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "ca-central-1", credentials: creds})?
+  let get = c.presign_get_object(s3.GetObjectRequest{bucket: "example-bucket", key: "a.txt"})?
+  os.stdio.println("s3 ${get.method} ${get.url.split("?")[0]}")
+  let id = sts.new(os.net, os.clock, os.rand, sts.Options{region: "ca-central-1", credentials: creds})?
+  let who = id.presign_get_caller_identity(sts.GetCallerIdentityRequest{})?
+  os.stdio.println("sts ${who.method} ${who.url.split("?")[0]}")
+  dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "ca-central-1", credentials: creds})?
+  os.stdio.println("dynamodb ok")
+  Ok(())
+}

@@ -321,3 +321,33 @@ says what happened, not a general opinion. Bugs with repros go in
   so `"${crc32.checksum(b)}"` alone left `std/crc32` unimported (moved
   the call out); `url.query_unescape` returns a Result where `??`
   needs an Option, which takes `.ok()` first.
+
+## 2026-11-05: read sweep of 366 services, the first release
+
+Liked:
+- Module cycles through MVS just work: the root and service/sts require
+  each other at one commit, both tagged v0.1.0, and an app with no
+  workspace fetched and built them (tested against a scratch bare
+  clone through `XO_GIT_BASE`). A workspace ignores requires of tags
+  that do not exist yet, so the requires could land before the tags.
+- Typed operation errors held up against 366 real services: every
+  error that came back parsed into the operation's enum, and the Go
+  and LLVM backends were ready workarounds when native failed.
+- The fix for a back-end cache bug (issue 12) came the same morning,
+  with its cause explained.
+
+Disliked:
+- Three native back-end failures that `xo test` on small modules never
+  shows: a duplicate symbol from a cached std unit (12), "reference
+  counting ... too many words" for a large struct in a Result (13), and
+  an arm64 frame over 4095 bytes the assembler rejects (14). The last
+  two are in 0.39.0 too. Large generated code finds these first; a
+  native build of a big program in Xo's own tests would catch them.
+- `xo version` of a debug checkout build says 0.38.1 while the
+  checkout is past 0.39.0, which sent issue 12's first triage the
+  wrong way (`version -m` with the binary path gives the build).
+- `xo test --run <no match>` skips compiling, and a test that `uses`
+  real capabilities is skipped before it compiles without `--real`, so
+  a compile-only check needs `--real` with the harness made inert.
+- `Rune` has no `to_str`; cutting a string at N characters takes
+  summing `utf8_len` over the runes.

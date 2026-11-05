@@ -14,7 +14,9 @@ current as work finds new ones.
    requiring that root tag, then a root tag requiring that sts tag.
 3. **No workspace.** Check each module with `--workspace=off`, so a
    missing require fails here rather than for a user.
-4. **Gates.** `scripts/gate.sh`, `scripts/check-endpoints-compiled.sh`,
+4. **Gates.** `scripts/gate.sh`, `scripts/check-programs.sh` (the
+   examples built natively and run: a program links differently from a
+   test), `scripts/check-endpoints-compiled.sh`,
    `scripts/check-public.sh`, and gitleaks over the full history
    (decision 0005, 0007).
 5. **Integration.** `scripts/integration-localstack.sh` against

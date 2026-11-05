@@ -118,7 +118,14 @@ if command -v gitleaks >/dev/null; then
     # the working tree too: history alone misses what the next commit adds
     # (tracked and new files only: a copy, so ignored model downloads are skipped)
     tree=$(mktemp -d)
-    git ls-files -co --exclude-standard | rsync -a --files-from=- . "$tree/"
+    list="$tree.list"
+    # files deleted from the working tree are left out (git still lists them)
+    git ls-files -d > "$list.deleted"
+    git ls-files -co --exclude-standard | sort -u | grep -vxF -f "$list.deleted" > "$list" || true
+    if ! tar -cf - -T "$list" | tar -xf - -C "$tree" || [ "$(find "$tree" -type f | wc -l)" -ne "$(wc -l < "$list")" ]; then
+      report "could not copy the working tree for gitleaks" ""
+    fi
+    rm -f "$list" "$list.deleted"
     cfgabs="$cfg"
     (cd "$tree" && gitleaks dir $cfgabs --no-banner . >/dev/null 2>&1) || { (cd "$tree" && gitleaks dir $cfgabs --no-banner . 2>&1 | tail -20 >&2); report "gitleaks found leaks in the working tree" ""; }
     rm -r "$tree"

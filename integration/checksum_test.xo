@@ -5,6 +5,7 @@
 // GetObject asks for the object's checksum and checks the body against it.
 
 use std/http
+use github.com/xo-lang/aws
 use github.com/xo-lang/aws/checksum
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/service/s3
@@ -108,4 +109,14 @@ test "PutObject sends CRC32 by default, unless turned off or the call carries a 
   off.put_object(put)?
   let crc = checksum.compute("CRC32", b"hello") ?? ""
   expect(seen.with_read(fn(xs: List[(Str, Str)]) -> List[(Str, Str)] { xs })) == [(crc, ""), ("", "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="), ("", "")]
+}
+
+test "the configuration's checksum settings reach S3's options" {
+  let base = aws.Config{region: Some("us-west-2"), credentials: Some(credentials.static_provider("AKIDTEST0000000000", "invented-secret"))}
+  let d = s3.options_from_config(base)?
+  expect(d.calculate_request_checksums) == true
+  expect(d.validate_response_checksums) == true
+  let r = s3.options_from_config(base with {request_checksum_calculation: Some("when_required"), response_checksum_validation: Some("when_required")})?
+  expect(r.calculate_request_checksums) == false
+  expect(r.validate_response_checksums) == false
 }

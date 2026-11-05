@@ -336,3 +336,42 @@ test "the account comes from AWS_ACCOUNT_ID and the endpoint mode from the envir
   let cr = (cfg.credentials ?? return Err("no credentials")).retrieve()?
   expect(cr.account_id) == Some("123456789012")
 }
+
+test "checksum settings come from the environment, else the profile, and reject other values" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_ACCESS_KEY_ID", "AKIDTEST0000000000")
+  os.env.set("AWS_SECRET_ACCESS_KEY", "invented-secret")
+  os.fs.write("/h/.aws/config", b"[default]\nrequest_checksum_calculation = when_required\nresponse_checksum_validation = WHEN_REQUIRED\n")?
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  expect(cfg.request_checksum_calculation) == Some("when_required")
+  expect(cfg.response_checksum_validation) == Some("when_required")
+  os.env.set("AWS_REQUEST_CHECKSUM_CALCULATION", "when_supported")
+  let env_first = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  expect(env_first.request_checksum_calculation) == Some("when_supported")
+  os.env.set("AWS_RESPONSE_CHECKSUM_VALIDATION", "sometimes")
+  match load_default_config(os.env, os.fs, os.net, os.clock, os.rand) {
+    Err(ConfigErr.Invalid(s, v, _)) => expect("${s}=${v}") == "AWS_RESPONSE_CHECKSUM_VALIDATION=sometimes"
+    other => expect("${other:?}") == "Invalid"
+  }
+}
+
+test "with no keys anywhere the chain ends at EC2 instance metadata, unless it is turned off" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_EC2_METADATA_SERVICE_ENDPOINT", "http://127.0.0.1:1338")
+  os.net.handle("PUT http://127.0.0.1:1338/latest/api/token", fn(req: http.Request) -> http.Response { http.text(200, "tok") })
+  os.net.handle("GET http://127.0.0.1:1338/latest/meta-data/iam/security-credentials/", fn(req: http.Request) -> http.Response { http.text(200, "role") })
+  os.net.handle("GET http://127.0.0.1:1338/latest/meta-data/iam/security-credentials/role", fn(req: http.Request) -> http.Response {
+    http.text(200, "{\"Code\":\"Success\",\"AccessKeyId\":\"ASIATEST0000000000\",\"SecretAccessKey\":\"s\",\"Token\":\"t\",\"Expiration\":\"2026-01-01T06:00:00Z\"}")
+  })
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  let c = (cfg.credentials ?? return Err("no provider")).retrieve()?
+  expect(c.source) == "EC2RoleProvider"
+  os.env.set("AWS_EC2_METADATA_DISABLED", "true")
+  let off = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  match (off.credentials ?? return Err("no provider")).retrieve() {
+    Err(aws.CredentialsErr.NotFound(_)) => {}
+    other => expect("${other:?}") == "NotFound"
+  }
+}

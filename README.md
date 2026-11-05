@@ -48,6 +48,14 @@ cross-region presigned URLs, hand-written paginators and more) is
 listed in [docs/customizations.md](docs/customizations.md), each with
 its test. The few items still open are listed there too.
 
+**Credentials:** static values, the environment (`AWS_ACCESS_KEY_ID`
+and the rest), the shared config and credentials files (including
+assume role through `source_profile` or `credential_source`), and EC2
+instance metadata (IMDSv2) on main since v0.1.0. Not yet: ECS and EKS
+container credentials, web identity, SSO and `credential_process`. On
+ECS, EKS or with an SSO login, pass credentials through the
+environment for now. Lambda works, since it sets the environment.
+
 The design is in [docs/decisions](docs/decisions/README.md), and
 [docs/usage.md](docs/usage.md) shows how to use it. Licensed under
 Apache-2.0 (LICENSE, NOTICE).
@@ -110,7 +118,7 @@ every service shares:
 | Package | What it does |
 |---|---|
 | `sigv4`, `sigv4a` | Signature Version 4 (HMAC) and 4a (ECDSA P-256, multi-region), and the chained event stream signer |
-| `credentials`, `config` | static, environment and cached credentials; shared config and credentials files |
+| `credentials`, `config` | static, environment and cached credentials; shared config and credentials files; EC2 instance metadata (`credentials/imds`) |
 | `endpoints` | the Smithy endpoint rules engine and its standard library |
 | `transport` | signing, retries (the standard retry mode), clock skew correction, streamed bodies |
 | `protocol` | restJson1, restXml, awsJson1_0 and 1_1, awsQuery, ec2Query |

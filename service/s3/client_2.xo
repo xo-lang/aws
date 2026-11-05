@@ -10,6 +10,12 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+fn xml_body_event_bridge_configuration(v: EventBridgeConfiguration, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_event_bridge_configuration(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_event_hold_duration(v: EventHoldDuration, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_event_hold_duration(w, v, name, ns)
@@ -10441,31 +10447,4 @@ pub fn deserialize_get_object_retention_error(resp: http.Response) -> GetObjectR
   let body = restxml.error_element(resp.body) ?? xmlv.empty()
   let _ = body
   GetObjectRetentionErr.Api(restxml.api_error(resp))
-}
-
-/// This operation is not supported for directory buckets. Retrieves an
-/// object's retention settings. For more information, see Locking Objects .
-/// This functionality is not supported for Amazon S3 on Outposts. The
-/// following action is related to GetObjectRetention : GetObjectAttributes
-/// You must URL encode any signed header values that contain spaces. For
-/// example, if your header value is my file.txt , containing two spaces
-/// after my , you must URL encode this value to my%20%20file.txt .
-pub fn (c: Client) get_object_retention(input: GetObjectRetentionRequest) -> GetObjectRetentionOutput ! GetObjectRetentionErr uses (net.dial, clock, rand) {
-  let (ep, routed, extra) = c.route(endpoint_params_get_object_retention(c.params, input)) ?? e => return Err(GetObjectRetentionErr.InvalidInput(e))
-  let signing = match c.express_session(routed) {
-    Ok(v) => v
-    Err(transport.PrecallErr.Send(e)) => return Err(GetObjectRetentionErr.Send(e))
-    Err(transport.PrecallErr.Api(e)) => return Err(GetObjectRetentionErr.Api(e))
-    Err(transport.PrecallErr.InvalidInput(m)) => return Err(GetObjectRetentionErr.InvalidInput(m))
-    Err(transport.PrecallErr.Deserialize(m)) => return Err(GetObjectRetentionErr.Deserialize(m))
-  }
-  var req = serialize_get_object_retention(ep, input, "") ?? e => return Err(GetObjectRetentionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetObjectRetentionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_get_object_retention_error(resp))
-  }
-  deserialize_get_object_retention(resp) ?? e => Err(GetObjectRetentionErr.Deserialize(e))
 }

@@ -33,11 +33,19 @@ change before `dynamodb.new` (`opts with {max_attempts: 5}`).
 | `credentials.env_provider(os.env)` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` |
 | `credentials.Chain` | each provider in order; `NotFound` moves on, any other error stops |
 | `credentials.cache(p, clock, window)` | keeps credentials until `window` before they expire |
+| `imds.provider(os.net, os.clock, os.rand)` (`credentials/imds`) | EC2 instance metadata: an IMDSv2 token, the instance's role, its credentials (at most an hour; kept 5 to 15 minutes longer when a refresh fails). IMDSv1 only with `Options{allow_v1: true}` |
 
 `config.load_default_config` builds the chain: the environment's keys,
 then the profile's static keys, or a role assumed through STS from
-`source_profile` or `credential_source = Environment`. SSO, web identity,
-container and instance metadata credentials are not implemented yet.
+`source_profile` or `credential_source` (`Environment` or
+`Ec2InstanceMetadata`), then EC2 instance metadata. Instance metadata is
+skipped when `AWS_EC2_METADATA_DISABLED=true`; its endpoint comes from
+`AWS_EC2_METADATA_SERVICE_ENDPOINT` (or the profile's
+`ec2_metadata_service_endpoint`), its mode from
+`..._ENDPOINT_MODE` (IPv4 or IPv6), and the IMDSv1 fallback is on only
+when `AWS_EC2_METADATA_V1_DISABLED` (or `ec2_metadata_v1_disabled`) is
+`false`. SSO, web identity and container credentials are not
+implemented yet.
 
 ### Settings from configuration
 

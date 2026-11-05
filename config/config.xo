@@ -4,6 +4,7 @@
 
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/credentials/imds
 use github.com/xo-lang/aws/credentials/stscreds
 use github.com/xo-lang/aws/service/sts
 
@@ -37,8 +38,8 @@ pub fn (e: ConfigErr) display() -> Str {
 /// The default configuration: region, the credentials chain (the
 /// environment's keys, then the profile: its static keys, or a role
 /// assumed from `source_profile` or `credential_source = Environment`;
-/// SSO, web identity, containers and instance metadata are added by
-/// later steps), retries, and configured endpoints. `net` and `rand`
+/// then EC2 instance metadata; SSO, web identity and containers are
+/// added by later steps), retries, and configured endpoints. `net` and `rand`
 /// are kept for the role provider's STS calls; nothing is sent here.
 pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand, opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
   let explicit = opts.profile.is_some() || (env.get("AWS_PROFILE") ?? "") != ""
@@ -81,12 +82,20 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
   let creds: aws.CredentialsProvider = match opts.credentials {
     Some(c) => c
     None => {
-      let ctx = RoleContext{env: env, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints}
+      let md = imds_options(env, p.props)?
+      let ctx = RoleContext{env: env, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md}
       let from_profile = profile_provider(ctx, profile, [])?
-      credentials.cache(credentials.Chain{providers: [credentials.env_provider(env), from_profile]}, clock, opts.refresh_window)
+      var chain: List[aws.CredentialsProvider] = [credentials.env_provider(env), from_profile]
+      // EC2 instance metadata last, as aws-sdk-go-v2, unless turned off
+      if !bool_setting(env.get("AWS_EC2_METADATA_DISABLED")) {
+        chain.push(imds.provider(net, clock, rand, md))
+      }
+      credentials.cache(credentials.Chain{providers: chain}, clock, opts.refresh_window)
     }
   }
 
+  let calc = checksum_setting("AWS_REQUEST_CHECKSUM_CALCULATION", "request_checksum_calculation", env, p.props)?
+  let valid = checksum_setting("AWS_RESPONSE_CHECKSUM_VALIDATION", "response_checksum_validation", env, p.props)?
   Ok(aws.Config{
     region: region,
     credentials: creds,
@@ -100,7 +109,26 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
     bearer_tokens: bearer_tokens(env),
     account_id_endpoint_mode: non_empty(env.get("AWS_ACCOUNT_ID_ENDPOINT_MODE")) ?? non_empty(p.props.get("account_id_endpoint_mode")),
     trace_id: lambda_trace_id(env),
+    request_checksum_calculation: calc,
+    response_checksum_validation: valid,
   })
+}
+
+/// A checksum setting from the environment variable `name_env` or the
+/// profile's `key`: "when_supported" or "when_required", in any case.
+fn checksum_setting(name_env: Str, key: Str, env: Env, props: Map[Str, Str]) -> Str? ! ConfigErr uses env {
+  let (name, raw) = match non_empty(env.get(name_env)) {
+    Some(v) => (name_env, v)
+    None => match non_empty(props.get(key)) {
+      Some(v) => (key, v)
+      None => return Ok(None)
+    }
+  }
+  let v = raw.trim().to_lower()
+  if v != "when_supported" && v != "when_required" {
+    return Err(ConfigErr.Invalid(setting: name, value: raw, msg: "want when_supported or when_required"))
+  }
+  Ok(Some(v))
 }
 
 /// `AWS_BEARER_TOKEN_<NAME>` values by NAME (empty ones left out).
@@ -133,6 +161,26 @@ struct RoleContext {
   rand: Rand
   region: Str?
   endpoints: aws.ConfiguredEndpoints
+  imds: imds.Options
+}
+
+/// The instance metadata client's settings: the endpoint
+/// (`AWS_EC2_METADATA_SERVICE_ENDPOINT` or the profile's
+/// `ec2_metadata_service_endpoint`), its mode (`..._ENDPOINT_MODE`,
+/// IPv4 or IPv6), and the IMDSv1 fallback, on only when
+/// `AWS_EC2_METADATA_V1_DISABLED` or `ec2_metadata_v1_disabled` is
+/// false.
+fn imds_options(env: Env, props: Map[Str, Str]) -> imds.Options ! ConfigErr uses env {
+  let mode = non_empty(env.get("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE")) ?? non_empty(props.get("ec2_metadata_service_endpoint_mode")) ?? "IPv4"
+  if mode.to_lower() != "ipv4" && mode.to_lower() != "ipv6" {
+    return Err(ConfigErr.Invalid(setting: "ec2_metadata_service_endpoint_mode", value: mode, msg: "want IPv4 or IPv6"))
+  }
+  let v1 = non_empty(env.get("AWS_EC2_METADATA_V1_DISABLED")) ?? non_empty(props.get("ec2_metadata_v1_disabled"))
+  Ok(imds.Options{
+    endpoint: non_empty(env.get("AWS_EC2_METADATA_SERVICE_ENDPOINT")) ?? non_empty(props.get("ec2_metadata_service_endpoint")) ?? "",
+    mode: mode,
+    allow_v1: v1.map(fn(v: Str) -> Bool { v.trim().to_lower() == "false" }) ?? false,
+  })
 }
 
 /// The credentials of `profile`, as aws-sdk-go-v2 resolves them: a
@@ -181,7 +229,8 @@ fn profile_provider(ctx: RoleContext, profile: Str, seen: List[Str]) -> aws.Cred
     }
     None => match credential_source {
       Some("Environment") => credentials.env_provider(ctx.env)
-      Some(other) => return Err(ConfigErr.Invalid(setting: "credential_source", value: other, msg: "supported: Environment (Ec2InstanceMetadata and EcsContainer come later)"))
+      Some("Ec2InstanceMetadata") => credentials.cache(imds.provider(ctx.net, ctx.clock, ctx.rand, ctx.imds), ctx.clock)
+      Some(other) => return Err(ConfigErr.Invalid(setting: "credential_source", value: other, msg: "supported: Environment, Ec2InstanceMetadata (EcsContainer comes later)"))
       None => return Err(ConfigErr.Invalid(setting: "role_arn", value: arn, msg: "profile ${profile} sets role_arn without source_profile or credential_source"))
     }
   }

@@ -1,6 +1,7 @@
 use std/http
 use std/testing
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials/ssocreds
 
 const CONFIG: Str = r"""
 # comment
@@ -462,4 +463,90 @@ test "a profile's web_identity_token_file, and a missing role ARN" {
     Err(ConfigErr.Invalid(s, _, _)) => expect(s) == "AWS_ROLE_ARN"
     other => expect("${other:?}") == "Invalid"
   }
+}
+
+const SSO_CONFIG: Str = r"""[profile dev]
+sso_session = corp
+sso_account_id = 123456789012
+sso_role_name = Dev
+region = us-west-2
+
+[sso-session corp]
+sso_region = us-west-2
+sso_start_url = https://example.awsapps.com/start
+
+[profile admin]
+role_arn = arn:aws:iam::123456789012:role/Admin
+source_profile = dev
+region = us-west-2
+
+[profile broken]
+sso_session = corp
+sso_role_name = Dev
+
+[profile legacy]
+sso_start_url = https://example.awsapps.com/start
+sso_region = us-west-2
+sso_account_id = 123456789012
+sso_role_name = Dev
+"""
+
+fn sso_setup(os: testing.TestOs) -> () ! FsErr {
+  os.env.set("HOME", "/h")
+  os.fs.write("/h/.aws/config", SSO_CONFIG.bytes())?
+  let tok = "{\"accessToken\":\"access-1\",\"expiresAt\":\"2026-01-01T08:00:00Z\"}"
+  // the session's cache is named after the session, the legacy one after the start URL
+  os.fs.write(ssocreds.cache_path("/h", "corp"), tok.bytes())?
+  os.fs.write(ssocreds.cache_path("/h", "https://example.awsapps.com/start"), tok.bytes())?
+  os.net.handle("GET https://portal.sso.us-west-2.amazonaws.com/federation/credentials", fn(req: http.Request) -> http.Response {
+    expect(req.header("x-amz-sso_bearer_token")) == Some("access-1")
+    http.text(200, "{\"roleCredentials\":{\"accessKeyId\":\"ASIASSOEXAMPLE00001\",\"secretAccessKey\":\"s\",\"sessionToken\":\"t\",\"expiration\":1767229200000}}")
+  })
+  os.net.handle("POST https://sts.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    // signed with the SSO role's credentials
+    expect((req.header("Authorization") ?? "").contains("Credential=ASIASSOEXAMPLE00001/")) == true
+    http.text(200, ROLE_OK).with_header("Content-Type", "text/xml")
+  })
+  Ok(())
+}
+
+test "an sso_session profile, a legacy SSO profile, and a role assumed from SSO" {
+  sso_setup(os)?
+  let dev = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("dev")})?
+  let c = (dev.credentials ?? return Err("no provider")).retrieve()?
+  expect(c.source) == "SSOProvider"
+  expect(c.account_id) == Some("123456789012")
+  expect(dev.token_files.map(fn(t: aws.TokenFile) -> Str { t.path })) == [ssocreds.cache_path("/h", "corp")]
+  let legacy = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("legacy")})?
+  expect((legacy.credentials ?? return Err("no provider")).retrieve()?.source) == "SSOProvider"
+  let admin = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("admin")})?
+  expect((admin.credentials ?? return Err("no provider")).retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
+}
+
+test "an SSO profile missing settings names them" {
+  sso_setup(os)?
+  match load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("broken")}) {
+    Err(ConfigErr.Invalid(s, _, m)) => {
+      expect(s) == "sso_account_id"
+      expect(m) == "profile broken: is configured to use SSO but is missing required configuration: sso_account_id"
+    }
+    other => expect("${other:?}") == "Invalid"
+  }
+}
+
+test "a profile's credential_process runs on the program's tasks, also as a role's source" {
+  os.env.set("HOME", "/h")
+  os.fs.write("/h/.aws/config", b"[profile tool]\ncredential_process = get-creds --account dev\n\n[profile admin]\nrole_arn = arn:aws:iam::123456789012:role/Admin\nsource_profile = tool\nregion = us-west-2\n")?
+  os.proc.on_run("sh", ProcOutput{code: 0, stdout: b"{\"Version\":1,\"AccessKeyId\":\"ASIAPROCEXAMPLE0001\",\"SecretAccessKey\":\"s\",\"Expiration\":\"2026-01-01T01:00:00Z\"}", stderr: b""})
+  os.net.handle("POST https://sts.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    expect((req.header("Authorization") ?? "").contains("Credential=ASIAPROCEXAMPLE0001/")) == true
+    http.text(200, ROLE_OK).with_header("Content-Type", "text/xml")
+  })
+  let tool = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("tool")})?
+  expect(tool.processes.map(fn(p: aws.CredentialProcess) -> Str { p.command })) == ["get-creds --account dev"]
+  tool.run_credential_processes(os.tasks, os.proc, os.clock)
+  expect((tool.credentials ?? return Err("no provider")).retrieve()?.source) == "ProcessProvider"
+  let admin = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("admin")})?
+  admin.run_credential_processes(os.tasks, os.proc, os.clock)
+  expect((admin.credentials ?? return Err("no provider")).retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
 }

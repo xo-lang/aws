@@ -1,0 +1,42 @@
+const PROC_OK: Str = "{\"Version\":1,\"AccessKeyId\":\"ASIAPROCEXAMPLE0001\",\"SecretAccessKey\":\"invented-proc-secret\",\"SessionToken\":\"invented-proc-token\",\"Expiration\":\"2026-01-01T01:00:00Z\",\"AccountId\":\"123456789012\"}"
+
+test "the command's JSON, as aws-sdk-go-v2 checks it" {
+  let c = parse_process_output(PROC_OK.bytes())?
+  expect(c.access_key_id) == "ASIAPROCEXAMPLE0001"
+  expect(c.account_id) == Some("123456789012")
+  expect(c.source) == "ProcessProvider"
+  expect(c.expires.map(fn(t: Time) -> Str { t.format_rfc3339() })) == Some("2026-01-01T01:00:00Z")
+  expect(parse_process_output(b"{\"Version\":2,\"AccessKeyId\":\"a\",\"SecretAccessKey\":\"s\"}").err()) == Some("Version must be 1, the output has 2")
+  expect(parse_process_output(b"{\"Version\":1,\"SecretAccessKey\":\"s\"}").err()) == Some("the output has no AccessKeyId")
+  expect(parse_process_output(b"not json").is_err()) == true
+}
+
+test "retrieve before the task is started says how to start it" {
+  match credential_process("p", "get-creds").retrieve() {
+    Err(CredentialsErr.Fetch(m)) => expect(m.contains("cfg.run_credential_processes(os.tasks, os.proc, os.clock)")) == true
+    other => expect("${other:?}") == "Fetch"
+  }
+}
+
+test "the task runs the command through the shell, and again before expiry" {
+  os.proc.on_run("sh", ProcOutput{code: 0, stdout: PROC_OK.bytes(), stderr: b""})
+  let cp = credential_process("p", "get-creds --profile p")
+  let cfg = Config{processes: [cp]}
+  cfg.run_credential_processes(os.tasks, os.proc, os.clock)
+  let c = cp.retrieve()?
+  expect(c.access_key_id) == "ASIAPROCEXAMPLE0001"
+  // a failing command keeps the last good credentials
+  os.proc.on_run("sh", ProcOutput{code: 2, stdout: b"", stderr: b"token expired\n"})
+  os.clock.advance(56m)
+  expect(cp.retrieve()?.access_key_id) == "ASIAPROCEXAMPLE0001"
+}
+
+test "a failing first run is the error, with the command's stderr" {
+  os.proc.on_run("sh", ProcOutput{code: 1, stdout: b"", stderr: b"no session\n"})
+  let cp = credential_process("p", "get-creds")
+  Config{processes: [cp]}.run_credential_processes(os.tasks, os.proc, os.clock)
+  match cp.retrieve() {
+    Err(CredentialsErr.Fetch(m)) => expect(m) == "profile p credential_process: exit status 1: no session"
+    other => expect("${other:?}") == "Fetch"
+  }
+}

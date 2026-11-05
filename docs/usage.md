@@ -36,6 +36,8 @@ change before `dynamodb.new` (`opts with {max_attempts: 5}`).
 | `imds.provider(os.net, os.clock, os.rand)` (`credentials/imds`) | EC2 instance metadata: an IMDSv2 token, the instance's role, its credentials (at most an hour; kept 5 to 15 minutes longer when a refresh fails). IMDSv1 only with `Options{allow_v1: true}` |
 | `container.provider(os.net, os.clock, opts)` (`credentials/container`) | ECS and EKS container credentials: a GET of `opts.uri` with `opts.token` as `Authorization` |
 | `stscreds.WebIdentityRoleProvider{client, input, token}` | AssumeRoleWithWebIdentity (unsigned) with the token from an `aws.TokenFile` (IRSA) |
+| `ssocreds.provider(os.net, os.clock, opts)` (`credentials/ssocreds`) | IAM Identity Center: the `aws sso login` token cache, refreshed through SSO OIDC for an `sso_session`, then GetRoleCredentials |
+| `aws.credential_process(profile, command)` | a profile's `credential_process`, run on a task (below) |
 
 `config.load_default_config` builds the chain: the environment's keys,
 then the profile's static keys, or a role assumed through STS from
@@ -56,21 +58,33 @@ skipped when `AWS_EC2_METADATA_DISABLED=true`; its endpoint comes from
 `ec2_metadata_service_endpoint`), its mode from
 `..._ENDPOINT_MODE` (IPv4 or IPv6), and the IMDSv1 fallback is on only
 when `AWS_EC2_METADATA_V1_DISABLED` (or `ec2_metadata_v1_disabled`) is
-`false`. SSO credentials are not implemented yet.
+`false`.
 
-Token files (the IRSA token, `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`)
-are read when the configuration loads. EKS rotates them, and they
-expire after 24 hours by default, so a long running program starts
-their refresh once:
+A profile can also name IAM Identity Center (`sso_session` with an
+`[sso-session NAME]` section, or the legacy `sso_start_url` and
+`sso_region`, plus `sso_account_id` and `sso_role_name`; log in with
+`aws sso login` first) or a `credential_process`.
+
+Two kinds of credentials need a task on `os.tasks`, since a provider's
+`retrieve` can neither read files nor run programs:
 
 ```
 let cfg = config.load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
-cfg.watch_token_files(os.tasks, os.fs, os.clock)  // rereads them every 5 minutes
+cfg.watch_token_files(os.tasks, os.fs, os.clock)          // token files
+cfg.run_credential_processes(os.tasks, os.proc, os.clock) // credential_process
 ```
 
-aws-sdk-go-v2 reads the file at every refresh; here a provider's
-`retrieve` has no file effect, so a background task on `os.tasks` does
-the reading.
+- Token files (the IRSA token, `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`,
+  the SSO token cache) are read when the configuration loads. The watch
+  rereads them every 5 minutes (EKS rotates its tokens, which expire
+  after 24 hours by default) and writes a refreshed SSO token back to
+  its cache file, keeping the file's permissions. Lambda and programs
+  that run less than the token's lifetime can skip it.
+- A `credential_process` runs only on its task: once at start, and
+  again 5 minutes before its credentials expire. Without the call, a
+  request fails with an error that names it.
+
+aws-sdk-go-v2 does these inside the provider, at every refresh.
 
 ### Settings from configuration
 

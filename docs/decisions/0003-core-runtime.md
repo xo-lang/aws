@@ -68,7 +68,21 @@ Each item names its reference and its test source (0005).
   `load_default_config` takes an optional `proc: Proc?`, and without one a
   profile that names a process fails with an error saying so (no silent
   skip). This keeps `uses proc` out of every program that never asked for
-  it.
+  it. **Amended 2026-11-05:** a `proc` argument cannot help, since
+  `retrieve` has no `proc` effect and Xo does not let a stored closure
+  carry one in. The command runs on a background task instead:
+  `load_default_config` lists the profiles' commands in
+  `Config.processes`, and `cfg.run_credential_processes(os.tasks,
+  os.proc, os.clock)` runs each at once and again 5 minutes before its
+  credentials expire; `retrieve` waits for the first run, and without
+  the call fails with an error that names it. `uses proc` stays out of
+  every program that never asks for it.
+- SSO: the token cache is a `aws.TokenFile` read at load. An expired
+  `sso_session` token is refreshed in `retrieve` (a network call) and
+  kept with `set`; the token watch writes it back with `write_atomic`,
+  which keeps the file's permission bits. The portal and OIDC calls are
+  hand written (`credentials/ssocreds`), as planned below, so the root
+  module does not require service/sso and service/ssooidc.
 - The default chain is aws-sdk-go-v2's order. A caching wrapper refreshes
   before expiry (a window with jitter) and lets one task refresh while
   others wait (`Mutex`), as Go's `CredentialsCache`.

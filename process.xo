@@ -1,0 +1,153 @@
+// credential_process credentials (decision 0003), as aws-sdk-go-v2's
+// credentials/processcreds: a profile's command runs through the shell
+// (`sh -c`, or `cmd.exe /C` on Windows) and prints JSON with Version 1,
+// AccessKeyId, SecretAccessKey and, optionally, SessionToken, Expiration
+// and AccountId.
+//
+// A provider's `retrieve` cannot run a program (it has no `proc`
+// effect), so the command runs on a background task started by
+// `cfg.run_credential_processes(os.tasks, os.proc, os.clock)`: once at
+// once, and again 5 minutes before the credentials expire. `retrieve`
+// waits for the first run and returns its credentials, or says how to
+// start the task when it has not been started.
+
+use std/json
+use std/task
+
+struct ProcessState {
+  creds: Credentials? = None
+  err: Str = ""
+}
+
+/// A profile's credential_process; copies share their state.
+pub struct CredentialProcess {
+  pub profile: Str
+  pub command: Str
+  /// Run through `cmd.exe /C` instead of `sh -c`.
+  pub windows: Bool = false
+  pub timeout: Duration = 1m
+  state: Mutex[ProcessState]
+  started: Atomic[Bool]
+  /// Closed when the first run has finished.
+  ready: Chan[()]
+}
+
+pub fn credential_process(profile: Str, command: Str, windows: Bool = false) -> CredentialProcess {
+  CredentialProcess{
+    profile: profile,
+    command: command,
+    windows: windows,
+    state: Mutex.new(ProcessState{}),
+    started: Atomic.new(false),
+    ready: Chan[()].new(),
+  }
+}
+
+pub fn (c: CredentialProcess) retrieve() -> Credentials ! CredentialsErr uses (net.dial, clock, rand) {
+  if !c.started.get() {
+    return Err(CredentialsErr.Fetch("profile ${c.profile} uses credential_process, which runs on a task: call cfg.run_credential_processes(os.tasks, os.proc, os.clock) after config.load_default_config"))
+  }
+  // the first run's result; a closed channel returns at once
+  let _ = c.ready.recv()
+  let s = c.state.with_read(fn(s: ProcessState) -> ProcessState { s })
+  match s.creds {
+    Some(cr) => Ok(cr)
+    None => Err(CredentialsErr.Fetch("profile ${c.profile} credential_process: ${s.err}"))
+  }
+}
+
+/// Runs the command once and keeps its credentials; a failure keeps the
+/// last good ones and records the error.
+pub fn (c: CredentialProcess) run_once(proc: Proc, clock: Clock) -> () ! Str uses (proc, clock) {
+  let (shell, flag) = if c.windows { ("cmd.exe", "/C") } else { ("sh", "-c") }
+  let out = task.with_timeout(clock, c.timeout, fn() -> ProcOutput ! ProcErr { proc.cmd(shell, [flag, c.command]).output() }) ?? e => {
+    let msg = match e {
+      task.Timed.TimedOut => "did not finish within ${c.timeout}"
+      task.Timed.Failed(pe) => pe.display()
+    }
+    return c.failed(msg)
+  }
+  if out.code != 0 {
+    let err = (out.stderr.to_str() ?? "").trim()
+    return c.failed("exit status ${out.code}${if err == "" { "" } else { ": ${err}" }}")
+  }
+  let creds = parse_process_output(out.stdout) ?? e => return c.failed(e)
+  c.state.reset(ProcessState{creds: Some(creds)})
+  Ok(())
+}
+
+fn (c: CredentialProcess) failed(msg: Str) -> () ! Str {
+  c.state.with(fn(var s: ProcessState) { s.err = msg })
+  Err(msg)
+}
+
+/// The command's JSON as credentials (aws-sdk-go-v2's checks).
+pub fn parse_process_output(stdout: Bytes) -> Credentials ! Str {
+  let text = stdout.to_str() ?? return Err("the output is not UTF-8")
+  let doc = json.parse_value(text) ?? e => return Err("the output is not JSON: ${e.display()}")
+  let field = fn(k: Str) -> Str {
+    match doc.get(k) {
+      Some(json.Value.Str(s)) => s
+      _ => ""
+    }
+  }
+  let version = match doc.get("Version") {
+    Some(json.Value.Int(n)) => n
+    Some(json.Value.Num(f)) => Int(f)
+    _ => 0
+  }
+  if version != 1 {
+    return Err("Version must be 1, the output has ${version}")
+  }
+  if field("AccessKeyId") == "" {
+    return Err("the output has no AccessKeyId")
+  }
+  if field("SecretAccessKey") == "" {
+    return Err("the output has no SecretAccessKey")
+  }
+  let expires = if field("Expiration") == "" { None } else {
+    Some(Time.parse_rfc3339(field("Expiration")) ?? return Err("Expiration ${field("Expiration")} is not RFC 3339"))
+  }
+  Ok(Credentials{
+    access_key_id: field("AccessKeyId"),
+    secret_access_key: Secret.new(field("SecretAccessKey")),
+    session_token: if field("SessionToken") == "" { None } else { Some(Secret.new(field("SessionToken"))) },
+    expires: expires,
+    source: "ProcessProvider",
+    account_id: if field("AccountId") == "" { None } else { Some(field("AccountId")) },
+  })
+}
+
+/// Runs the command now and again 5 minutes before the credentials
+/// expire, until cancelled; after a failure it tries again in a minute.
+/// Credentials without an Expiration are fetched once.
+pub fn (c: CredentialProcess) run(proc: Proc, clock: Clock) uses (proc, clock) {
+  var first = true
+  while true {
+    let ok = c.run_once(proc, clock).is_ok()
+    if first {
+      first = false
+      c.ready.close()
+    }
+    let next = if ok {
+      match c.state.with_read(fn(s: ProcessState) -> Time? { s.creds.and_then(fn(cr: Credentials) -> Time? { cr.expires }) }) {
+        Some(t) => (t.unix_millis() - clock.now().unix_millis() - 5 * 60 * 1000).max(10 * 1000)
+        None => return
+      }
+    } else {
+      60 * 1000
+    }
+    clock.sleep(Duration.from_millis(next))
+  }
+}
+
+/// Starts each of `c.processes` on `tasks`, a group that lives as long
+/// as the program (`os.tasks`). Needed only when a profile names a
+/// credential_process.
+pub fn (c: Config) run_credential_processes(tasks: task.Group, proc: Proc, clock: Clock) uses (proc, clock) {
+  for p in c.processes {
+    if !p.started.swap(true) {
+      tasks.spawn_background(fn() { p.run(proc, clock) })
+    }
+  }
+}

@@ -352,7 +352,7 @@ Disliked:
 - `Rune` has no `to_str`; cutting a string at N characters takes
   summing `utf8_len` over the runes.
 
-## 2026-11-05: instance metadata, container and web identity credentials
+## 2026-11-05: the rest of the credential providers
 
 Liked:
 - `testing.FakeNet.handle` with a "METHOD URL" pattern made the IMDS
@@ -368,7 +368,25 @@ Liked:
   spec's effect attribution for `spawn_background` (the spawner pays)
   made the design obvious once found.
 
+- The capability rules held through all seven providers: the file
+  reads, the SSO token write back and `credential_process`'s program
+  run all moved to tasks the caller starts and pays for, and
+  `test` blocks gave each one a fake (`os.fs`, `os.proc.on_run`,
+  `os.tasks` cancelled at the end, `os.clock.advance`) without extra
+  plumbing.
+- `write_atomic` keeps the replaced file's permission bits, so an SSO
+  token cache at 0600 stays 0600 with one call.
+
 Disliked:
+- The flip side: a provider that must run a program or touch a file
+  cannot do it lazily, so `credential_process` and the token watches
+  need one call each after loading the configuration, where
+  aws-sdk-go-v2 needs none. Forgetting the call is a clear error at the
+  first request, not at build time.
+- `xo test --run` is a substring match (documented in `xo help
+  test`), where Go's `-run` is a regular expression, so `--run 'a|b'`
+  quietly matches nothing. The "no tests match" message could say it
+  matched a substring.
 - Issue 15: two packages' types with the same short name
   (`imds.Provider`, `container.Provider`) boxed into one interface fail
   the native build with an error that blames a stale cache (XO1510,

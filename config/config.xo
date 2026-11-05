@@ -6,6 +6,7 @@ use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/credentials/container
 use github.com/xo-lang/aws/credentials/imds
+use github.com/xo-lang/aws/credentials/ssocreds
 use github.com/xo-lang/aws/credentials/stscreds
 use github.com/xo-lang/aws/service/sts
 
@@ -41,7 +42,8 @@ pub fn (e: ConfigErr) display() -> Str {
 /// assumed from `source_profile` or `credential_source = Environment`;
 /// AWS_WEB_IDENTITY_TOKEN_FILE with AWS_ROLE_ARN, the profile's
 /// web_identity_token_file, then container credentials when the
-/// environment names them, else EC2 instance metadata; SSO comes later), retries, and configured endpoints. `net` and `rand`
+/// environment names them, else EC2 instance metadata; a profile may
+/// also name IAM Identity Center (SSO)), retries, and configured endpoints. `net` and `rand`
 /// are kept for the role provider's STS calls; nothing is sent here.
 pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand, opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
   let explicit = opts.profile.is_some() || (env.get("AWS_PROFILE") ?? "") != ""
@@ -82,6 +84,7 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
 
   let endpoints = configured_endpoints(env, sc, p)
   let files = Mutex[List[aws.TokenFile]].new([])
+  let procs = Mutex[List[aws.CredentialProcess]].new([])
   let creds: aws.CredentialsProvider = match opts.credentials {
     Some(c) => c
     None => {
@@ -92,7 +95,7 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
           files.with(fn(var l: List[aws.TokenFile]) { l.push(o.token) })
         }
       }
-      let ctx = RoleContext{env: env, fs: fs, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md, container: box, token_files: files}
+      let ctx = RoleContext{env: env, fs: fs, sc: sc, net: net, clock: clock, rand: rand, region: region, endpoints: endpoints, imds: md, container: box, token_files: files, processes: procs}
       var chain: List[aws.CredentialsProvider] = [credentials.env_provider(env)]
       // AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN come after the
       // environment's keys and before the profile, unless a profile was
@@ -122,6 +125,7 @@ pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand,
     region: region,
     credentials: creds,
     token_files: files.with_read(fn(l: List[aws.TokenFile]) -> List[aws.TokenFile] { l }),
+    processes: procs.with_read(fn(l: List[aws.CredentialProcess]) -> List[aws.CredentialProcess] { l }),
     retry_mode: retry_mode,
     max_attempts: max_attempts,
     endpoints: endpoints,
@@ -187,8 +191,71 @@ struct RoleContext {
   endpoints: aws.ConfiguredEndpoints
   imds: imds.Options
   container: container.Options?
-  /// Token files read so far, for `Options.tasks` to watch.
+  /// Token files read so far, for `watch_token_files`.
   token_files: Mutex[List[aws.TokenFile]]
+  /// credential_process commands, for `run_credential_processes`.
+  processes: Mutex[List[aws.CredentialProcess]]
+}
+
+/// The profile's IAM Identity Center credentials, if it names SSO: an
+/// `sso_session` (with that section's `sso_region` and `sso_start_url`)
+/// or the legacy `sso_start_url` and `sso_region` on the profile, and
+/// `sso_account_id` and `sso_role_name`. The token cache is read now;
+/// a session's token is refreshed when it expires (aws-sdk-go-v2's
+/// validation and messages).
+fn sso_provider(ctx: RoleContext, profile: Str, p: Section) -> aws.CredentialsProvider? ! ConfigErr uses (env, fs.read) {
+  let session = non_empty(p.props.get("sso_session"))
+  let legacy = ["sso_region", "sso_account_id", "sso_start_url", "sso_role_name"].any(fn(k: Str) -> Bool { non_empty(p.props.get(k)).is_some() })
+  if session.is_none() && !legacy {
+    return Ok(None)
+  }
+  let bad = fn(setting: Str, msg: Str) -> ConfigErr { ConfigErr.Invalid(setting: setting, value: "", msg: "profile ${profile}: ${msg}") }
+  var region = non_empty(p.props.get("sso_region")) ?? ""
+  var start = non_empty(p.props.get("sso_start_url")) ?? ""
+  var key = start
+  if let Some(name) = session {
+    let s = ctx.sc.sso_sessions.get(name) ?? return Err(bad("sso_session", "is configured to use SSO but is missing required configuration: sso-session ${name}"))
+    let sr = non_empty(s.props.get("sso_region")) ?? ""
+    let ss = non_empty(s.props.get("sso_start_url")) ?? ""
+    var missing: List[Str] = []
+    if sr == "" { missing.push("sso_region") }
+    if ss == "" { missing.push("sso_start_url") }
+    if !missing.is_empty() {
+      return Err(bad("sso_session", "is configured to use SSO but is missing required configuration: ${missing.join(", ")}"))
+    }
+    if region != "" && region != sr {
+      return Err(bad("sso_region", "sso_region in profile ${profile} must match sso_region in sso-session"))
+    }
+    if start != "" && start != ss {
+      return Err(bad("sso_start_url", "sso_start_url in profile ${profile} must match sso_start_url in sso-session"))
+    }
+    region = sr
+    start = ss
+    key = name
+  }
+  var missing: List[Str] = []
+  if region == "" { missing.push("sso_region") }
+  if start == "" { missing.push("sso_start_url") }
+  let account = non_empty(p.props.get("sso_account_id")) ?? ""
+  let role = non_empty(p.props.get("sso_role_name")) ?? ""
+  if account == "" { missing.push("sso_account_id") }
+  if role == "" { missing.push("sso_role_name") }
+  if !missing.is_empty() {
+    return Err(bad(missing[0], "is configured to use SSO but is missing required configuration: ${missing.join(", ")}"))
+  }
+  let home = ctx.env.home() ?? e => return Err(bad("sso_start_url", "the SSO token cache is under the home directory: ${e.display()}"))
+  let path = ssocreds.cache_path(home, key)
+  let token = aws.load_token_file(ctx.fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "sso_session", value: key, msg: "reading the SSO token cache (run aws sso login): ${e}"))
+  ctx.token_files.with(fn(var l: List[aws.TokenFile]) { l.push(token) })
+  Ok(Some(credentials.cache(ssocreds.provider(ctx.net, ctx.clock, ssocreds.Options{
+    region: region,
+    account_id: account,
+    role_name: role,
+    token: token,
+    refresh: session.is_some(),
+    portal_endpoint: aws.endpoint_for(ctx.endpoints, "SSO") ?? "",
+    oidc_endpoint: aws.endpoint_for(ctx.endpoints, "SSO OIDC") ?? "",
+  }), ctx.clock)))
 }
 
 /// Assume `arn` with the web identity token in `path` (read now), over
@@ -265,6 +332,17 @@ fn profile_provider(ctx: RoleContext, profile: Str, seen: List[Str]) -> aws.Cred
   let statics = credentials.FixedResult{result: profile_static_credentials(ctx.sc, profile)}
   // a source profile's own static keys end the chain (Go's rule)
   if role_arn.is_none() || (seen.len() > 0 && has_static) {
+    if !has_static {
+      if let Some(sso) = sso_provider(ctx, profile, p)? {
+        return Ok(sso)
+      }
+      if let Some(cmd) = non_empty(p.props.get("credential_process")) {
+        // Windows sets OS=Windows_NT; there the shell is cmd.exe
+        let cp = aws.credential_process(profile, cmd, windows: ctx.env.get("OS") == Some("Windows_NT"))
+        ctx.processes.with(fn(var l: List[aws.CredentialProcess]) { l.push(cp) })
+        return Ok(cp)
+      }
+    }
     return Ok(statics)
   }
   let arn = role_arn ?? ""

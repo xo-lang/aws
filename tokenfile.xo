@@ -1,12 +1,15 @@
 // A token kept in a file that something else rotates: the EKS service
 // account token of IRSA (AWS_WEB_IDENTITY_TOKEN_FILE) and of EKS Pod
-// Identity (AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE).
+// Identity (AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE), and the SSO token
+// cache (~/.aws/sso/cache), which the SDK itself refreshes and writes
+// back.
 //
 // aws-sdk-go-v2 reads the file at every credentials refresh. Here a
 // provider's `retrieve` has no file effect, so the file is read when it
 // is loaded, and `watch`, run as a background task on a group that
 // lives as long as the program (`os.tasks`), reads it again every few
-// minutes. `config.load_default_config` lists the files it read in
+// minutes, or writes it back after `set`. `config.load_default_config`
+// lists the files it read in
 // `Config.token_files`; `cfg.watch_token_files(os.tasks, os.fs, os.clock)`
 // starts their watches.
 
@@ -16,22 +19,45 @@ use std/task
 pub struct TokenFile {
   pub path: Str
   token: Mutex[Secret[Str]]
+  /// Set by `set`: the watch writes the file instead of reading it.
+  dirty: Atomic[Bool]
 }
 
 /// Reads `path` now (surrounding white space dropped).
 pub fn load_token_file(fs: Fs, path: Str) -> TokenFile ! Str uses fs.read {
   let t = read_token(fs, path)?
-  Ok(TokenFile{path: path, token: Mutex.new(t)})
+  Ok(TokenFile{path: path, token: Mutex.new(t), dirty: Atomic.new(false)})
 }
 
 /// A token file holding `token`, for tests and for tokens from elsewhere.
 pub fn fixed_token(token: Str) -> TokenFile {
-  TokenFile{path: "", token: Mutex.new(Secret.new(token))}
+  TokenFile{path: "", token: Mutex.new(Secret.new(token)), dirty: Atomic.new(false)}
 }
 
 /// The token as last read.
 pub fn (t: TokenFile) get() -> Secret[Str] {
   t.token.with_read(fn(s: Secret[Str]) -> Secret[Str] { s })
+}
+
+/// Replaces the token (a refreshed SSO token); the watch writes it to
+/// the file.
+pub fn (t: TokenFile) set(token: Str) {
+  t.token.reset(Secret.new(token))
+  t.dirty.set(true)
+}
+
+/// Writes the token to the file when `set` changed it, keeping the
+/// file's permission bits (`write_atomic`).
+pub fn (t: TokenFile) flush(fs: Fs) -> () ! Str uses fs {
+  if t.path == "" || !t.dirty.get() {
+    return Ok(())
+  }
+  t.dirty.set(false)
+  write_atomic(fs, t.path, t.get().reveal().bytes()) ?? e => {
+    t.dirty.set(true)
+    return Err("${t.path}: ${e.display()}")
+  }
+  Ok(())
 }
 
 /// Reads the file again; on an error the last token is kept and the
@@ -42,17 +68,22 @@ pub fn (t: TokenFile) reload(fs: Fs) -> () ! Str uses fs.read {
   Ok(())
 }
 
-/// Reloads the file every `every` until cancelled. Run it as a
+/// Every `every` until cancelled: writes the file if `set` changed the
+/// token, else reads it again. Run it as a
 /// background task: `os.tasks.spawn_background(fn() { t.watch(os.fs,
 /// os.clock) })`. A failed read keeps the last token (the file is being
 /// replaced, or is briefly missing) and is tried again next time.
-pub fn (t: TokenFile) watch(fs: Fs, clock: Clock, every: Duration = 5m) uses (fs.read, clock) {
+pub fn (t: TokenFile) watch(fs: Fs, clock: Clock, every: Duration = 5m) uses (fs, clock) {
   if t.path == "" {
     return
   }
   while true {
     clock.sleep(every)
-    let _ = t.reload(fs).ignore_err("the last token is kept; the next pass reads the file again")
+    if t.dirty.get() {
+      let _ = t.flush(fs).ignore_err("still dirty; the next pass writes it again")
+    } else {
+      let _ = t.reload(fs).ignore_err("the last token is kept; the next pass reads the file again")
+    }
   }
 }
 
@@ -60,7 +91,7 @@ pub fn (t: TokenFile) watch(fs: Fs, clock: Clock, every: Duration = 5m) uses (fs
 /// lives as long as the program (`os.tasks`). Long running programs on
 /// EKS need it: the service account token rotates and expires (24 hours
 /// by default). Lambda and short programs can leave it out.
-pub fn (c: Config) watch_token_files(tasks: task.Group, fs: Fs, clock: Clock, every: Duration = 5m) uses (fs.read, clock) {
+pub fn (c: Config) watch_token_files(tasks: task.Group, fs: Fs, clock: Clock, every: Duration = 5m) uses (fs, clock) {
   for f in c.token_files {
     tasks.spawn_background(fn() { f.watch(fs, clock, every) })
   }

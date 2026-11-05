@@ -51,11 +51,13 @@ its test. The few items still open are listed there too.
 **Credentials:** static values, the environment (`AWS_ACCESS_KEY_ID`
 and the rest), the shared config and credentials files (including
 assume role through `source_profile` or `credential_source`), and EC2
-instance metadata (IMDSv2), ECS and EKS container credentials, and web
-identity (IRSA), on main since v0.1.0. Not yet: SSO and
-`credential_process`. With an SSO login, pass credentials through the
-environment for now. On EKS, a program that runs longer than a day
-calls `cfg.watch_token_files(os.tasks, os.fs, os.clock)` (see
+instance metadata (IMDSv2), ECS and EKS container credentials, web
+identity (IRSA), IAM Identity Center (SSO) and `credential_process`, on
+main since v0.1.0. Two need one call after loading the configuration:
+`cfg.run_credential_processes(os.tasks, os.proc, os.clock)` for a
+`credential_process`, and `cfg.watch_token_files(os.tasks, os.fs,
+os.clock)` for a program on EKS that runs longer than a day, or to
+write a refreshed SSO token back to its cache (see
 [usage](docs/usage.md)). Lambda works, since it sets the environment.
 
 The design is in [docs/decisions](docs/decisions/README.md), and
@@ -131,7 +133,7 @@ every service shares:
 | Package | What it does |
 |---|---|
 | `sigv4`, `sigv4a` | Signature Version 4 (HMAC) and 4a (ECDSA P-256, multi-region), and the chained event stream signer |
-| `credentials`, `config` | static, environment and cached credentials; shared config and credentials files; EC2 instance metadata (`credentials/imds`); ECS and EKS containers (`credentials/container`) |
+| `credentials`, `config` | static, environment and cached credentials; shared config and credentials files; EC2 instance metadata (`credentials/imds`); ECS and EKS containers (`credentials/container`); web identity (`credentials/stscreds`); IAM Identity Center (`credentials/ssocreds`); `credential_process` |
 | `endpoints` | the Smithy endpoint rules engine and its standard library |
 | `transport` | signing, retries (the standard retry mode), clock skew correction, streamed bodies |
 | `protocol` | restJson1, restXml, awsJson1_0 and 1_1, awsQuery, ec2Query |

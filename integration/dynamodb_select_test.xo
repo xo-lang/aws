@@ -1,0 +1,20 @@
+// A program that uses DynamoDB together with `select` (README,
+// requirements): DynamoDB's generated `enum Select` once took the name of
+// the runtime's select handle, and the build failed (fixed in xo
+// 5dd0b3f4e; scripts/xo-skips.tsv leaves this out for older releases).
+
+use github.com/xo-lang/aws/service/dynamodb
+
+test "DynamoDB's Select enum and a select statement build together" {
+  let sel = dynamodb.Select.Count
+  let ch: Chan[Int] = Chan.new()
+  scope s {
+    s.spawn_background(fn() { ch.send(1) })
+    let got = select {
+      v = ch.recv() => v ?? 0
+      after 1s => -1
+    }
+    expect(got) == 1
+  }
+  expect(sel.value()) == "COUNT"
+}

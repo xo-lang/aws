@@ -1,6 +1,6 @@
 # 0009: Streamed request bodies
 
-Status: Proposed (Xo AWS 1, 2026-11-05)
+Status: Accepted (owner, 2026-11-05; proposed by Xo AWS 1, 2026-11-05)
 
 ## Context
 

@@ -138,7 +138,7 @@ allowed=.gencheck/public-allowed.tsv
 grep -v '^#' scripts/public-placeholders.tsv | while IFS="$(printf '\t')" read -r cat val models; do
   locs=$(echo "$files" | grep -v "^scripts/public-placeholders.tsv$" | xargs grep -n -I -F -- "$val" 2>/dev/null | cut -d: -f1,2)
   n=$(echo "$locs" | grep -c .)
-  echo "$locs" | grep . | sed "s/^/$cat	$val	/" >> "$allowed"
+  echo "$locs" | grep . | awk -v c="$cat" -v v="$val" '{print c "\t" v "\t" $0}' >> "$allowed"
   printf 'check-public: allowed %s %s: %s, first %s (cited: %s)\n' "$cat" "$val" "$n" "$(echo "$locs" | head -1)" "$models"
 done
 echo "check-public: every allowed occurrence is in $allowed"

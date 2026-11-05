@@ -203,3 +203,32 @@ pub fn (var p: ScanPaginator) next_page() -> ScanOutput ! ScanErr uses (net.dial
   p.input.exclusive_start_key = next
   Ok(out)
 }
+
+/// The pages of BatchGetItem. Each `next_page` sends the input with the
+/// previous page's UnprocessedKeys as RequestItems, until none are left (aws-sdk-go-v2's hand-written paginator).
+pub struct BatchGetItemPaginator {
+  client: Client
+  input: BatchGetItemInput
+  first: Bool = true
+  more: Bool = true
+}
+
+pub fn new_batch_get_item_paginator(c: Client, input: BatchGetItemInput) -> BatchGetItemPaginator {
+  BatchGetItemPaginator{client: c, input: input}
+}
+
+/// Whether `next_page` has a page to fetch: before the first page, or
+/// while the last page said there are more.
+pub fn (p: BatchGetItemPaginator) has_more_pages() -> Bool {
+  p.first || p.more
+}
+
+pub fn (var p: BatchGetItemPaginator) next_page() -> BatchGetItemOutput ! BatchGetItemErr uses (net.dial, clock, rand) {
+  let out = p.client.batch_get_item(p.input)?
+  p.first = false
+  p.more = out.unprocessed_keys.map(fn(m: Map[Str, KeysAndAttributes]) -> Bool { !m.is_empty() }) == Some(true)
+  if p.more {
+    p.input.request_items = out.unprocessed_keys
+  }
+  Ok(out)
+}

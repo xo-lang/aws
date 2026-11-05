@@ -295,3 +295,37 @@ const LONG_POLL: List[(Str, Str)] = [
 pub fn long_poll(g: G, op: Str) -> Bool {
   LONG_POLL.contains((sdk_id(g), model.name_of(op)))
 }
+
+/// A paginator aws-sdk-go-v2 writes by hand (its handwritten_paginators.go)
+/// because the operation's tokens do not fit the paginated trait: several
+/// markers, a truncation flag, or a token taken from the page's items.
+pub struct HandPager {
+  pub sdk: Str
+  pub op: Str
+  /// Whether there is another page, over the page `out`.
+  pub more: Str
+  /// The input fields the next page sends, over `out`.
+  pub next: List[Str]
+  pub doc: Str
+}
+
+pub const HAND_PAGERS: List[HandPager] = [
+  HandPager{sdk: "S3", op: "ListObjectVersions", more: "out.is_truncated == Some(true)",
+    next: ["p.input.key_marker = out.next_key_marker", "p.input.version_id_marker = out.next_version_id_marker"],
+    doc: "NextKeyMarker and NextVersionIdMarker as KeyMarker and VersionIdMarker, while IsTruncated"},
+  HandPager{sdk: "S3", op: "ListMultipartUploads", more: "out.is_truncated == Some(true)",
+    next: ["p.input.key_marker = out.next_key_marker", "p.input.upload_id_marker = out.next_upload_id_marker"],
+    doc: "NextKeyMarker and NextUploadIdMarker as KeyMarker and UploadIdMarker, while IsTruncated"},
+  HandPager{sdk: "Route 53", op: "ListResourceRecordSets", more: "out.is_truncated == Some(true)",
+    next: ["p.input.start_record_name = out.next_record_name", "p.input.start_record_identifier = out.next_record_identifier", "p.input.start_record_type = out.next_record_type"],
+    doc: "NextRecordName, NextRecordIdentifier and NextRecordType as StartRecordName, StartRecordIdentifier and StartRecordType, while IsTruncated"},
+  HandPager{sdk: "DynamoDB", op: "BatchGetItem", more: "out.unprocessed_keys.map(fn(m: Map[Str, KeysAndAttributes]) -> Bool { !m.is_empty() }) == Some(true)",
+    next: ["p.input.request_items = out.unprocessed_keys"],
+    doc: "UnprocessedKeys as RequestItems, until none are left"},
+  HandPager{sdk: "Kinesis", op: "DescribeStream", more: "out.stream_description.map(fn(d: StreamDescription) -> Bool { d.has_more_shards == Some(true) && !(d.shards ?? []).is_empty() }) == Some(true)",
+    next: ["if let Some(d) = out.stream_description {", "  let shards = d.shards ?? []", "  p.input.exclusive_start_shard_id = shards[shards.len() - 1].shard_id", "}"],
+    doc: "last shard's ShardId as ExclusiveStartShardId, while HasMoreShards"},
+  HandPager{sdk: "AmplifyBackend", op: "ListBackendJobs", more: "(out.next_token ?? \"\") != \"\"",
+    next: ["p.input.next_token = out.next_token"],
+    doc: "NextToken as NextToken (the model has no paginated trait)"},
+]

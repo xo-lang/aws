@@ -77,4 +77,4 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 |---|---|---|---|
 | EC2's unboxed members treated as optional | EC2 | Yes (every member is optional, decision 0004) | protocol tests |
 | Defaults not filled in, required members optional | all | Yes (decision 0004) | protocol tests (skips listed in `codegen/gen/gen.xo`) |
-| Paginators and waiters the models leave out (S3 ListObjectVersions, Route 53, DynamoDB, Kinesis) | those services | No | hand-written paginators where aws-sdk-go-v2 has them |
+| Paginators aws-sdk-go-v2 writes by hand (several markers, a truncation flag, or a token from the items) | S3 ListObjectVersions and ListMultipartUploads, Route 53 ListResourceRecordSets, DynamoDB BatchGetItem, Kinesis DescribeStream, Amplify Backend ListBackendJobs | Yes (`HAND_PAGERS` in codegen/gen/customize.xo) | `integration/paginators_test.xo` (all but Amplify Backend, which type checks) |

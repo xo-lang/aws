@@ -203,3 +203,34 @@ pub fn (var p: ListQueryLoggingConfigsPaginator) next_page() -> ListQueryLogging
   p.input.next_token = next
   Ok(out)
 }
+
+/// The pages of ListResourceRecordSets. Each `next_page` sends the input with the
+/// previous page's NextRecordName, NextRecordIdentifier and NextRecordType as StartRecordName, StartRecordIdentifier and StartRecordType, while IsTruncated (aws-sdk-go-v2's hand-written paginator).
+pub struct ListResourceRecordSetsPaginator {
+  client: Client
+  input: ListResourceRecordSetsRequest
+  first: Bool = true
+  more: Bool = true
+}
+
+pub fn new_list_resource_record_sets_paginator(c: Client, input: ListResourceRecordSetsRequest) -> ListResourceRecordSetsPaginator {
+  ListResourceRecordSetsPaginator{client: c, input: input}
+}
+
+/// Whether `next_page` has a page to fetch: before the first page, or
+/// while the last page said there are more.
+pub fn (p: ListResourceRecordSetsPaginator) has_more_pages() -> Bool {
+  p.first || p.more
+}
+
+pub fn (var p: ListResourceRecordSetsPaginator) next_page() -> ListResourceRecordSetsResponse ! ListResourceRecordSetsErr uses (net.dial, clock, rand) {
+  let out = p.client.list_resource_record_sets(p.input)?
+  p.first = false
+  p.more = out.is_truncated == Some(true)
+  if p.more {
+    p.input.start_record_name = out.next_record_name
+    p.input.start_record_identifier = out.next_record_identifier
+    p.input.start_record_type = out.next_record_type
+  }
+  Ok(out)
+}

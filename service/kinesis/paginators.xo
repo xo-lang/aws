@@ -101,3 +101,35 @@ pub fn (var p: ListStreamsPaginator) next_page() -> ListStreamsOutput ! ListStre
   p.input.next_token = next
   Ok(out)
 }
+
+/// The pages of DescribeStream. Each `next_page` sends the input with the
+/// previous page's last shard's ShardId as ExclusiveStartShardId, while HasMoreShards (aws-sdk-go-v2's hand-written paginator).
+pub struct DescribeStreamPaginator {
+  client: Client
+  input: DescribeStreamInput
+  first: Bool = true
+  more: Bool = true
+}
+
+pub fn new_describe_stream_paginator(c: Client, input: DescribeStreamInput) -> DescribeStreamPaginator {
+  DescribeStreamPaginator{client: c, input: input}
+}
+
+/// Whether `next_page` has a page to fetch: before the first page, or
+/// while the last page said there are more.
+pub fn (p: DescribeStreamPaginator) has_more_pages() -> Bool {
+  p.first || p.more
+}
+
+pub fn (var p: DescribeStreamPaginator) next_page() -> DescribeStreamOutput ! DescribeStreamErr uses (net.dial, clock, rand) {
+  let out = p.client.describe_stream(p.input)?
+  p.first = false
+  p.more = out.stream_description.map(fn(d: StreamDescription) -> Bool { d.has_more_shards == Some(true) && !(d.shards ?? []).is_empty() }) == Some(true)
+  if p.more {
+    if let Some(d) = out.stream_description {
+      let shards = d.shards ?? []
+      p.input.exclusive_start_shard_id = shards[shards.len() - 1].shard_id
+    }
+  }
+  Ok(out)
+}

@@ -127,5 +127,52 @@ pub fn emit_paginators(g: G) -> Str {
     out.push("}")
     out.push("")
   }
+  emit_hand_pagers(g, out)
   out.join("\n")
+}
+
+/// The paginators aws-sdk-go-v2 writes by hand (customize.xo HAND_PAGERS).
+fn emit_hand_pagers(g: G, var out: List[Str]) {
+  for h in HAND_PAGERS {
+    if h.sdk != sdk_id(g) {
+      continue
+    }
+    let op = model.operations(g.m).find(fn(o: Str) -> Bool { model.name_of(o) == h.op }) ?? continue
+    let s = shape_of(g, op)
+    let pn = free_type(g, "${h.op}Paginator")
+    let in_t = xo_type(g, s.input)
+    let out_t = xo_type(g, s.output)
+    let fname = op_name(op)
+    out.push("/// The pages of ${h.op}. Each `next_page` sends the input with the")
+    out.push("/// previous page's ${h.doc} (aws-sdk-go-v2's hand-written paginator).")
+    out.push("pub struct ${pn} {")
+    out.push("  client: Client")
+    out.push("  input: ${in_t}")
+    out.push("  first: Bool = true")
+    out.push("  more: Bool = true")
+    out.push("}")
+    out.push("")
+    out.push("pub fn new_${fname}_paginator(c: Client, input: ${in_t}) -> ${pn} {")
+    out.push("  ${pn}{client: c, input: input}")
+    out.push("}")
+    out.push("")
+    out.push("/// Whether `next_page` has a page to fetch: before the first page, or")
+    out.push("/// while the last page said there are more.")
+    out.push("pub fn (p: ${pn}) has_more_pages() -> Bool {")
+    out.push("  p.first || p.more")
+    out.push("}")
+    out.push("")
+    out.push("pub fn (var p: ${pn}) next_page() -> ${out_t} ! ${op_err(op)} uses (net.dial, clock, rand) {")
+    out.push("  let out = p.client.${fname}(p.input)?")
+    out.push("  p.first = false")
+    out.push("  p.more = ${h.more}")
+    out.push("  if p.more {")
+    for l in h.next {
+      out.push("    ${l}")
+    }
+    out.push("  }")
+    out.push("  Ok(out)")
+    out.push("}")
+    out.push("")
+  }
 }

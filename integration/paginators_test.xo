@@ -1,0 +1,114 @@
+// The paginators aws-sdk-go-v2 writes by hand, on the test network: S3
+// ListObjectVersions (two markers), Route 53 ListResourceRecordSets
+// (three), DynamoDB BatchGetItem (UnprocessedKeys) and Kinesis
+// DescribeStream (the last shard's id).
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/dynamodb
+use github.com/xo-lang/aws/service/kinesis
+use github.com/xo-lang/aws/service/route53
+use github.com/xo-lang/aws/service/s3
+
+fn keys() -> credentials.StaticProvider {
+  credentials.static_provider("AKIDTEST0000000000", "invented-secret")
+}
+
+test "S3 ListObjectVersions pages by key and version markers" {
+  let queries = Mutex[List[Str]].new([])
+  os.net.handle("GET https://bucket.s3.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let q = req.url.query
+    let marks = "${q.get("key-marker") ?? ""}/${q.get("version-id-marker") ?? ""}"
+    queries.with(fn(var xs: List[Str]) { xs.push(marks) })
+    let body = if marks != "/" {
+      "<ListVersionsResult><IsTruncated>false</IsTruncated><Version><Key>b</Key><VersionId>2</VersionId></Version></ListVersionsResult>"
+    } else {
+      "<ListVersionsResult><IsTruncated>true</IsTruncated><NextKeyMarker>a</NextKeyMarker><NextVersionIdMarker>v1</NextVersionIdMarker><Version><Key>a</Key><VersionId>1</VersionId></Version></ListVersionsResult>"
+    }
+    http.text(200, body).with_header("Content-Type", "application/xml")
+  })
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: keys()})?
+  var p = s3.new_list_object_versions_paginator(c, s3.ListObjectVersionsRequest{bucket: "bucket"})
+  var got: List[Str] = []
+  while p.has_more_pages() {
+    for v in p.next_page()?.versions ?? [] {
+      got.push(v.key ?? "")
+    }
+  }
+  expect(got) == ["a", "b"]
+  let qs = queries.with_read(fn(xs: List[Str]) -> List[Str] { xs })
+  expect(qs) == ["/", "a/v1"]
+}
+
+test "Route 53 ListResourceRecordSets pages by name, type and identifier" {
+  let queries = Mutex[List[Str]].new([])
+  os.net.handle("GET https://route53.amazonaws.com/2013-04-01/hostedzone/Z1/rrset", fn(req: http.Request) -> http.Response {
+    let q = req.url.query
+    let start = "${q.get("name") ?? ""}/${q.get("type") ?? ""}/${q.get("identifier") ?? ""}"
+    queries.with(fn(var xs: List[Str]) { xs.push(start) })
+    let body = if start != "//" {
+      "<ListResourceRecordSetsResponse><ResourceRecordSets><ResourceRecordSet><Name>b.example.com.</Name><Type>A</Type></ResourceRecordSet></ResourceRecordSets><IsTruncated>false</IsTruncated><MaxItems>1</MaxItems></ListResourceRecordSetsResponse>"
+    } else {
+      "<ListResourceRecordSetsResponse><ResourceRecordSets><ResourceRecordSet><Name>a.example.com.</Name><Type>A</Type></ResourceRecordSet></ResourceRecordSets><IsTruncated>true</IsTruncated><NextRecordName>b.example.com.</NextRecordName><NextRecordType>A</NextRecordType><NextRecordIdentifier>w2</NextRecordIdentifier><MaxItems>1</MaxItems></ListResourceRecordSetsResponse>"
+    }
+    http.text(200, body).with_header("Content-Type", "text/xml")
+  })
+  let c = route53.new(os.net, os.clock, os.rand, route53.Options{region: "us-east-1", credentials: keys()})?
+  var p = route53.new_list_resource_record_sets_paginator(c, route53.ListResourceRecordSetsRequest{hosted_zone_id: "Z1"})
+  var got: List[Str] = []
+  while p.has_more_pages() {
+    for r in p.next_page()?.resource_record_sets ?? [] {
+      got.push(r.name ?? "")
+    }
+  }
+  expect(got) == ["a.example.com.", "b.example.com."]
+  expect(queries.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["//", "b.example.com./A/w2"]
+}
+
+test "DynamoDB BatchGetItem pages until no keys are unprocessed" {
+  let bodies = Mutex[List[Str]].new([])
+  os.net.handle("POST https://dynamodb.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let n = bodies.with(fn(var xs: List[Str]) -> Int { xs.push(req.body.to_str() ?? ""); xs.len() })
+    let body = if n == 1 {
+      "{\"Responses\":{\"t\":[{\"id\":{\"S\":\"1\"}}]},\"UnprocessedKeys\":{\"t\":{\"Keys\":[{\"id\":{\"S\":\"2\"}}]}}}"
+    } else {
+      "{\"Responses\":{\"t\":[{\"id\":{\"S\":\"2\"}}]},\"UnprocessedKeys\":{}}"
+    }
+    http.text(200, body).with_header("Content-Type", "application/x-amz-json-1.0")
+  })
+  let c = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: keys(), account_id_endpoint_mode: "disabled"})?
+  let first = dynamodb.KeysAndAttributes{keys: [{"id": dynamodb.AttributeValue.S("1")}, {"id": dynamodb.AttributeValue.S("2")}]}
+  var p = dynamodb.new_batch_get_item_paginator(c, dynamodb.BatchGetItemInput{request_items: {"t": first}})
+  var pages = 0
+  while p.has_more_pages() {
+    p.next_page()?
+    pages += 1
+  }
+  expect(pages) == 2
+  let second = bodies.with_read(fn(xs: List[Str]) -> Str { xs[1] })
+  expect(second.contains("\"2\"")) == true
+  expect(second.contains("\"1\"")) == false
+}
+
+test "Kinesis DescribeStream pages from the last shard while there are more" {
+  let bodies = Mutex[List[Str]].new([])
+  os.net.handle("POST https://kinesis.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let n = bodies.with(fn(var xs: List[Str]) -> Int { xs.push(req.body.to_str() ?? ""); xs.len() })
+    let body = if n == 1 {
+      "{\"StreamDescription\":{\"StreamName\":\"s\",\"HasMoreShards\":true,\"Shards\":[{\"ShardId\":\"shardId-0\"},{\"ShardId\":\"shardId-1\"}]}}"
+    } else {
+      "{\"StreamDescription\":{\"StreamName\":\"s\",\"HasMoreShards\":false,\"Shards\":[{\"ShardId\":\"shardId-2\"}]}}"
+    }
+    http.text(200, body).with_header("Content-Type", "application/x-amz-json-1.1")
+  })
+  let c = kinesis.new(os.net, os.clock, os.rand, kinesis.Options{region: "us-west-2", credentials: keys(), account_id_endpoint_mode: "disabled"})?
+  var p = kinesis.new_describe_stream_paginator(c, kinesis.DescribeStreamInput{stream_name: "s"})
+  var shards: List[Str] = []
+  while p.has_more_pages() {
+    for sh in p.next_page()?.stream_description.map(fn(d: kinesis.StreamDescription) -> List[kinesis.Shard] { d.shards ?? [] }) ?? [] {
+      shards.push(sh.shard_id ?? "")
+    }
+  }
+  expect(shards) == ["shardId-0", "shardId-1", "shardId-2"]
+  expect(bodies.with_read(fn(xs: List[Str]) -> Str { xs[1] }).contains("\"ExclusiveStartShardId\":\"shardId-1\"")) == true
+}

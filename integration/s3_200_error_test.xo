@@ -48,3 +48,22 @@ test "GetObject returns an object that happens to be an XML error document" {
   let out = c.get_object(s3.GetObjectRequest{bucket: "bucket", key: "doc.xml"})?
   expect((out.body ?? b"").to_str_lossy()) == INTERNAL
 }
+
+test "GetBucketLocation reads its unwrapped root element, set or empty" {
+  let n = Mutex[Int].new(0)
+  os.net.handle("GET https://bucket.s3.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let i = n.with(fn(var x: Int) -> Int { x += 1; x })
+    let body = if i == 1 {
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<LocationConstraint xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">eu-west-1</LocationConstraint>"
+    } else {
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<LocationConstraint xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"/>"
+    }
+    http.text(200, body).with_header("Content-Type", "application/xml")
+  })
+  let c = s3_client(os.net, os.clock, os.rand)?
+  let set = c.get_bucket_location(s3.GetBucketLocationRequest{bucket: "bucket"})?
+  expect(set.location_constraint) == Some(s3.BucketLocationConstraint.EuWest1)
+  // us-east-1 answers an empty constraint
+  let empty = c.get_bucket_location(s3.GetBucketLocationRequest{bucket: "bucket"})?
+  expect(empty.location_constraint.map(fn(l: s3.BucketLocationConstraint) -> Str { l.value() }) ?? "") == ""
+}

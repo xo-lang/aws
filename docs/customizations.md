@@ -63,9 +63,9 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | Glacier: account id `-` by default, `x-amz-glacier-version` | Glacier | Yes | `integration/customize_test.xo` |
 | API Gateway: `Accept: application/json` | API Gateway | Yes | `integration/customize_test.xo` |
 | Machine Learning: Predict goes to the PredictEndpoint input | Machine Learning | Yes | `integration/customize_test.xo` |
-| Cross-region presigned URL (SourceRegion, then PreSignedUrl filled) | RDS, DocumentDB, Neptune (CopyDBSnapshot, CreateDBCluster, ...), EC2 CopySnapshot | No | a `source_region` input that presigns the same call in that region |
-| S3 GetBucketLocation's unwrapped root element | S3 | No test yet | a test with an empty and a set constraint |
-| S3 `Expires`: an unparseable date does not fail the response | S3 GetObject, HeadObject | No test yet | a test with a bad date |
+| Cross-region presigned URL (SourceRegion, then PreSignedUrl filled) | RDS (4 operations), DocumentDB and Neptune (2 each), EC2 CopySnapshot | Yes: a `source_region` input field (modeled by EC2) | `integration/presign_autofill_test.xo` |
+| S3 GetBucketLocation's unwrapped root element | S3 | Yes | `integration/s3_200_error_test.xo` "GetBucketLocation" |
+| S3 `Expires`: an unparseable date does not fail the response | S3 GetObject, HeadObject | Rules: the pinned model types it as a string | none needed |
 | Presigned URLs | S3 (GetObject, PutObject, ...), STS GetCallerIdentity | Yes | `transport/transport_test.xo`, LocalStack, real AWS steps 1 and 2 |
 | Polly SynthesizeSpeech presigned URL (a GET with the input in the query) | Polly | Yes | `integration/polly_presign_test.xo` |
 | S3 presigned POST | S3 | No | a form policy signer |

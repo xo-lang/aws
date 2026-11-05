@@ -170,3 +170,92 @@ pub fn response_checks(g: G, op: Str, en: Str) -> (List[Str], List[Str]) {
   }
   ([], [])
 }
+
+/// Operations that fill in a cross-region presigned URL (aws-sdk-go-v2's
+/// PresignURLAutoFill): (service shape id, operation, presigned URL
+/// member).
+const PRESIGN_AUTOFILL: List[(Str, Str, Str)] = [
+  ("com.amazonaws.rds#AmazonRDSv19", "CopyDBSnapshot", "PreSignedUrl"),
+  ("com.amazonaws.rds#AmazonRDSv19", "CreateDBInstanceReadReplica", "PreSignedUrl"),
+  ("com.amazonaws.rds#AmazonRDSv19", "CopyDBClusterSnapshot", "PreSignedUrl"),
+  ("com.amazonaws.rds#AmazonRDSv19", "CreateDBCluster", "PreSignedUrl"),
+  ("com.amazonaws.neptune#AmazonRDSv19", "CopyDBClusterSnapshot", "PreSignedUrl"),
+  ("com.amazonaws.neptune#AmazonRDSv19", "CreateDBCluster", "PreSignedUrl"),
+  ("com.amazonaws.docdb#AmazonRDSv19", "CopyDBClusterSnapshot", "PreSignedUrl"),
+  ("com.amazonaws.docdb#AmazonRDSv19", "CreateDBCluster", "PreSignedUrl"),
+  ("com.amazonaws.ec2#AmazonEC2", "CopySnapshot", "PresignedUrl"),
+]
+
+/// The presigned URL member of an operation that fills it in.
+pub fn presign_autofill(g: G, op: Str) -> Str? {
+  for (svc, name, member) in PRESIGN_AUTOFILL {
+    if svc == g.m.service && name == model.name_of(op) {
+      return Some(member)
+    }
+  }
+  None
+}
+
+/// Fields a structure gets beyond its model: the source region of an
+/// input whose operation fills in a cross-region presigned URL, where
+/// the model has none (RDS, Neptune, DocumentDB; EC2 models it).
+pub fn extra_fields(g: G, s: model.Shape) -> List[Str] {
+  for op in model.operations(g.m) {
+    let o = shape_of(g, op)
+    if o.input == s.id && presign_autofill(g, op).is_some() {
+      if s.members.any(fn(m: model.Member) -> Bool { m.name == "SourceRegion" }) {
+        return []
+      }
+      return [
+        "  /// The region the source lives in: when set and the presigned URL is",
+        "  /// not, the SDK presigns this call in that region and sends it as the",
+        "  /// presigned URL (as the other AWS SDKs do). Not sent itself.",
+        "  pub source_region: Str? = None",
+      ]
+    }
+  }
+  []
+}
+
+/// `presigned_url_<op>`: the input with its cross-region presigned URL
+/// filled in, when `source_region` is set and the URL is not: the same
+/// call routed and serialized for the source region, with
+/// DestinationRegion set to this client's region, presigned as a GET for
+/// 15 minutes.
+pub fn emit_presign_autofill(g: G, op: Str, var out: List[Str]) {
+  let member = presign_autofill(g, op) ?? return
+  let name = op_name(op)
+  let s = shape_of(g, op)
+  let in_t = xo_type(g, s.input)
+  let url_f = field_name(member)
+  let input = shape_of(g, s.input)
+  let modeled_dest = input.members.any(fn(m: model.Member) -> Bool { m.name == "DestinationRegion" })
+  out.push("/// ${model.name_of(op)}'s input with its presigned URL filled in from `source_region`.")
+  out.push("fn (c: Client) presigned_url_${name}(input: ${in_t}) -> ${in_t} ! Str uses (net.dial, clock, rand) {")
+  out.push("  let source = input.source_region ?? return Ok(input)")
+  out.push("  if input.${url_f}.is_some() || source == c.region {")
+  out.push("    return Ok(input)")
+  out.push("  }")
+  out.push("  var params = c.params")
+  out.push("  params.region = source")
+  out.push("  let (ep, routed, _) = c.route(endpoint_params_${name}(params, input))?")
+  out.push("  // signed for the source region (the route falls back to the client's)")
+  out.push("  let signing = routed with {region: source}")
+  if modeled_dest {
+    out.push("  var req = serialize_${name}(ep, input with {destination_region: c.region}, \"\")?")
+    out.push("  var form = req.body.to_str() ?? \"\"")
+  } else {
+    out.push("  var req = serialize_${name}(ep, input, \"\")?")
+    out.push("  var form = \"\${req.body.to_str() ?? \"\"}&DestinationRegion=\${query.escape(c.region)}\"")
+  }
+  out.push("  req = req with {")
+  out.push("    method: \"GET\",")
+  out.push("    query: form,")
+  out.push("    body: b\"\",")
+  out.push("    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != \"content-type\" }),")
+  out.push("  }")
+  out.push("  let p = transport.presign(c.transport, req, signing, 15m) ?? e => return Err(\"presigning in \${source}: \${e:?}\")")
+  out.push("  Ok(input with {${url_f}: p.url})")
+  out.push("}")
+  out.push("")
+}

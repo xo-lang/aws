@@ -8,6 +8,57 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_create_db_instance_read_replica(resp: http.Response) -> CreateDBInstanceReadReplicaResult ! Str {
+  var out = CreateDBInstanceReadReplicaResult{}
+  let body = query.result_of(resp.body, "CreateDBInstanceReadReplica")?
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "DBInstance" => out.db_instance = xml_read_db_instance(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateDBInstanceReadReplica.
+pub enum CreateDBInstanceReadReplicaErr {
+  CertificateNotFoundFault(e: CertificateNotFoundFault)
+  DBCapacityReservationNotFoundFault(e: DBCapacityReservationNotFoundFault)
+  DBClusterNotFoundFault(e: DBClusterNotFoundFault)
+  DBInstanceAlreadyExistsFault(e: DBInstanceAlreadyExistsFault)
+  DBInstanceNotFoundFault(e: DBInstanceNotFoundFault)
+  DBParameterGroupNotFoundFault(e: DBParameterGroupNotFoundFault)
+  DBSecurityGroupNotFoundFault(e: DBSecurityGroupNotFoundFault)
+  DBSubnetGroupDoesNotCoverEnoughAZs(e: DBSubnetGroupDoesNotCoverEnoughAZs)
+  DBSubnetGroupNotAllowedFault(e: DBSubnetGroupNotAllowedFault)
+  DBSubnetGroupNotFoundFault(e: DBSubnetGroupNotFoundFault)
+  DomainNotFoundFault(e: DomainNotFoundFault)
+  InstanceQuotaExceededFault(e: InstanceQuotaExceededFault)
+  InsufficientDBInstanceCapacityFault(e: InsufficientDBInstanceCapacityFault)
+  InvalidDBCapacityReservationStateFault(e: InvalidDBCapacityReservationStateFault)
+  InvalidDBClusterStateFault(e: InvalidDBClusterStateFault)
+  InvalidDBInstanceStateFault(e: InvalidDBInstanceStateFault)
+  InvalidDBSubnetGroupFault(e: InvalidDBSubnetGroupFault)
+  InvalidSubnet(e: InvalidSubnet)
+  InvalidVPCNetworkStateFault(e: InvalidVPCNetworkStateFault)
+  KMSKeyNotAccessibleFault(e: KMSKeyNotAccessibleFault)
+  NetworkTypeNotSupported(e: NetworkTypeNotSupported)
+  OptionGroupNotFoundFault(e: OptionGroupNotFoundFault)
+  ProvisionedIopsNotAvailableInAZFault(e: ProvisionedIopsNotAvailableInAZFault)
+  StorageQuotaExceededFault(e: StorageQuotaExceededFault)
+  StorageTypeNotSupportedFault(e: StorageTypeNotSupportedFault)
+  TenantDatabaseQuotaExceededFault(e: TenantDatabaseQuotaExceededFault)
+  VpcEncryptionControlViolationException(e: VpcEncryptionControlViolationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: CreateDBInstanceReadReplicaErr) display() -> Str {
   match e {
     CertificateNotFoundFault(x) => "CertificateNotFoundFault: ${x:?}"
@@ -161,6 +212,29 @@ pub fn deserialize_create_db_instance_read_replica_error(resp: http.Response) ->
   CreateDBInstanceReadReplicaErr.Api(restxml.api_error(resp))
 }
 
+/// CreateDBInstanceReadReplica's input with its presigned URL filled in from `source_region`.
+fn (c: Client) presigned_url_create_db_instance_read_replica(input: CreateDBInstanceReadReplicaMessage) -> CreateDBInstanceReadReplicaMessage ! Str uses (net.dial, clock, rand) {
+  let source = input.source_region ?? return Ok(input)
+  if input.pre_signed_url.is_some() || source == c.region {
+    return Ok(input)
+  }
+  var params = c.params
+  params.region = source
+  let (ep, routed, _) = c.route(endpoint_params_create_db_instance_read_replica(params, input))?
+  // signed for the source region (the route falls back to the client's)
+  let signing = routed with {region: source}
+  var req = serialize_create_db_instance_read_replica(ep, input, "")?
+  var form = "${req.body.to_str() ?? ""}&DestinationRegion=${query.escape(c.region)}"
+  req = req with {
+    method: "GET",
+    query: form,
+    body: b"",
+    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" }),
+  }
+  let p = transport.presign(c.transport, req, signing, 15m) ?? e => return Err("presigning in ${source}: ${e:?}")
+  Ok(input with {pre_signed_url: p.url})
+}
+
 /// Creates a new DB instance that acts as a read replica for an existing
 /// source DB instance or Multi-AZ DB cluster. You can create a read replica
 /// for a DB instance running Db2, MariaDB, MySQL, Oracle, PostgreSQL, or
@@ -174,7 +248,8 @@ pub fn deserialize_create_db_instance_read_replica_error(resp: http.Response) ->
 /// groups and DB parameter groups) are inherited from the source DB
 /// instance or cluster, except as specified. Your source DB instance or
 /// cluster must have backup retention enabled.
-pub fn (c: Client) create_db_instance_read_replica(input: CreateDBInstanceReadReplicaMessage) -> CreateDBInstanceReadReplicaResult ! CreateDBInstanceReadReplicaErr uses (net.dial, clock, rand) {
+pub fn (c: Client) create_db_instance_read_replica(given: CreateDBInstanceReadReplicaMessage) -> CreateDBInstanceReadReplicaResult ! CreateDBInstanceReadReplicaErr uses (net.dial, clock, rand) {
+  let input = c.presigned_url_create_db_instance_read_replica(given) ?? e => return Err(CreateDBInstanceReadReplicaErr.InvalidInput(e))
   let (ep, signing, extra) = c.route(endpoint_params_create_db_instance_read_replica(c.params, input)) ?? e => return Err(CreateDBInstanceReadReplicaErr.InvalidInput(e))
   var req = serialize_create_db_instance_read_replica(ep, input, "") ?? e => return Err(CreateDBInstanceReadReplicaErr.InvalidInput(e))
   for h in extra {
@@ -10683,93 +10758,4 @@ pub fn (c: Client) modify_current_db_cluster_capacity(input: ModifyCurrentDBClus
     return Err(deserialize_modify_current_db_cluster_capacity_error(resp))
   }
   deserialize_modify_current_db_cluster_capacity(resp) ?? e => Err(ModifyCurrentDBClusterCapacityErr.Deserialize(e))
-}
-
-pub fn endpoint_params_modify_custom_db_engine_version(base: EndpointParameters, input: ModifyCustomDBEngineVersionMessage) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ModifyCustomDBEngineVersion.
-pub fn serialize_modify_custom_db_engine_version(ep: rest.Endpoint, input: ModifyCustomDBEngineVersionMessage, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("ModifyCustomDBEngineVersion", "2014-10-31")
-  if let Some(x) = input.engine {
-    query.add(f, query.key("", "Engine"), x)
-  }
-  if let Some(x) = input.engine_version {
-    query.add(f, query.key("", "EngineVersion"), x)
-  }
-  if let Some(x) = input.description {
-    query.add(f, query.key("", "Description"), x)
-  }
-  if let Some(x) = input.status {
-    query.add(f, query.key("", "Status"), x.value())
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_modify_custom_db_engine_version(resp: http.Response) -> DBEngineVersion ! Str {
-  var out = DBEngineVersion{}
-  let body = query.result_of(resp.body, "ModifyCustomDBEngineVersion")?
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "Engine" => out.engine = c.text()
-      "MajorEngineVersion" => out.major_engine_version = c.text()
-      "EngineVersion" => out.engine_version = c.text()
-      "DatabaseInstallationFilesS3BucketName" => out.database_installation_files_s3_bucket_name = c.text()
-      "DatabaseInstallationFilesS3Prefix" => out.database_installation_files_s3_prefix = c.text()
-      "DatabaseInstallationFiles" => out.database_installation_files = xml_read_string_list(c)?
-      "CustomDBEngineVersionManifest" => out.custom_db_engine_version_manifest = c.text()
-      "DBParameterGroupFamily" => out.db_parameter_group_family = c.text()
-      "DBEngineDescription" => out.db_engine_description = c.text()
-      "DBEngineVersionArn" => out.db_engine_version_arn = c.text()
-      "DBEngineVersionDescription" => out.db_engine_version_description = c.text()
-      "DefaultCharacterSet" => out.default_character_set = xml_read_character_set(c)?
-      "FailureReason" => out.failure_reason = c.text()
-      "Image" => out.image = xml_read_custom_db_engine_version_ami(c)?
-      "DBEngineMediaType" => out.db_engine_media_type = c.text()
-      "KMSKeyId" => out.kms_key_id = c.text()
-      "CreateTime" => out.create_time = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
-      "SupportedCharacterSets" => out.supported_character_sets = xml_read_supported_character_sets_list(c)?
-      "SupportedNcharCharacterSets" => out.supported_nchar_character_sets = xml_read_supported_character_sets_list(c)?
-      "ValidUpgradeTarget" => out.valid_upgrade_target = xml_read_valid_upgrade_target_list(c)?
-      "SupportedTimezones" => out.supported_timezones = xml_read_supported_timezones_list(c)?
-      "ExportableLogTypes" => out.exportable_log_types = xml_read_log_type_list(c)?
-      "SupportsLogExportsToCloudwatchLogs" => out.supports_log_exports_to_cloudwatch_logs = xmlv.read_bool(c.text())?
-      "SupportsReadReplica" => out.supports_read_replica = xmlv.read_bool(c.text())?
-      "SupportedEngineModes" => out.supported_engine_modes = xml_read_engine_mode_list(c)?
-      "SupportedFeatureNames" => out.supported_feature_names = xml_read_feature_name_list(c)?
-      "Status" => out.status = c.text()
-      "SupportsParallelQuery" => out.supports_parallel_query = xmlv.read_bool(c.text())?
-      "SupportsGlobalDatabases" => out.supports_global_databases = xmlv.read_bool(c.text())?
-      "TagList" => out.tag_list = xml_read_tag_list(c)?
-      "SupportsBabelfish" => out.supports_babelfish = xmlv.read_bool(c.text())?
-      "SupportsLimitlessDatabase" => out.supports_limitless_database = xmlv.read_bool(c.text())?
-      "SupportsCertificateRotationWithoutRestart" => out.supports_certificate_rotation_without_restart = xmlv.read_bool(c.text())?
-      "SupportedCACertificateIdentifiers" => out.supported_ca_certificate_identifiers = xml_read_ca_certificate_identifiers_list(c)?
-      "SupportsLocalWriteForwarding" => out.supports_local_write_forwarding = xmlv.read_bool(c.text())?
-      "SupportsIntegrations" => out.supports_integrations = xmlv.read_bool(c.text())?
-      "ServerlessV2FeaturesSupport" => out.serverless_v2_features_support = xml_read_serverless_v2_features_support(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

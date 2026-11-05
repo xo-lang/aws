@@ -1,0 +1,60 @@
+// Cross-region presigned URLs on the test network (aws-sdk-go-v2's
+// PresignURLAutoFill): with source_region set, RDS CopyDBSnapshot and EC2
+// CopySnapshot are sent with a URL presigned in the source region, whose
+// query carries the same call and DestinationRegion; source_region itself
+// is never sent, and a URL the caller gave is kept.
+
+use std/http
+use std/url
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/ec2
+use github.com/xo-lang/aws/service/rds
+
+fn presigned_in(form: Str, key: Str) -> Str {
+  for part in form.split("&") {
+    if let Some((k, v)) = part.cut("=") {
+      if k == key {
+        return url.query_unescape(v).ok() ?? ""
+      }
+    }
+  }
+  ""
+}
+
+test "RDS CopyDBSnapshot carries a URL presigned in the source region" {
+  let bodies = Mutex[List[Str]].new([])
+  os.net.handle("POST https://rds.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    bodies.with(fn(var xs: List[Str]) { xs.push(req.body.to_str() ?? "") })
+    http.text(200, "<CopyDBSnapshotResponse><CopyDBSnapshotResult></CopyDBSnapshotResult></CopyDBSnapshotResponse>").with_header("Content-Type", "text/xml")
+  })
+  let c = rds.new(os.net, os.clock, os.rand, rds.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let input = rds.CopyDBSnapshotMessage{source_db_snapshot_identifier: "arn:aws:rds:us-east-1:123456789012:snapshot:s", target_db_snapshot_identifier: "t", kms_key_id: "k", source_region: "us-east-1"}
+  c.copy_db_snapshot(input)?
+  c.copy_db_snapshot(input with {pre_signed_url: "https://given.example.com/"})?
+  let got = bodies.with_read(fn(xs: List[Str]) -> List[Str] { xs })
+  let u = presigned_in(got[0], "PreSignedUrl")
+  expect(u.starts_with("https://rds.us-east-1.amazonaws.com/?")) == true
+  expect(u.contains("Action=CopyDBSnapshot")) == true
+  expect(u.contains("DestinationRegion=us-west-2")) == true
+  expect(u.contains("X-Amz-Credential=AKIDTEST0000000000%2F")) == true
+  expect(u.contains("%2Fus-east-1%2Frds%2Faws4_request")) == true
+  expect(u.contains("X-Amz-Signature=")) == true
+  expect(got[0].contains("SourceRegion")) == false
+  expect(presigned_in(got[1], "PreSignedUrl")) == "https://given.example.com/"
+}
+
+test "EC2 CopySnapshot fills PresignedUrl with its modeled DestinationRegion" {
+  let bodies = Mutex[List[Str]].new([])
+  os.net.handle("POST https://ec2.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    bodies.with(fn(var xs: List[Str]) { xs.push(req.body.to_str() ?? "") })
+    http.text(200, "<CopySnapshotResponse><snapshotId>snap-1</snapshotId></CopySnapshotResponse>").with_header("Content-Type", "text/xml")
+  })
+  let c = ec2.new(os.net, os.clock, os.rand, ec2.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  c.copy_snapshot(ec2.CopySnapshotRequest{source_region: "us-east-1", source_snapshot_id: "snap-0"})?
+  let body = bodies.with_read(fn(xs: List[Str]) -> Str { xs[0] })
+  let u = presigned_in(body, "PresignedUrl")
+  expect(u.starts_with("https://ec2.us-east-1.amazonaws.com/?")) == true
+  expect(u.contains("DestinationRegion=us-west-2")) == true
+  expect(u.contains("Action=CopySnapshot")) == true
+  expect(u.contains("%2Fus-east-1%2Fec2%2Faws4_request")) == true
+}

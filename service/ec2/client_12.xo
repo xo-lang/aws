@@ -1102,6 +1102,29 @@ pub fn deserialize_copy_snapshot_error(resp: http.Response) -> CopySnapshotErr {
   CopySnapshotErr.Api(restxml.api_error(resp))
 }
 
+/// CopySnapshot's input with its presigned URL filled in from `source_region`.
+fn (c: Client) presigned_url_copy_snapshot(input: CopySnapshotRequest) -> CopySnapshotRequest ! Str uses (net.dial, clock, rand) {
+  let source = input.source_region ?? return Ok(input)
+  if input.presigned_url.is_some() || source == c.region {
+    return Ok(input)
+  }
+  var params = c.params
+  params.region = source
+  let (ep, routed, _) = c.route(endpoint_params_copy_snapshot(params, input))?
+  // signed for the source region (the route falls back to the client's)
+  let signing = routed with {region: source}
+  var req = serialize_copy_snapshot(ep, input with {destination_region: c.region}, "")?
+  var form = req.body.to_str() ?? ""
+  req = req with {
+    method: "GET",
+    query: form,
+    body: b"",
+    headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" }),
+  }
+  let p = transport.presign(c.transport, req, signing, 15m) ?? e => return Err("presigning in ${source}: ${e:?}")
+  Ok(input with {presigned_url: p.url})
+}
+
 /// Creates an exact copy of an Amazon EBS snapshot. The location of the
 /// source snapshot determines whether you can copy it or not, and the
 /// allowed destinations for the snapshot copy. If the source snapshot is in
@@ -1121,7 +1144,8 @@ pub fn deserialize_copy_snapshot_error(resp: http.Response) -> CopySnapshotErr {
 /// source volume ID. Do not use this volume ID for any purpose. For more
 /// information, see Copy an Amazon EBS snapshot in the Amazon EBS User
 /// Guide .
-pub fn (c: Client) copy_snapshot(input: CopySnapshotRequest) -> CopySnapshotResult ! CopySnapshotErr uses (net.dial, clock, rand) {
+pub fn (c: Client) copy_snapshot(given: CopySnapshotRequest) -> CopySnapshotResult ! CopySnapshotErr uses (net.dial, clock, rand) {
+  let input = c.presigned_url_copy_snapshot(given) ?? e => return Err(CopySnapshotErr.InvalidInput(e))
   let (ep, signing, extra) = c.route(endpoint_params_copy_snapshot(c.params, input)) ?? e => return Err(CopySnapshotErr.InvalidInput(e))
   var req = serialize_copy_snapshot(ep, input, "") ?? e => return Err(CopySnapshotErr.InvalidInput(e))
   for h in extra {

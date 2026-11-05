@@ -990,8 +990,15 @@ pub fn emit_restjson(g: G) -> Str {
       emit_stream_method(g, op, route, token, out)
       continue
     }
+    let autofill = presign_autofill(g, op).is_some()
+    if autofill {
+      emit_presign_autofill(g, op, out)
+    }
     doc_lines(out, s.traits, "")
-    out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
+    out.push("pub fn (c: Client) ${name}(${if autofill { "given" } else { "input" }}: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
+    if autofill {
+      out.push("  let input = c.presigned_url_${name}(given) ?? e => return Err(${en}.InvalidInput(e))")
+    }
     for l in route_binding(g, op, route, en) { out.push(l) }
     out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
     out.push("  for h in extra {")

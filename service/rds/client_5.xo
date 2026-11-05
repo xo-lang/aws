@@ -8,6 +8,95 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_modify_custom_db_engine_version(base: EndpointParameters, input: ModifyCustomDBEngineVersionMessage) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ModifyCustomDBEngineVersion.
+pub fn serialize_modify_custom_db_engine_version(ep: rest.Endpoint, input: ModifyCustomDBEngineVersionMessage, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var f = query.form("ModifyCustomDBEngineVersion", "2014-10-31")
+  if let Some(x) = input.engine {
+    query.add(f, query.key("", "Engine"), x)
+  }
+  if let Some(x) = input.engine_version {
+    query.add(f, query.key("", "EngineVersion"), x)
+  }
+  if let Some(x) = input.description {
+    query.add(f, query.key("", "Description"), x)
+  }
+  if let Some(x) = input.status {
+    query.add(f, query.key("", "Status"), x.value())
+  }
+  body = query.encode(f).bytes()
+  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_modify_custom_db_engine_version(resp: http.Response) -> DBEngineVersion ! Str {
+  var out = DBEngineVersion{}
+  let body = query.result_of(resp.body, "ModifyCustomDBEngineVersion")?
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "Engine" => out.engine = c.text()
+      "MajorEngineVersion" => out.major_engine_version = c.text()
+      "EngineVersion" => out.engine_version = c.text()
+      "DatabaseInstallationFilesS3BucketName" => out.database_installation_files_s3_bucket_name = c.text()
+      "DatabaseInstallationFilesS3Prefix" => out.database_installation_files_s3_prefix = c.text()
+      "DatabaseInstallationFiles" => out.database_installation_files = xml_read_string_list(c)?
+      "CustomDBEngineVersionManifest" => out.custom_db_engine_version_manifest = c.text()
+      "DBParameterGroupFamily" => out.db_parameter_group_family = c.text()
+      "DBEngineDescription" => out.db_engine_description = c.text()
+      "DBEngineVersionArn" => out.db_engine_version_arn = c.text()
+      "DBEngineVersionDescription" => out.db_engine_version_description = c.text()
+      "DefaultCharacterSet" => out.default_character_set = xml_read_character_set(c)?
+      "FailureReason" => out.failure_reason = c.text()
+      "Image" => out.image = xml_read_custom_db_engine_version_ami(c)?
+      "DBEngineMediaType" => out.db_engine_media_type = c.text()
+      "KMSKeyId" => out.kms_key_id = c.text()
+      "CreateTime" => out.create_time = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
+      "SupportedCharacterSets" => out.supported_character_sets = xml_read_supported_character_sets_list(c)?
+      "SupportedNcharCharacterSets" => out.supported_nchar_character_sets = xml_read_supported_character_sets_list(c)?
+      "ValidUpgradeTarget" => out.valid_upgrade_target = xml_read_valid_upgrade_target_list(c)?
+      "SupportedTimezones" => out.supported_timezones = xml_read_supported_timezones_list(c)?
+      "ExportableLogTypes" => out.exportable_log_types = xml_read_log_type_list(c)?
+      "SupportsLogExportsToCloudwatchLogs" => out.supports_log_exports_to_cloudwatch_logs = xmlv.read_bool(c.text())?
+      "SupportsReadReplica" => out.supports_read_replica = xmlv.read_bool(c.text())?
+      "SupportedEngineModes" => out.supported_engine_modes = xml_read_engine_mode_list(c)?
+      "SupportedFeatureNames" => out.supported_feature_names = xml_read_feature_name_list(c)?
+      "Status" => out.status = c.text()
+      "SupportsParallelQuery" => out.supports_parallel_query = xmlv.read_bool(c.text())?
+      "SupportsGlobalDatabases" => out.supports_global_databases = xmlv.read_bool(c.text())?
+      "TagList" => out.tag_list = xml_read_tag_list(c)?
+      "SupportsBabelfish" => out.supports_babelfish = xmlv.read_bool(c.text())?
+      "SupportsLimitlessDatabase" => out.supports_limitless_database = xmlv.read_bool(c.text())?
+      "SupportsCertificateRotationWithoutRestart" => out.supports_certificate_rotation_without_restart = xmlv.read_bool(c.text())?
+      "SupportedCACertificateIdentifiers" => out.supported_ca_certificate_identifiers = xml_read_ca_certificate_identifiers_list(c)?
+      "SupportsLocalWriteForwarding" => out.supports_local_write_forwarding = xmlv.read_bool(c.text())?
+      "SupportsIntegrations" => out.supports_integrations = xmlv.read_bool(c.text())?
+      "ServerlessV2FeaturesSupport" => out.serverless_v2_features_support = xml_read_serverless_v2_features_support(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 /// The errors of ModifyCustomDBEngineVersion.
 pub enum ModifyCustomDBEngineVersionErr {
   CustomDBEngineVersionNotFoundFault(e: CustomDBEngineVersionNotFoundFault)

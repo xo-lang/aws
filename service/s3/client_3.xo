@@ -2,10 +2,146 @@
 
 use std/http
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/checksum
 use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
+
+/// The errors of HeadObject.
+pub enum HeadObjectErr {
+  NotFound(e: NotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: HeadObjectErr) display() -> Str {
+  match e {
+    NotFound(x) => "NotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_head_object_error(resp: http.Response) -> HeadObjectErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "NotFound" => match read_error_not_found(resp, body) {
+      Ok(x) => return HeadObjectErr.NotFound(x)
+      Err(msg) => return HeadObjectErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  HeadObjectErr.Api(restxml.api_error(resp))
+}
+
+/// The HEAD operation retrieves metadata from an object without returning
+/// the object itself. This operation is useful if you're interested only in
+/// an object's metadata. A HEAD request has the same options as a GET
+/// operation on an object. The response is identical to the GET response
+/// except that there is no response body. Because of this, if the HEAD
+/// request generates an error, it returns a generic code, such as 400 Bad
+/// Request , 403 Forbidden , 404 Not Found , 405 Method Not Allowed , 412
+/// Precondition Failed , or 304 Not Modified . It's not possible to
+/// retrieve the exact exception of these error codes. Request headers are
+/// limited to 8 KB in size. For more information, see Common Request
+/// Headers . Permissions General purpose bucket permissions - To use HEAD ,
+/// you must have the s3:GetObject permission. You need the relevant read
+/// object (or version) permission for this operation. For more information,
+/// see Actions, resources, and condition keys for Amazon S3 in the Amazon
+/// S3 User Guide . For more information about the permissions to S3 API
+/// operations by S3 resource types, see Required permissions for Amazon S3
+/// API operations in the Amazon S3 User Guide . If the object you request
+/// doesn't exist, the error that Amazon S3 returns depends on whether you
+/// also have the s3:ListBucket permission. If you have the s3:ListBucket
+/// permission on the bucket, Amazon S3 returns an HTTP status code 404 Not
+/// Found error. If you don’t have the s3:ListBucket permission, Amazon S3
+/// returns an HTTP status code 403 Forbidden error. Directory bucket
+/// permissions - To grant access to this API operation on a directory
+/// bucket, we recommend that you use the CreateSession API operation for
+/// session-based authorization. Specifically, you grant the
+/// s3express:CreateSession permission to the directory bucket in a bucket
+/// policy or an IAM identity-based policy. Then, you make the CreateSession
+/// API call on the bucket to obtain a session token. With the session token
+/// in your request header, you can make API requests to this operation.
+/// After the session token expires, you make another CreateSession API call
+/// to generate a new session token for use. Amazon Web Services CLI or SDKs
+/// create session and refresh the session token automatically to avoid
+/// service interruptions when a session expires. For more information about
+/// authorization, see CreateSession . If you enable x-amz-checksum-mode in
+/// the request and the object is encrypted with Amazon Web Services Key
+/// Management Service (Amazon Web Services KMS), you must also have the
+/// kms:GenerateDataKey and kms:Decrypt permissions in IAM identity-based
+/// policies and KMS key policies for the KMS key to retrieve the checksum
+/// of the object. Encryption Encryption request headers, like
+/// x-amz-server-side-encryption , should not be sent for HEAD requests if
+/// your object uses server-side encryption with Key Management Service
+/// (KMS) keys (SSE-KMS), dual-layer server-side encryption with Amazon Web
+/// Services KMS keys (DSSE-KMS), or server-side encryption with Amazon S3
+/// managed encryption keys (SSE-S3). The x-amz-server-side-encryption
+/// header is used when you PUT an object to S3 and want to specify the
+/// encryption method. If you include this header in a HEAD request for an
+/// object that uses these types of keys, you’ll get an HTTP 400 Bad
+/// Request error. It's because the encryption method can't be changed when
+/// you retrieve the object. If you encrypt an object by using server-side
+/// encryption with customer-provided encryption keys (SSE-C) when you store
+/// the object in Amazon S3, then when you retrieve the metadata from the
+/// object, you must use the following headers to provide the encryption key
+/// for the server to be able to retrieve the object's metadata. The headers
+/// are: x-amz-server-side-encryption-customer-algorithm
+/// x-amz-server-side-encryption-customer-key
+/// x-amz-server-side-encryption-customer-key-MD5 For more information about
+/// SSE-C, see Server-Side Encryption (Using Customer-Provided Encryption
+/// Keys) in the Amazon S3 User Guide . Directory bucket - For directory
+/// buckets, there are only two supported options for server-side
+/// encryption: SSE-S3 and SSE-KMS. SSE-C isn't supported. For more
+/// information, see Protecting data with server-side encryption in the
+/// Amazon S3 User Guide . Versioning If the current version of the object
+/// is a delete marker, Amazon S3 behaves as if the object was deleted and
+/// includes x-amz-delete-marker: true in the response. If the specified
+/// version is a delete marker, the response returns a 405 Method Not
+/// Allowed error and the Last-Modified: timestamp response header.
+/// Directory buckets - Delete marker is not supported for directory
+/// buckets. Directory buckets - S3 Versioning isn't enabled and supported
+/// for directory buckets. For this API operation, only the null value of
+/// the version ID is supported by directory buckets. You can only specify
+/// null to the versionId query parameter in the request. HTTP Host header
+/// syntax Directory buckets - The HTTP Host header syntax is Bucket-name
+/// .s3express- zone-id . region-code .amazonaws.com . For directory
+/// buckets, you must make requests for this API operation to the Zonal
+/// endpoint. These endpoints support virtual-hosted-style requests in the
+/// format https:// amzn-s3-demo-bucket .s3express- zone-id . region-code
+/// .amazonaws.com/ key-name . Path-style requests are not supported. For
+/// more information about endpoints in Availability Zones, see Regional and
+/// Zonal endpoints for directory buckets in Availability Zones in the
+/// Amazon S3 User Guide . For more information about endpoints in Local
+/// Zones, see Concepts for directory buckets in Local Zones in the Amazon
+/// S3 User Guide . The following actions are related to HeadObject :
+/// GetObject GetObjectAttributes You must URL encode any signed header
+/// values that contain spaces. For example, if your header value is my
+/// file.txt , containing two spaces after my , you must URL encode this
+/// value to my%20%20file.txt .
+pub fn (c: Client) head_object(input: HeadObjectRequest) -> HeadObjectOutput ! HeadObjectErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_head_object(c.params, input)) ?? e => return Err(HeadObjectErr.InvalidInput(e))
+  var req = serialize_head_object(ep, input, "") ?? e => return Err(HeadObjectErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(HeadObjectErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_head_object_error(resp))
+  }
+  deserialize_head_object(resp) ?? e => Err(HeadObjectErr.Deserialize(e))
+}
 
 /// HeadObject as a presigned request: a URL (and the headers
 /// to send with it) that works without credentials until `expires`
@@ -55,6 +191,7 @@ pub fn serialize_list_bucket_analytics_configurations(ep: rest.Endpoint, input: 
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -176,6 +313,7 @@ pub fn serialize_list_bucket_intelligent_tiering_configurations(ep: rest.Endpoin
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -298,6 +436,7 @@ pub fn serialize_list_bucket_inventory_configurations(ep: rest.Endpoint, input: 
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -437,6 +576,7 @@ pub fn serialize_list_bucket_metrics_configurations(ep: rest.Endpoint, input: Li
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -579,6 +719,7 @@ pub fn serialize_list_buckets(ep: rest.Endpoint, input: ListBucketsRequest, idem
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -684,6 +825,7 @@ pub fn serialize_list_directory_buckets(ep: rest.Endpoint, input: ListDirectoryB
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -821,6 +963,7 @@ pub fn serialize_list_multipart_uploads(ep: rest.Endpoint, input: ListMultipartU
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1020,6 +1163,7 @@ pub fn serialize_list_object_annotations(ep: rest.Endpoint, input: ListObjectAnn
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1178,6 +1322,7 @@ pub fn serialize_list_object_versions(ep: rest.Endpoint, input: ListObjectVersio
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1330,6 +1475,7 @@ pub fn serialize_list_objects(ep: rest.Endpoint, input: ListObjectsRequest, idem
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1490,6 +1636,7 @@ pub fn serialize_list_objects_v2(ep: rest.Endpoint, input: ListObjectsV2Request,
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1692,6 +1839,7 @@ pub fn serialize_list_parts(ep: rest.Endpoint, input: ListPartsRequest, idempote
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1850,6 +1998,7 @@ pub fn serialize_put_bucket_abac(ep: rest.Endpoint, input: PutBucketAbacRequest,
     body = xml_body_abac_status(v, "AbacStatus", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -1862,6 +2011,7 @@ pub fn serialize_put_bucket_abac(ep: rest.Endpoint, input: PutBucketAbacRequest,
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -1946,6 +2096,7 @@ pub fn serialize_put_bucket_accelerate_configuration(ep: rest.Endpoint, input: P
     body = xml_body_accelerate_configuration(v, "AccelerateConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -1958,6 +2109,7 @@ pub fn serialize_put_bucket_accelerate_configuration(ep: rest.Endpoint, input: P
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2079,6 +2231,7 @@ pub fn serialize_put_bucket_acl(ep: rest.Endpoint, input: PutBucketAclRequest, i
     body = xml_body_access_control_policy(v, "AccessControlPolicy", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -2091,6 +2244,7 @@ pub fn serialize_put_bucket_acl(ep: rest.Endpoint, input: PutBucketAclRequest, i
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2255,6 +2409,7 @@ pub fn serialize_put_bucket_analytics_configuration(ep: rest.Endpoint, input: Pu
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2369,6 +2524,7 @@ pub fn serialize_put_bucket_cors(ep: rest.Endpoint, input: PutBucketCorsRequest,
     body = xml_body_cors_configuration(v, "CORSConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -2381,6 +2537,7 @@ pub fn serialize_put_bucket_cors(ep: rest.Endpoint, input: PutBucketCorsRequest,
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2490,6 +2647,7 @@ pub fn serialize_put_bucket_encryption(ep: rest.Endpoint, input: PutBucketEncryp
     body = xml_body_server_side_encryption_configuration(v, "ServerSideEncryptionConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -2502,6 +2660,7 @@ pub fn serialize_put_bucket_encryption(ep: rest.Endpoint, input: PutBucketEncryp
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2666,6 +2825,7 @@ pub fn serialize_put_bucket_intelligent_tiering_configuration(ep: rest.Endpoint,
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2790,6 +2950,7 @@ pub fn serialize_put_bucket_inventory_configuration(ep: rest.Endpoint, input: Pu
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -2934,6 +3095,7 @@ pub fn serialize_put_bucket_lifecycle_configuration(ep: rest.Endpoint, input: Pu
     body = xml_body_bucket_lifecycle_configuration(v, "LifecycleConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -2946,6 +3108,7 @@ pub fn serialize_put_bucket_lifecycle_configuration(ep: rest.Endpoint, input: Pu
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3100,6 +3263,7 @@ pub fn serialize_put_bucket_logging(ep: rest.Endpoint, input: PutBucketLoggingRe
     body = xml_body_bucket_logging_status(v, "BucketLoggingStatus", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -3112,6 +3276,7 @@ pub fn serialize_put_bucket_logging(ep: rest.Endpoint, input: PutBucketLoggingRe
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3240,6 +3405,7 @@ pub fn serialize_put_bucket_metrics_configuration(ep: rest.Endpoint, input: PutB
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3371,6 +3537,7 @@ pub fn serialize_put_bucket_notification_configuration(ep: rest.Endpoint, input:
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3491,6 +3658,7 @@ pub fn serialize_put_bucket_ownership_controls(ep: rest.Endpoint, input: PutBuck
     body = xml_body_ownership_controls(v, "OwnershipControls", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -3503,6 +3671,7 @@ pub fn serialize_put_bucket_ownership_controls(ep: rest.Endpoint, input: PutBuck
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3596,6 +3765,7 @@ pub fn serialize_put_bucket_policy(ep: rest.Endpoint, input: PutBucketPolicyRequ
     body = v.bytes()
     headers.push(("Content-Type", "text/plain"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -3608,6 +3778,7 @@ pub fn serialize_put_bucket_policy(ep: rest.Endpoint, input: PutBucketPolicyRequ
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3736,6 +3907,7 @@ pub fn serialize_put_bucket_replication(ep: rest.Endpoint, input: PutBucketRepli
     body = xml_body_replication_configuration(v, "ReplicationConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -3748,6 +3920,7 @@ pub fn serialize_put_bucket_replication(ep: rest.Endpoint, input: PutBucketRepli
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3871,6 +4044,7 @@ pub fn serialize_put_bucket_request_payment(ep: rest.Endpoint, input: PutBucketR
     body = xml_body_request_payment_configuration(v, "RequestPaymentConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -3883,6 +4057,7 @@ pub fn serialize_put_bucket_request_payment(ep: rest.Endpoint, input: PutBucketR
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -3972,6 +4147,7 @@ pub fn serialize_put_bucket_tagging(ep: rest.Endpoint, input: PutBucketTaggingRe
     body = xml_body_tagging(v, "Tagging", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -3984,6 +4160,7 @@ pub fn serialize_put_bucket_tagging(ep: rest.Endpoint, input: PutBucketTaggingRe
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -4100,6 +4277,7 @@ pub fn serialize_put_bucket_versioning(ep: rest.Endpoint, input: PutBucketVersio
     body = xml_body_versioning_configuration(v, "VersioningConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -4112,6 +4290,7 @@ pub fn serialize_put_bucket_versioning(ep: rest.Endpoint, input: PutBucketVersio
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -4222,6 +4401,7 @@ pub fn serialize_put_bucket_website(ep: rest.Endpoint, input: PutBucketWebsiteRe
     body = xml_body_website_configuration(v, "WebsiteConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -4234,6 +4414,7 @@ pub fn serialize_put_bucket_website(ep: rest.Endpoint, input: PutBucketWebsiteRe
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -4485,6 +4666,7 @@ pub fn serialize_put_object(ep: rest.Endpoint, input: PutObjectRequest, idempote
   if let Some(v) = input.body {
     body = v
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -4497,6 +4679,7 @@ pub fn serialize_put_object(ep: rest.Endpoint, input: PutObjectRequest, idempote
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -4803,6 +4986,7 @@ pub fn serialize_put_object_acl(ep: rest.Endpoint, input: PutObjectAclRequest, i
     body = xml_body_access_control_policy(v, "AccessControlPolicy", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -4815,6 +4999,7 @@ pub fn serialize_put_object_acl(ep: rest.Endpoint, input: PutObjectAclRequest, i
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5035,6 +5220,7 @@ pub fn serialize_put_object_annotation(ep: rest.Endpoint, input: PutObjectAnnota
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5047,6 +5233,7 @@ pub fn serialize_put_object_annotation(ep: rest.Endpoint, input: PutObjectAnnota
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5252,6 +5439,7 @@ pub fn serialize_put_object_legal_hold(ep: rest.Endpoint, input: PutObjectLegalH
     body = xml_body_object_lock_legal_hold(v, "LegalHold", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5264,6 +5452,7 @@ pub fn serialize_put_object_legal_hold(ep: rest.Endpoint, input: PutObjectLegalH
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5358,6 +5547,7 @@ pub fn serialize_put_object_lock_configuration(ep: rest.Endpoint, input: PutObje
     body = xml_body_object_lock_configuration(v, "ObjectLockConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5370,6 +5560,7 @@ pub fn serialize_put_object_lock_configuration(ep: rest.Endpoint, input: PutObje
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5479,6 +5670,7 @@ pub fn serialize_put_object_retention(ep: rest.Endpoint, input: PutObjectRetenti
     body = xml_body_object_lock_retention(v, "Retention", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5491,6 +5683,7 @@ pub fn serialize_put_object_retention(ep: rest.Endpoint, input: PutObjectRetenti
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5595,6 +5788,7 @@ pub fn serialize_put_object_tagging(ep: rest.Endpoint, input: PutObjectTaggingRe
     body = xml_body_tagging(v, "Tagging", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5607,6 +5801,7 @@ pub fn serialize_put_object_tagging(ep: rest.Endpoint, input: PutObjectTaggingRe
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5715,6 +5910,7 @@ pub fn serialize_put_public_access_block(ep: rest.Endpoint, input: PutPublicAcce
     body = xml_body_public_access_block_configuration(v, "PublicAccessBlockConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5727,6 +5923,7 @@ pub fn serialize_put_public_access_block(ep: rest.Endpoint, input: PutPublicAcce
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5865,6 +6062,7 @@ pub fn serialize_rename_object(ep: rest.Endpoint, input: RenameObjectRequest, id
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -5998,6 +6196,7 @@ pub fn serialize_restore_object(ep: rest.Endpoint, input: RestoreObjectRequest, 
     body = xml_body_restore_request(v, "RestoreRequest", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6010,6 +6209,7 @@ pub fn serialize_restore_object(ep: rest.Endpoint, input: RestoreObjectRequest, 
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -6388,6 +6588,7 @@ pub fn serialize_update_bucket_metadata_annotation_table_configuration(ep: rest.
     body = xml_body_annotation_table_configuration_updates(v, "AnnotationTableConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6400,6 +6601,7 @@ pub fn serialize_update_bucket_metadata_annotation_table_configuration(ep: rest.
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -6496,6 +6698,7 @@ pub fn serialize_update_bucket_metadata_inventory_table_configuration(ep: rest.E
     body = xml_body_inventory_table_configuration_updates(v, "InventoryTableConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6508,6 +6711,7 @@ pub fn serialize_update_bucket_metadata_inventory_table_configuration(ep: rest.E
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -6608,6 +6812,7 @@ pub fn serialize_update_bucket_metadata_journal_table_configuration(ep: rest.End
     body = xml_body_journal_table_configuration_updates(v, "JournalTableConfiguration", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6620,6 +6825,7 @@ pub fn serialize_update_bucket_metadata_journal_table_configuration(ep: rest.End
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -6725,6 +6931,7 @@ pub fn serialize_update_object_encryption(ep: rest.Endpoint, input: UpdateObject
     body = xml_body_object_encryption(v, "ObjectEncryption", [("xmlns", "http://s3.amazonaws.com/doc/2006-03-01/")])
     headers.push(("Content-Type", "application/xml"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), true)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6737,6 +6944,7 @@ pub fn serialize_update_object_encryption(ep: rest.Endpoint, input: UpdateObject
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -6982,6 +7190,7 @@ pub fn serialize_upload_part(ep: rest.Endpoint, input: UploadPartRequest, idempo
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
   }
+  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6994,6 +7203,7 @@ pub fn serialize_upload_part(ep: rest.Endpoint, input: UploadPartRequest, idempo
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -7305,6 +7515,7 @@ pub fn serialize_upload_part_copy(ep: rest.Endpoint, input: UploadPartCopyReques
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 
@@ -7654,6 +7865,7 @@ pub fn serialize_write_get_object_response(ep: rest.Endpoint, input: WriteGetObj
     query: rest.query(qs),
     headers: headers,
     body: body,
+    error_in_2xx: true,
   })
 }
 

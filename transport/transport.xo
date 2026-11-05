@@ -23,6 +23,23 @@ pub struct Request {
   pub query: Str = ""
   pub headers: List[(Str, Str)] = []
   pub body: Bytes = b""
+  /// S3's rule for operations with a structured XML response: a 2xx
+  /// whose root element is `<Error>` is a failure (treated as a 500, so
+  /// it is retried and then returned as the error it names), as in
+  /// aws-sdk-go-v2's HandleResponseErrorWith200Status.
+  pub error_in_2xx: Bool = false
+}
+
+/// Whether `body`'s XML root element is `Error`: after an optional XML
+/// declaration and whitespace.
+pub fn xml_root_is_error(body: Bytes) -> Bool {
+  let text = (if body.len() > 512 { body[0..512] } else { body }).to_str_lossy()
+  var rest = text.trim_start()
+  if rest.starts_with("<?xml") {
+    let end = rest.find("?>") ?? return false
+    rest = rest[end + 2..rest.len()].trim_start()
+  }
+  rest.starts_with("<Error>") || rest.starts_with("<Error ")
 }
 
 /// The `Host` value: the host, with the port when it is not the scheme's.
@@ -54,6 +71,19 @@ pub struct Signing {
   pub unsigned_payload: Bool = false
   /// Sign with SigV4a for these regions (the endpoint chose `sigv4a`).
   pub region_set: List[Str]? = None
+  /// Whether the operation is signed (Smithy's auth traits).
+  pub auth: Auth = Auth.Required
+}
+
+/// How an operation authenticates: `smithy.api#auth` with no schemes is
+/// None (sent unsigned, as STS AssumeRoleWithWebIdentity and Cognito's
+/// GetId are), `smithy.api#optionalAuth` is Optional (signed when
+/// credentials resolve, unsigned when they do not), anything else
+/// Required.
+pub enum Auth {
+  Required
+  Optional
+  None
 }
 
 pub enum SendErr {
@@ -147,14 +177,22 @@ fn signed_request(c: Client, req: Request, signing: Signing, attempt: Int, max: 
 /// credentials and the signing time (an event stream's signer needs
 /// them). `payload` overrides the payload hash.
 fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: Int, payload_override: Str?) -> (http.Request, Str, sigv4.Credentials, Time) ! AttemptErr uses (net.dial, clock, rand) {
-  let creds = match c.credentials.retrieve() {
-    Ok(v) => v
-    Err(e) => return Err(AttemptErr.Creds(e))
-  }
   let now = Time.from_unix_millis(c.clock.now().unix_millis() + c.skew_ms.get())
   var headers = req.headers
   headers.push(("Host", host_header(req)))
   headers.push(("Amz-Sdk-Request", "attempt=${attempt}; max=${max}"))
+  let found = match signing.auth {
+    Auth.None => None
+    Auth.Optional => c.credentials.retrieve().ok()
+    Auth.Required => match c.credentials.retrieve() {
+      Ok(v) => Some(v)
+      Err(e) => return Err(AttemptErr.Creds(e))
+    }
+  }
+  let creds = match found {
+    Some(v) => v
+    None => return Ok((unsigned_request(c, req, headers), "", sigv4.Credentials{access_key_id: "", secret_access_key: Secret.new("")}, now))
+  }
   let payload = payload_override ?? if signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
   let screds = sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token}
   let sreq = sigv4.Request{method: req.method, path: req.path, query: req.query, headers: headers}
@@ -200,12 +238,28 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
   Ok((hreq, signed.signature, screds, now))
 }
 
+/// `req` with `headers` and no signature, for an operation without auth.
+fn unsigned_request(c: Client, req: Request, headers: List[(Str, Str)]) -> http.Request {
+  var hreq = http.new_request(req.method, url_of(req), {}, req.body)
+  for (name, value) in headers {
+    if name != "Host" && name.to_lower() != "content-length" {
+      hreq = hreq.add_header(name, value)
+    }
+  }
+  hreq = hreq.with_header("User-Agent", c.user_agent)
+  if hreq.header("Accept-Encoding").is_none() {
+    hreq = hreq.with_header("Accept-Encoding", "identity")
+  }
+  hreq
+}
+
 fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
   let hreq = signed_request(c, req, signing, attempt, max)?
-  let resp = match c.http.send(hreq) {
+  let sent = match c.http.send(hreq) {
     Ok(r) => r
     Err(e) => return Err(AttemptErr.Net(e))
   }
+  let resp = if req.error_in_2xx && sent.status < 300 && xml_root_is_error(sent.body) { sent with {status: 500} } else { sent }
   if resp.status < 300 {
     return Ok(resp)
   }

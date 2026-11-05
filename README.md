@@ -32,6 +32,8 @@ Less tested: services that depend on hand-written customizations in the
 other AWS SDKs (checksums, endpoint discovery, cross-region presigned
 URLs, service-specific headers). Every service type checks, but only the
 services above have run against a server.
+[docs/customizations.md](docs/customizations.md) lists each customization
+the other SDKs make and whether this one handles it yet.
 
 The design is in [docs/decisions](docs/decisions/README.md), and
 [docs/usage.md](docs/usage.md) shows how to use it. Licensed under

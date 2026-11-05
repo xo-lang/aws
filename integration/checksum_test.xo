@@ -1,0 +1,55 @@
+// S3 flexible checksums on the test network: an operation that requires
+// a checksum (DeleteObjects) sends CRC32 unless the caller picks another
+// algorithm, and an algorithm the caller names is used for any operation
+// that takes one (PutObject). Real S3 refuses DeleteObjects without one.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+fn checksum_client(net: testing.FakeNet, clock: Clock, rand: Rand) -> s3.Client ! Str {
+  s3.new(net, clock, rand, s3.Options{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+  })
+}
+
+test "DeleteObjects sends a CRC32 checksum by default and SHA256 when asked" {
+  let seen = Mutex[List[(Str, Str)]].new([])
+  os.net.handle("POST https://bucket.s3.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[(Str, Str)]) {
+      xs.push((req.header("x-amz-checksum-crc32") ?? "", req.header("x-amz-checksum-sha256") ?? ""))
+    })
+    http.text(200, "<DeleteResult></DeleteResult>").with_header("Content-Type", "application/xml")
+  })
+  let c = checksum_client(os.net, os.clock, os.rand)?
+  let del = s3.Delete{objects: [s3.ObjectIdentifier{key: "a"}]}
+  c.delete_objects(s3.DeleteObjectsRequest{bucket: "bucket", delete: del})?
+  c.delete_objects(s3.DeleteObjectsRequest{bucket: "bucket", delete: del, checksum_algorithm: s3.ChecksumAlgorithm.Sha256})?
+  let got = seen.with_read(fn(xs: List[(Str, Str)]) -> List[(Str, Str)] { xs })
+  expect(got.len()) == 2
+  expect(got[0].0 != "") == true
+  expect(got[0].1) == ""
+  expect(got[1].0) == ""
+  expect(got[1].1 != "") == true
+}
+
+test "PutObject sends the checksum of the algorithm the caller names, and none otherwise" {
+  let seen = Mutex[List[Str]].new([])
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/k", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[Str]) { xs.push(req.header("x-amz-checksum-crc32c") ?? "") })
+    http.empty(200)
+  })
+  let c = checksum_client(os.net, os.clock, os.rand)?
+  c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "k", body: b"Hello world"})?
+  c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "k", body: b"Hello world", checksum_algorithm: s3.ChecksumAlgorithm.Crc32C})?
+  expect(seen.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["", "crUfeA=="]
+}
+
+test "an algorithm this SDK cannot compute fails before sending" {
+  let c = checksum_client(os.net, os.clock, os.rand)?
+  match c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "k", body: b"x", checksum_algorithm: s3.ChecksumAlgorithm.Xxhash3}) {
+    Err(s3.PutObjectErr.InvalidInput(e)) => expect(e.contains("XXHASH3")) == true
+    _ => return Err("want InvalidInput")
+  }
+}

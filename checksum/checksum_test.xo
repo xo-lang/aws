@@ -1,0 +1,51 @@
+// Known answers: "Hello world" as in aws-sdk-go-v2's
+// service/internal/checksum tests, and the CRC catalogue's "123456789".
+
+test "checksums match aws-sdk-go-v2's values" {
+  let b = b"Hello world"
+  expect(compute("CRC32", b)) == Some("i9aeUg==")
+  expect(compute("CRC32C", b)) == Some("crUfeA==")
+  expect(compute("SHA1", b)) == Some("e1AsOh9IyGCa4hLN+2Od7jlnP14=")
+  expect(compute("SHA256", b)) == Some("ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=")
+  expect(compute("crc32", b)) == Some("i9aeUg==")
+  expect(compute("XXHASH64", b)) == None
+}
+
+test "CRC64NVME matches the catalogue check value" {
+  // 0xae8b14860a799888
+  expect(compute("CRC64NVME", b"123456789")) == Some("rosUhgp5mIg=")
+}
+
+test "a required checksum defaults to CRC32; an algorithm the caller names wins" {
+  var h: List[(Str, Str)] = []
+  add(h, b"Hello world", None, true)?
+  expect(h) == [("x-amz-checksum-crc32", "i9aeUg==")]
+  var h2: List[(Str, Str)] = []
+  add(h2, b"Hello world", Some("SHA256"), false)?
+  expect(h2) == [("x-amz-checksum-sha256", "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=")]
+  var h3: List[(Str, Str)] = []
+  add(h3, b"x", None, false)?
+  expect(h3) == []
+}
+
+test "a checksum the caller supplied is kept" {
+  var h = [("Content-MD5", "abc")]
+  add(h, b"Hello world", None, true)?
+  expect(h.len()) == 1
+  var h2 = [("x-amz-checksum-crc32c", "abc")]
+  add(h2, b"Hello world", Some("CRC32"), true)?
+  expect(h2.len()) == 1
+}
+
+test "an unsupported algorithm is an error, not a request without a checksum" {
+  var h: List[(Str, Str)] = []
+  expect(add(h, b"x", Some("XXHASH3"), true).is_err()) == true
+}
+
+test "response validation checks the strongest fast checksum and skips composites" {
+  let b = b"Hello world"
+  expect(validate([("x-amz-checksum-sha256", "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw="), ("x-amz-checksum-crc32", "i9aeUg==")], b)) == Ok(Some("CRC32"))
+  expect(validate([("x-amz-checksum-crc32", "AAAAAA==")], b).is_err()) == true
+  expect(validate([("x-amz-checksum-crc32", "i9aeUg==-3")], b)) == Ok(None)
+  expect(validate([], b)) == Ok(None)
+}

@@ -1,0 +1,53 @@
+// Smithy's auth traits on the test network: an operation with no auth
+// schemes (`smithy.api#auth: []`, which wins over the optionalAuth these
+// operations also carry) is never signed: STS AssumeRoleWithWebIdentity,
+// how a web identity provider gets its first credentials, and Cognito
+// Identity GetId. Operations that need auth still fail without
+// credentials.
+
+use std/http
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/cognitoidentity
+use github.com/xo-lang/aws/service/sts
+
+const WEB_IDENTITY_RESULT: Str = "<AssumeRoleWithWebIdentityResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\"><AssumeRoleWithWebIdentityResult><Credentials><AccessKeyId>AKIDTEST0000000001</AccessKeyId><SecretAccessKey>invented</SecretAccessKey><SessionToken>invented-token</SessionToken><Expiration>2030-01-01T00:00:00Z</Expiration></Credentials></AssumeRoleWithWebIdentityResult></AssumeRoleWithWebIdentityResponse>"
+
+fn no_credentials() -> credentials.FixedResult {
+  credentials.FixedResult{result: Err(aws.CredentialsErr.NotFound("none in this test"))}
+}
+
+test "no auth schemes: AssumeRoleWithWebIdentity is unsigned, with credentials or without" {
+  let seen = Mutex[List[Bool]].new([])
+  os.net.handle("POST https://sts.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[Bool]) { xs.push(req.header("Authorization").is_some()) })
+    http.text(200, WEB_IDENTITY_RESULT).with_header("Content-Type", "text/xml")
+  })
+  let input = sts.AssumeRoleWithWebIdentityRequest{role_arn: "arn:aws:iam::123456789012:role/r", role_session_name: "s", web_identity_token: "invented-token"}
+  let anon = sts.new(os.net, os.clock, os.rand, sts.Options{region: "us-west-2", credentials: no_credentials()})?
+  let out = anon.assume_role_with_web_identity(input)?
+  expect(out.credentials.map(fn(c: sts.Credentials) -> Str { c.access_key_id ?? "" })) == Some("AKIDTEST0000000001")
+  let signed = sts.new(os.net, os.clock, os.rand, sts.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  signed.assume_role_with_web_identity(input)?
+  expect(seen.with_read(fn(xs: List[Bool]) -> List[Bool] { xs })) == [false, false]
+}
+
+test "a required-auth operation still fails without credentials" {
+  let c = sts.new(os.net, os.clock, os.rand, sts.Options{region: "us-west-2", credentials: no_credentials()})?
+  match c.get_caller_identity(sts.GetCallerIdentityRequest{}) {
+    Err(sts.GetCallerIdentityErr.Send(_)) => {}
+    _ => return Err("want a credentials error")
+  }
+}
+
+test "no auth schemes: Cognito Identity GetId is never signed" {
+  let seen = Mutex[List[Bool]].new([])
+  os.net.handle("POST https://cognito-identity.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[Bool]) { xs.push(req.header("Authorization").is_some()) })
+    http.text(200, "{\"IdentityId\":\"us-west-2:00000000-0000-0000-0000-000000000000\"}").with_header("Content-Type", "application/x-amz-json-1.1")
+  })
+  let c = cognitoidentity.new(os.net, os.clock, os.rand, cognitoidentity.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let out = c.get_id(cognitoidentity.GetIdInput{identity_pool_id: "us-west-2:00000000-0000-0000-0000-000000000000"})?
+  expect(out.identity_id) == Some("us-west-2:00000000-0000-0000-0000-000000000000")
+  expect(seen.with_read(fn(xs: List[Bool]) -> List[Bool] { xs })) == [false]
+}

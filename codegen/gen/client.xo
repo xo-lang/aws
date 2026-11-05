@@ -269,3 +269,39 @@ fn emit_from_config(g: G, var out: List[Str]) {
 fn s3_signing(g: G) -> Bool {
   g.s3 || g.m.service == "com.amazonaws.s3control#AWSS3ControlServiceV20180820"
 }
+
+/// The operation's auth (Smithy's auth traits on the operation, else the
+/// service): "None" for `smithy.api#auth` with no schemes (even with
+/// optionalAuth too), "Optional" for `smithy.api#optionalAuth`, else
+/// "Required".
+pub fn op_auth(g: G, op: Str) -> Str {
+  let s = shape_of(g, op)
+  let svc = g.m.shapes.get(g.m.service)
+  let t = model.trait_of(s.traits, "auth") ?? (match svc {
+    Some(x) => model.trait_of(x.traits, "auth")
+    None => None
+  })
+  // no schemes at all wins over optionalAuth (Cognito's GetId has both)
+  if let Some(json.Value.List(xs)) = t {
+    if xs.is_empty() {
+      return "None"
+    }
+  }
+  if model.trait_of(s.traits, "optionalAuth").is_some() {
+    return "Optional"
+  }
+  "Required"
+}
+
+/// The lines that route an operation's request: the endpoint, the
+/// signing (with the operation's auth) and the endpoint's extra headers.
+pub fn route_binding(g: G, op: Str, route: Str, en: Str) -> List[Str] {
+  let auth = op_auth(g, op)
+  if auth == "Required" {
+    return ["  let (ep, signing, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
+  }
+  [
+    "  let (ep, routed, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))",
+    "  let signing = routed with {auth: transport.Auth.${auth}}",
+  ]
+}

@@ -101,6 +101,21 @@ test "missing credentials fail without sending" {
   expect(os.net.requests().len()) == 0
 }
 
+test "auth None and Optional send unsigned when credentials are missing; Optional signs when they resolve" {
+  let seen = Mutex[List[Bool]].new([])
+  os.net.handle("POST https://sts.test/", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[Bool]) { xs.push(req.header("Authorization").is_some()) })
+    http.text(200, "ok")
+  })
+  let none = new_client(os.net, os.clock, os.rand, credentials.FixedResult{result: Err(aws.CredentialsErr.NotFound("none"))}, retry.standard())
+  send(none, sts_request(), SIGNING with {auth: Auth.None}, status_failure)?
+  send(none, sts_request(), SIGNING with {auth: Auth.Optional}, status_failure)?
+  let some = test_client(os.net, os.clock, os.rand)
+  send(some, sts_request(), SIGNING with {auth: Auth.Optional}, status_failure)?
+  send(some, sts_request(), SIGNING with {auth: Auth.None}, status_failure)?
+  expect(seen.with_read(fn(xs: List[Bool]) -> List[Bool] { xs })) == [false, false, true, false]
+}
+
 test "host header and url" {
   let r = Request{host: "localhost", port: 9000, scheme: "http", path: "/b/a%20b", query: "x=1"}
   expect(host_header(r)) == "localhost:9000"

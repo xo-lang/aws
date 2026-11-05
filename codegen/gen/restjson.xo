@@ -585,6 +585,25 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       out.push("  }")
     }
   }
+  // flexible checksums (aws.protocols#httpChecksum): the caller's
+  // algorithm, or CRC32 when the operation requires a checksum
+  if let Some(hc) = model.trait_of(s.traits, "aws.protocols#httpChecksum") {
+    let required = match hc.get("requestChecksumRequired") {
+      Some(json.Value.Bool(b)) => b
+      _ => false
+    }
+    var alg = "None"
+    if let Some(json.Value.Str(member)) = hc.get("requestAlgorithmMember") {
+      for m in input.members {
+        if m.name == member {
+          alg = "input.${field_name(member)}.map(fn(a: ${type_name(g.names, m.target)}) -> Str { a.value() })"
+        }
+      }
+    }
+    if required || alg != "None" {
+      out.push("  checksum.add(headers, body, ${alg}, ${required})?")
+    }
+  }
   out.push("  if !body.is_empty() {")
   out.push("    headers.push((\"Content-Length\", \"\${body.len()}\"))")
   out.push("  }")
@@ -619,9 +638,33 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   out.push("    query: rest.query(qs),")
   out.push("    headers: headers,")
   out.push("    body: body,")
+  if s3_error_in_2xx(g, s) {
+    out.push("    error_in_2xx: true,")
+  }
   out.push("  })")
   out.push("}")
   out.push("")
+}
+
+/// S3 operations whose response is structured XML (no streaming or string
+/// payload) can carry an error in a 200 (aws-sdk-go-v2's
+/// S3ErrorWith200Status).
+fn s3_error_in_2xx(g: G, s: model.Shape) -> Bool {
+  if !g.s3 {
+    return false
+  }
+  if s.output == "smithy.api#Unit" {
+    return true
+  }
+  for m in shape_of(g, s.output).members {
+    if has(m.traits, "httpPayload") {
+      let t = shape_of(g, m.target)
+      if has(t.traits, "streaming") || t.kind is model.Kind.String || t.kind is model.Kind.Blob {
+        return false
+      }
+    }
+  }
+  true
 }
 
 /// The statements that read the HTTP bindings of `shape` from `resp`
@@ -929,7 +972,7 @@ pub fn emit_restjson(g: G) -> Str {
     }
     doc_lines(out, s.traits, "")
     out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
-    out.push("  let (ep, signing, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))")
+    for l in route_binding(g, op, route, en) { out.push(l) }
     out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
     out.push("  for h in extra {")
     out.push("    req.headers.push(h)")

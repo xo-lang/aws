@@ -1,0 +1,101 @@
+// Flexible checksums (the aws.protocols#httpChecksum trait, as in
+// aws-sdk-go-v2's service/internal/checksum): the request header an
+// operation sends when the model requires a checksum or the caller picks
+// an algorithm, and the check of a response checksum the caller asked to
+// validate. Values are the digest's bytes in base64, CRCs big-endian.
+
+use std/base64
+use std/binary
+use std/crc32
+use std/crc64
+use std/crypto
+
+/// The algorithm used when an operation requires a checksum and the
+/// caller named none (aws-sdk-go-v2's default).
+pub const DEFAULT: Str = "CRC32"
+
+/// The algorithms response validation prefers, strongest first among the
+/// fast ones (aws-sdk-go-v2's order).
+pub const VALIDATION_ORDER: List[Str] = ["CRC64NVME", "CRC32C", "CRC32", "SHA1", "SHA256", "SHA512", "MD5"]
+
+/// The base64 checksum of `body` with `algorithm` (an enum value such as
+/// "CRC32"), or None for an algorithm this SDK cannot compute.
+pub fn compute(algorithm: Str, body: Bytes) -> Str? {
+  let raw = match algorithm.to_upper() {
+    "CRC32" => binary.u32_be(crc32.checksum(body))
+    "CRC32C" => binary.u32_be(crc32.checksum(body, crc32.Poly.Castagnoli))
+    "CRC64NVME" => binary.u64_be(crc64.checksum(body, crc64.Poly.Nvme))
+    "SHA1" => crypto.digest(crypto.Hash.Sha1, body)
+    "SHA256" => crypto.digest(crypto.Hash.Sha256, body)
+    "SHA512" => crypto.digest(crypto.Hash.Sha512, body)
+    "MD5" => crypto.digest(crypto.Hash.Md5, body)
+    _ => return None
+  }
+  Some(base64.encode(raw))
+}
+
+/// The header that carries `algorithm`'s checksum.
+pub fn header_name(algorithm: Str) -> Str {
+  "x-amz-checksum-${algorithm.to_lower()}"
+}
+
+/// Whether `headers` already carry a checksum the caller supplied.
+pub fn has_checksum(headers: List[(Str, Str)]) -> Bool {
+  headers.any(fn(h: (Str, Str)) -> Bool {
+    let n = h.0.to_lower()
+    n.starts_with("x-amz-checksum-") && n != "x-amz-checksum-type" || n == "content-md5"
+  })
+}
+
+/// Adds the request checksum: `algorithm` when the caller named one, else
+/// DEFAULT when the operation requires one; nothing when the caller
+/// already supplied a checksum header. Err for an algorithm this SDK
+/// cannot compute.
+pub fn add(var headers: List[(Str, Str)], body: Bytes, algorithm: Str?, required: Bool) -> () ! Str {
+  if has_checksum(headers) {
+    return Ok(())
+  }
+  let alg = match algorithm {
+    Some(a) => a
+    None => {
+      if !required {
+        return Ok(())
+      }
+      DEFAULT
+    }
+  }
+  let v = compute(alg, body) ?? return Err("checksum algorithm ${alg} is not supported by this SDK")
+  headers.push((header_name(alg), v))
+  Ok(())
+}
+
+/// The mismatch of a response checksum the caller asked to validate.
+pub struct Mismatch {
+  pub algorithm: Str
+  pub expected: Str
+  pub actual: Str
+}
+
+/// Checks `body` against the first checksum header the response carries,
+/// in VALIDATION_ORDER. A multipart object's composite checksum (a value
+/// ending `-<parts>`) cannot be checked against the whole body and is
+/// skipped, as in aws-sdk-go-v2. Returns the algorithm checked, None when
+/// there was nothing to check.
+pub fn validate(headers: List[(Str, Str)], body: Bytes) -> Str? ! Mismatch {
+  for alg in VALIDATION_ORDER {
+    let name = header_name(alg)
+    for h in headers {
+      if h.0.to_lower() == name {
+        if h.1.contains("-") {
+          return Ok(None)
+        }
+        let actual = compute(alg, body) ?? ""
+        if actual != h.1 {
+          return Err(Mismatch{algorithm: alg, expected: h.1, actual: actual})
+        }
+        return Ok(Some(alg))
+      }
+    }
+  }
+  Ok(None)
+}

@@ -128,5 +128,20 @@ else
   report "gitleaks is not installed" ""
 fi
 
+# where each allowed placeholder occurs, so a reviewer can spot one that
+# is not AWS's: one line per value (category, value, occurrences, the
+# first file:line, the pinned models the list cites), and every
+# occurrence in .gencheck/public-allowed.tsv
+mkdir -p .gencheck
+allowed=.gencheck/public-allowed.tsv
+: > "$allowed"
+grep -v '^#' scripts/public-placeholders.tsv | while IFS="$(printf '\t')" read -r cat val models; do
+  locs=$(echo "$files" | grep -v "^scripts/public-placeholders.tsv$" | xargs grep -n -I -F -- "$val" 2>/dev/null | cut -d: -f1,2)
+  n=$(echo "$locs" | grep -c .)
+  echo "$locs" | grep . | sed "s/^/$cat	$val	/" >> "$allowed"
+  printf 'check-public: allowed %s %s: %s, first %s (cited: %s)\n' "$cat" "$val" "$n" "$(echo "$locs" | head -1)" "$models"
+done
+echo "check-public: every allowed occurrence is in $allowed"
+
 [ $fail -eq 0 ] && echo "check-public: ok"
 exit $fail

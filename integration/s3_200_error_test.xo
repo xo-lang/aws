@@ -1,0 +1,50 @@
+// S3's errors inside a 200 on the test network: CopyObject and
+// CompleteMultipartUpload can answer 200 and then report a failure in the
+// body. The SDK treats that as a 500 (aws-sdk-go-v2 does the same): it is
+// retried, and if it persists it is returned as the error it names.
+// GetObject's body is the object, so an object that is an XML error
+// document comes back as data.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+const COPY_OK: Str = "<CopyObjectResult><ETag>\"e\"</ETag></CopyObjectResult>"
+const INTERNAL: Str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>InternalError</Code><Message>We encountered an internal error. Please try again.</Message></Error>"
+
+fn s3_client(net: testing.FakeNet, clock: Clock, rand: Rand) -> s3.Client ! Str {
+  s3.new(net, clock, rand, s3.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})
+}
+
+test "an error in a 200 is retried, then the success is returned" {
+  let n = Mutex[Int].new(0)
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/dst", fn(req: http.Request) -> http.Response {
+    let i = n.with(fn(var x: Int) -> Int { x += 1; x })
+    http.text(200, if i == 1 { INTERNAL } else { COPY_OK }).with_header("Content-Type", "application/xml")
+  })
+  let c = s3_client(os.net, os.clock, os.rand)?
+  let out = c.copy_object(s3.CopyObjectRequest{bucket: "bucket", key: "dst", copy_source: "bucket/src"})?
+  expect(out.copy_object_result.map(fn(r: s3.CopyObjectResult) -> Str { r.e_tag ?? "" })) == Some("\"e\"")
+  expect(n.with_read(fn(x: Int) -> Int { x })) == 2
+}
+
+test "an error in a 200 that persists is returned as that error" {
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/dst", fn(req: http.Request) -> http.Response {
+    http.text(200, INTERNAL).with_header("Content-Type", "application/xml")
+  })
+  let c = s3_client(os.net, os.clock, os.rand)?
+  match c.copy_object(s3.CopyObjectRequest{bucket: "bucket", key: "dst", copy_source: "bucket/src"}) {
+    Err(s3.CopyObjectErr.Api(e)) => expect(e.code) == "InternalError"
+    Err(e) => return Err("want the InternalError, got ${e:?}")
+    Ok(_) => return Err("a 200 carrying an error must not succeed")
+  }
+}
+
+test "GetObject returns an object that happens to be an XML error document" {
+  os.net.handle("GET https://bucket.s3.us-west-2.amazonaws.com/doc.xml", fn(req: http.Request) -> http.Response {
+    http.text(200, INTERNAL).with_header("Content-Type", "application/xml")
+  })
+  let c = s3_client(os.net, os.clock, os.rand)?
+  let out = c.get_object(s3.GetObjectRequest{bucket: "bucket", key: "doc.xml"})?
+  expect((out.body ?? b"").to_str_lossy()) == INTERNAL
+}

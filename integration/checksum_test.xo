@@ -89,3 +89,23 @@ test "GetObject asks for the object's checksum and checks the body against it" {
   expect(c.get_object(get)?.body) == Some(b"hello")
   expect(modes.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["ENABLED", "ENABLED", "", "ENABLED"]
 }
+
+test "PutObject sends CRC32 by default, unless turned off or the call carries a checksum" {
+  let seen = Mutex[List[(Str, Str)]].new([])
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/k", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[(Str, Str)]) { xs.push((req.header("x-amz-checksum-crc32") ?? "", req.header("x-amz-checksum-sha256") ?? "")) })
+    http.text(200, "")
+  })
+  let c = checksum_client(os.net, os.clock, os.rand)?
+  let put = s3.PutObjectRequest{bucket: "bucket", key: "k", body: b"hello"}
+  c.put_object(put)?
+  c.put_object(put with {checksum_sha256: "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="})?
+  let off = s3.new(os.net, os.clock, os.rand, s3.Options{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    calculate_request_checksums: false,
+  })?
+  off.put_object(put)?
+  let crc = checksum.compute("CRC32", b"hello") ?? ""
+  expect(seen.with_read(fn(xs: List[(Str, Str)]) -> List[(Str, Str)] { xs })) == [(crc, ""), ("", "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="), ("", "")]
+}

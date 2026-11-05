@@ -3,6 +3,7 @@
 use std/http
 use std/xml
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/endpoints
 use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restxml
@@ -54,6 +55,8 @@ pub struct Client {
   /// The endpoint rule parameters every call shares.
   pub params: EndpointParameters
   rand: Rand
+  /// S3 Express session credentials, by base credentials and bucket.
+  express_sessions: credentials.SessionCache
 }
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
@@ -89,6 +92,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
     region: options.region,
     transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
+    express_sessions: credentials.new_session_cache(),
   })
 }
 
@@ -117,6 +121,11 @@ pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Clien
   new(net, clock, rand, options_from_config(cfg)?)
 }
 
+/// `signing` with the S3 Express session of its directory bucket, if any.
+fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing ! Str uses (net.dial, clock, rand) {
+  Ok(signing)
+}
+
 const SIGNING_NAME: Str = "s3"
 
 /// Where one call goes: the endpoint, how to sign, extra headers.
@@ -124,7 +133,7 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   let e = resolve_endpoint(params) ?? err => return Err("endpoint: ${err.msg}")
   let ep = rest.parse_endpoint(e.url) ?? return Err("bad endpoint ${e.url}")
   let (service, region) = endpoints.signing(e)
-  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: true, region_set: endpoints.region_set(e)}
+  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: true, region_set: endpoints.region_set(e), express_bucket: if endpoints.is_s3_express(e) { params.bucket } else { None }}
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
@@ -680,7 +689,8 @@ pub fn deserialize_delete_object_tagging_error(resp: http.Response) -> DeleteObj
 }
 
 pub fn (c: Client) delete_object_tagging(input: DeleteObjectTaggingRequest) -> DeleteObjectTaggingOutput ! DeleteObjectTaggingErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_object_tagging(c.params, input)) ?? e => return Err(DeleteObjectTaggingErr.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_delete_object_tagging(c.params, input)) ?? e => return Err(DeleteObjectTaggingErr.InvalidInput(e))
+  let signing = c.express_session(routed) ?? e => return Err(DeleteObjectTaggingErr.InvalidInput(e))
   var req = serialize_delete_object_tagging(ep, input, "") ?? e => return Err(DeleteObjectTaggingErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -765,7 +775,8 @@ pub fn deserialize_get_bucket_location_error(resp: http.Response) -> GetBucketLo
 }
 
 pub fn (c: Client) get_bucket_location(input: GetBucketLocationRequest) -> GetBucketLocationOutput ! GetBucketLocationErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_bucket_location(c.params, input)) ?? e => return Err(GetBucketLocationErr.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_get_bucket_location(c.params, input)) ?? e => return Err(GetBucketLocationErr.InvalidInput(e))
+  let signing = c.express_session(routed) ?? e => return Err(GetBucketLocationErr.InvalidInput(e))
   var req = serialize_get_bucket_location(ep, input, "") ?? e => return Err(GetBucketLocationErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -850,7 +861,8 @@ pub fn deserialize_get_object_error(resp: http.Response) -> GetObjectErr {
 }
 
 pub fn (c: Client) get_object(input: GetObjectRequest) -> GetObjectOutput ! GetObjectErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_object(c.params, input)) ?? e => return Err(GetObjectErr.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_get_object(c.params, input)) ?? e => return Err(GetObjectErr.InvalidInput(e))
+  let signing = c.express_session(routed) ?? e => return Err(GetObjectErr.InvalidInput(e))
   var req = serialize_get_object(ep, input, "") ?? e => return Err(GetObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -866,7 +878,8 @@ pub fn (c: Client) get_object(input: GetObjectRequest) -> GetObjectOutput ! GetO
 /// to send with it) that works without credentials until `expires`
 /// passes (at most 7 days).
 pub fn (c: Client) presign_get_object(input: GetObjectRequest, expires: Duration = 15m) -> transport.Presigned ! GetObjectErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_object(c.params, input)) ?? e => return Err(GetObjectErr.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_get_object(c.params, input)) ?? e => return Err(GetObjectErr.InvalidInput(e))
+  let signing = c.express_session(routed) ?? e => return Err(GetObjectErr.InvalidInput(e))
   var req = serialize_get_object(ep, input, "") ?? e => return Err(GetObjectErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1002,7 +1015,8 @@ pub fn deserialize_list_objects_v2_error(resp: http.Response) -> ListObjectsV2Er
 }
 
 pub fn (c: Client) list_objects_v2(input: ListObjectsV2Request) -> ListObjectsV2Output ! ListObjectsV2Err uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_objects_v2(c.params, input)) ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_list_objects_v2(c.params, input)) ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
+  let signing = c.express_session(routed) ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
   var req = serialize_list_objects_v2(ep, input, "") ?? e => return Err(ListObjectsV2Err.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

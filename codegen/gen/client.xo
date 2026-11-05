@@ -85,6 +85,12 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  pub max_attempts: Int = 3")
   out.push("  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).")
   out.push("  pub trace_id: Str? = None")
+  if calculates_checksums(g) {
+    out.push("  /// Send a CRC32 checksum with every operation that takes one, when the")
+    out.push("  /// call names no algorithm and carries no checksum (aws-sdk-go-v2's")
+    out.push("  /// default, \"when supported\"); false sends one only where required.")
+    out.push("  pub calculate_request_checksums: Bool = true")
+  }
   if validates_responses(g) {
     out.push("  /// Ask for and check response checksums where the operation supports")
     out.push("  /// them (aws-sdk-go-v2's default, \"when supported\"); false checks them")
@@ -114,6 +120,13 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  pub endpoint: rest.Endpoint")
   }
   out.push("  rand: Rand")
+  if g.s3 {
+    out.push("  /// S3 Express session credentials, by base credentials and bucket.")
+    out.push("  express_sessions: credentials.SessionCache")
+  }
+  if calculates_checksums(g) {
+    out.push("  calculate_checksums: Bool")
+  }
   if validates_responses(g) {
     out.push("  validate_checksums: Bool")
   }
@@ -154,6 +167,12 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},")
   }
   out.push("    rand: rand,")
+  if g.s3 {
+    out.push("    express_sessions: credentials.new_session_cache(),")
+  }
+  if calculates_checksums(g) {
+    out.push("    calculate_checksums: options.calculate_request_checksums,")
+  }
   if validates_responses(g) {
     out.push("    validate_checksums: options.validate_response_checksums,")
   }
@@ -168,6 +187,9 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     emit_from_config(g, out)
     emit_with_account(g, out)
   }
+  if g.s3 {
+    emit_express_session(g, out)
+  }
   emit_discover(g, out)
   out.push("const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}")
   out.push("")
@@ -177,7 +199,8 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  let e = resolve_endpoint(params) ?? err => return Err(\"endpoint: \${err.msg}\")")
     out.push("  let ep = rest.parse_endpoint(e.url) ?? return Err(\"bad endpoint \${e.url}\")")
     out.push("  let (service, region) = endpoints.signing(e)")
-    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${s3_signing(g)}, region_set: endpoints.region_set(e)${bearer_signing(g)}}")
+    let express = if g.s3 { ", express_bucket: if endpoints.is_s3_express(e) { params.bucket } else { None }" } else { "" }
+    out.push("  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: ${s3_signing(g)}, region_set: endpoints.region_set(e)${bearer_signing(g)}${express}}")
     out.push("  Ok((ep, signing, endpoints.header_pairs(e)))")
   } else {
     out.push("fn (c: Client) route() -> (rest.Endpoint, transport.Signing, List[(Str, Str)]) ! Str {")
@@ -341,6 +364,13 @@ pub fn route_binding(g: G, op: Str, route: Str, en: Str) -> List[Str] {
   let discovered = needs_discovery(g, op)
   let ep_name = if discovered { "found" } else { "ep" }
   let sig_name = if auth == "Required" { "signing" } else { "routed" }
+  if g.s3 {
+    // a directory bucket signs with its session (S3 Express)
+    var out = ["  let (${ep_name}, routed, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
+    let authed = if auth != "Required" { "routed with {auth: transport.Auth.${auth}}" } else { "routed" }
+    out.push("  let signing = c.express_session(${authed}) ?? e => return Err(${en}.InvalidInput(e))")
+    return out
+  }
   var out = ["  let (${ep_name}, ${sig_name}, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
   if auth != "Required" {
     out.push("  let signing = routed with {auth: transport.Auth.${auth}}")
@@ -472,6 +502,47 @@ fn emit_with_account(g: G, var out: List[Str]) {
   out.push("    Ok(cr) => p with {${af}: cr.account_id}")
   out.push("    Err(_) => p")
   out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// S3 Express (aws-sdk-go-v2's defaultS3ExpressCredentialsProvider): a
+/// directory bucket's calls sign with CreateSession credentials, cached by
+/// the base credentials (an HMAC of their keys) and the bucket, and
+/// fetched again a minute before they expire. CreateSession itself signs
+/// with the base credentials (its endpoint rules say plain SigV4).
+fn emit_express_session(g: G, var out: List[Str]) {
+  out.push("/// `signing` with the S3 Express session of its directory bucket, if any.")
+  out.push("fn (c: Client) express_session(signing: transport.Signing) -> transport.Signing ! Str uses (net.dial, clock, rand) {")
+  if !model.operations(g.m).any(fn(o: Str) -> Bool { model.name_of(o) == "CreateSession" }) {
+    // a model without CreateSession (the protocol tests' subset of S3)
+    out.push("  Ok(signing)")
+    out.push("}")
+    out.push("")
+    return
+  }
+  out.push("  let bucket = signing.express_bucket ?? return Ok(signing)")
+  out.push("  let base = c.transport.credentials.retrieve() ?? e => return Err(\"S3 Express session: \${e.display()}\")")
+  out.push("  let mac = crypto.hmac_sha256(base.secret_access_key.reveal().bytes(), base.access_key_id.bytes()).to_hex()")
+  out.push("  let key = \"\${mac}/\${bucket}\"")
+  out.push("  let now = c.transport.clock.now()")
+  out.push("  if let Some(s) = c.express_sessions.get(key, now, 1m) {")
+  out.push("    return Ok(signing with {session: s})")
+  out.push("  }")
+  out.push("  let made = c.create_session(CreateSessionRequest{bucket: bucket}) ?? e => return Err(\"S3 Express CreateSession for \${bucket}: \${e.display()}\")")
+  out.push("  let sc = made.credentials ?? return Err(\"S3 Express CreateSession for \${bucket}: no credentials in the response\")")
+  out.push("  let s = aws.Credentials{")
+  out.push("    access_key_id: sc.access_key_id ?? \"\",")
+  out.push("    secret_access_key: Secret.new(sc.secret_access_key ?? \"\"),")
+  out.push("    session_token: Secret.new(sc.session_token ?? \"\"),")
+  out.push("    expires: sc.expiration,")
+  out.push("    source: \"S3ExpressSession\",")
+  out.push("  }")
+  out.push("  if s.access_key_id == \"\" || sc.session_token.is_none() || sc.expiration.is_none() {")
+  out.push("    return Err(\"S3 Express CreateSession for \${bucket}: incomplete credentials\")")
+  out.push("  }")
+  out.push("  let kept = c.express_sessions.put(key, s)")
+  out.push("  Ok(signing with {session: kept})")
   out.push("}")
   out.push("")
 }

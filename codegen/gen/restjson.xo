@@ -995,10 +995,22 @@ pub fn emit_restjson(g: G) -> Str {
     if autofill {
       emit_presign_autofill(g, op, out)
     }
+    let defsum = default_checksum(g, op)
     doc_lines(out, s.traits, "")
-    out.push("pub fn (c: Client) ${name}(${if autofill { "given" } else { "input" }}: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
+    out.push("pub fn (c: Client) ${name}(${if autofill || defsum.is_some() { "given" } else { "input" }}: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
     if autofill {
       out.push("  let input = c.presigned_url_${name}(given) ?? e => return Err(${en}.InvalidInput(e))")
+    }
+    if let Some((alg, given)) = defsum {
+      let af = field_name(alg)
+      let am = shape_of(g, s.input).members.find(fn(m: model.Member) -> Bool { m.name == alg })
+      let at = type_name(g.names, am.map(fn(m: model.Member) -> Str { m.target }) ?? "")
+      var conds = ["given.${af}.is_none()", "c.calculate_checksums"]
+      for m in given {
+        conds.push("given.${field_name(m)}.is_none()")
+      }
+      out.push("  // CRC32 unless the call chose an algorithm or carries a checksum")
+      out.push("  let input = if ${conds.join(" && ")} { given with {${af}: ${at}.Crc32} } else { given }")
     }
     for l in route_binding(g, op, route, en) { out.push(l) }
     out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")

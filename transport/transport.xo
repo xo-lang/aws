@@ -76,6 +76,12 @@ pub struct Signing {
   pub region_set: List[Str]? = None
   /// Whether the operation is signed (Smithy's auth traits).
   pub auth: Auth = Auth.Required
+  /// The S3 directory bucket whose session signs the call (the endpoint
+  /// chose `sigv4-s3express`); the client fills `session` from it.
+  pub express_bucket: Str? = None
+  /// S3 Express session credentials (CreateSession): signed with instead
+  /// of the client's, the token sent as `X-Amz-S3session-Token`.
+  pub session: aws.Credentials? = None
 }
 
 /// How an operation authenticates: `smithy.api#auth` with no schemes is
@@ -201,7 +207,7 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
     headers.push(("Authorization", "Bearer ${token.reveal()}"))
     return Ok((unsigned_request(c, req, headers), "", sigv4.Credentials{access_key_id: "", secret_access_key: Secret.new("")}, now))
   }
-  let found = match signing.auth {
+  let found = if let Some(sc) = signing.session { Some(sc) } else { match signing.auth {
     Auth.Bearer => None
     Auth.None => None
     Auth.Optional => c.credentials.retrieve().ok()
@@ -209,7 +215,7 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
       Ok(v) => Some(v)
       Err(e) => return Err(AttemptErr.Creds(e))
     }
-  }
+  } }
   let creds = match found {
     Some(v) => v
     None => return Ok((unsigned_request(c, req, headers), "", sigv4.Credentials{access_key_id: "", secret_access_key: Secret.new("")}, now))
@@ -239,6 +245,7 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
         normalize_path: !signing.s3,
         double_escape_path: !signing.s3,
         add_content_sha256_header: signing.s3 || payload_override.is_some(),
+        session_token_name: token_name(signing),
       },
       now,
     )
@@ -431,10 +438,10 @@ pub const MAX_PRESIGN: Duration = 168h
 /// for a region set), valid for `expires` from now. S3 signs
 /// `UNSIGNED-PAYLOAD`; other services sign the body's hash.
 pub fn presign(c: Client, req: Request, signing: Signing, expires: Duration) -> Presigned ! SendErr uses (net.dial, clock, rand) {
-  let creds = match c.credentials.retrieve() {
+  let creds = if let Some(sc) = signing.session { sc } else { match c.credentials.retrieve() {
     Ok(v) => v
     Err(e) => return Err(SendErr.Credentials(e))
-  }
+  } }
   let ttl = if expires > MAX_PRESIGN { MAX_PRESIGN } else { expires }
   let now = Time.from_unix_millis(c.clock.now().unix_millis() + c.skew_ms.get())
   // the holder of the URL chooses the body, so its length is not signed
@@ -461,8 +468,15 @@ pub fn presign(c: Client, req: Request, signing: Signing, expires: Duration) -> 
       payload_hash: payload,
       normalize_path: !signing.s3,
       double_escape_path: !signing.s3,
+      session_token_name: token_name(signing),
     }, now, ttl)
   }
   let url = url_of(req with {query: signed.query})
   Ok(Presigned{method: req.method, url: url, headers: kept})
+}
+
+/// The session token's header or query name: S3 Express's own for a
+/// directory bucket's session, else SigV4's.
+fn token_name(signing: Signing) -> Str {
+  if signing.session.is_some() { "X-Amz-S3session-Token" } else { "X-Amz-Security-Token" }
 }

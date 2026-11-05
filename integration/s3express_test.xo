@@ -1,0 +1,40 @@
+// S3 Express One Zone on the test network: a directory bucket's calls are
+// signed with the session CreateSession returns (its key, and its token in
+// x-amz-s3session-token, not X-Amz-Security-Token); the session is made
+// once and reused; CreateSession itself signs with the client's keys.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+const EXPRESS_HOST: Str = "https://bkt--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com"
+
+test "a directory bucket signs with its CreateSession credentials, made once" {
+  let sessions = Mutex[List[Str]].new([])
+  let gets = Mutex[List[(Str, Str, Str)]].new([])
+  let expires = Time.from_unix_millis(os.clock.now().unix_millis() + 3600000).format_rfc3339()
+  os.net.handle("GET ${EXPRESS_HOST}/", fn(req: http.Request) -> http.Response {
+    sessions.with(fn(var xs: List[Str]) { xs.push(req.header("Authorization") ?? "") })
+    http.text(200, "<CreateSessionResult><Credentials><SessionToken>invented-session-token</SessionToken><SecretAccessKey>invented-session-secret</SecretAccessKey><AccessKeyId>ASIASESSION0000000</AccessKeyId><Expiration>${expires}</Expiration></Credentials></CreateSessionResult>").with_header("Content-Type", "application/xml")
+  })
+  os.net.handle("GET ${EXPRESS_HOST}/k", fn(req: http.Request) -> http.Response {
+    gets.with(fn(var xs: List[(Str, Str, Str)]) {
+      xs.push((req.header("Authorization") ?? "", req.header("x-amz-s3session-token") ?? "", req.header("X-Amz-Security-Token") ?? ""))
+    })
+    http.text(200, "hello")
+  })
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"), validate_response_checksums: false})?
+  let get = s3.GetObjectRequest{bucket: "bkt--usw2-az1--x-s3", key: "k"}
+  expect(c.get_object(get)?.body) == Some(b"hello")
+  expect(c.get_object(get)?.body) == Some(b"hello")
+  let made = sessions.with_read(fn(xs: List[Str]) -> List[Str] { xs })
+  expect(made.len()) == 1
+  expect(made[0].contains("Credential=AKIDTEST0000000000/")) == true
+  expect(made[0].contains("/s3express/aws4_request")) == true
+  for (auth, session, security) in gets.with_read(fn(xs: List[(Str, Str, Str)]) -> List[(Str, Str, Str)] { xs }) {
+    expect(auth.contains("Credential=ASIASESSION0000000/")) == true
+    expect(auth.contains("x-amz-s3session-token")) == true
+    expect(session) == "invented-session-token"
+    expect(security) == ""
+  }
+}

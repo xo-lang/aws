@@ -329,3 +329,31 @@ pub const HAND_PAGERS: List[HandPager] = [
     next: ["p.input.next_token = out.next_token"],
     doc: "NextToken as NextToken (the model has no paginated trait)"},
 ]
+
+/// For an operation that takes a checksum but does not require one
+/// (`requestAlgorithmMember` without `requestChecksumRequired`): the
+/// algorithm member and the members that already carry a checksum
+/// (`Checksum<ALG>` values, `ContentMD5`), any of which leaves the
+/// default off.
+pub fn default_checksum(g: G, op: Str) -> (Str, List[Str])? {
+  let hc = model.trait_of(shape_of(g, op).traits, "aws.protocols#httpChecksum") ?? return None
+  if hc.get("requestChecksumRequired") == Some(json.Value.Bool(true)) {
+    return None
+  }
+  let alg = match hc.get("requestAlgorithmMember") {
+    Some(json.Value.Str(m)) => m
+    _ => return None
+  }
+  var given: List[Str] = []
+  for m in shape_of(g, shape_of(g, op).input).members {
+    if m.name == "ContentMD5" || (m.name.starts_with("Checksum") && m.name != alg && m.name != "ChecksumType" && m.name != "ChecksumMode") {
+      given.push(m.name)
+    }
+  }
+  Some((alg, given))
+}
+
+/// Whether any operation of the service has a default request checksum.
+pub fn calculates_checksums(g: G) -> Bool {
+  model.operations(g.m).any(fn(op: Str) -> Bool { default_checksum(g, op).is_some() })
+}

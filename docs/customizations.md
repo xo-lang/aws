@@ -25,7 +25,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | SigV4a when the endpoint rules choose it (Multi-Region Access Points, EventBridge global endpoints, CloudFront KeyValueStore, SESv2) | S3, EventBridge, CloudFront KVS, SESv2 and others | Yes (Rules) | `sigv4a/sigv4a_test.xo`; `transport/transport_test.xo`; real AWS step 13 |
 | No auth (`smithy.api#auth: []`) and optional auth: sent unsigned | STS AssumeRoleWithWebIdentity and AssumeRoleWithSAML, Cognito Identity and Identity Provider, SSO, SSO OIDC, Sign-In | Yes | `integration/auth_test.xo`; `transport/transport_test.xo` "auth None and Optional" |
 | Bearer token auth (`smithy.api#httpBearerAuth`; Bedrock API keys from `AWS_BEARER_TOKEN_BEDROCK`) | Bedrock, Bedrock Runtime (used when a token is set), CodeCatalyst (always) | Yes | `integration/bearer_test.xo`; `config/config_test.xo` "bearer tokens". Next: CodeCatalyst tokens from an SSO session |
-| S3 Express One Zone session auth (CreateSession credentials, `sigv4-s3express`) | S3 directory buckets | No | a session cache keyed by bucket, signing with `x-amz-s3session-token` |
+| S3 Express One Zone session auth (CreateSession credentials, `sigv4-s3express`): sessions cached by the base credentials' HMAC and the bucket, refreshed a minute before expiry; the token sent as `x-amz-s3session-token` (and in a presigned query) | S3 directory buckets | Yes | `integration/s3express_test.xo`; `credentials/credentials_test.xo` "session cache". Next: a real directory bucket in the real AWS steps |
 | Retry: IDPCommunicationError retryable | STS | Yes | `retry/retry_test.xo` |
 | Clock skew correction | all | Yes | `transport/transport_test.xo` "clock skew" |
 | Long polling: when the retry quota stops a retry, back off before returning (aws-sdk-go-v2 behind `AWS_NEW_RETRIES_2026`; on here) | SQS ReceiveMessage, Step Functions GetActivityTask, SWF PollForActivityTask and PollForDecisionTask | Yes | `retry/retry_test.xo` "long poll" |
@@ -40,7 +40,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 
 | Customization | Services | Status | Test or next step |
 |---|---|---|---|
-| Flexible checksums: CRC32 when the operation requires one, the caller's algorithm otherwise (`aws.protocols#httpChecksum`) | S3 (DeleteObjects and 24 other operations require one) | Yes | `checksum/checksum_test.xo`; `integration/checksum_test.xo` |
+| Flexible checksums (`aws.protocols#httpChecksum`): the caller's algorithm; else CRC32 when the operation requires one, and also when it only supports one unless `calculate_request_checksums` is false or the call carries a checksum ("when supported", the aws-sdk-go-v2 default) | S3 (DeleteObjects and 24 others require one; PutObject, UploadPart and 4 others support one) | Yes | `checksum/checksum_test.xo`; `integration/checksum_test.xo` "CRC32 by default". Next: `AWS_REQUEST_CHECKSUM_CALCULATION` and the profile setting |
 | `Content-MD5` for `httpChecksumRequired` | S3 Control | Yes | generated serializers |
 | Response checksum validation: the mode sent and the body checked unless `validate_response_checksums` is false ("when supported", the aws-sdk-go-v2 default); multipart checksums skipped | S3 GetObject, GetObjectAnnotation | Yes | `integration/checksum_test.xo` "GetObject asks". Next: `AWS_RESPONSE_CHECKSUM_VALIDATION` and the profile setting |
 | Trailing checksums with aws-chunked encoding for streamed uploads | S3 | No | needed only for unsized streams |

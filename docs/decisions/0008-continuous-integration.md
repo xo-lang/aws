@@ -44,6 +44,12 @@ call AWS outside the owner's own real AWS runs (docs/real-aws-tests.md).
   runners' minutes); the first run is a `workflow_dispatch` dry run whose
   timings are reported before the first scheduled run.
 
+- Each long step has its own time limit, so a hang fails that step. Under
+  Rosetta (linux/amd64 emulated on arm64) `xo test` of the integration
+  module hung in 2 of 9 local runs; on a native linux/amd64 host it
+  passed 40 of 40 (Lang 2, 2026-11-05), so GitHub's runners are not
+  expected to hit it.
+
 ## Consequences
 
 - A model change that breaks generation, a check or the public hygiene

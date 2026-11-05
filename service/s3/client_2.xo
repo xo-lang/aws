@@ -10,6 +10,12 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+fn xml_body_get_bucket_cors_request(v: GetBucketCorsRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_get_bucket_cors_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_get_bucket_encryption_output(v: GetBucketEncryptionOutput, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_get_bucket_encryption_output(w, v, name, ns)
@@ -9058,9 +9064,19 @@ pub fn (c: Client) get_object(input: GetObjectRequest) -> GetObjectOutput ! GetO
   for h in extra {
     req.headers.push(h)
   }
+  // response checksums: asked for unless the call set its mode, then checked
+  let validate = input.checksum_mode.is_some() || c.validate_checksums
+  if validate && input.checksum_mode.is_none() {
+    req.headers.push(("x-amz-checksum-mode", "ENABLED"))
+  }
   let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetObjectErr.Send(e))
   if resp.status >= 300 {
     return Err(deserialize_get_object_error(resp))
+  }
+  if validate {
+    if let Err(e) = checksum.validate(resp.headers.entries(), resp.body) {
+      return Err(GetObjectErr.Deserialize("the body's ${e.algorithm} ${e.actual} does not match the response's ${e.expected}"))
+    }
   }
   deserialize_get_object(resp) ?? e => Err(GetObjectErr.Deserialize(e))
 }
@@ -9394,9 +9410,19 @@ pub fn (c: Client) get_object_annotation(input: GetObjectAnnotationRequest) -> G
   for h in extra {
     req.headers.push(h)
   }
+  // response checksums: asked for unless the call set its mode, then checked
+  let validate = input.checksum_mode.is_some() || c.validate_checksums
+  if validate && input.checksum_mode.is_none() {
+    req.headers.push(("x-amz-checksum-mode", "ENABLED"))
+  }
   let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetObjectAnnotationErr.Send(e))
   if resp.status >= 300 {
     return Err(deserialize_get_object_annotation_error(resp))
+  }
+  if validate {
+    if let Err(e) = checksum.validate(resp.headers.entries(), resp.body) {
+      return Err(GetObjectAnnotationErr.Deserialize("the body's ${e.algorithm} ${e.actual} does not match the response's ${e.expected}"))
+    }
   }
   deserialize_get_object_annotation(resp) ?? e => Err(GetObjectAnnotationErr.Deserialize(e))
 }

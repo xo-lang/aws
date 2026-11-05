@@ -2,8 +2,10 @@
 // a checksum (DeleteObjects) sends CRC32 unless the caller picks another
 // algorithm, and an algorithm the caller names is used for any operation
 // that takes one (PutObject). Real S3 refuses DeleteObjects without one.
+// GetObject asks for the object's checksum and checks the body against it.
 
 use std/http
+use github.com/xo-lang/aws/checksum
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/service/s3
 
@@ -52,4 +54,38 @@ test "an algorithm this SDK cannot compute fails before sending" {
     Err(s3.PutObjectErr.InvalidInput(e)) => expect(e.contains("XXHASH3")) == true
     _ => return Err("want InvalidInput")
   }
+}
+
+test "GetObject asks for the object's checksum and checks the body against it" {
+  let modes = Mutex[List[Str]].new([])
+  let n = Mutex[Int].new(0)
+  let good = checksum.compute("CRC32", b"hello") ?? ""
+  os.net.handle("GET https://bucket.s3.us-west-2.amazonaws.com/k", fn(req: http.Request) -> http.Response {
+    modes.with(fn(var xs: List[Str]) { xs.push(req.header("x-amz-checksum-mode") ?? "") })
+    let i = n.with(fn(var x: Int) -> Int { x += 1; x })
+    // the second answer is corrupt; the fourth has a multipart checksum
+    let sum = match i {
+      2 => "AAAAAA=="
+      4 => "AAAAAA==-3"
+      _ => good
+    }
+    http.text(200, "hello").with_header("x-amz-checksum-crc32", sum)
+  })
+  let c = checksum_client(os.net, os.clock, os.rand)?
+  let get = s3.GetObjectRequest{bucket: "bucket", key: "k"}
+  expect(c.get_object(get)?.body) == Some(b"hello")
+  match c.get_object(get) {
+    Err(s3.GetObjectErr.Deserialize(m)) => expect(m.contains("CRC32")) == true
+    _ => expect("a checksum mismatch") == "returned"
+  }
+  // off: no mode sent, nothing checked
+  let off = s3.new(os.net, os.clock, os.rand, s3.Options{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    validate_response_checksums: false,
+  })?
+  expect(off.get_object(get)?.body) == Some(b"hello")
+  // a multipart object's checksum of checksums is not the body's
+  expect(c.get_object(get)?.body) == Some(b"hello")
+  expect(modes.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["ENABLED", "ENABLED", "", "ENABLED"]
 }

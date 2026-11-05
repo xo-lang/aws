@@ -259,3 +259,39 @@ pub fn emit_presign_autofill(g: G, op: Str, var out: List[Str]) {
   out.push("}")
   out.push("")
 }
+
+/// The input member that asks for response checksums
+/// (`requestValidationModeMember` of `aws.protocols#httpChecksum`: S3
+/// GetObject's ChecksumMode), and the header it is sent in.
+pub fn validation_member(g: G, op: Str) -> (Str, Str)? {
+  let hc = model.trait_of(shape_of(g, op).traits, "aws.protocols#httpChecksum") ?? return None
+  let name = match hc.get("requestValidationModeMember") {
+    Some(json.Value.Str(m)) => m
+    _ => return None
+  }
+  for m in shape_of(g, shape_of(g, op).input).members {
+    if m.name == name {
+      if let Some(json.Value.Str(h)) = model.trait_of(m.traits, "httpHeader") {
+        return Some((name, h))
+      }
+    }
+  }
+  None
+}
+
+/// Whether any operation of the service can validate response checksums.
+pub fn validates_responses(g: G) -> Bool {
+  model.operations(g.m).any(fn(op: Str) -> Bool { validation_member(g, op).is_some() })
+}
+
+/// The long polling operations (aws-sdk-go-v2's SetLongPollingContext).
+const LONG_POLL: List[(Str, Str)] = [
+  ("SQS", "ReceiveMessage"),
+  ("SFN", "GetActivityTask"),
+  ("SWF", "PollForActivityTask"),
+  ("SWF", "PollForDecisionTask"),
+]
+
+pub fn long_poll(g: G, op: Str) -> Bool {
+  LONG_POLL.contains((sdk_id(g), model.name_of(op)))
+}

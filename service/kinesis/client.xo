@@ -84,12 +84,29 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
   o.trace_id = cfg.trace_id
+  o.account_id_endpoint_mode = cfg.account_id_endpoint_mode
   Ok(o)
 }
 
 /// A client from shared configuration: `new` with `options_from_config`.
 pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
   new(net, clock, rand, options_from_config(cfg)?)
+}
+
+/// The endpoint parameters with the credentials' account filled in.
+fn (c: Client) with_account(base: EndpointParameters) -> EndpointParameters uses (net.dial, clock, rand) {
+  var p = base
+  // aws-sdk-go-v2's default mode
+  if p.account_id_endpoint_mode.is_none() {
+    p.account_id_endpoint_mode = Some("preferred")
+  }
+  if p.account_id.is_some() || p.account_id_endpoint_mode == Some("disabled") {
+    return p
+  }
+  match c.transport.credentials.retrieve() {
+    Ok(cr) => p with {account_id: cr.account_id}
+    Err(_) => p
+  }
 }
 
 const SIGNING_NAME: Str = "kinesis"
@@ -5005,7 +5022,7 @@ pub fn deserialize_add_tags_to_stream_error(resp: http.Response) -> AddTagsToStr
 /// specified tag keys. AddTagsToStream has a limit of five transactions per
 /// second per account.
 pub fn (c: Client) add_tags_to_stream(input: AddTagsToStreamInput) -> () ! AddTagsToStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_add_tags_to_stream(c.params, input)) ?? e => return Err(AddTagsToStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_add_tags_to_stream(c.params, input))) ?? e => return Err(AddTagsToStreamErr.InvalidInput(e))
   var req = serialize_add_tags_to_stream(ep, input, "") ?? e => return Err(AddTagsToStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5206,7 +5223,7 @@ pub fn deserialize_create_channel_error(resp: http.Response) -> CreateChannelErr
 /// transactions per second (TPS) for each Amazon Web Services account.
 /// Exceeding 5 TPS results in a LimitExceededException .
 pub fn (c: Client) create_channel(input: CreateChannelInput) -> CreateChannelOutput ! CreateChannelErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_channel(c.params, input)) ?? e => return Err(CreateChannelErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_create_channel(c.params, input))) ?? e => return Err(CreateChannelErr.InvalidInput(e))
   var req = serialize_create_channel(ep, input, "") ?? e => return Err(CreateChannelErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5377,7 +5394,7 @@ pub fn deserialize_create_stream_error(resp: http.Response) -> CreateStreamErr {
 /// CREATING status of the stream, but you can't make any updates to the
 /// tags until the stream is in ACTIVE state.
 pub fn (c: Client) create_stream(input: CreateStreamInput) -> () ! CreateStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_stream(c.params, input)) ?? e => return Err(CreateStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_create_stream(c.params, input))) ?? e => return Err(CreateStreamErr.InvalidInput(e))
   var req = serialize_create_stream(ep, input, "") ?? e => return Err(CreateStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5512,7 +5529,7 @@ pub fn deserialize_decrease_stream_retention_period_error(resp: http.Response) -
 /// hours and is decreased to 24 hours, any data already in the stream that
 /// is older than 24 hours is inaccessible.
 pub fn (c: Client) decrease_stream_retention_period(input: DecreaseStreamRetentionPeriodInput) -> () ! DecreaseStreamRetentionPeriodErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_decrease_stream_retention_period(c.params, input)) ?? e => return Err(DecreaseStreamRetentionPeriodErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_decrease_stream_retention_period(c.params, input))) ?? e => return Err(DecreaseStreamRetentionPeriodErr.InvalidInput(e))
   var req = serialize_decrease_stream_retention_period(ep, input, "") ?? e => return Err(DecreaseStreamRetentionPeriodErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5633,7 +5650,7 @@ pub fn deserialize_delete_channel_error(resp: http.Response) -> DeleteChannelErr
 /// call limit of 5 transactions per second (TPS) for each Amazon Web
 /// Services account. Exceeding 5 TPS results in a LimitExceededException .
 pub fn (c: Client) delete_channel(input: DeleteChannelInput) -> () ! DeleteChannelErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_channel(c.params, input)) ?? e => return Err(DeleteChannelErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_delete_channel(c.params, input))) ?? e => return Err(DeleteChannelErr.InvalidInput(e))
   var req = serialize_delete_channel(ep, input, "") ?? e => return Err(DeleteChannelErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5757,7 +5774,7 @@ pub fn deserialize_delete_resource_policy_error(resp: http.Response) -> DeleteRe
 /// arn:aws.*:kinesis:.*:\d{12}:.*stream/\S+ Consumer pattern:
 /// ^(arn):aws.*:kinesis:.*:\d{12}:.*stream\/[a-zA-Z0-9_.-]+\/consumer\/[a-zA-Z0-9_.-]+:[0-9]+
 pub fn (c: Client) delete_resource_policy(input: DeleteResourcePolicyInput) -> () ! DeleteResourcePolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_resource_policy(c.params, input)) ?? e => return Err(DeleteResourcePolicyErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_delete_resource_policy(c.params, input))) ?? e => return Err(DeleteResourcePolicyErr.InvalidInput(e))
   var req = serialize_delete_resource_policy(ep, input, "") ?? e => return Err(DeleteResourcePolicyErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5900,7 +5917,7 @@ pub fn deserialize_delete_stream_error(resp: http.Response) -> DeleteStreamErr {
 /// is returned in StreamStatus . DeleteStream has a limit of five
 /// transactions per second per account.
 pub fn (c: Client) delete_stream(input: DeleteStreamInput) -> () ! DeleteStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_stream(c.params, input)) ?? e => return Err(DeleteStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_delete_stream(c.params, input))) ?? e => return Err(DeleteStreamErr.InvalidInput(e))
   var req = serialize_delete_stream(ep, input, "") ?? e => return Err(DeleteStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6026,7 +6043,7 @@ pub fn deserialize_deregister_stream_consumer_error(resp: http.Response) -> Dere
 /// The description of a consumer contains its name and ARN. This operation
 /// has a limit of five transactions per second per stream.
 pub fn (c: Client) deregister_stream_consumer(input: DeregisterStreamConsumerInput) -> () ! DeregisterStreamConsumerErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_deregister_stream_consumer(c.params, input)) ?? e => return Err(DeregisterStreamConsumerErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_deregister_stream_consumer(c.params, input))) ?? e => return Err(DeregisterStreamConsumerErr.InvalidInput(e))
   var req = serialize_deregister_stream_consumer(ep, input, "") ?? e => return Err(DeregisterStreamConsumerErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6125,7 +6142,7 @@ pub fn deserialize_describe_account_settings_error(resp: http.Response) -> Descr
 /// limit of 5 transactions per second (TPS) for each Amazon Web Services
 /// account. TPS over 5 will initiate the LimitExceededException .
 pub fn (c: Client) describe_account_settings(input: DescribeAccountSettingsInput) -> DescribeAccountSettingsOutput ! DescribeAccountSettingsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_account_settings(c.params, input)) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_account_settings(c.params, input))) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
   var req = serialize_describe_account_settings(ep, input, "") ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6255,7 +6272,7 @@ pub fn deserialize_describe_channel_error(resp: http.Response) -> DescribeChanne
 /// transactions per second (TPS) for each Amazon Web Services account.
 /// Exceeding 5 TPS results in a LimitExceededException .
 pub fn (c: Client) describe_channel(input: DescribeChannelInput) -> DescribeChannelOutput ! DescribeChannelErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_channel(c.params, input)) ?? e => return Err(DescribeChannelErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_channel(c.params, input))) ?? e => return Err(DescribeChannelErr.InvalidInput(e))
   var req = serialize_describe_channel(ep, input, "") ?? e => return Err(DescribeChannelErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6357,7 +6374,7 @@ pub fn deserialize_describe_limits_error(resp: http.Response) -> DescribeLimitsE
 /// account limits, the old limits might be returned for a few minutes. This
 /// operation has a limit of one transaction per second per account.
 pub fn (c: Client) describe_limits(input: DescribeLimitsInput) -> DescribeLimitsOutput ! DescribeLimitsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_limits(c.params, input)) ?? e => return Err(DescribeLimitsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_limits(c.params, input))) ?? e => return Err(DescribeLimitsErr.InvalidInput(e))
   var req = serialize_describe_limits(ep, input, "") ?? e => return Err(DescribeLimitsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6511,7 +6528,7 @@ pub fn deserialize_describe_stream_error(resp: http.Response) -> DescribeStreamE
 /// shard. This operation has a limit of 10 transactions per second per
 /// account.
 pub fn (c: Client) describe_stream(input: DescribeStreamInput) -> DescribeStreamOutput ! DescribeStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_stream(c.params, input)) ?? e => return Err(DescribeStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_stream(c.params, input))) ?? e => return Err(DescribeStreamErr.InvalidInput(e))
   var req = serialize_describe_stream(ep, input, "") ?? e => return Err(DescribeStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6648,7 +6665,7 @@ pub fn deserialize_describe_stream_consumer_error(resp: http.Response) -> Descri
 /// per second per stream. When making a cross-account call with
 /// DescribeStreamConsumer , make sure to provide the ARN of the consumer.
 pub fn (c: Client) describe_stream_consumer(input: DescribeStreamConsumerInput) -> DescribeStreamConsumerOutput ! DescribeStreamConsumerErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_stream_consumer(c.params, input)) ?? e => return Err(DescribeStreamConsumerErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_stream_consumer(c.params, input))) ?? e => return Err(DescribeStreamConsumerErr.InvalidInput(e))
   var req = serialize_describe_stream_consumer(ep, input, "") ?? e => return Err(DescribeStreamConsumerErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6784,7 +6801,7 @@ pub fn deserialize_describe_stream_summary_error(resp: http.Response) -> Describ
 /// DescribeStreamSummary has a limit of 20 transactions per second per
 /// account.
 pub fn (c: Client) describe_stream_summary(input: DescribeStreamSummaryInput) -> DescribeStreamSummaryOutput ! DescribeStreamSummaryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_stream_summary(c.params, input)) ?? e => return Err(DescribeStreamSummaryErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_stream_summary(c.params, input))) ?? e => return Err(DescribeStreamSummaryErr.InvalidInput(e))
   var req = serialize_describe_stream_summary(ep, input, "") ?? e => return Err(DescribeStreamSummaryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -6927,7 +6944,7 @@ pub fn deserialize_disable_enhanced_monitoring_error(resp: http.Response) -> Dis
 /// recommended that you use the StreamARN input parameter when you invoke
 /// this API.
 pub fn (c: Client) disable_enhanced_monitoring(input: DisableEnhancedMonitoringInput) -> EnhancedMonitoringOutput ! DisableEnhancedMonitoringErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_disable_enhanced_monitoring(c.params, input)) ?? e => return Err(DisableEnhancedMonitoringErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_disable_enhanced_monitoring(c.params, input))) ?? e => return Err(DisableEnhancedMonitoringErr.InvalidInput(e))
   var req = serialize_disable_enhanced_monitoring(ep, input, "") ?? e => return Err(DisableEnhancedMonitoringErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7070,7 +7087,7 @@ pub fn deserialize_enable_enhanced_monitoring_error(resp: http.Response) -> Enab
 /// StreamName parameter, or both. It is recommended that you use the
 /// StreamARN input parameter when you invoke this API.
 pub fn (c: Client) enable_enhanced_monitoring(input: EnableEnhancedMonitoringInput) -> EnhancedMonitoringOutput ! EnableEnhancedMonitoringErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_enable_enhanced_monitoring(c.params, input)) ?? e => return Err(EnableEnhancedMonitoringErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_enable_enhanced_monitoring(c.params, input))) ?? e => return Err(EnableEnhancedMonitoringErr.InvalidInput(e))
   var req = serialize_enable_enhanced_monitoring(ep, input, "") ?? e => return Err(EnableEnhancedMonitoringErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7319,7 +7336,7 @@ pub fn deserialize_get_records_error(resp: http.Response) -> GetRecordsErr {
 /// might have time stamps that are out of order. This operation has a limit
 /// of five transactions per second per shard.
 pub fn (c: Client) get_records(input: GetRecordsInput) -> GetRecordsOutput ! GetRecordsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_records(c.params, input)) ?? e => return Err(GetRecordsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_get_records(c.params, input))) ?? e => return Err(GetRecordsErr.InvalidInput(e))
   var req = serialize_get_records(ep, input, "") ?? e => return Err(GetRecordsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7453,7 +7470,7 @@ pub fn deserialize_get_resource_policy_error(resp: http.Response) -> GetResource
 /// arn:aws.*:kinesis:.*:\d{12}:.*stream/\S+ Consumer pattern:
 /// ^(arn):aws.*:kinesis:.*:\d{12}:.*stream\/[a-zA-Z0-9_.-]+\/consumer\/[a-zA-Z0-9_.-]+:[0-9]+
 pub fn (c: Client) get_resource_policy(input: GetResourcePolicyInput) -> GetResourcePolicyOutput ! GetResourcePolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_resource_policy(c.params, input)) ?? e => return Err(GetResourcePolicyErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_get_resource_policy(c.params, input))) ?? e => return Err(GetResourcePolicyErr.InvalidInput(e))
   var req = serialize_get_resource_policy(ep, input, "") ?? e => return Err(GetResourcePolicyErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7642,7 +7659,7 @@ pub fn deserialize_get_shard_iterator_error(resp: http.Response) -> GetShardIter
 /// MergeShards . GetShardIterator has a limit of five transactions per
 /// second per account per open shard.
 pub fn (c: Client) get_shard_iterator(input: GetShardIteratorInput) -> GetShardIteratorOutput ! GetShardIteratorErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_shard_iterator(c.params, input)) ?? e => return Err(GetShardIteratorErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_get_shard_iterator(c.params, input))) ?? e => return Err(GetShardIteratorErr.InvalidInput(e))
   var req = serialize_get_shard_iterator(ep, input, "") ?? e => return Err(GetShardIteratorErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7781,7 +7798,7 @@ pub fn deserialize_increase_stream_retention_period_error(resp: http.Response) -
 /// and is increased to 168 hours, any data that is older than 24 hours
 /// remains inaccessible to consumer applications.
 pub fn (c: Client) increase_stream_retention_period(input: IncreaseStreamRetentionPeriodInput) -> () ! IncreaseStreamRetentionPeriodErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_increase_stream_retention_period(c.params, input)) ?? e => return Err(IncreaseStreamRetentionPeriodErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_increase_stream_retention_period(c.params, input))) ?? e => return Err(IncreaseStreamRetentionPeriodErr.InvalidInput(e))
   var req = serialize_increase_stream_retention_period(ep, input, "") ?? e => return Err(IncreaseStreamRetentionPeriodErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -7917,7 +7934,7 @@ pub fn deserialize_list_channels_error(resp: http.Response) -> ListChannelsErr {
 /// transactions per second (TPS) for each Amazon Web Services account.
 /// Exceeding 5 TPS results in a LimitExceededException .
 pub fn (c: Client) list_channels(input: ListChannelsInput) -> ListChannelsOutput ! ListChannelsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_channels(c.params, input)) ?? e => return Err(ListChannelsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_channels(c.params, input))) ?? e => return Err(ListChannelsErr.InvalidInput(e))
   var req = serialize_list_channels(ep, input, "") ?? e => return Err(ListChannelsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8084,7 +8101,7 @@ pub fn deserialize_list_shards_error(resp: http.Response) -> ListShardsErr {
 /// more information, see Controlling Access to Amazon Kinesis Data Streams
 /// Resources Using IAM .
 pub fn (c: Client) list_shards(input: ListShardsInput) -> ListShardsOutput ! ListShardsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_shards(c.params, input)) ?? e => return Err(ListShardsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_shards(c.params, input))) ?? e => return Err(ListShardsErr.InvalidInput(e))
   var req = serialize_list_shards(ep, input, "") ?? e => return Err(ListShardsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8227,7 +8244,7 @@ pub fn deserialize_list_stream_consumers_error(resp: http.Response) -> ListStrea
 /// enhanced fan-out, and provides information about each consumer. This
 /// operation has a limit of 5 transactions per second per stream.
 pub fn (c: Client) list_stream_consumers(input: ListStreamConsumersInput) -> ListStreamConsumersOutput ! ListStreamConsumersErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_stream_consumers(c.params, input)) ?? e => return Err(ListStreamConsumersErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_stream_consumers(c.params, input))) ?? e => return Err(ListStreamConsumersErr.InvalidInput(e))
   var req = serialize_list_stream_consumers(ep, input, "") ?? e => return Err(ListStreamConsumersErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8359,7 +8376,7 @@ pub fn deserialize_list_streams_error(resp: http.Response) -> ListStreamsErr {
 /// process until all the stream names have been collected in the list.
 /// ListStreams has a limit of five transactions per second per account.
 pub fn (c: Client) list_streams(input: ListStreamsInput) -> ListStreamsOutput ! ListStreamsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_streams(c.params, input)) ?? e => return Err(ListStreamsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_streams(c.params, input))) ?? e => return Err(ListStreamsErr.InvalidInput(e))
   var req = serialize_list_streams(ep, input, "") ?? e => return Err(ListStreamsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8494,7 +8511,7 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
 /// information about tagging Kinesis resources, see Tag your Amazon Kinesis
 /// Data Streams resources .
 pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceInput) -> ListTagsForResourceOutput ! ListTagsForResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_tags_for_resource(c.params, input))) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8633,7 +8650,7 @@ pub fn deserialize_list_tags_for_stream_error(resp: http.Response) -> ListTagsFo
 /// both. It is recommended that you use the StreamARN input parameter when
 /// you invoke this API.
 pub fn (c: Client) list_tags_for_stream(input: ListTagsForStreamInput) -> ListTagsForStreamOutput ! ListTagsForStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_stream(c.params, input)) ?? e => return Err(ListTagsForStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_tags_for_stream(c.params, input))) ?? e => return Err(ListTagsForStreamErr.InvalidInput(e))
   var req = serialize_list_tags_for_stream(ep, input, "") ?? e => return Err(ListTagsForStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -8802,7 +8819,7 @@ pub fn deserialize_merge_shards_error(resp: http.Response) -> MergeShardsErr {
 /// , you receive a LimitExceededException . MergeShards has a limit of five
 /// transactions per second per account.
 pub fn (c: Client) merge_shards(input: MergeShardsInput) -> () ! MergeShardsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_merge_shards(c.params, input)) ?? e => return Err(MergeShardsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_merge_shards(c.params, input))) ?? e => return Err(MergeShardsErr.InvalidInput(e))
   var req = serialize_merge_shards(ep, input, "") ?? e => return Err(MergeShardsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -9031,7 +9048,7 @@ pub fn deserialize_put_record_error(resp: http.Response) -> PutRecordErr {
 /// You can use IncreaseStreamRetentionPeriod or
 /// DecreaseStreamRetentionPeriod to modify this retention period.
 pub fn (c: Client) put_record(input: PutRecordInput) -> PutRecordOutput ! PutRecordErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_put_record(c.params, input)) ?? e => return Err(PutRecordErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_put_record(c.params, input))) ?? e => return Err(PutRecordErr.InvalidInput(e))
   var req = serialize_put_record(ep, input, "") ?? e => return Err(PutRecordErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -9270,7 +9287,7 @@ pub fn deserialize_put_records_error(resp: http.Response) -> PutRecordsErr {
 /// a stream. You can use IncreaseStreamRetentionPeriod or
 /// DecreaseStreamRetentionPeriod to modify this retention period.
 pub fn (c: Client) put_records(input: PutRecordsInput) -> PutRecordsOutput ! PutRecordsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_put_records(c.params, input)) ?? e => return Err(PutRecordsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_put_records(c.params, input))) ?? e => return Err(PutRecordsErr.InvalidInput(e))
   var req = serialize_put_records(ep, input, "") ?? e => return Err(PutRecordsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -9407,7 +9424,7 @@ pub fn deserialize_put_resource_policy_error(resp: http.Response) -> PutResource
 /// For more information, see Controlling Access to Amazon Kinesis Data
 /// Streams Resources Using IAM .
 pub fn (c: Client) put_resource_policy(input: PutResourcePolicyInput) -> () ! PutResourcePolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_put_resource_policy(c.params, input)) ?? e => return Err(PutResourcePolicyErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_put_resource_policy(c.params, input))) ?? e => return Err(PutResourcePolicyErr.InvalidInput(e))
   var req = serialize_put_resource_policy(ep, input, "") ?? e => return Err(PutResourcePolicyErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -9559,7 +9576,7 @@ pub fn deserialize_register_stream_consumer_error(resp: http.Response) -> Regist
 /// a 6th consumer while there are 5 in a CREATING status results in a
 /// LimitExceededException .
 pub fn (c: Client) register_stream_consumer(input: RegisterStreamConsumerInput) -> RegisterStreamConsumerOutput ! RegisterStreamConsumerErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_register_stream_consumer(c.params, input)) ?? e => return Err(RegisterStreamConsumerErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_register_stream_consumer(c.params, input))) ?? e => return Err(RegisterStreamConsumerErr.InvalidInput(e))
   var req = serialize_register_stream_consumer(ep, input, "") ?? e => return Err(RegisterStreamConsumerErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -9692,7 +9709,7 @@ pub fn deserialize_remove_tags_from_stream_error(resp: http.Response) -> RemoveT
 /// that does not exist, it is ignored. RemoveTagsFromStream has a limit of
 /// five transactions per second per account.
 pub fn (c: Client) remove_tags_from_stream(input: RemoveTagsFromStreamInput) -> () ! RemoveTagsFromStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_remove_tags_from_stream(c.params, input)) ?? e => return Err(RemoveTagsFromStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_remove_tags_from_stream(c.params, input))) ?? e => return Err(RemoveTagsFromStreamErr.InvalidInput(e))
   var req = serialize_remove_tags_from_stream(ep, input, "") ?? e => return Err(RemoveTagsFromStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -9866,7 +9883,7 @@ pub fn deserialize_split_shard_error(resp: http.Response) -> SplitShardErr {
 /// SplitShard , you receive a LimitExceededException . SplitShard has a
 /// limit of five transactions per second per account.
 pub fn (c: Client) split_shard(input: SplitShardInput) -> () ! SplitShardErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_split_shard(c.params, input)) ?? e => return Err(SplitShardErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_split_shard(c.params, input))) ?? e => return Err(SplitShardErr.InvalidInput(e))
   var req = serialize_split_shard(ep, input, "") ?? e => return Err(SplitShardErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10049,7 +10066,7 @@ pub fn deserialize_start_stream_encryption_error(resp: http.Response) -> StartSt
 /// enable encryption, you can verify that encryption is applied by
 /// inspecting the API response from PutRecord or PutRecords .
 pub fn (c: Client) start_stream_encryption(input: StartStreamEncryptionInput) -> () ! StartStreamEncryptionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_start_stream_encryption(c.params, input)) ?? e => return Err(StartStreamEncryptionErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_start_stream_encryption(c.params, input))) ?? e => return Err(StartStreamEncryptionErr.InvalidInput(e))
   var req = serialize_start_stream_encryption(ep, input, "") ?? e => return Err(StartStreamEncryptionErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10196,7 +10213,7 @@ pub fn deserialize_stop_stream_encryption_error(resp: http.Response) -> StopStre
 /// encryption is not applied by inspecting the API response from PutRecord
 /// or PutRecords .
 pub fn (c: Client) stop_stream_encryption(input: StopStreamEncryptionInput) -> () ! StopStreamEncryptionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_stop_stream_encryption(c.params, input)) ?? e => return Err(StopStreamEncryptionErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_stop_stream_encryption(c.params, input))) ?? e => return Err(StopStreamEncryptionErr.InvalidInput(e))
   var req = serialize_stop_stream_encryption(ep, input, "") ?? e => return Err(StopStreamEncryptionErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10363,7 +10380,7 @@ pub fn deserialize_subscribe_to_shard_error(resp: http.Response) -> SubscribeToS
 /// ResourceInUseException . For an example of how to use this operation,
 /// see Enhanced Fan-Out Using the Kinesis Data Streams API .
 pub fn (c: Client) subscribe_to_shard(input: SubscribeToShardInput) -> SubscribeToShardEvents ! SubscribeToShardErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_subscribe_to_shard(c.params, input)) ?? e => return Err(SubscribeToShardErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_subscribe_to_shard(c.params, input))) ?? e => return Err(SubscribeToShardErr.InvalidInput(e))
   var req = serialize_subscribe_to_shard(ep, input, "") ?? e => return Err(SubscribeToShardErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10500,7 +10517,7 @@ pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
 /// manage, identify, organize, search for, and filter resources. You can
 /// assign up to 50 tags to a Kinesis resource.
 pub fn (c: Client) tag_resource(input: TagResourceInput) -> () ! TagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_tag_resource(c.params, input))) ?? e => return Err(TagResourceErr.InvalidInput(e))
   var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10626,7 +10643,7 @@ pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr
 /// deleted and can't be recovered after this operation completes
 /// successfully.
 pub fn (c: Client) untag_resource(input: UntagResourceInput) -> () ! UntagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_untag_resource(c.params, input))) ?? e => return Err(UntagResourceErr.InvalidInput(e))
   var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10745,7 +10762,7 @@ pub fn deserialize_update_account_settings_error(resp: http.Response) -> UpdateA
 /// (TPS) for each Amazon Web Services account. TPS over 5 will initiate the
 /// LimitExceededException .
 pub fn (c: Client) update_account_settings(input: UpdateAccountSettingsInput) -> UpdateAccountSettingsOutput ! UpdateAccountSettingsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_account_settings(c.params, input)) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_account_settings(c.params, input))) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
   var req = serialize_update_account_settings(ep, input, "") ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -10895,7 +10912,7 @@ pub fn deserialize_update_channel_error(resp: http.Response) -> UpdateChannelErr
 /// limit of 5 transactions per second (TPS) for each Amazon Web Services
 /// account. Exceeding 5 TPS results in a LimitExceededException .
 pub fn (c: Client) update_channel(input: UpdateChannelInput) -> UpdateChannelOutput ! UpdateChannelErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_channel(c.params, input)) ?? e => return Err(UpdateChannelErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_channel(c.params, input))) ?? e => return Err(UpdateChannelErr.InvalidInput(e))
   var req = serialize_update_channel(ep, input, "") ?? e => return Err(UpdateChannelErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -11027,7 +11044,7 @@ pub fn deserialize_update_max_record_size_error(resp: http.Response) -> UpdateMa
 /// can write to, and read from a stream. You can ingest and digest single
 /// records up to 10240 KiB.
 pub fn (c: Client) update_max_record_size(input: UpdateMaxRecordSizeInput) -> () ! UpdateMaxRecordSizeErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_max_record_size(c.params, input)) ?? e => return Err(UpdateMaxRecordSizeErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_max_record_size(c.params, input))) ?? e => return Err(UpdateMaxRecordSizeErr.InvalidInput(e))
   var req = serialize_update_max_record_size(ep, input, "") ?? e => return Err(UpdateMaxRecordSizeErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -11206,7 +11223,7 @@ pub fn deserialize_update_shard_count_error(resp: http.Response) -> UpdateShardC
 /// Guide . To request an increase in the call rate limit, the shard limit
 /// for this API, or your overall shard limit, use the limits form .
 pub fn (c: Client) update_shard_count(input: UpdateShardCountInput) -> UpdateShardCountOutput ! UpdateShardCountErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_shard_count(c.params, input)) ?? e => return Err(UpdateShardCountErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_shard_count(c.params, input))) ?? e => return Err(UpdateShardCountErr.InvalidInput(e))
   var req = serialize_update_shard_count(ep, input, "") ?? e => return Err(UpdateShardCountErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -11341,7 +11358,7 @@ pub fn deserialize_update_stream_mode_error(resp: http.Response) -> UpdateStream
 /// the warm throughput in MiB per second that your stream can support in
 /// writes.
 pub fn (c: Client) update_stream_mode(input: UpdateStreamModeInput) -> () ! UpdateStreamModeErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_stream_mode(c.params, input)) ?? e => return Err(UpdateStreamModeErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_stream_mode(c.params, input))) ?? e => return Err(UpdateStreamModeErr.InvalidInput(e))
   var req = serialize_update_stream_mode(ep, input, "") ?? e => return Err(UpdateStreamModeErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -11492,7 +11509,7 @@ pub fn deserialize_update_stream_record_distribution_strategy_error(resp: http.R
 /// distributed according to the new strategy. Records already in the stream
 /// keep their original shard assignments and are not redistributed.
 pub fn (c: Client) update_stream_record_distribution_strategy(input: UpdateStreamRecordDistributionStrategyInput) -> () ! UpdateStreamRecordDistributionStrategyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_stream_record_distribution_strategy(c.params, input)) ?? e => return Err(UpdateStreamRecordDistributionStrategyErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_stream_record_distribution_strategy(c.params, input))) ?? e => return Err(UpdateStreamRecordDistributionStrategyErr.InvalidInput(e))
   var req = serialize_update_stream_record_distribution_strategy(ep, input, "") ?? e => return Err(UpdateStreamRecordDistributionStrategyErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -11664,7 +11681,7 @@ pub fn deserialize_update_stream_warm_throughput_error(resp: http.Response) -> U
 /// shard limit for this API, or your overall shard limit, use the limits
 /// form .
 pub fn (c: Client) update_stream_warm_throughput(input: UpdateStreamWarmThroughputInput) -> UpdateStreamWarmThroughputOutput ! UpdateStreamWarmThroughputErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_stream_warm_throughput(c.params, input)) ?? e => return Err(UpdateStreamWarmThroughputErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_update_stream_warm_throughput(c.params, input))) ?? e => return Err(UpdateStreamWarmThroughputErr.InvalidInput(e))
   var req = serialize_update_stream_warm_throughput(ep, input, "") ?? e => return Err(UpdateStreamWarmThroughputErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

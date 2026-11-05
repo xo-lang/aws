@@ -981,7 +981,8 @@ pub fn emit_restjson(g: G) -> Str {
     let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
     let out_t = if s.output == "smithy.api#Unit" { "()" } else { xo_type(g, s.output) }
     let token = if needs_token(shape_of(g, s.input)) { "rest.uuid(c.rand)" } else { "\"\"" }
-    let route = if rules_of(g).is_some() { "c.route(endpoint_params_${name}(c.params, input))" } else { "c.route()" }
+    let params = if param_of(g, "AWS::Auth::AccountId").is_some() { "c.with_account(endpoint_params_${name}(c.params, input))" } else { "endpoint_params_${name}(c.params, input)" }
+    let route = if rules_of(g).is_some() { "c.route(${params})" } else { "c.route()" }
     if stream_member(g, s.input).is_some() {
       emit_input_stream_method(g, op, route, token, out)
       continue
@@ -1004,10 +1005,35 @@ pub fn emit_restjson(g: G) -> Str {
     out.push("  for h in extra {")
     out.push("    req.headers.push(h)")
     out.push("  }")
+    if long_poll(g, op) {
+      out.push("  req.long_poll = true")
+    }
+    let validation = validation_member(g, op)
+    if let Some((member, header)) = validation {
+      let f = field_name(member)
+      out.push("  // response checksums: asked for unless the call set its mode, then checked")
+      out.push("  let validate = input.${f}.is_some() || c.validate_checksums")
+      out.push("  if validate && input.${f}.is_none() {")
+      out.push("    req.headers.push((${lit_str(header)}, \"ENABLED\"))")
+      out.push("  }")
+    }
     out.push("  let resp = transport.send(c.transport, req, signing, ${if g.xml { "restxml" } else { "restjson" }}.classify) ?? e => return Err(${en}.Send(e))")
     out.push("  if resp.status >= 300 {")
+    if needs_discovery(g, op) {
+      out.push("    // a cell that moved: discover again on the next call (aws-sdk-go-v2)")
+      out.push("    if restjson.error_code(resp, jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])) == \"InvalidEndpointException\" {")
+      out.push("      c.discovered.forget(c.region)")
+      out.push("    }")
+    }
     out.push("    return Err(deserialize_${name}_error(resp))")
     out.push("  }")
+    if validation.is_some() {
+      out.push("  if validate {")
+      out.push("    if let Err(e) = checksum.validate(resp.headers.entries(), resp.body) {")
+      out.push("      return Err(${en}.Deserialize(\"the body's \${e.algorithm} \${e.actual} does not match the response's \${e.expected}\"))")
+      out.push("    }")
+      out.push("  }")
+    }
     let (before, after) = response_checks(g, op, en)
     for l in before {
       out.push(l)

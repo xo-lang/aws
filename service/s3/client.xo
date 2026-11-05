@@ -18,6 +18,10 @@ pub struct Options {
   pub max_attempts: Int = 3
   /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
   pub trace_id: Str? = None
+  /// Ask for and check response checksums where the operation supports
+  /// them (aws-sdk-go-v2's default, "when supported"); false checks them
+  /// only when the call sets its checksum mode ("when required").
+  pub validate_response_checksums: Bool = true
   /// When true, send this request to the FIPS-compliant regional endpoint.
   /// If the configured endpoint does not have a FIPS compliant endpoint,
   /// dispatching the request will return an error.
@@ -52,6 +56,7 @@ pub struct Client {
   /// The endpoint rule parameters every call shares.
   pub params: EndpointParameters
   rand: Rand
+  validate_checksums: Bool
 }
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
@@ -87,6 +92,7 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
     region: options.region,
     transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
     rand: rand,
+    validate_checksums: options.validate_response_checksums,
   })
 }
 
@@ -14341,11 +14347,5 @@ fn xml_body_get_bucket_analytics_configuration_request(v: GetBucketAnalyticsConf
 fn xml_body_get_bucket_cors_output(v: GetBucketCorsOutput, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_get_bucket_cors_output(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_get_bucket_cors_request(v: GetBucketCorsRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_get_bucket_cors_request(w, v, name, ns)
   xmlv.finish(w)
 }

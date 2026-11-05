@@ -323,3 +323,16 @@ test "bearer tokens and the Lambda trace id come from the environment" {
   let inside = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
   expect(inside.trace_id) == Some("Root=1-00000000-000000000000000000000000")
 }
+
+test "the account comes from AWS_ACCOUNT_ID and the endpoint mode from the environment" {
+  os.env.set("HOME", "/h")
+  os.env.set("AWS_REGION", "us-west-2")
+  os.env.set("AWS_ACCESS_KEY_ID", "AKIDTEST0000000000")
+  os.env.set("AWS_SECRET_ACCESS_KEY", "invented-secret")
+  os.env.set("AWS_ACCOUNT_ID", "123456789012")
+  os.env.set("AWS_ACCOUNT_ID_ENDPOINT_MODE", "required")
+  let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
+  expect(cfg.account_id_endpoint_mode) == Some("required")
+  let cr = (cfg.credentials ?? return Err("no credentials")).retrieve()?
+  expect(cr.account_id) == Some("123456789012")
+}

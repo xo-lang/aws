@@ -74,3 +74,21 @@ test "delays grow, stay under the cap" for seed: Int {
     expect(d.millis() <= cap)
   }
 }
+
+test "a long poll still backs off when the quota stops it" {
+  let empty = Costs{initial: 0}
+  let t0 = os.clock.now()
+  let plain = run(standard(costs: empty), os.clock, os.rand, fn(_a: Int) -> Int ! Str { Err("t") }, fn(_e: Str) -> Failure { Failure.Transient })
+  expect(plain.is_err()) == true
+  expect(os.clock.now() - t0) == 0s
+  let t1 = os.clock.now()
+  let polled = run(standard(costs: empty), os.clock, os.rand, fn(_a: Int) -> Int ! Str { Err("t") }, fn(_e: Str) -> Failure { Failure.Transient }, long_poll: true)
+  match polled {
+    Err(a) => {
+      expect(a.attempts) == 1
+      expect(a.quota_exceeded) == true
+    }
+    Ok(_) => expect(false)
+  }
+  expect(os.clock.now() - t1 > 0s) == true
+}

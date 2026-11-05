@@ -131,8 +131,10 @@ pub struct Attempted[E] {
 
 /// Calls `op(attempt)` (1 for the first) until it succeeds, its failure
 /// is Permanent, `max_attempts` calls were made, or the quota is empty;
-/// sleeps `delay` on `clock` between attempts.
-pub fn run[T, E, fx: Effects](s: Standard, clock: Clock, rand: Rand, op: fn(Int) -> T ! E uses fx, failure: fn(E) -> Failure) -> T ! Attempted[E] uses (clock, rand, fx) {
+/// sleeps `delay` on `clock` between attempts. A `long_poll` operation
+/// still sleeps that delay when the quota stops it, so a polling loop
+/// backs off instead of spinning (aws-sdk-go-v2's 2026 retry behavior).
+pub fn run[T, E, fx: Effects](s: Standard, clock: Clock, rand: Rand, op: fn(Int) -> T ! E uses fx, failure: fn(E) -> Failure, long_poll: Bool = false) -> T ! Attempted[E] uses (clock, rand, fx) {
   var attempt = 1
   var held = 0
   while true {
@@ -146,7 +148,15 @@ pub fn run[T, E, fx: Effects](s: Standard, clock: Clock, rand: Rand, op: fn(Int)
         if f is Failure.Permanent || attempt >= s.max_attempts {
           return Err(Attempted{err: e, attempts: attempt})
         }
-        let cost = acquire(s, f) ?? return Err(Attempted{err: e, attempts: attempt, quota_exceeded: true})
+        let cost = match acquire(s, f) {
+          Some(x) => x
+          None => {
+            if long_poll {
+              clock.sleep(delay(s, attempt - 1, rand))
+            }
+            return Err(Attempted{err: e, attempts: attempt, quota_exceeded: true})
+          }
+        }
         held = cost
         clock.sleep(delay(s, attempt - 1, rand))
         attempt += 1

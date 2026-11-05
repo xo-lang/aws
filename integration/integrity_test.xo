@@ -54,3 +54,24 @@ test "SQS checks the MD5 of sent and received message bodies" {
     _ => return Err("an MD5 mismatch on receive must fail")
   }
 }
+
+test "DynamoDB sends to the credentials' account endpoint unless the mode is disabled" {
+  let hosts = Mutex[List[Str]].new([])
+  let answer = fn(host: Str) -> fn(http.Request) -> http.Response {
+    fn(req: http.Request) -> http.Response {
+      hosts.with(fn(var xs: List[Str]) { xs.push(host) })
+      http.text(200, "{\"TableNames\":[]}").with_header("Content-Type", "application/x-amz-json-1.0")
+    }
+  }
+  os.net.handle("POST https://123456789012.ddb.us-west-2.amazonaws.com/", answer("123456789012.ddb.us-west-2.amazonaws.com"))
+  os.net.handle("POST https://dynamodb.us-west-2.amazonaws.com/", answer("dynamodb.us-west-2.amazonaws.com"))
+  let creds = credentials.static_provider("AKIDTEST0000000000", "invented-secret", account_id: "123456789012")
+  let c = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: creds})?
+  c.list_tables(dynamodb.ListTablesInput{})?
+  let off = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: creds, account_id_endpoint_mode: "disabled"})?
+  off.list_tables(dynamodb.ListTablesInput{})?
+  // credentials without an account use the regional endpoint
+  let plain = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  plain.list_tables(dynamodb.ListTablesInput{})?
+  expect(hosts.with_read(fn(xs: List[Str]) -> List[Str] { xs })) == ["123456789012.ddb.us-west-2.amazonaws.com", "dynamodb.us-west-2.amazonaws.com", "dynamodb.us-west-2.amazonaws.com"]
+}

@@ -85,6 +85,12 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  pub max_attempts: Int = 3")
   out.push("  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).")
   out.push("  pub trace_id: Str? = None")
+  if validates_responses(g) {
+    out.push("  /// Ask for and check response checksums where the operation supports")
+    out.push("  /// them (aws-sdk-go-v2's default, \"when supported\"); false checks them")
+    out.push("  /// only when the call sets its checksum mode (\"when required\").")
+    out.push("  pub validate_response_checksums: Bool = true")
+  }
   if bearer_auth(g) != "" {
     out.push("  /// The token of bearer auth (`AWS_BEARER_TOKEN_${bearer_env(g)}` through")
     out.push(if bearer_auth(g) == "only" { "  /// `from_config`); every call needs it." } else { "  /// `from_config`): when set, calls use it instead of SigV4." })
@@ -108,6 +114,9 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  pub endpoint: rest.Endpoint")
   }
   out.push("  rand: Rand")
+  if validates_responses(g) {
+    out.push("  validate_checksums: Bool")
+  }
   if discovery_op(g).is_some() {
     out.push("  /// Addresses DescribeEndpoints returned (endpoint discovery).")
     out.push("  discovered: discovery.Cache")
@@ -145,6 +154,9 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},")
   }
   out.push("    rand: rand,")
+  if validates_responses(g) {
+    out.push("    validate_checksums: options.validate_response_checksums,")
+  }
   if discovery_op(g).is_some() {
     out.push("    discovered: discovery.new_cache(),")
     out.push("    clock: clock,")
@@ -154,6 +166,7 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("")
   if with_rules {
     emit_from_config(g, out)
+    emit_with_account(g, out)
   }
   emit_discover(g, out)
   out.push("const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}")
@@ -275,6 +288,9 @@ fn emit_from_config(g: G, var out: List[Str]) {
     out.push("  o.${field_name(d)} = Some(cfg.use_dualstack)")
   }
   out.push("  o.trace_id = cfg.trace_id")
+  if let Some(m) = param_of(g, "AWS::Auth::AccountIdEndpointMode") {
+    out.push("  o.${field_name(m)} = cfg.account_id_endpoint_mode")
+  }
   if bearer_auth(g) != "" {
     out.push("  o.bearer_token = cfg.bearer_tokens.get(${lit_str(bearer_env(g))})")
   }
@@ -426,4 +442,36 @@ fn bearer_signing(g: G) -> Str {
 fn bearer_env(g: G) -> Str {
   let n = sigv4_name(g)
   if n == "" { endpoint_suffix(g) } else { n.to_upper().replace("-", "_") }
+}
+
+/// For a service whose endpoint rules take `AWS::Auth::AccountId`: the
+/// account of the credentials, unless the caller set one or the mode is
+/// "disabled" (aws-sdk-go-v2 resolves the identity before the endpoint).
+/// A credentials error is left for signing to report.
+fn emit_with_account(g: G, var out: List[Str]) {
+  let a = param_of(g, "AWS::Auth::AccountId") ?? return
+  let af = field_name(a)
+  out.push("/// The endpoint parameters with the credentials' account filled in.")
+  out.push("fn (c: Client) with_account(base: EndpointParameters) -> EndpointParameters uses (net.dial, clock, rand) {")
+  out.push("  var p = base")
+  if let Some(m) = param_of(g, "AWS::Auth::AccountIdEndpointMode") {
+    let mf = field_name(m)
+    out.push("  // aws-sdk-go-v2's default mode")
+    out.push("  if p.${mf}.is_none() {")
+    out.push("    p.${mf} = Some(\"preferred\")")
+    out.push("  }")
+    out.push("  if p.${af}.is_some() || p.${mf} == Some(\"disabled\") {")
+    out.push("    return p")
+    out.push("  }")
+  } else {
+    out.push("  if p.${af}.is_some() {")
+    out.push("    return p")
+    out.push("  }")
+  }
+  out.push("  match c.transport.credentials.retrieve() {")
+  out.push("    Ok(cr) => p with {${af}: cr.account_id}")
+  out.push("    Err(_) => p")
+  out.push("  }")
+  out.push("}")
+  out.push("")
 }

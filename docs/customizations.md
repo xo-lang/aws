@@ -28,7 +28,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | S3 Express One Zone session auth (CreateSession credentials, `sigv4-s3express`) | S3 directory buckets | No | a session cache keyed by bucket, signing with `x-amz-s3session-token` |
 | Retry: IDPCommunicationError retryable | STS | Yes | `retry/retry_test.xo` |
 | Clock skew correction | all | Yes | `transport/transport_test.xo` "clock skew" |
-| Long polling operations keep retrying when the retry quota is empty | SQS ReceiveMessage and similar | No | a `long_poll` flag on the request that bypasses the quota |
+| Long polling: when the retry quota stops a retry, back off before returning (aws-sdk-go-v2 behind `AWS_NEW_RETRIES_2026`; on here) | SQS ReceiveMessage, Step Functions GetActivityTask, SWF PollForActivityTask and PollForDecisionTask | Yes | `retry/retry_test.xo` "long poll" |
 | `Accept-Encoding: identity` (bodies as stored) | all (S3 needs it) | Yes | `transport/transport_test.xo` "gzip bodies" |
 | `Expect: 100-continue` for large S3 uploads | S3 PutObject, UploadPart | No | not needed for correctness; an optimization once std/http supports it |
 | Request compression (`requestCompression`, gzip) | CloudWatch PutMetricData | Yes | protocol tests (`internal/protocoltest`) |
@@ -42,7 +42,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 |---|---|---|---|
 | Flexible checksums: CRC32 when the operation requires one, the caller's algorithm otherwise (`aws.protocols#httpChecksum`) | S3 (DeleteObjects and 24 other operations require one) | Yes | `checksum/checksum_test.xo`; `integration/checksum_test.xo` |
 | `Content-MD5` for `httpChecksumRequired` | S3 Control | Yes | generated serializers |
-| Response checksum validation (`ChecksumMode: ENABLED`) | S3 GetObject, HeadObject | No (`checksum.validate` exists) | wrap the streamed body to check at its end |
+| Response checksum validation: the mode sent and the body checked unless `validate_response_checksums` is false ("when supported", the aws-sdk-go-v2 default); multipart checksums skipped | S3 GetObject, GetObjectAnnotation | Yes | `integration/checksum_test.xo` "GetObject asks". Next: `AWS_RESPONSE_CHECKSUM_VALIDATION` and the profile setting |
 | Trailing checksums with aws-chunked encoding for streamed uploads | S3 | No | needed only for unsized streams |
 | DynamoDB response CRC32 (`X-Amz-Crc32`) | DynamoDB | Yes | `integration/integrity_test.xo` |
 | SQS message MD5 checks (SendMessage, SendMessageBatch, ReceiveMessage) | SQS | Yes (bodies, as aws-sdk-go-v2) | `integration/integrity_test.xo` |
@@ -54,8 +54,8 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 |---|---|---|---|
 | Endpoint rules: virtual host and path style buckets, ARNs, access points, Outposts, Object Lambda, dual stack, FIPS, accelerate | S3, S3 Control | Rules | the endpoint tests in each model (`scripts/check-endpoints.sh`) |
 | S3 Control: no host prefix on top of the rules' account host | S3 Control | Yes | `integration/s3control_test.xo` |
-| Account ID endpoints (`AWS::Auth::AccountId`, filled from the credentials) | DynamoDB, DynamoDB Streams, Kinesis, EventBridge | Partly: an `account_id` option, not filled from credentials | fill it from the credentials' account when the mode allows |
-| Endpoint discovery (`aws.api#clientEndpointDiscovery`) | Timestream Write and Query (required), DynamoDB (optional, off as in aws-sdk-go-v2) | Yes for required; a configured endpoint skips it | `discovery/discovery_test.xo`; `integration/discovery_test.xo`. Next: forget the address on InvalidEndpointException |
+| Account ID endpoints (`AWS::Auth::AccountId` from the credentials' account: `AWS_ACCOUNT_ID`, a profile's `aws_account_id`, an assumed role's ARN; mode "preferred" by default, `AWS_ACCOUNT_ID_ENDPOINT_MODE`) | DynamoDB, DynamoDB Streams, Kinesis, EventBridge | Yes | `integration/integrity_test.xo` "account endpoint"; `config/config_test.xo` "the account comes". Next: the account from SSO and process credentials |
+| Endpoint discovery (`aws.api#clientEndpointDiscovery`), the address dropped on InvalidEndpointException | Timestream Write and Query (required), DynamoDB (optional, off as in aws-sdk-go-v2) | Yes for required; a configured endpoint skips it | `discovery/discovery_test.xo`; `integration/discovery_test.xo` |
 | Errors in a 200 response | S3 (every operation with a structured XML response) | Yes | `integration/s3_200_error_test.xo` |
 | Route 53: `/hostedzone/`, `/change/` and `/delegationset/` prefixes trimmed from ids | Route 53 (34 members) | Yes | `integration/customize_test.xo` |
 | Route 53: InvalidChangeBatch error body | Route 53 ChangeResourceRecordSets | Yes | `integration/customize_test.xo` "Route 53 errors" |

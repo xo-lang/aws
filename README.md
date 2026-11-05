@@ -6,7 +6,8 @@ Amazon.com, Inc. or its affiliates.
 
 ## Status
 
-Not yet released (no tags). What is true today:
+The first release is v0.1.0, for the core and every service module.
+What is true today:
 
 - **All 435 of AWS's published service models** have a generated client
   module, committed under `service/`, and every one type checks.
@@ -93,8 +94,8 @@ use github.com/xo-lang/aws/service/s3
 ```
 
 Versions are git tags: `vX.Y.Z` for the core and `service/<name>/vX.Y.Z`
-for a service (`service/s3/v0.1.0`). No tag exists yet; the versions
-above show the form.
+for a service (`service/s3/v0.1.0`). v0.1.0 tags every module at one
+commit; after it, each module gets a new tag only when it changes.
 
 ## Layout
 

@@ -22,6 +22,9 @@ pub struct Options {
   pub max_attempts: Int = 3
   /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
   pub trace_id: Str? = None
+  /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the
+  /// profile's `sdk_ua_app_id` through `from_config`).
+  pub app_id: Str? = None
 }
 
 pub struct Client {
@@ -33,10 +36,11 @@ pub struct Client {
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
   let ep = rest.parse_endpoint(options.endpoint) ?? return Err("bad endpoint ${options.endpoint}")
+  var ua_features: List[Str] = ["E"]
   Ok(Client{
     endpoint: ep,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/restjsonprotocol", app_id: options.app_id, features: ua_features},
     rand: rand,
   })
 }
@@ -13385,17 +13389,4 @@ pub fn (e: RecursiveShapesErr) display() -> Str {
 pub fn deserialize_recursive_shapes_error(resp: http.Response) -> RecursiveShapesErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   RecursiveShapesErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) recursive_shapes(input: RecursiveShapesInputOutput) -> RecursiveShapesInputOutput ! RecursiveShapesErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(RecursiveShapesErr.InvalidInput(e))
-  var req = serialize_recursive_shapes(ep, input, "") ?? e => return Err(RecursiveShapesErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(RecursiveShapesErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_recursive_shapes_error(resp))
-  }
-  deserialize_recursive_shapes(resp) ?? e => Err(RecursiveShapesErr.Deserialize(e))
 }

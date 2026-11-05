@@ -85,6 +85,9 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("  pub max_attempts: Int = 3")
   out.push("  /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).")
   out.push("  pub trace_id: Str? = None")
+  out.push("  /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the")
+  out.push("  /// profile's `sdk_ua_app_id` through `from_config`).")
+  out.push("  pub app_id: Str? = None")
   if calculates_checksums(g) {
     out.push("  /// Send a CRC32 checksum with every operation that takes one, when the")
     out.push("  /// call names no algorithm and carries no checksum (aws-sdk-go-v2's")
@@ -159,6 +162,26 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   } else {
     out.push("  let ep = rest.parse_endpoint(options.endpoint) ?? return Err(\"bad endpoint \${options.endpoint}\")")
   }
+  // the User-Agent's client feature codes (aws-sdk-go-v2's): E the
+  // standard retry mode; Z/a and b/c the checksum settings; P/Q/R the
+  // account ID endpoint mode
+  out.push("  var ua_features: List[Str] = [\"E\"]")
+  if calculates_checksums(g) {
+    out.push("  ua_features.push(if options.calculate_request_checksums { \"Z\" } else { \"a\" })")
+  }
+  if validates_responses(g) {
+    out.push("  ua_features.push(if options.validate_response_checksums { \"b\" } else { \"c\" })")
+  }
+  if let Some(m) = param_of(g, "AWS::Auth::AccountIdEndpointMode") {
+    out.push("  ua_features.push(match options.${field_name(m)} {")
+    out.push("    Some(\"disabled\") => \"Q\"")
+    out.push("    Some(\"required\") => \"R\"")
+    out.push("    _ => \"P\"")
+    out.push("  })")
+  }
+  // no versions: modules are tagged one by one (scripts/tag-modules.sh)
+  let ua = "xo-lang-aws ua/2.1 lang/xo api/${service_dir(sdk_id(g))}"
+  let ua_fields = "user_agent: \"${ua}\", app_id: options.app_id, features: ua_features"
   out.push("  Ok(Client{")
   if with_rules {
     out.push("    params: params,")
@@ -168,9 +191,9 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("    region: options.region,")
   if bearer_auth(g) != "" {
     let provider = if bearer_auth(g) == "only" { ", token_provider: options.bearer_provider" } else { "" }
-    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) })${provider}, trace_id: options.trace_id},")
+    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) })${provider}, trace_id: options.trace_id, ${ua_fields}},")
   } else {
-    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},")
+    out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, ${ua_fields}},")
   }
   out.push("    rand: rand,")
   if g.s3 {
@@ -317,6 +340,7 @@ fn emit_from_config(g: G, var out: List[Str]) {
     out.push("  o.${field_name(d)} = Some(cfg.use_dualstack)")
   }
   out.push("  o.trace_id = cfg.trace_id")
+  out.push("  o.app_id = cfg.app_id")
   if calculates_checksums(g) {
     out.push("  o.calculate_request_checksums = cfg.request_checksum_calculation != Some(\"when_required\")")
   }

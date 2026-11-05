@@ -8,6 +8,53 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn (e: DescribeTermsByClientErr) display() -> Str {
+  match e {
+    InternalErrorException(x) => "InternalErrorException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    NotAuthorizedException(x) => "NotAuthorizedException: ${x:?}"
+    OperationNotEnabledException(x) => "OperationNotEnabledException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_terms_by_client_error(resp: http.Response) -> DescribeTermsByClientErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalErrorException" => match read_error_internal_error_exception(resp, body) {
+      Ok(x) => return DescribeTermsByClientErr.InternalErrorException(x)
+      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return DescribeTermsByClientErr.InvalidParameterException(x)
+      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
+    }
+    "NotAuthorizedException" => match read_error_not_authorized_exception(resp, body) {
+      Ok(x) => return DescribeTermsByClientErr.NotAuthorizedException(x)
+      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
+    }
+    "OperationNotEnabledException" => match read_error_operation_not_enabled_exception(resp, body) {
+      Ok(x) => return DescribeTermsByClientErr.OperationNotEnabledException(x)
+      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DescribeTermsByClientErr.ResourceNotFoundException(x)
+      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return DescribeTermsByClientErr.TooManyRequestsException(x)
+      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeTermsByClientErr.Api(restjson.api_error(resp, body))
+}
+
 /// Returns details for the terms documents that are associated with an app
 /// client, identified by the app client ID, user pool ID, and terms name.
 /// For more information, see Terms documents . To call
@@ -9715,46 +9762,4 @@ pub fn deserialize_update_user_pool_error(resp: http.Response) -> UpdateUserPool
     _ => {}
   }
   UpdateUserPoolErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the configuration of a user pool. To avoid setting parameters to
-/// Amazon Cognito defaults, construct this API request to pass the existing
-/// configuration of your user pool, modified to include the changes that
-/// you want to make. If you don't provide a value for an attribute, Amazon
-/// Cognito sets it to its default value. In secondary regions for user
-/// pools with multi-region replication, regional configurations for email,
-/// SMS, Lambda functions, and tags can be updated. Both global and regional
-/// settings must be provided as inputs, with global settings required to
-/// match existing values to maintain consistency across replicas. This
-/// action might generate an SMS text message. Starting June 1, 2021, US
-/// telecom carriers require you to register an origination phone number
-/// before you can send SMS messages to US phone numbers. If you use SMS
-/// text messages in Amazon Cognito, you must register a phone number with
-/// Amazon Pinpoint . Amazon Cognito uses the registered number
-/// automatically. Otherwise, Amazon Cognito users who must receive SMS
-/// messages might not be able to sign up, activate their accounts, or sign
-/// in. If you have never used SMS text messages with Amazon Cognito or any
-/// other Amazon Web Services service, Amazon Simple Notification Service
-/// might place your account in the SMS sandbox. In sandbox mode , you can
-/// send messages only to verified phone numbers. After you test your app
-/// while in the sandbox environment, you can move out of the sandbox and
-/// into production. For more information, see SMS message settings for
-/// Amazon Cognito user pools in the Amazon Cognito Developer Guide . Amazon
-/// Cognito evaluates Identity and Access Management (IAM) policies in
-/// requests for this API operation. For this operation, you must use IAM
-/// credentials to authorize requests, and you must grant yourself the
-/// corresponding IAM permission in a policy. Learn more Signing Amazon Web
-/// Services API Requests Using the Amazon Cognito user pools API and user
-/// pool endpoints
-pub fn (c: Client) update_user_pool(input: UpdateUserPoolRequest) -> UpdateUserPoolResponse ! UpdateUserPoolErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_user_pool(c.params, input)) ?? e => return Err(UpdateUserPoolErr.InvalidInput(e))
-  var req = serialize_update_user_pool(ep, input, "") ?? e => return Err(UpdateUserPoolErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateUserPoolErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_user_pool_error(resp))
-  }
-  deserialize_update_user_pool(resp) ?? e => Err(UpdateUserPoolErr.Deserialize(e))
 }

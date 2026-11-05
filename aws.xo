@@ -16,6 +16,10 @@ pub struct Credentials {
   /// ARN). Clients whose endpoints take the account (DynamoDB and
   /// others) use it, as aws-sdk-go-v2 does.
   pub account_id: Str? = None
+  /// The user agent feature codes of where they came from (`g` the
+  /// environment, `n` a profile, `i` an assumed role, ...), sent as the
+  /// User-Agent's `m/` metrics (aws-sdk-go-v2's credential sources).
+  pub features: List[Str] = []
 }
 
 /// Why credentials could not be had.
@@ -43,6 +47,18 @@ pub fn (e: CredentialsErr) display() -> Str {
 /// jitter) effects.
 pub interface CredentialsProvider {
   fn retrieve(self) -> Credentials ! CredentialsErr uses (net.dial, clock, rand)
+}
+
+/// `c` with the feature codes `codes` in front of its own (a provider
+/// that wraps another: a profile around its source).
+pub fn with_features(c: Credentials, codes: List[Str]) -> Credentials {
+  var out = codes
+  for f in c.features {
+    if !out.contains(f) {
+      out.push(f)
+    }
+  }
+  c with {features: out}
 }
 
 /// A source of bearer tokens (`smithy.api#httpBearerAuth`), such as an

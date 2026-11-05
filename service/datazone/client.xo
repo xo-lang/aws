@@ -18,6 +18,9 @@ pub struct Options {
   pub max_attempts: Int = 3
   /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
   pub trace_id: Str? = None
+  /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the
+  /// profile's `sdk_ua_app_id` through `from_config`).
+  pub app_id: Str? = None
   /// When true, send this request to the FIPS-compliant regional endpoint.
   /// If the configured endpoint does not have a FIPS compliant endpoint,
   /// dispatching the request will return an error.
@@ -39,10 +42,11 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   if let Some(v) = options.use_fips {
     params.use_fips = v
   }
+  var ua_features: List[Str] = ["E"]
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/datazone", app_id: options.app_id, features: ua_features},
     rand: rand,
   })
 }
@@ -63,6 +67,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   }
   o.use_fips = Some(cfg.use_fips)
   o.trace_id = cfg.trace_id
+  o.app_id = cfg.app_id
   Ok(o)
 }
 
@@ -13748,40 +13753,4 @@ fn json_of_get_notebook_run_output(v: GetNotebookRunOutput) -> json.Value {
     fs.push(("completedAt", jsonv.time(x, "epoch-seconds")))
   }
   json.Value.Object(fs)
-}
-
-fn from_json_get_notebook_run_output(v: json.Value) -> GetNotebookRunOutput ! Str {
-  var out = GetNotebookRunOutput{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "id" => out.id = jsonv.read_str(fv)?
-      "domainId" => out.domain_id = jsonv.read_str(fv)?
-      "owningProjectId" => out.owning_project_id = jsonv.read_str(fv)?
-      "notebookId" => out.notebook_id = jsonv.read_str(fv)?
-      "scheduleId" => out.schedule_id = jsonv.read_str(fv)?
-      "status" => out.status = NotebookRunStatus.from(jsonv.read_str(fv)?)
-      "cellOrder" => out.cell_order = from_json_cell_order(fv)?
-      "metadata" => out.metadata = from_json_metadata(fv)?
-      "parameters" => out.parameters = from_json_parameters(fv)?
-      "computeConfiguration" => out.compute_configuration = from_json_compute_config(fv)?
-      "networkConfiguration" => out.network_configuration = from_json_network_config(fv)?
-      "timeoutConfiguration" => out.timeout_configuration = from_json_timeout_config(fv)?
-      "environmentConfiguration" => out.environment_configuration = from_json_environment_config(fv)?
-      "storageConfiguration" => out.storage_configuration = from_json_storage_config(fv)?
-      "notificationConfiguration" => out.notification_configuration = from_json_notification_config(fv)?
-      "triggerSource" => out.trigger_source = from_json_trigger_source(fv)?
-      "error" => out.error = from_json_notebook_run_error(fv)?
-      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
-      "createdBy" => out.created_by = jsonv.read_str(fv)?
-      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
-      "updatedBy" => out.updated_by = jsonv.read_str(fv)?
-      "startedAt" => out.started_at = jsonv.read_time(fv, "epoch-seconds")?
-      "completedAt" => out.completed_at = jsonv.read_time(fv, "epoch-seconds")?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

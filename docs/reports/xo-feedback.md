@@ -383,6 +383,11 @@ Disliked:
   need one call each after loading the configuration, where
   aws-sdk-go-v2 needs none. Forgetting the call is a clear error at the
   first request, not at build time.
+- `xo check` accepts a closure with a `var` parameter
+  (`fn(var l: List[Str], code: Str)`), but `xo test` on the native
+  backends then stops with XO1201 "function values with `var`
+  parameters (support is planned)". The checker could warn, since every
+  default build is native.
 - `xo test --run` is a substring match (documented in `xo help
   test`), where Go's `-run` is a regular expression, so `--run 'a|b'`
   quietly matches nothing. The "no tests match" message could say it

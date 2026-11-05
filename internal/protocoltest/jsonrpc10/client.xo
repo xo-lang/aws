@@ -19,6 +19,9 @@ pub struct Options {
   pub max_attempts: Int = 3
   /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
   pub trace_id: Str? = None
+  /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the
+  /// profile's `sdk_ua_app_id` through `from_config`).
+  pub app_id: Str? = None
 }
 
 pub struct Client {
@@ -30,10 +33,11 @@ pub struct Client {
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
   let ep = rest.parse_endpoint(options.endpoint) ?? return Err("bad endpoint ${options.endpoint}")
+  var ua_features: List[Str] = ["E"]
   Ok(Client{
     endpoint: ep,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/jsonrpc10", app_id: options.app_id, features: ua_features},
     rand: rand,
   })
 }

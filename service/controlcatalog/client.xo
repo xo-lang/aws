@@ -20,6 +20,9 @@ pub struct Options {
   pub max_attempts: Int = 3
   /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
   pub trace_id: Str? = None
+  /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the
+  /// profile's `sdk_ua_app_id` through `from_config`).
+  pub app_id: Str? = None
   /// When true, use the dual-stack endpoint. If the configured endpoint
   /// does not support dual-stack, dispatching the request MAY return an
   /// error.
@@ -48,10 +51,11 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   if let Some(v) = options.use_fips {
     params.use_fips = v
   }
+  var ua_features: List[Str] = ["E"]
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/controlcatalog", app_id: options.app_id, features: ua_features},
     rand: rand,
   })
 }
@@ -73,6 +77,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
   o.trace_id = cfg.trace_id
+  o.app_id = cfg.app_id
   Ok(o)
 }
 

@@ -128,7 +128,14 @@ pub struct Client {
   pub rand: Rand
   pub retryer: retry.Standard
   pub credentials: aws.CredentialsProvider
-  pub user_agent: Str = "xo-lang-aws/0.1"
+  /// No versions: each module is tagged on its own (scripts/tag-modules.sh),
+  /// so one constant would be wrong for most of them.
+  pub user_agent: Str = "xo-lang-aws ua/2.1 lang/xo"
+  /// The application's id (`AWS_SDK_UA_APP_ID`), sent as `app/<id>`.
+  pub app_id: Str? = None
+  /// User agent feature codes of the client (its checksum settings, the
+  /// account ID mode, a paginator's or waiter's calls), sent as `m/`.
+  pub features: List[Str] = []
   /// The token of bearer auth (`Auth.Bearer`), such as a Bedrock API key.
   pub token: Secret[Str]? = None
   /// Asked for a token when `token` is not set.
@@ -266,13 +273,55 @@ fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: In
       hreq = hreq.add_header(name, value)
     }
   }
-  hreq = hreq.with_header("User-Agent", c.user_agent)
+  hreq = hreq.with_header("User-Agent", user_agent_for(c, req.headers, signing.session.is_some(), creds.features))
   // The SDK reads bodies as stored (an S3 object saved gzip must come
   // back gzip); setting the header turns off std/http's decoding.
   if hreq.header("Accept-Encoding").is_none() {
     hreq = hreq.with_header("Accept-Encoding", "identity")
   }
   Ok((hreq, signed.signature, screds, now))
+}
+
+/// `c` with the feature `code` added (a paginator's `C`, a waiter's `B`).
+pub fn with_feature(c: Client, code: Str) -> Client {
+  if c.features.contains(code) { c } else { c with {features: c.features + [code]} }
+}
+
+/// The User-Agent for a request with `headers`, sent with credentials
+/// whose codes are `creds`: the client's string, `app/<id>`, and `m/`
+/// with the sorted feature codes of the client, the request (its
+/// checksum algorithm, gzip, an S3 Express session) and the
+/// credentials, as aws-sdk-go-v2's user agent middleware.
+pub fn user_agent_for(c: Client, headers: List[(Str, Str)], session: Bool, creds: List[Str]) -> Str {
+  var all = c.features
+  for (name, value) in headers {
+    match name.to_lower() {
+      "x-amz-checksum-crc32" => all.push("U")
+      "x-amz-checksum-crc32c" => all.push("V")
+      "x-amz-checksum-crc64nvme" => all.push("W")
+      "x-amz-checksum-sha1" => all.push("X")
+      "x-amz-checksum-sha256" => all.push("Y")
+      "content-encoding" => if value.to_lower().contains("gzip") { all.push("L") }
+      _ => {}
+    }
+  }
+  if session {
+    all.push("J")
+  }
+  all = all + creds
+  var codes: List[Str] = []
+  for f in all {
+    if !codes.contains(f) {
+      codes.push(f)
+    }
+  }
+  var ua = c.user_agent
+  if let Some(id) = c.app_id {
+    if id != "" {
+      ua = "${ua} app/${id.replace(" ", "_")}"
+    }
+  }
+  if codes.is_empty() { ua } else { "${ua} m/${codes.sort().join(",")}" }
 }
 
 /// `req` with `headers` and no signature, for an operation without auth.
@@ -283,7 +332,7 @@ fn unsigned_request(c: Client, req: Request, headers: List[(Str, Str)]) -> http.
       hreq = hreq.add_header(name, value)
     }
   }
-  hreq = hreq.with_header("User-Agent", c.user_agent)
+  hreq = hreq.with_header("User-Agent", user_agent_for(c, req.headers, false, []))
   if hreq.header("Accept-Encoding").is_none() {
     hreq = hreq.with_header("Accept-Encoding", "identity")
   }

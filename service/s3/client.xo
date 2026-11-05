@@ -20,6 +20,9 @@ pub struct Options {
   pub max_attempts: Int = 3
   /// Sent as `X-Amzn-Trace-Id` (inside Lambda, from the configuration).
   pub trace_id: Str? = None
+  /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the
+  /// profile's `sdk_ua_app_id` through `from_config`).
+  pub app_id: Str? = None
   /// Send a CRC32 checksum with every operation that takes one, when the
   /// call names no algorithm and carries no checksum (aws-sdk-go-v2's
   /// default, "when supported"); false sends one only where required.
@@ -96,10 +99,13 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
   if let Some(v) = options.disable_s3_express_session_auth {
     params.disable_s3_express_session_auth = v
   }
+  var ua_features: List[Str] = ["E"]
+  ua_features.push(if options.calculate_request_checksums { "Z" } else { "a" })
+  ua_features.push(if options.validate_response_checksums { "b" } else { "c" })
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/s3", app_id: options.app_id, features: ua_features},
     rand: rand,
     express_sessions: credentials.new_session_cache(),
     calculate_checksums: options.calculate_request_checksums,
@@ -124,6 +130,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   o.use_fips = Some(cfg.use_fips)
   o.use_dual_stack = Some(cfg.use_dualstack)
   o.trace_id = cfg.trace_id
+  o.app_id = cfg.app_id
   o.calculate_request_checksums = cfg.request_checksum_calculation != Some("when_required")
   o.validate_response_checksums = cfg.response_checksum_validation != Some("when_required")
   Ok(o)
@@ -14300,23 +14307,5 @@ fn xml_body_encryption_type_mismatch(v: EncryptionTypeMismatch, name: Str, ns: L
 fn xml_body_end_event(v: EndEvent, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_end_event(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_error_shape(v: ErrorShape, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_error_shape(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_error_details(v: ErrorDetails, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_error_details(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_error_document(v: ErrorDocument, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_error_document(w, v, name, ns)
   xmlv.finish(w)
 }

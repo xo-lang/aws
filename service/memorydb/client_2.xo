@@ -8,6 +8,38 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_update_subnet_group_error(resp: http.Response) -> UpdateSubnetGroupErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidSubnet" => match read_error_invalid_subnet(resp, body) {
+      Ok(x) => return UpdateSubnetGroupErr.InvalidSubnet(x)
+      Err(msg) => return UpdateSubnetGroupErr.Deserialize(msg)
+    }
+    "ServiceLinkedRoleNotFoundFault" => match read_error_service_linked_role_not_found_fault(resp, body) {
+      Ok(x) => return UpdateSubnetGroupErr.ServiceLinkedRoleNotFoundFault(x)
+      Err(msg) => return UpdateSubnetGroupErr.Deserialize(msg)
+    }
+    "SubnetGroupNotFoundFault" => match read_error_subnet_group_not_found_fault(resp, body) {
+      Ok(x) => return UpdateSubnetGroupErr.SubnetGroupNotFoundFault(x)
+      Err(msg) => return UpdateSubnetGroupErr.Deserialize(msg)
+    }
+    "SubnetInUse" => match read_error_subnet_in_use(resp, body) {
+      Ok(x) => return UpdateSubnetGroupErr.SubnetInUse(x)
+      Err(msg) => return UpdateSubnetGroupErr.Deserialize(msg)
+    }
+    "SubnetNotAllowedFault" => match read_error_subnet_not_allowed_fault(resp, body) {
+      Ok(x) => return UpdateSubnetGroupErr.SubnetNotAllowedFault(x)
+      Err(msg) => return UpdateSubnetGroupErr.Deserialize(msg)
+    }
+    "SubnetQuotaExceededFault" => match read_error_subnet_quota_exceeded_fault(resp, body) {
+      Ok(x) => return UpdateSubnetGroupErr.SubnetQuotaExceededFault(x)
+      Err(msg) => return UpdateSubnetGroupErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateSubnetGroupErr.Api(restjson.api_error(resp, body))
+}
+
 /// Updates a subnet group. For more information, see Updating a subnet
 /// group
 pub fn (c: Client) update_subnet_group(input: UpdateSubnetGroupRequest) -> UpdateSubnetGroupResponse ! UpdateSubnetGroupErr uses (net.dial, clock, rand) {

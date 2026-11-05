@@ -3,6 +3,27 @@
 use std/json
 use github.com/xo-lang/aws/protocol/jsonv
 
+fn from_json_list_trials_request(v: json.Value) -> ListTrialsRequest ! Str {
+  var out = ListTrialsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ExperimentName" => out.experiment_name = jsonv.read_str(fv)?
+      "TrialComponentName" => out.trial_component_name = jsonv.read_str(fv)?
+      "CreatedAfter" => out.created_after = jsonv.read_time(fv, "epoch-seconds")?
+      "CreatedBefore" => out.created_before = jsonv.read_time(fv, "epoch-seconds")?
+      "SortBy" => out.sort_by = SortTrialsBy.from(jsonv.read_str(fv)?)
+      "SortOrder" => out.sort_order = SortOrder.from(jsonv.read_str(fv)?)
+      "MaxResults" => out.max_results = jsonv.read_int(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_list_trials_response(v: ListTrialsResponse) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.trial_summaries {
@@ -13940,39 +13961,6 @@ fn json_of_traffic_pattern(v: TrafficPattern) -> json.Value {
   }
   if let Some(x) = v.stairs {
     fs.push(("Stairs", json_of_stairs(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_traffic_pattern(v: json.Value) -> TrafficPattern ! Str {
-  var out = TrafficPattern{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "TrafficType" => out.traffic_type = TrafficType.from(jsonv.read_str(fv)?)
-      "Phases" => out.phases = from_json_phases(fv)?
-      "Stairs" => out.stairs = from_json_stairs(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_traffic_routing_config(v: TrafficRoutingConfig) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.type_value {
-    fs.push(("Type", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.wait_interval_in_seconds {
-    fs.push(("WaitIntervalInSeconds", json.Value.Int(x)))
-  }
-  if let Some(x) = v.canary_size {
-    fs.push(("CanarySize", json_of_capacity_size(x)))
-  }
-  if let Some(x) = v.linear_step_size {
-    fs.push(("LinearStepSize", json_of_capacity_size(x)))
   }
   json.Value.Object(fs)
 }

@@ -8,6 +8,37 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// The HTTP request of AdminDeleteSoftwareToken.
+pub fn serialize_admin_delete_software_token(ep: rest.Endpoint, input: AdminDeleteSoftwareTokenRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.user_pool_id {
+    fs.push(("UserPoolId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.username {
+    fs.push(("Username", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSCognitoIdentityProviderService.AdminDeleteSoftwareToken"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_admin_delete_software_token(resp: http.Response) -> AdminDeleteSoftwareTokenResponse ! Str {
   var out = AdminDeleteSoftwareTokenResponse{}
   Ok(out)
@@ -9539,51 +9570,4 @@ pub enum DescribeTermsByClientErr {
   InvalidInput(msg: Str)
   /// The response is not what the protocol says.
   Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeTermsByClientErr) display() -> Str {
-  match e {
-    InternalErrorException(x) => "InternalErrorException: ${x:?}"
-    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
-    NotAuthorizedException(x) => "NotAuthorizedException: ${x:?}"
-    OperationNotEnabledException(x) => "OperationNotEnabledException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_terms_by_client_error(resp: http.Response) -> DescribeTermsByClientErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InternalErrorException" => match read_error_internal_error_exception(resp, body) {
-      Ok(x) => return DescribeTermsByClientErr.InternalErrorException(x)
-      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
-    }
-    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
-      Ok(x) => return DescribeTermsByClientErr.InvalidParameterException(x)
-      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
-    }
-    "NotAuthorizedException" => match read_error_not_authorized_exception(resp, body) {
-      Ok(x) => return DescribeTermsByClientErr.NotAuthorizedException(x)
-      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
-    }
-    "OperationNotEnabledException" => match read_error_operation_not_enabled_exception(resp, body) {
-      Ok(x) => return DescribeTermsByClientErr.OperationNotEnabledException(x)
-      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DescribeTermsByClientErr.ResourceNotFoundException(x)
-      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
-    }
-    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
-      Ok(x) => return DescribeTermsByClientErr.TooManyRequestsException(x)
-      Err(msg) => return DescribeTermsByClientErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeTermsByClientErr.Api(restjson.api_error(resp, body))
 }

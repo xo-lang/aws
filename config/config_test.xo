@@ -426,6 +426,8 @@ test "AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN assume the role, unsigned, wi
   let c = (cfg.credentials ?? return Err("no provider")).retrieve()?
   expect(c.access_key_id) == "ASIAWEBEXAMPLE00001"
   expect(c.source) == "WebIdentityCredentials"
+  // User-Agent codes: h the environment's web identity, k the STS call
+  expect(c.features) == ["h", "k"]
   expect(c.account_id) == Some("123456789012")
   expect(seen.with_read(fn(l: List[Str]) -> List[Str] { l })) == ["jwt-one"]
   expect(cfg.token_files.map(fn(t: aws.TokenFile) -> Str { t.path })) == ["/var/run/irsa/token"]
@@ -515,12 +517,16 @@ test "an sso_session profile, a legacy SSO profile, and a role assumed from SSO"
   let dev = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("dev")})?
   let c = (dev.credentials ?? return Err("no provider")).retrieve()?
   expect(c.source) == "SSOProvider"
+  expect(c.features) == ["r", "s"]
   expect(c.account_id) == Some("123456789012")
   expect(dev.token_files.map(fn(t: aws.TokenFile) -> Str { t.path })) == [ssocreds.cache_path("/h", "corp")]
   let legacy = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("legacy")})?
   expect((legacy.credentials ?? return Err("no provider")).retrieve()?.source) == "SSOProvider"
   let admin = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("admin")})?
-  expect((admin.credentials ?? return Err("no provider")).retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
+  let ac = (admin.credentials ?? return Err("no provider")).retrieve()?
+  expect(ac.access_key_id) == "ROLEKEYEXAMPLE00001"
+  // o a role from a source profile, i the STS call
+  expect(ac.features) == ["o", "i"]
 }
 
 test "SSO settings: a legacy profile must name all four; a session profile needs account and role only for credentials" {
@@ -564,7 +570,9 @@ test "a profile's credential_process runs on the program's tasks, also as a role
   let tool = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("tool")})?
   expect(tool.processes.map(fn(p: aws.CredentialProcess) -> Str { p.command })) == ["get-creds --account dev"]
   tool.run_credential_processes(os.tasks, os.proc, os.clock)
-  expect((tool.credentials ?? return Err("no provider")).retrieve()?.source) == "ProcessProvider"
+  let tc = (tool.credentials ?? return Err("no provider")).retrieve()?
+  expect(tc.source) == "ProcessProvider"
+  expect(tc.features) == ["v", "w"]
   let admin = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("admin")})?
   admin.run_credential_processes(os.tasks, os.proc, os.clock)
   expect((admin.credentials ?? return Err("no provider")).retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"

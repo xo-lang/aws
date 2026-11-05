@@ -1,0 +1,41 @@
+// The User-Agent: the SDK, the service, the application's id and the
+// `m/` feature codes of the client, the request and the credentials,
+// as aws-sdk-go-v2 sends them.
+
+use std/http
+use std/testing
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+fn ua_client(net: testing.FakeNet, clock: Clock, rand: Rand) -> s3.Client ! Str {
+  s3.new(net, clock, rand, s3.Options{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+    app_id: Some("my app"),
+  })
+}
+
+test "PutObject's User-Agent names S3, the app, and the checksum, retry and credential codes" {
+  let seen = Mutex[Str].new("")
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/k", fn(req: http.Request) -> http.Response {
+    seen.reset(req.header("User-Agent") ?? "")
+    http.text(200, "")
+  })
+  let c = ua_client(os.net, os.clock, os.rand)?
+  c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "k", body: b"hello", checksum_algorithm: Some(s3.ChecksumAlgorithm.Sha256)})?
+  // E standard retries, Y a SHA-256 checksum, Z and b the default
+  // checksum settings, e credentials given in code
+  expect(seen.with_read(fn(s: Str) -> Str { s })) == "xo-lang-aws ua/2.1 lang/xo api/s3 app/my_app m/E,Y,Z,b,e"
+}
+
+test "a paginator's calls carry C" {
+  let seen = Mutex[Str].new("")
+  os.net.handle("GET https://bucket.s3.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    seen.reset(req.header("User-Agent") ?? "")
+    http.text(200, "<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>").with_header("Content-Type", "application/xml")
+  })
+  let c = ua_client(os.net, os.clock, os.rand)?
+  var p = s3.new_list_objects_v2_paginator(c, s3.ListObjectsV2Request{bucket: "bucket"})
+  p.next_page()?
+  expect(seen.with_read(fn(s: Str) -> Str { s }).ends_with(" m/C,E,Z,b,e")) == true
+}

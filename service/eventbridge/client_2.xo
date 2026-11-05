@@ -8,6 +8,22 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_test_event_pattern_error(resp: http.Response) -> TestEventPatternErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalException" => match read_error_internal_exception(resp, body) {
+      Ok(x) => return TestEventPatternErr.InternalException(x)
+      Err(msg) => return TestEventPatternErr.Deserialize(msg)
+    }
+    "InvalidEventPatternException" => match read_error_invalid_event_pattern_exception(resp, body) {
+      Ok(x) => return TestEventPatternErr.InvalidEventPatternException(x)
+      Err(msg) => return TestEventPatternErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  TestEventPatternErr.Api(restjson.api_error(resp, body))
+}
+
 /// Tests whether the specified event pattern matches the provided event.
 /// Most services in Amazon Web Services treat : or / as the same character
 /// in Amazon Resource Names (ARNs). However, EventBridge uses an exact

@@ -8,6 +8,34 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_delete_proxy_error(resp: http.Response) -> DeleteProxyErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerError" => match read_error_internal_server_error(resp, body) {
+      Ok(x) => return DeleteProxyErr.InternalServerError(x)
+      Err(msg) => return DeleteProxyErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return DeleteProxyErr.InvalidRequestException(x)
+      Err(msg) => return DeleteProxyErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteProxyErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteProxyErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteProxyErr.ThrottlingException(x)
+      Err(msg) => return DeleteProxyErr.Deserialize(msg)
+    }
+    "UnsupportedOperationException" => match read_error_unsupported_operation_exception(resp, body) {
+      Ok(x) => return DeleteProxyErr.UnsupportedOperationException(x)
+      Err(msg) => return DeleteProxyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteProxyErr.Api(restjson.api_error(resp, body))
+}
+
 /// Deletes the specified Proxy . Detaches a Proxy configuration from a NAT
 /// Gateway.
 pub fn (c: Client) delete_proxy(input: DeleteProxyRequest) -> DeleteProxyResponse ! DeleteProxyErr uses (net.dial, clock, rand) {

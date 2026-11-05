@@ -34,7 +34,7 @@ The audit was made against aws-sdk-go-v2 at commit 0dedb8162
 | Request compression (`requestCompression`, gzip) | CloudWatch PutMetricData | Yes | protocol tests (`internal/protocoltest`) |
 | Idempotency tokens filled in | all with `idempotencyToken` | Yes | protocol tests |
 | Lambda recursion detection (`X-Amzn-Trace-Id` from `_X_AMZN_TRACE_ID` inside Lambda) | all | Yes | `config/config_test.xo`; `integration/bearer_test.xo` "trace id" |
-| User agent features and metrics | all | No (only a plain user agent) | not needed for correctness |
+| User agent features and metrics (UA 2.1: `api/<service>`, `app/<AWS_SDK_UA_APP_ID>`, and `m/` with aws-sdk-go-v2's codes: E retry mode, B waiter, C paginator, U to Y the request checksum, Z/a and b/c the checksum settings, P/Q/R the account ID mode, J an S3 Express session, L gzip, and the credential sources e, g, h, i, k, n, o, p, q, r, s, t, u, v, w, z, 0) | all | Yes, without versions (modules are tagged one by one) | `integration/useragent_test.xo`; `config/config_test.xo` (credential codes). Next: per module versions written at tag time |
 
 ## Checksums and integrity
 

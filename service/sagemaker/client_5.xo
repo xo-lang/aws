@@ -8,6 +8,39 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn from_json_traffic_pattern(v: json.Value) -> TrafficPattern ! Str {
+  var out = TrafficPattern{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TrafficType" => out.traffic_type = TrafficType.from(jsonv.read_str(fv)?)
+      "Phases" => out.phases = from_json_phases(fv)?
+      "Stairs" => out.stairs = from_json_stairs(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_traffic_routing_config(v: TrafficRoutingConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.wait_interval_in_seconds {
+    fs.push(("WaitIntervalInSeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.canary_size {
+    fs.push(("CanarySize", json_of_capacity_size(x)))
+  }
+  if let Some(x) = v.linear_step_size {
+    fs.push(("LinearStepSize", json_of_capacity_size(x)))
+  }
+  json.Value.Object(fs)
+}
+
 fn from_json_traffic_routing_config(v: json.Value) -> TrafficRoutingConfig ! Str {
   var out = TrafficRoutingConfig{}
   for (k, fv) in jsonv.fields(v)? {
@@ -12411,42 +12444,4 @@ pub fn serialize_create_mlflow_app(ep: rest.Endpoint, input: CreateMlflowAppRequ
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_create_mlflow_app(resp: http.Response) -> CreateMlflowAppResponse ! Str {
-  var out = CreateMlflowAppResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateMlflowApp.
-pub enum CreateMlflowAppErr {
-  ResourceLimitExceeded(e: ResourceLimitExceeded)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateMlflowAppErr) display() -> Str {
-  match e {
-    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
 }

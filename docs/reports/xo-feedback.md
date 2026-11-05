@@ -304,3 +304,20 @@ says what happened, not a general opinion. Bugs with repros go in
   GB for one small check); `?` in a test cannot carry a plain struct
   error (XO0202), so a non-Error error type needs `== Ok(..)` comparisons
   in tests; `"${req.url}"` needed `:?` because `http.Url` has no Display.
+
+## 2026-11-05: customization audit, CI on the 0.39.0 release
+
+- Liked: the 0.39.0 release archives come with SHA256SUMS and a linux
+  build for both CPUs, so CI installs a release in two curl calls and a
+  checksum; on Linux arm64 the 0.39.0 release passes the whole gate,
+  every service and the endpoint tests unchanged (only the two known
+  version gaps fail); `Secret.new` and `reveal` made the bearer token
+  hard to print by accident.
+- Didn't like: `xo test` has `--run` but no `--skip`, so CI leaves out a
+  test that needs a newer Xo by deleting its file; a build of main
+  reports the last release's version (`xo 0.38.1` for a build with
+  0.39-era fixes), so a script cannot tell a main build from the release
+  it names; the import detector ignores calls inside `${}` interpolation,
+  so `"${crc32.checksum(b)}"` alone left `std/crc32` unimported (moved
+  the call out); `url.query_unescape` returns a Result where `??`
+  needs an Option, which takes `.ok()` first.

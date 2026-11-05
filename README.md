@@ -49,6 +49,11 @@ Xo 0.39.0 or later, except for two cases:
 - This repository's own tests need Xo main at or after 0e1d7b177, which
   makes the test network full duplex.
 
+Both were checked against the 0.39.0 release: it builds and passes
+everything else, fails to build DynamoDB with `select`
+(`integration/dynamodb_select_test.xo`), and deadlocks in the duplex
+test.
+
 ## Install
 
 Each service is its own module, next to the core module

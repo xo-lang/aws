@@ -6,6 +6,7 @@
 use std/http
 use std/time
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/eventstream
 use github.com/xo-lang/aws/retry
 use github.com/xo-lang/aws/sigv4
 
@@ -133,7 +134,16 @@ pub fn send(c: Client, req: Request, signing: Signing, classify: fn(http.Respons
   }
 }
 
-fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
+/// The signed std/http request of one attempt.
+fn signed_request(c: Client, req: Request, signing: Signing, attempt: Int, max: Int) -> http.Request ! AttemptErr uses (net.dial, clock, rand) {
+  let (hreq, _, _, _) = sign_attempt(c, req, signing, attempt, max, None)?
+  Ok(hreq)
+}
+
+/// One attempt's signed std/http request, with the signature, the
+/// credentials and the signing time (an event stream's signer needs
+/// them). `payload` overrides the payload hash.
+fn sign_attempt(c: Client, req: Request, signing: Signing, attempt: Int, max: Int, payload_override: Str?) -> (http.Request, Str, sigv4.Credentials, Time) ! AttemptErr uses (net.dial, clock, rand) {
   let creds = match c.credentials.retrieve() {
     Ok(v) => v
     Err(e) => return Err(AttemptErr.Creds(e))
@@ -142,17 +152,18 @@ fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Res
   var headers = req.headers
   headers.push(("Host", host_header(req)))
   headers.push(("Amz-Sdk-Request", "attempt=${attempt}; max=${max}"))
-  let payload = if signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
+  let payload = payload_override ?? if signing.unsigned_payload { sigv4.UNSIGNED_PAYLOAD } else { sigv4.payload_hash(req.body) }
+  let screds = sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token}
   let signed = sigv4.sign_header(
     sigv4.Request{method: req.method, path: req.path, query: req.query, headers: headers},
-    sigv4.Credentials{access_key_id: creds.access_key_id, secret_access_key: creds.secret_access_key, session_token: creds.session_token},
+    screds,
     sigv4.Options{
       service: signing.service,
       region: signing.region,
       payload_hash: payload,
       normalize_path: !signing.s3,
       double_escape_path: !signing.s3,
-      add_content_sha256_header: signing.s3,
+      add_content_sha256_header: signing.s3 || payload_override.is_some(),
     },
     now,
   )
@@ -169,6 +180,11 @@ fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Res
   if hreq.header("Accept-Encoding").is_none() {
     hreq = hreq.with_header("Accept-Encoding", "identity")
   }
+  Ok((hreq, signed.signature, screds, now))
+}
+
+fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
+  let hreq = signed_request(c, req, signing, attempt, max)?
   let resp = match c.http.send(hreq) {
     Ok(r) => r
     Err(e) => return Err(AttemptErr.Net(e))
@@ -205,4 +221,104 @@ fn note_skew(c: Client, resp: http.Response) -> Bool uses clock {
     return true
   }
   false
+}
+
+/// What `open` returns: a 2xx response whose body is read as it arrives,
+/// or any other response read whole (an error to deserialize).
+pub enum Opened {
+  Stream(head: http.ResponseHead, body: http.ClientStream)
+  Done(resp: http.Response)
+}
+
+/// Like `send`, but a successful response's body is left to read as it
+/// arrives (an event stream). Retries happen only before the response's
+/// head: a body read error is the caller's.
+pub fn open(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure) -> Opened ! SendErr uses (net.dial, clock, rand) {
+  let max = c.retryer.max_attempts
+  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> Opened ! AttemptErr uses (net.dial, clock, rand) {
+    let hreq = signed_request(c, req, signing, attempt, max)?
+    let st = match c.http.open(hreq) {
+      Ok(x) => x
+      Err(e) => return Err(AttemptErr.Net(e))
+    }
+    let head = st.head()
+    if head.status < 300 {
+      return Ok(Opened.Stream(head: head, body: st))
+    }
+    let body = match st.read_all() {
+      Ok(b) => b
+      Err(e) => {
+        st.close()
+        return Err(AttemptErr.Net(e))
+      }
+    }
+    st.close()
+    let resp = http.Response{status: head.status, headers: head.headers, body: body}
+    if note_skew(c, resp) {
+      return Err(AttemptErr.Status(resp: resp, f: retry.Failure.Transient))
+    }
+    let f = classify(resp)
+    if f is retry.Failure.Permanent {
+      return Ok(Opened.Done(resp: resp))
+    }
+    Err(AttemptErr.Status(resp: resp, f: f))
+  }, fn(e: AttemptErr) -> retry.Failure {
+    match e {
+      Creds(_) => retry.Failure.Permanent
+      Net(he) => match he {
+        Connect(_) => retry.Failure.Transient
+        Timeout => retry.Failure.Timeout
+        Protocol(_) => retry.Failure.Transient
+        InvalidUrl(_) | Canceled => retry.Failure.Permanent
+      }
+      Status(_, f) => f
+    }
+  })
+  match r {
+    Ok(o) => Ok(o)
+    Err(a) => match a.err {
+      Status(resp, _) => if a.quota_exceeded { Err(SendErr.QuotaExceeded(last: "HTTP ${resp.status}", attempts: a.attempts)) } else { Ok(Opened.Done(resp: resp)) }
+      Creds(ce) => Err(SendErr.Credentials(ce))
+      Net(he) => if a.quota_exceeded { Err(SendErr.QuotaExceeded(last: he.display(), attempts: a.attempts)) } else { Err(SendErr.Http(he)) }
+    }
+  }
+}
+
+/// An input event stream's start: the response (as `open` gives it) and
+/// the signer of the request body's messages, seeded with the request's
+/// signature.
+pub struct StreamStart {
+  pub opened: Opened
+  pub signer: sigv4.StreamSigner
+}
+
+/// Sends a request whose body is an event stream read from `body` (the
+/// reading end of an http.pipe whose `writer` the caller keeps writing
+/// signed messages to), signed with the streaming payload hash. The
+/// encoded messages `first` are signed and written before the request is
+/// sent. One attempt: a body being streamed cannot be sent again.
+pub fn open_stream(c: Client, req: Request, signing: Signing, body: http.BodyReader, first: List[Bytes], writer: http.PipeWriter) -> StreamStart ! SendErr uses (net.dial, clock, rand) {
+  let (hreq, sig, creds, _) = match sign_attempt(c, req, signing, 1, 1, Some(sigv4.STREAMING_EVENTS_PAYLOAD)) {
+    Ok(x) => x
+    Err(Creds(ce)) => return Err(SendErr.Credentials(ce))
+    Err(Net(he)) => return Err(SendErr.Http(he))
+    Err(Status(resp, _)) => return Err(SendErr.QuotaExceeded(last: "HTTP ${resp.status}", attempts: 1))
+  }
+  var signer = sigv4.StreamSigner{creds: creds, region: signing.region, service: signing.service, prev: Bytes.from_hex(sig) ?? b""}
+  // the pipe holds these until the client reads the body (64 KiB)
+  for m in first {
+    let now = Time.from_unix_millis(c.clock.now().unix_millis() + c.skew_ms.get())
+    writer.write(eventstream.signed(signer, m, now)) ?? e => return Err(SendErr.Http(http.ClientErr.Protocol(e.display())))
+  }
+  let st = c.http.open(hreq.with_body_reader(body)) ?? e => return Err(SendErr.Http(e))
+  let head = st.head()
+  if head.status < 300 {
+    return Ok(StreamStart{opened: Opened.Stream(head: head, body: st), signer: signer})
+  }
+  let rest = st.read_all() ?? e => {
+    st.close()
+    return Err(SendErr.Http(e))
+  }
+  st.close()
+  Ok(StreamStart{opened: Opened.Done(resp: http.Response{status: head.status, headers: head.headers, body: rest}), signer: signer})
 }

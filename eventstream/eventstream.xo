@@ -1,0 +1,263 @@
+// The AWS event stream message format (application/vnd.amazon.eventstream):
+// a prelude (total length, headers length, CRC32 of both), typed headers,
+// a payload and a CRC32 of the whole message, all big endian.
+
+use std/binary
+use std/crc32
+
+/// A header's value, one variant per wire type (0 to 9).
+pub enum HeaderValue {
+  Bool(b: Bool)
+  Byte(n: Int)
+  Short(n: Int)
+  Integer(n: Int)
+  Long(n: Int)
+  ByteArray(b: Bytes)
+  Str(s: Str)
+  /// Milliseconds since the Unix epoch.
+  Timestamp(ms: Int)
+  /// 16 bytes.
+  Uuid(b: Bytes)
+}
+
+pub struct Header {
+  pub name: Str
+  pub value: HeaderValue
+}
+
+pub struct Message {
+  pub headers: List[Header] = []
+  pub payload: Bytes = b""
+}
+
+/// The value of header `name`, if the message has it.
+pub fn (m: Message) header(name: Str) -> HeaderValue? {
+  m.headers.find(fn(h: Header) -> Bool { h.name == name }).map(fn(h: Header) -> HeaderValue { h.value })
+}
+
+/// The string value of header `name` ("" when absent or not a string).
+pub fn (m: Message) header_str(name: Str) -> Str {
+  match m.header(name) {
+    Some(HeaderValue.Str(s)) => s
+    _ => ""
+  }
+}
+
+/// The largest message (16 MiB) and headers section (128 KiB) accepted.
+pub const MAX_MESSAGE: Int = 16777216
+pub const MAX_HEADERS: Int = 131072
+
+fn byte(n: Int) -> UInt8 {
+  UInt8(n & 255)
+}
+
+/// The wire form of headers `hs`.
+pub fn encode_headers(hs: List[Header]) -> Bytes {
+  var b = BytesBuilder.new()
+  for h in hs {
+    let name = h.name.bytes()
+    b.write_byte(byte(name.len()))
+    b.write(name)
+    match h.value {
+      Bool(v) => b.write_byte(byte(if v { 0 } else { 1 }))
+      Byte(n) => {
+        b.write_byte(byte(2))
+        b.write_byte(byte(n))
+      }
+      Short(n) => {
+        b.write_byte(byte(3))
+        b.write(binary.u16_be(n))
+      }
+      Integer(n) => {
+        b.write_byte(byte(4))
+        b.write(binary.u32_be(n))
+      }
+      Long(n) => {
+        b.write_byte(byte(5))
+        b.write(binary.u64_be(n))
+      }
+      ByteArray(v) => {
+        b.write_byte(byte(6))
+        b.write(binary.u16_be(v.len()))
+        b.write(v)
+      }
+      Str(s) => {
+        let v = s.bytes()
+        b.write_byte(byte(7))
+        b.write(binary.u16_be(v.len()))
+        b.write(v)
+      }
+      Timestamp(ms) => {
+        b.write_byte(byte(8))
+        b.write(binary.u64_be(ms))
+      }
+      Uuid(v) => {
+        b.write_byte(byte(9))
+        b.write(v)
+      }
+    }
+  }
+  b.freeze()
+}
+
+/// The wire form of message `m`.
+pub fn encode(m: Message) -> Bytes {
+  let hs = encode_headers(m.headers)
+  let total = 12 + hs.len() + m.payload.len() + 4
+  var head = BytesBuilder.new()
+  head.write(binary.u32_be(total))
+  head.write(binary.u32_be(hs.len()))
+  let pre = head.freeze()
+  var b = BytesBuilder.new()
+  b.write(pre)
+  b.write(binary.u32_be(crc32.checksum(pre)))
+  b.write(hs)
+  b.write(m.payload)
+  let body = b.freeze()
+  var out = BytesBuilder.new()
+  out.write(body)
+  out.write(binary.u32_be(crc32.checksum(body)))
+  out.freeze()
+}
+
+/// Why bytes are not a message.
+pub struct DecodeErr {
+  pub msg: Str
+}
+
+pub fn (e: DecodeErr) display() -> Str {
+  "eventstream: ${e.msg}"
+}
+
+fn bad(msg: Str) -> DecodeErr {
+  DecodeErr{msg: msg}
+}
+
+fn decode_headers(b: Bytes) -> List[Header] ! DecodeErr {
+  var hs: List[Header] = []
+  var i = 0
+  let need = fn(at: Int, n: Int) -> () ! DecodeErr {
+    if at + n > b.len() {
+      return Err(bad("a header runs past the headers section"))
+    }
+    Ok(())
+  }
+  while i < b.len() {
+    let nl = Int(b[i])
+    need(i + 1, nl + 1)?
+    let name = b[i + 1..i + 1 + nl].to_str() ?? return Err(bad("a header name is not UTF-8"))
+    i += 1 + nl
+    let t = Int(b[i])
+    i += 1
+    let v = match t {
+      0 => HeaderValue.Bool(true)
+      1 => HeaderValue.Bool(false)
+      2 => {
+        need(i, 1)?
+        let n = Int(b[i])
+        i += 1
+        HeaderValue.Byte(if n >= 128 { n - 256 } else { n })
+      }
+      3 => {
+        need(i, 2)?
+        let n = binary.get_i16_be(b, i)
+        i += 2
+        HeaderValue.Short(n)
+      }
+      4 => {
+        need(i, 4)?
+        let n = binary.get_i32_be(b, i)
+        i += 4
+        HeaderValue.Integer(n)
+      }
+      5 | 8 => {
+        need(i, 8)?
+        let n = binary.get_u64_be(b, i)
+        i += 8
+        if t == 5 { HeaderValue.Long(n) } else { HeaderValue.Timestamp(n) }
+      }
+      6 | 7 => {
+        need(i, 2)?
+        let n = binary.get_u16_be(b, i)
+        need(i + 2, n)?
+        let v = b[i + 2..i + 2 + n]
+        i += 2 + n
+        if t == 6 { HeaderValue.ByteArray(v) } else { HeaderValue.Str(v.to_str() ?? return Err(bad("a string header is not UTF-8"))) }
+      }
+      9 => {
+        need(i, 16)?
+        let v = b[i..i + 16]
+        i += 16
+        HeaderValue.Uuid(v)
+      }
+      _ => return Err(bad("unknown header type ${t}"))
+    }
+    hs.push(Header{name: name, value: v})
+  }
+  Ok(hs)
+}
+
+/// The message at the start of `b` and its length, None when `b` holds
+/// only part of it.
+pub fn decode_one(b: Bytes) -> (Message, Int)? ! DecodeErr {
+  if b.len() < 12 {
+    return Ok(None)
+  }
+  let total = binary.get_u32_be(b, 0)
+  let hl = binary.get_u32_be(b, 4)
+  if binary.get_u32_be(b, 8) != crc32.checksum(b[0..8]) {
+    return Err(bad("Prelude checksum mismatch"))
+  }
+  if total < 16 || total > MAX_MESSAGE || hl > MAX_HEADERS || 12 + hl + 4 > total {
+    return Err(bad("bad lengths: total ${total}, headers ${hl}"))
+  }
+  if b.len() < total {
+    return Ok(None)
+  }
+  if binary.get_u32_be(b, total - 4) != crc32.checksum(b[0..total - 4]) {
+    return Err(bad("Message checksum mismatch"))
+  }
+  let hs = decode_headers(b[12..12 + hl])?
+  Ok(Some((Message{headers: hs, payload: b[12 + hl..total - 4]}, total)))
+}
+
+/// Exactly one message.
+pub fn decode(b: Bytes) -> Message ! DecodeErr {
+  match decode_one(b)? {
+    Some((m, n)) => if n == b.len() { Ok(m) } else { Err(bad("${b.len() - n} bytes after the message")) }
+    None => Err(bad("a message cut short"))
+  }
+}
+
+/// Messages from bytes that arrive in pieces.
+pub struct Decoder {
+  buf: Bytes = b""
+}
+
+pub fn decoder() -> Decoder {
+  Decoder{}
+}
+
+/// Adds the next piece of the stream.
+pub fn (var d: Decoder) feed(piece: Bytes) {
+  var b = BytesBuilder.new()
+  b.write(d.buf)
+  b.write(piece)
+  d.buf = b.freeze()
+}
+
+/// The next whole message, None until more bytes arrive.
+pub fn (var d: Decoder) next() -> Message? ! DecodeErr {
+  match decode_one(d.buf)? {
+    Some((m, n)) => {
+      d.buf = d.buf[n..d.buf.len()]
+      Ok(Some(m))
+    }
+    None => Ok(None)
+  }
+}
+
+/// Bytes pushed but not yet part of a whole message.
+pub fn (d: Decoder) pending() -> Int {
+  d.buf.len()
+}

@@ -333,15 +333,9 @@ fn needs_token(s: model.Shape) -> Bool {
 /// Operations this generator can emit: not event streams.
 pub fn supported(g: G, op: Str) -> Bool {
   let s = shape_of(g, op)
-  for io in [s.input, s.output] {
-    for m in shape_of(g, io).members {
-      let t = shape_of(g, m.target)
-      if has(t.traits, "streaming") && t.kind is model.Kind.Union {
-        return false
-      }
-    }
-  }
-  true
+  // input event streams are generated for the JSON protocols (no XML
+  // model has one)
+  stream_member(g, s.input).is_none() || !g.xml
 }
 
 fn emit_serializer(g: G, op: Str, var out: List[Str]) {
@@ -742,7 +736,9 @@ fn emit_deserializer(g: G, op: Str, var out: List[Str]) {
   let t = xo_type(g, s.output)
   out.push("pub fn deserialize_${name}(resp: http.Response) -> ${t} ! Str {")
   out.push("  var out = ${t}{}")
-  let has_payload = output.members.any(fn(m: model.Member) -> Bool { has(m.traits, "httpPayload") })
+  // bind, not the trait: awsJson has no payload binding even where a
+  // model marks one (HealthLake's stream member)
+  let has_payload = output.members.any(fn(m: model.Member) -> Bool { bind(g, m.traits, "", m.name) is Binding.Payload })
   let has_body = output.members.any(fn(m: model.Member) -> Bool { in_response_body(bind(g, m.traits, "", m.name)) })
   if !has_payload && has_body {
     if g.xml && has(s.traits, "aws.customizations#s3UnwrappedXmlOutput") {
@@ -902,9 +898,10 @@ pub fn emit_restjson(g: G) -> Str {
     emit_json_fns(g, out)
   }
   emit_error_readers(g, out)
+  emit_event_streams(g, out)
   for op in model.operations(g.m) {
     if !supported(g, op) {
-      out.push("// ${model.name_of(op)}: event streams are not generated yet.")
+      out.push("// ${model.name_of(op)}: input event streams over XML are not generated.")
       out.push("")
       continue
     }
@@ -918,9 +915,17 @@ pub fn emit_restjson(g: G) -> Str {
     let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
     let out_t = if s.output == "smithy.api#Unit" { "()" } else { xo_type(g, s.output) }
     let token = if needs_token(shape_of(g, s.input)) { "rest.uuid(c.rand)" } else { "\"\"" }
+    let route = if rules_of(g).is_some() { "c.route(endpoint_params_${name}(c.params, input))" } else { "c.route()" }
+    if stream_member(g, s.input).is_some() {
+      emit_input_stream_method(g, op, route, token, out)
+      continue
+    }
+    if has_output_stream(g, op) {
+      emit_stream_method(g, op, route, token, out)
+      continue
+    }
     doc_lines(out, s.traits, "")
     out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${out_t} ! ${en} uses (net.dial, clock, rand) {")
-    let route = if rules_of(g).is_some() { "c.route(endpoint_params_${name}(c.params, input))" } else { "c.route()" }
     out.push("  let (ep, signing, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))")
     out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
     out.push("  for h in extra {")

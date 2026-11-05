@@ -1,0 +1,549 @@
+// Event streams (a streaming union in an operation's output): the
+// operation's method returns `<Operation>Events`, whose `next` reads the
+// response body as it arrives and decodes each event stream message
+// (github.com/xo-lang/aws/eventstream) into the union, as aws-sdk-go-v2's
+// event stream readers do. Members marked eventHeader come from the
+// message's headers; an eventPayload member is the whole payload; any
+// other members are the payload in the protocol's document format.
+
+use github.com/xo-lang/aws/codegen/model
+
+/// The member of shape `io` that targets a streaming union.
+pub fn stream_member(g: G, io: Str) -> model.Member? {
+  if io == "smithy.api#Unit" {
+    return None
+  }
+  shape_of(g, io).members.find(fn(m: model.Member) -> Bool {
+    let t = shape_of(g, m.target)
+    has(t.traits, "streaming") && t.kind is model.Kind.Union
+  })
+}
+
+/// Whether operation `op`'s output is an event stream.
+pub fn has_output_stream(g: G, op: Str) -> Bool {
+  stream_member(g, shape_of(g, op).output).is_some()
+}
+
+/// Whether operation `op` has an event stream either way (paginators and
+/// waiters skip them).
+pub fn has_stream(g: G, op: Str) -> Bool {
+  let s = shape_of(g, op)
+  stream_member(g, s.output).is_some() || stream_member(g, s.input).is_some()
+}
+
+fn stream_err(g: G, union: Str) -> Str {
+  "${xo_type(g, union)}Err"
+}
+
+fn is_error(g: G, id: Str) -> Bool {
+  has(shape_of(g, id).traits, "error")
+}
+
+/// Reads header value `v` (an eventstream.HeaderValue) into `out.f` for
+/// a member of shape `target`.
+fn header_read(g: G, target: Str, f: Str, var out: List[Str]) {
+  let s = shape_of(g, target)
+  let (pat, expr) = match s.kind {
+    String => ("Str(x)", "x")
+    Enum => ("Str(x)", "${type_name(g.names, target)}.from(x)")
+    Boolean => ("Bool(x)", "x")
+    Byte => ("Byte(x)", "x")
+    Short => ("Short(x)", "x")
+    Integer => ("Integer(x)", "x")
+    Long => ("Long(x)", "x")
+    Blob => ("ByteArray(x)", "x")
+    Timestamp => ("Timestamp(x)", "Time.from_unix_millis(x)")
+    _ => ("", "")
+  }
+  if pat == "" {
+    return
+  }
+  out.push("    if let Some(eventstream.HeaderValue.${pat}) = m.header(${lit_str(f)}) {")
+  out.push("      out.${field_name(f)} = ${expr}")
+  out.push("    }")
+}
+
+/// The document reader of shape `id` over bytes `b`, to use with `?`.
+fn doc_read(g: G, id: Str, b: Str) -> Str {
+  if g.xml {
+    "xml_read_${fn_key(g, id)}(xmlv.parse_body(${b})?)"
+  } else {
+    let k = shape_of(g, id).kind
+    match k {
+      Structure | Union | List | Map => "from_json_${fn_key(g, id)}(jsonv.parse_body(${b})?)"
+      _ => "${from_json_expr(g, [], id, "jsonv.parse_body(${b})?")}"
+    }
+  }
+}
+
+/// `fn event_read_<key>(m) -> T ! Str` for event structure `id`.
+fn emit_event_read(g: G, id: Str, var out: List[Str]) {
+  let s = shape_of(g, id)
+  let t = xo_type(g, id)
+  out.push("fn event_read_${fn_key(g, id)}(m: eventstream.Message) -> ${t} ! Str {")
+  let payload = s.members.find(fn(m: model.Member) -> Bool { has(m.traits, "eventPayload") })
+  let body = s.members.filter(fn(m: model.Member) -> Bool { !has(m.traits, "eventHeader") && !has(m.traits, "eventPayload") })
+  match payload {
+    Some(pm) => {
+      out.push("  var out = ${t}{}")
+      let f = field_name(pm.name)
+      let k = shape_of(g, pm.target).kind
+      match k {
+        Blob => out.push("  out.${f} = m.payload")
+        String => out.push("  out.${f} = m.payload.to_str() ?? \"\"")
+        _ => {
+          out.push("  if !m.payload.is_empty() {")
+          out.push("    out.${f} = ${doc_read(g, pm.target, "m.payload")}?")
+          out.push("  }")
+        }
+      }
+    }
+    None => if body.is_empty() {
+      out.push("  var out = ${t}{}")
+    } else {
+      out.push("  var out = if m.payload.is_empty() { ${t}{} } else { ${doc_read(g, id, "m.payload")}? }")
+    }
+  }
+  let headers = s.members.filter(fn(m: model.Member) -> Bool { has(m.traits, "eventHeader") })
+  if !headers.is_empty() {
+    out.push("  if true {")
+    for hm in headers {
+      header_read(g, hm.target, hm.name, out)
+    }
+    out.push("  }")
+  }
+  if payload.is_none() && body.is_empty() && headers.is_empty() {
+    out.push("  let _ = m")
+  }
+  out.push("  Ok(out)")
+  out.push("}")
+  out.push("")
+}
+
+/// Per streaming union: its error enum, the event and exception readers.
+fn emit_union_fns(g: G, union: Str, var events: List[Str], var readers: List[Str], var out: List[Str]) {
+  let u = shape_of(g, union)
+  let ut = xo_type(g, union)
+  let en = stream_err(g, union)
+  let (vs, catch_all) = union_variants(u)
+  out.push("/// Why reading a ${model.name_of(union)} stream stopped.")
+  out.push("pub enum ${en} {")
+  for (i, m) in u.members.indexed() {
+    if is_error(g, m.target) {
+      out.push("  ${vs[i]}(e: ${xo_type(g, m.target)})")
+    }
+  }
+  out.push("  /// An error message, or an exception the model does not list.")
+  out.push("  Api(e: aws.ApiError)")
+  out.push("  /// The body could not be read or is not event stream messages.")
+  out.push("  Read(msg: Str)")
+  out.push("}")
+  out.push("")
+  out.push("pub fn (e: ${en}) display() -> Str {")
+  out.push("  match e {")
+  for (i, m) in u.members.indexed() {
+    if is_error(g, m.target) {
+      out.push("    ${vs[i]}(x) => \"${model.name_of(m.target)}: \${x:?}\"")
+    }
+  }
+  out.push("    Api(x) => x.display()")
+  out.push("    Read(msg) => \"event stream: \${msg}\"")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+  let key = fn_key(g, union)
+  out.push("fn event_${key}(t: Str, m: eventstream.Message) -> ${ut} ! Str {")
+  out.push("  match t {")
+  for (i, m) in u.members.indexed() {
+    if is_error(g, m.target) {
+      continue
+    }
+    if m.target == "smithy.api#Unit" {
+      out.push("    ${lit_str(m.name)} => Ok(${ut}.${vs[i]})")
+      continue
+    }
+    if !events.contains(m.target) {
+      events.push(m.target)
+    }
+    out.push("    ${lit_str(m.name)} => Ok(${ut}.${vs[i]}(event_read_${fn_key(g, m.target)}(m)?))")
+  }
+  out.push("    _ => Ok(${ut}.${catch_all}(t))")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+  out.push("fn exception_${key}(m: eventstream.Message) -> ${en} {")
+  out.push("  let t = m.header_str(\":exception-type\")")
+  out.push("  match t {")
+  for (i, m) in u.members.indexed() {
+    if !is_error(g, m.target) {
+      continue
+    }
+    out.push("    ${lit_str(m.name)} => match exception_read_${fn_key(g, m.target)}(m.payload) {")
+    out.push("      Ok(x) => ${en}.${vs[i]}(x)")
+    out.push("      Err(msg) => ${en}.Read(msg)")
+    out.push("    }")
+  }
+  out.push("    _ => ${en}.Api(aws.ApiError{code: t, message: m.payload.to_str() ?? \"\"})")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+  for m in u.members {
+    if !is_error(g, m.target) || readers.contains(m.target) {
+      continue
+    }
+    readers.push(m.target)
+    out.push("fn exception_read_${fn_key(g, m.target)}(b: Bytes) -> ${xo_type(g, m.target)} ! Str {")
+    out.push("  Ok(${doc_read(g, m.target, "b")}?)")
+    out.push("}")
+    out.push("")
+  }
+}
+
+/// `next` of stream type `et`, reading output union member `sm` of
+/// output shape `output`.
+fn emit_next(g: G, et: Str, output: Str, sm: model.Member, var out: List[Str]) {
+  let ut = xo_type(g, sm.target)
+  let en = stream_err(g, sm.target)
+  let key = fn_key(g, sm.target)
+  out.push("/// The next event, None at the end of the stream.")
+  out.push("pub fn (var s: ${et}) next() -> ${ut}? ! ${en} uses net.dial {")
+  out.push("  while !s.done {")
+  out.push("    match s.dec.next() {")
+  out.push("      Err(e) => return Err(${en}.Read(e.display()))")
+  out.push("      Ok(Some(m)) => {")
+  out.push("        match m.header_str(\":message-type\") {")
+  out.push("          \"event\" => {")
+  out.push("            let t = m.header_str(\":event-type\")")
+  out.push("            if t == \"initial-response\" {")
+  if g.rpc != "" {
+    out.push("              if !m.payload.is_empty() {")
+    out.push("                s.output = from_json_${fn_key(g, output)}(jsonv.parse_body(m.payload) ?? e => return Err(${en}.Read(e))) ?? e => return Err(${en}.Read(e))")
+    out.push("              }")
+  }
+  out.push("              continue")
+  out.push("            }")
+  out.push("            return match event_${key}(t, m) {")
+  out.push("              Ok(v) => Ok(Some(v))")
+  out.push("              Err(msg) => Err(${en}.Read(msg))")
+  out.push("            }")
+  out.push("          }")
+  out.push("          \"exception\" => return Err(exception_${key}(m))")
+  out.push("          _ => return Err(${en}.Api(aws.ApiError{code: m.header_str(\":error-code\"), message: m.header_str(\":error-message\")}))")
+  out.push("        }")
+  out.push("      }")
+  out.push("      Ok(None) => {")
+  out.push("        match s.body.read() {")
+  out.push("          Ok(Some(piece)) => s.dec.feed(piece)")
+  out.push("          Ok(None) => {")
+  out.push("            s.done = true")
+  out.push("            s.body.close()")
+  out.push("            if s.dec.pending() > 0 {")
+  out.push("              return Err(${en}.Read(\"the stream ended inside a message\"))")
+  out.push("            }")
+  out.push("          }")
+  out.push("          Err(e) => {")
+  out.push("            s.done = true")
+  out.push("            s.body.close()")
+  out.push("            return Err(${en}.Read(e.display()))")
+  out.push("          }")
+  out.push("        }")
+  out.push("      }")
+  out.push("    }")
+  out.push("  }")
+  out.push("  Ok(None)")
+  out.push("}")
+  out.push("")
+}
+
+/// The `<Operation>Events` type of each output event stream operation.
+fn emit_events_type(g: G, op: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let sm = stream_member(g, s.output) ?? return
+  let name = model.name_of(op)
+  let et = free_type(g, "${name}Events")
+  let out_t = xo_type(g, s.output)
+  out.push("/// The events of ${name}, read as they arrive. `output` has the")
+  out.push("/// response's other members; close the stream when done with it.")
+  out.push("pub struct ${et} {")
+  out.push("  pub output: ${out_t}")
+  out.push("  body: http.ClientStream")
+  out.push("  dec: eventstream.Decoder = eventstream.decoder()")
+  out.push("  done: Bool = false")
+  out.push("}")
+  out.push("")
+  emit_next(g, et, s.output, sm, out)
+  out.push("/// Stops reading the stream.")
+  out.push("pub fn (var s: ${et}) close() {")
+  out.push("  if !s.done {")
+  out.push("    s.done = true")
+  out.push("    s.body.close()")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// The method of an output event stream operation: as `send`'s, but
+/// through transport.open.
+pub fn emit_stream_method(g: G, op: Str, route: Str, token: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let name = op_name(op)
+  let en = op_err(op)
+  let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
+  let et = free_type(g, "${model.name_of(op)}Events")
+  doc_lines(out, s.traits, "")
+  out.push("pub fn (c: Client) ${name}(input: ${in_t}) -> ${et} ! ${en} uses (net.dial, clock, rand) {")
+  out.push("  let (ep, signing, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))")
+  out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
+  out.push("  for h in extra {")
+  out.push("    req.headers.push(h)")
+  out.push("  }")
+  out.push("  let opened = transport.open(c.transport, req, signing, ${if g.xml { "restxml" } else { "restjson" }}.classify) ?? e => return Err(${en}.Send(e))")
+  out.push("  match opened {")
+  out.push("    Done(resp) => Err(deserialize_${name}_error(resp))")
+  out.push("    Stream(head, body) => {")
+  out.push("      // the other members are in the headers (an initial-response")
+  out.push("      // event carries them in awsJson)")
+  out.push("      match deserialize_${name}(http.Response{status: head.status, headers: head.headers, body: b\"\"}) {")
+  out.push("        Ok(o) => Ok(${et}{output: o, body: body})")
+  out.push("        Err(msg) => {")
+  out.push("          body.close()")
+  out.push("          Err(${en}.Deserialize(msg))")
+  out.push("        }")
+  out.push("      }")
+  out.push("    }")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// The event stream types and readers of every output stream operation.
+pub fn emit_event_streams(g: G, var out: List[Str]) {
+  var unions: List[Str] = []
+  var events: List[Str] = []
+  var readers: List[Str] = []
+  var writers: List[Str] = []
+  for op in model.operations(g.m) {
+    if !supported(g, op) {
+      continue
+    }
+    let s = shape_of(g, op)
+    if let Some(im) = stream_member(g, s.input) {
+      emit_input_stream_type(g, op, out)
+      if !writers.contains(im.target) {
+        writers.push(im.target)
+        emit_event_writer(g, im.target, out)
+      }
+    } else if stream_member(g, s.output).is_some() {
+      emit_events_type(g, op, out)
+    }
+    let sm = stream_member(g, s.output) ?? continue
+    if !unions.contains(sm.target) {
+      unions.push(sm.target)
+      emit_union_fns(g, sm.target, events, readers, out)
+    }
+  }
+  for id in events {
+    emit_event_read(g, id, out)
+  }
+}
+
+/// The header value of `v`, a member value of shape `target`.
+fn header_value(g: G, target: Str, v: Str) -> Str {
+  match shape_of(g, target).kind {
+    String => "eventstream.HeaderValue.Str(${v})"
+    Enum => "eventstream.HeaderValue.Str(${v}.value())"
+    Boolean => "eventstream.HeaderValue.Bool(${v})"
+    Byte => "eventstream.HeaderValue.Byte(${v})"
+    Short => "eventstream.HeaderValue.Short(${v})"
+    Integer | IntEnum => "eventstream.HeaderValue.Integer(${v})"
+    Long => "eventstream.HeaderValue.Long(${v})"
+    Blob => "eventstream.HeaderValue.ByteArray(${v})"
+    Timestamp => "eventstream.HeaderValue.Timestamp(${v}.unix_millis())"
+    _ => "eventstream.HeaderValue.Str(\"\${${v}:?}\")"
+  }
+}
+
+fn str_header(name: Str, v: Str) -> Str {
+  "eventstream.Header{name: ${lit_str(name)}, value: eventstream.HeaderValue.Str(${v})}"
+}
+
+/// `fn event_message_<key>(v) -> eventstream.Message` for input union
+/// `union`: the event's headers and payload (JSON for the protocols that
+/// have input streams).
+fn emit_event_writer(g: G, union: Str, var out: List[Str]) {
+  let u = shape_of(g, union)
+  let ut = xo_type(g, union)
+  let (vs, catch_all) = union_variants(u)
+  out.push("fn event_message_${fn_key(g, union)}(v: ${ut}) -> eventstream.Message {")
+  out.push("  match v {")
+  for (i, m) in u.members.indexed() {
+    let base = "[${str_header(":message-type", "\"event\"")}, ${str_header(":event-type", lit_str(m.name))}]"
+    if m.target == "smithy.api#Unit" {
+      out.push("    ${vs[i]} => eventstream.Message{headers: ${base}}")
+      continue
+    }
+    let es = shape_of(g, m.target)
+    out.push(if es.members.is_empty() { "    ${vs[i]}(_) => {" } else { "    ${vs[i]}(x) => {" })
+    out.push("      var hs = ${base}")
+    for hm in es.members.filter(fn(x: model.Member) -> Bool { has(x.traits, "eventHeader") }) {
+      out.push("      if let Some(h) = x.${field_name(hm.name)} {")
+      out.push("        hs.push(eventstream.Header{name: ${lit_str(hm.name)}, value: ${header_value(g, hm.target, "h")}})")
+      out.push("      }")
+    }
+    let payload = es.members.find(fn(x: model.Member) -> Bool { has(x.traits, "eventPayload") })
+    let body = es.members.filter(fn(x: model.Member) -> Bool { !has(x.traits, "eventHeader") && !has(x.traits, "eventPayload") })
+    match payload {
+      Some(pm) => {
+        let f = field_name(pm.name)
+        match shape_of(g, pm.target).kind {
+          Blob => {
+            out.push("      hs.push(${str_header(":content-type", "\"application/octet-stream\"")})")
+            out.push("      eventstream.Message{headers: hs, payload: x.${f} ?? b\"\"}")
+          }
+          String => {
+            out.push("      hs.push(${str_header(":content-type", "\"text/plain\"")})")
+            out.push("      eventstream.Message{headers: hs, payload: (x.${f} ?? \"\").bytes()}")
+          }
+          _ => {
+            out.push("      hs.push(${str_header(":content-type", "\"application/json\"")})")
+            out.push("      let p = match x.${f} {")
+            out.push("        Some(y) => ${json_expr(g, pm.traits, pm.target, "y")}.encode().bytes()")
+            out.push("        None => b\"\"")
+            out.push("      }")
+            out.push("      eventstream.Message{headers: hs, payload: p}")
+          }
+        }
+      }
+      None => if body.is_empty() {
+        out.push("      eventstream.Message{headers: hs}")
+      } else {
+        out.push("      hs.push(${str_header(":content-type", "\"application/json\"")})")
+        out.push("      var fs: List[(Str, json.Value)] = []")
+        for bm in body {
+          out.push("      if let Some(y) = x.${field_name(bm.name)} {")
+          out.push("        fs.push((${lit_str(json_name(g, bm))}, ${json_expr(g, bm.traits, bm.target, "y")}))")
+          out.push("      }")
+        }
+        out.push("      eventstream.Message{headers: hs, payload: json.Value.Object(fs).encode().bytes()}")
+      }
+    }
+    out.push("    }")
+  }
+  out.push("    ${catch_all}(_) => eventstream.Message{}")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// The `<Operation>Stream` type of an input event stream operation: send
+/// events, then close_send; read the output's events with next when the
+/// output is an event stream too.
+fn emit_input_stream_type(g: G, op: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let im = stream_member(g, s.input) ?? return
+  let name = model.name_of(op)
+  let st = free_type(g, "${name}Stream")
+  let out_t = if s.output == "smithy.api#Unit" { "()" } else { xo_type(g, s.output) }
+  out.push("/// A ${name} stream: `send` writes input events (signed in a chain),")
+  out.push("/// `close_send` ends them, and `close` ends the whole stream.")
+  out.push("pub struct ${st} {")
+  out.push("  pub output: ${out_t}")
+  out.push("  writer: http.PipeWriter")
+  out.push("  signer: sigv4.StreamSigner")
+  out.push("  clock: Clock")
+  out.push("  body: http.ClientStream")
+  out.push("  dec: eventstream.Decoder = eventstream.decoder()")
+  out.push("  done: Bool = false")
+  out.push("  sent_end: Bool = false")
+  out.push("}")
+  out.push("")
+  out.push("/// Sends input event `e`.")
+  out.push("pub fn (var s: ${st}) send(e: ${xo_type(g, im.target)}) -> () ! IoErr uses clock {")
+  out.push("  let m = eventstream.encode(event_message_${fn_key(g, im.target)}(e))")
+  out.push("  s.writer.write(eventstream.signed(s.signer, m, s.clock.now()))")
+  out.push("}")
+  out.push("")
+  out.push("/// Ends the input events: sends the signed empty message and closes")
+  out.push("/// the request body.")
+  out.push("pub fn (var s: ${st}) close_send() -> () ! IoErr uses clock {")
+  out.push("  if s.sent_end {")
+  out.push("    return Ok(())")
+  out.push("  }")
+  out.push("  s.sent_end = true")
+  out.push("  let r = s.writer.write(eventstream.signed(s.signer, b\"\", s.clock.now()))")
+  out.push("  s.writer.close()")
+  out.push("  r")
+  out.push("}")
+  out.push("")
+  if let Some(om) = stream_member(g, s.output) {
+    emit_next(g, st, s.output, om, out)
+  }
+  out.push("/// Ends the stream in both directions.")
+  out.push("pub fn (var s: ${st}) close() uses clock {")
+  out.push("  match s.close_send() {")
+  out.push("    Ok(_) => {}")
+  out.push("    // closing anyway: a failed end message changes nothing here")
+  out.push("    Err(_) => {}")
+  out.push("  }")
+  out.push("  if !s.done {")
+  out.push("    s.done = true")
+  out.push("    s.body.close()")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// The method of an input event stream operation. `first` events are
+/// written before the request is sent (a server may wait for one before
+/// it answers).
+pub fn emit_input_stream_method(g: G, op: Str, route: Str, token: Str, var out: List[Str]) {
+  let s = shape_of(g, op)
+  let im = stream_member(g, s.input) ?? return
+  let name = op_name(op)
+  let en = op_err(op)
+  let st = free_type(g, "${model.name_of(op)}Stream")
+  let ut = xo_type(g, im.target)
+  doc_lines(out, s.traits, "")
+  out.push("pub fn (c: Client) ${name}(input: ${xo_type(g, s.input)}, first: List[${ut}] = []) -> ${st} ! ${en} uses (net.dial, clock, rand) {")
+  out.push("  let (ep, signing, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))")
+  out.push("  var req = serialize_${name}(ep, input, ${token}) ?? e => return Err(${en}.InvalidInput(e))")
+  out.push("  for h in extra {")
+  out.push("    req.headers.push(h)")
+  out.push("  }")
+  out.push("  req.headers = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != \"content-type\" })")
+  out.push("  req.headers.push((\"Content-Type\", \"application/vnd.amazon.eventstream\"))")
+  out.push("  req.body = b\"\"")
+  out.push("  let (w, r) = http.pipe()")
+  out.push("  // the signer is seeded by the request's signature, known only once")
+  out.push("  // it is signed: open_stream signs, then the first events follow")
+  out.push("  let started = transport.open_stream(c.transport, req, signing, r, first.map(fn(e: ${ut}) -> Bytes { eventstream.encode(event_message_${fn_key(g, im.target)}(e)) }), w) ?? e => return Err(${en}.Send(e))")
+  out.push("  match started.opened {")
+  out.push("    Done(resp) => {")
+  out.push("      w.close()")
+  out.push("      Err(deserialize_${name}_error(resp))")
+  out.push("    }")
+  out.push("    Stream(head, body) => {")
+  out.push("      match deserialize_${name}(http.Response{status: head.status, headers: head.headers, body: b\"\"}) {")
+  out.push("        Ok(o) => Ok(${st}{output: o, writer: w, signer: started.signer, clock: c.transport.clock, body: body})")
+  out.push("        Err(msg) => {")
+  out.push("          body.close()")
+  out.push("          w.close()")
+  out.push("          Err(${en}.Deserialize(msg))")
+  out.push("        }")
+  out.push("      }")
+  out.push("    }")
+  out.push("  }")
+  out.push("}")
+  out.push("")
+}
+
+/// `want`, or `want` with "Reader" appended until it names no model type
+/// (DevOps Agent has a union named SendMessageEvents, the name the
+/// SendMessage reader would take).
+pub fn free_type(g: G, want: Str) -> Str {
+  var n = want
+  while g.ids.any(fn(id: Str) -> Bool { named_kind(shape_of(g, id).kind) && type_name(g.names, id) == n }) {
+    n = "${n}Reader"
+  }
+  n
+}

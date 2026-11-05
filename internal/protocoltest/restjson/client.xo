@@ -5,10 +5,12 @@ use std/crypto
 use std/http
 use std/json
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/eventstream
 use github.com/xo-lang/aws/protocol/jsonv
 use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/retry
+use github.com/xo-lang/aws/sigv4
 use github.com/xo-lang/aws/transport
 
 /// How a Client is made.
@@ -4950,6 +4952,654 @@ fn read_error_service_unavailable_error(resp: http.Response, body: json.Value) -
   Ok(out)
 }
 
+/// A DuplexStream stream: `send` writes input events (signed in a chain),
+/// `close_send` ends them, and `close` ends the whole stream.
+pub struct DuplexStreamStream {
+  pub output: DuplexStreamOutput
+  writer: http.PipeWriter
+  signer: sigv4.StreamSigner
+  clock: Clock
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+  sent_end: Bool = false
+}
+
+/// Sends input event `e`.
+pub fn (var s: DuplexStreamStream) send(e: EventStream) -> () ! IoErr uses clock {
+  let m = eventstream.encode(event_message_event_stream(e))
+  s.writer.write(eventstream.signed(s.signer, m, s.clock.now()))
+}
+
+/// Ends the input events: sends the signed empty message and closes
+/// the request body.
+pub fn (var s: DuplexStreamStream) close_send() -> () ! IoErr uses clock {
+  if s.sent_end {
+    return Ok(())
+  }
+  s.sent_end = true
+  let r = s.writer.write(eventstream.signed(s.signer, b"", s.clock.now()))
+  s.writer.close()
+  r
+}
+
+/// The next event, None at the end of the stream.
+pub fn (var s: DuplexStreamStream) next() -> EventStream? ! EventStreamErr uses net.dial {
+  while !s.done {
+    match s.dec.next() {
+      Err(e) => return Err(EventStreamErr.Read(e.display()))
+      Ok(Some(m)) => {
+        match m.header_str(":message-type") {
+          "event" => {
+            let t = m.header_str(":event-type")
+            if t == "initial-response" {
+              continue
+            }
+            return match event_event_stream(t, m) {
+              Ok(v) => Ok(Some(v))
+              Err(msg) => Err(EventStreamErr.Read(msg))
+            }
+          }
+          "exception" => return Err(exception_event_stream(m))
+          _ => return Err(EventStreamErr.Api(aws.ApiError{code: m.header_str(":error-code"), message: m.header_str(":error-message")}))
+        }
+      }
+      Ok(None) => {
+        match s.body.read() {
+          Ok(Some(piece)) => s.dec.feed(piece)
+          Ok(None) => {
+            s.done = true
+            s.body.close()
+            if s.dec.pending() > 0 {
+              return Err(EventStreamErr.Read("the stream ended inside a message"))
+            }
+          }
+          Err(e) => {
+            s.done = true
+            s.body.close()
+            return Err(EventStreamErr.Read(e.display()))
+          }
+        }
+      }
+    }
+  }
+  Ok(None)
+}
+
+/// Ends the stream in both directions.
+pub fn (var s: DuplexStreamStream) close() uses clock {
+  match s.close_send() {
+    Ok(_) => {}
+    // closing anyway: a failed end message changes nothing here
+    Err(_) => {}
+  }
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+fn event_message_event_stream(v: EventStream) -> eventstream.Message {
+  match v {
+    Headers(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("headers")}]
+      if let Some(h) = x.boolean_header {
+        hs.push(eventstream.Header{name: "booleanHeader", value: eventstream.HeaderValue.Bool(h)})
+      }
+      if let Some(h) = x.byte_header {
+        hs.push(eventstream.Header{name: "byteHeader", value: eventstream.HeaderValue.Byte(h)})
+      }
+      if let Some(h) = x.short_header {
+        hs.push(eventstream.Header{name: "shortHeader", value: eventstream.HeaderValue.Short(h)})
+      }
+      if let Some(h) = x.int_header {
+        hs.push(eventstream.Header{name: "intHeader", value: eventstream.HeaderValue.Integer(h)})
+      }
+      if let Some(h) = x.long_header {
+        hs.push(eventstream.Header{name: "longHeader", value: eventstream.HeaderValue.Long(h)})
+      }
+      if let Some(h) = x.blob_header {
+        hs.push(eventstream.Header{name: "blobHeader", value: eventstream.HeaderValue.ByteArray(h)})
+      }
+      if let Some(h) = x.string_header {
+        hs.push(eventstream.Header{name: "stringHeader", value: eventstream.HeaderValue.Str(h)})
+      }
+      if let Some(h) = x.timestamp_header {
+        hs.push(eventstream.Header{name: "timestampHeader", value: eventstream.HeaderValue.Timestamp(h.unix_millis())})
+      }
+      eventstream.Message{headers: hs}
+    }
+    BlobPayload(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("blobPayload")}]
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/octet-stream")})
+      eventstream.Message{headers: hs, payload: x.payload ?? b""}
+    }
+    StringPayload(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("stringPayload")}]
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("text/plain")})
+      eventstream.Message{headers: hs, payload: (x.payload ?? "").bytes()}
+    }
+    StructurePayload(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("structurePayload")}]
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/json")})
+      let p = match x.payload {
+        Some(y) => json_of_payload_structure(y).encode().bytes()
+        None => b""
+      }
+      eventstream.Message{headers: hs, payload: p}
+    }
+    UnionPayload(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("unionPayload")}]
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/json")})
+      let p = match x.payload {
+        Some(y) => json_of_payload_union(y).encode().bytes()
+        None => b""
+      }
+      eventstream.Message{headers: hs, payload: p}
+    }
+    HeadersAndExplicitPayload(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("headersAndExplicitPayload")}]
+      if let Some(h) = x.header {
+        hs.push(eventstream.Header{name: "header", value: eventstream.HeaderValue.Str(h)})
+      }
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/json")})
+      let p = match x.payload {
+        Some(y) => json_of_payload_structure(y).encode().bytes()
+        None => b""
+      }
+      eventstream.Message{headers: hs, payload: p}
+    }
+    HeadersAndImplicitPayload(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("headersAndImplicitPayload")}]
+      if let Some(h) = x.header {
+        hs.push(eventstream.Header{name: "header", value: eventstream.HeaderValue.Str(h)})
+      }
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/json")})
+      var fs: List[(Str, json.Value)] = []
+      if let Some(y) = x.payload {
+        fs.push(("payload", json.Value.Str(y)))
+      }
+      eventstream.Message{headers: hs, payload: json.Value.Object(fs).encode().bytes()}
+    }
+    Error(x) => {
+      var hs = [eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")}, eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str("error")}]
+      hs.push(eventstream.Header{name: ":content-type", value: eventstream.HeaderValue.Str("application/json")})
+      var fs: List[(Str, json.Value)] = []
+      if let Some(y) = x.message {
+        fs.push(("message", json.Value.Str(y)))
+      }
+      eventstream.Message{headers: hs, payload: json.Value.Object(fs).encode().bytes()}
+    }
+    Unknown(_) => eventstream.Message{}
+  }
+}
+
+/// Why reading a EventStream stream stopped.
+pub enum EventStreamErr {
+  Error(e: ErrorEvent)
+  /// An error message, or an exception the model does not list.
+  Api(e: aws.ApiError)
+  /// The body could not be read or is not event stream messages.
+  Read(msg: Str)
+}
+
+pub fn (e: EventStreamErr) display() -> Str {
+  match e {
+    Error(x) => "ErrorEvent: ${x:?}"
+    Api(x) => x.display()
+    Read(msg) => "event stream: ${msg}"
+  }
+}
+
+fn event_event_stream(t: Str, m: eventstream.Message) -> EventStream ! Str {
+  match t {
+    "headers" => Ok(EventStream.Headers(event_read_headers_event(m)?))
+    "blobPayload" => Ok(EventStream.BlobPayload(event_read_blob_payload_event(m)?))
+    "stringPayload" => Ok(EventStream.StringPayload(event_read_string_payload_event(m)?))
+    "structurePayload" => Ok(EventStream.StructurePayload(event_read_structure_payload_event(m)?))
+    "unionPayload" => Ok(EventStream.UnionPayload(event_read_union_payload_event(m)?))
+    "headersAndExplicitPayload" => Ok(EventStream.HeadersAndExplicitPayload(event_read_headers_and_explicit_payload_event(m)?))
+    "headersAndImplicitPayload" => Ok(EventStream.HeadersAndImplicitPayload(event_read_headers_and_implicit_payload_event(m)?))
+    _ => Ok(EventStream.Unknown(t))
+  }
+}
+
+fn exception_event_stream(m: eventstream.Message) -> EventStreamErr {
+  let t = m.header_str(":exception-type")
+  match t {
+    "error" => match exception_read_error_event(m.payload) {
+      Ok(x) => EventStreamErr.Error(x)
+      Err(msg) => EventStreamErr.Read(msg)
+    }
+    _ => EventStreamErr.Api(aws.ApiError{code: t, message: m.payload.to_str() ?? ""})
+  }
+}
+
+fn exception_read_error_event(b: Bytes) -> ErrorEvent ! Str {
+  Ok(from_json_error_event(jsonv.parse_body(b)?)?)
+}
+
+/// A DuplexStreamWithDistinctStreams stream: `send` writes input events (signed in a chain),
+/// `close_send` ends them, and `close` ends the whole stream.
+pub struct DuplexStreamWithDistinctStreamsStream {
+  pub output: DuplexStreamWithDistinctStreamsOutput
+  writer: http.PipeWriter
+  signer: sigv4.StreamSigner
+  clock: Clock
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+  sent_end: Bool = false
+}
+
+/// Sends input event `e`.
+pub fn (var s: DuplexStreamWithDistinctStreamsStream) send(e: EventStream) -> () ! IoErr uses clock {
+  let m = eventstream.encode(event_message_event_stream(e))
+  s.writer.write(eventstream.signed(s.signer, m, s.clock.now()))
+}
+
+/// Ends the input events: sends the signed empty message and closes
+/// the request body.
+pub fn (var s: DuplexStreamWithDistinctStreamsStream) close_send() -> () ! IoErr uses clock {
+  if s.sent_end {
+    return Ok(())
+  }
+  s.sent_end = true
+  let r = s.writer.write(eventstream.signed(s.signer, b"", s.clock.now()))
+  s.writer.close()
+  r
+}
+
+/// Ends the stream in both directions.
+pub fn (var s: DuplexStreamWithDistinctStreamsStream) close() uses clock {
+  match s.close_send() {
+    Ok(_) => {}
+    // closing anyway: a failed end message changes nothing here
+    Err(_) => {}
+  }
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+/// A DuplexStreamWithInitialMessages stream: `send` writes input events (signed in a chain),
+/// `close_send` ends them, and `close` ends the whole stream.
+pub struct DuplexStreamWithInitialMessagesStream {
+  pub output: DuplexStreamWithInitialMessagesOutput
+  writer: http.PipeWriter
+  signer: sigv4.StreamSigner
+  clock: Clock
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+  sent_end: Bool = false
+}
+
+/// Sends input event `e`.
+pub fn (var s: DuplexStreamWithInitialMessagesStream) send(e: EventStream) -> () ! IoErr uses clock {
+  let m = eventstream.encode(event_message_event_stream(e))
+  s.writer.write(eventstream.signed(s.signer, m, s.clock.now()))
+}
+
+/// Ends the input events: sends the signed empty message and closes
+/// the request body.
+pub fn (var s: DuplexStreamWithInitialMessagesStream) close_send() -> () ! IoErr uses clock {
+  if s.sent_end {
+    return Ok(())
+  }
+  s.sent_end = true
+  let r = s.writer.write(eventstream.signed(s.signer, b"", s.clock.now()))
+  s.writer.close()
+  r
+}
+
+/// The next event, None at the end of the stream.
+pub fn (var s: DuplexStreamWithInitialMessagesStream) next() -> EventStream? ! EventStreamErr uses net.dial {
+  while !s.done {
+    match s.dec.next() {
+      Err(e) => return Err(EventStreamErr.Read(e.display()))
+      Ok(Some(m)) => {
+        match m.header_str(":message-type") {
+          "event" => {
+            let t = m.header_str(":event-type")
+            if t == "initial-response" {
+              continue
+            }
+            return match event_event_stream(t, m) {
+              Ok(v) => Ok(Some(v))
+              Err(msg) => Err(EventStreamErr.Read(msg))
+            }
+          }
+          "exception" => return Err(exception_event_stream(m))
+          _ => return Err(EventStreamErr.Api(aws.ApiError{code: m.header_str(":error-code"), message: m.header_str(":error-message")}))
+        }
+      }
+      Ok(None) => {
+        match s.body.read() {
+          Ok(Some(piece)) => s.dec.feed(piece)
+          Ok(None) => {
+            s.done = true
+            s.body.close()
+            if s.dec.pending() > 0 {
+              return Err(EventStreamErr.Read("the stream ended inside a message"))
+            }
+          }
+          Err(e) => {
+            s.done = true
+            s.body.close()
+            return Err(EventStreamErr.Read(e.display()))
+          }
+        }
+      }
+    }
+  }
+  Ok(None)
+}
+
+/// Ends the stream in both directions.
+pub fn (var s: DuplexStreamWithInitialMessagesStream) close() uses clock {
+  match s.close_send() {
+    Ok(_) => {}
+    // closing anyway: a failed end message changes nothing here
+    Err(_) => {}
+  }
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+/// A InputStream stream: `send` writes input events (signed in a chain),
+/// `close_send` ends them, and `close` ends the whole stream.
+pub struct InputStreamStream {
+  pub output: ()
+  writer: http.PipeWriter
+  signer: sigv4.StreamSigner
+  clock: Clock
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+  sent_end: Bool = false
+}
+
+/// Sends input event `e`.
+pub fn (var s: InputStreamStream) send(e: EventStream) -> () ! IoErr uses clock {
+  let m = eventstream.encode(event_message_event_stream(e))
+  s.writer.write(eventstream.signed(s.signer, m, s.clock.now()))
+}
+
+/// Ends the input events: sends the signed empty message and closes
+/// the request body.
+pub fn (var s: InputStreamStream) close_send() -> () ! IoErr uses clock {
+  if s.sent_end {
+    return Ok(())
+  }
+  s.sent_end = true
+  let r = s.writer.write(eventstream.signed(s.signer, b"", s.clock.now()))
+  s.writer.close()
+  r
+}
+
+/// Ends the stream in both directions.
+pub fn (var s: InputStreamStream) close() uses clock {
+  match s.close_send() {
+    Ok(_) => {}
+    // closing anyway: a failed end message changes nothing here
+    Err(_) => {}
+  }
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+/// A InputStreamWithInitialRequest stream: `send` writes input events (signed in a chain),
+/// `close_send` ends them, and `close` ends the whole stream.
+pub struct InputStreamWithInitialRequestStream {
+  pub output: ()
+  writer: http.PipeWriter
+  signer: sigv4.StreamSigner
+  clock: Clock
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+  sent_end: Bool = false
+}
+
+/// Sends input event `e`.
+pub fn (var s: InputStreamWithInitialRequestStream) send(e: EventStream) -> () ! IoErr uses clock {
+  let m = eventstream.encode(event_message_event_stream(e))
+  s.writer.write(eventstream.signed(s.signer, m, s.clock.now()))
+}
+
+/// Ends the input events: sends the signed empty message and closes
+/// the request body.
+pub fn (var s: InputStreamWithInitialRequestStream) close_send() -> () ! IoErr uses clock {
+  if s.sent_end {
+    return Ok(())
+  }
+  s.sent_end = true
+  let r = s.writer.write(eventstream.signed(s.signer, b"", s.clock.now()))
+  s.writer.close()
+  r
+}
+
+/// Ends the stream in both directions.
+pub fn (var s: InputStreamWithInitialRequestStream) close() uses clock {
+  match s.close_send() {
+    Ok(_) => {}
+    // closing anyway: a failed end message changes nothing here
+    Err(_) => {}
+  }
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+/// The events of OutputStream, read as they arrive. `output` has the
+/// response's other members; close the stream when done with it.
+pub struct OutputStreamEvents {
+  pub output: OutputStreamOutput
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+}
+
+/// The next event, None at the end of the stream.
+pub fn (var s: OutputStreamEvents) next() -> EventStream? ! EventStreamErr uses net.dial {
+  while !s.done {
+    match s.dec.next() {
+      Err(e) => return Err(EventStreamErr.Read(e.display()))
+      Ok(Some(m)) => {
+        match m.header_str(":message-type") {
+          "event" => {
+            let t = m.header_str(":event-type")
+            if t == "initial-response" {
+              continue
+            }
+            return match event_event_stream(t, m) {
+              Ok(v) => Ok(Some(v))
+              Err(msg) => Err(EventStreamErr.Read(msg))
+            }
+          }
+          "exception" => return Err(exception_event_stream(m))
+          _ => return Err(EventStreamErr.Api(aws.ApiError{code: m.header_str(":error-code"), message: m.header_str(":error-message")}))
+        }
+      }
+      Ok(None) => {
+        match s.body.read() {
+          Ok(Some(piece)) => s.dec.feed(piece)
+          Ok(None) => {
+            s.done = true
+            s.body.close()
+            if s.dec.pending() > 0 {
+              return Err(EventStreamErr.Read("the stream ended inside a message"))
+            }
+          }
+          Err(e) => {
+            s.done = true
+            s.body.close()
+            return Err(EventStreamErr.Read(e.display()))
+          }
+        }
+      }
+    }
+  }
+  Ok(None)
+}
+
+/// Stops reading the stream.
+pub fn (var s: OutputStreamEvents) close() {
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+/// The events of OutputStreamWithInitialResponse, read as they arrive. `output` has the
+/// response's other members; close the stream when done with it.
+pub struct OutputStreamWithInitialResponseEvents {
+  pub output: OutputStreamWithInitialResponseOutput
+  body: http.ClientStream
+  dec: eventstream.Decoder = eventstream.decoder()
+  done: Bool = false
+}
+
+/// The next event, None at the end of the stream.
+pub fn (var s: OutputStreamWithInitialResponseEvents) next() -> EventStream? ! EventStreamErr uses net.dial {
+  while !s.done {
+    match s.dec.next() {
+      Err(e) => return Err(EventStreamErr.Read(e.display()))
+      Ok(Some(m)) => {
+        match m.header_str(":message-type") {
+          "event" => {
+            let t = m.header_str(":event-type")
+            if t == "initial-response" {
+              continue
+            }
+            return match event_event_stream(t, m) {
+              Ok(v) => Ok(Some(v))
+              Err(msg) => Err(EventStreamErr.Read(msg))
+            }
+          }
+          "exception" => return Err(exception_event_stream(m))
+          _ => return Err(EventStreamErr.Api(aws.ApiError{code: m.header_str(":error-code"), message: m.header_str(":error-message")}))
+        }
+      }
+      Ok(None) => {
+        match s.body.read() {
+          Ok(Some(piece)) => s.dec.feed(piece)
+          Ok(None) => {
+            s.done = true
+            s.body.close()
+            if s.dec.pending() > 0 {
+              return Err(EventStreamErr.Read("the stream ended inside a message"))
+            }
+          }
+          Err(e) => {
+            s.done = true
+            s.body.close()
+            return Err(EventStreamErr.Read(e.display()))
+          }
+        }
+      }
+    }
+  }
+  Ok(None)
+}
+
+/// Stops reading the stream.
+pub fn (var s: OutputStreamWithInitialResponseEvents) close() {
+  if !s.done {
+    s.done = true
+    s.body.close()
+  }
+}
+
+fn event_read_headers_event(m: eventstream.Message) -> HeadersEvent ! Str {
+  var out = HeadersEvent{}
+  if true {
+    if let Some(eventstream.HeaderValue.Bool(x)) = m.header("booleanHeader") {
+      out.boolean_header = x
+    }
+    if let Some(eventstream.HeaderValue.Byte(x)) = m.header("byteHeader") {
+      out.byte_header = x
+    }
+    if let Some(eventstream.HeaderValue.Short(x)) = m.header("shortHeader") {
+      out.short_header = x
+    }
+    if let Some(eventstream.HeaderValue.Integer(x)) = m.header("intHeader") {
+      out.int_header = x
+    }
+    if let Some(eventstream.HeaderValue.Long(x)) = m.header("longHeader") {
+      out.long_header = x
+    }
+    if let Some(eventstream.HeaderValue.ByteArray(x)) = m.header("blobHeader") {
+      out.blob_header = x
+    }
+    if let Some(eventstream.HeaderValue.Str(x)) = m.header("stringHeader") {
+      out.string_header = x
+    }
+    if let Some(eventstream.HeaderValue.Timestamp(x)) = m.header("timestampHeader") {
+      out.timestamp_header = Time.from_unix_millis(x)
+    }
+  }
+  Ok(out)
+}
+
+fn event_read_blob_payload_event(m: eventstream.Message) -> BlobPayloadEvent ! Str {
+  var out = BlobPayloadEvent{}
+  out.payload = m.payload
+  Ok(out)
+}
+
+fn event_read_string_payload_event(m: eventstream.Message) -> StringPayloadEvent ! Str {
+  var out = StringPayloadEvent{}
+  out.payload = m.payload.to_str() ?? ""
+  Ok(out)
+}
+
+fn event_read_structure_payload_event(m: eventstream.Message) -> StructurePayloadEvent ! Str {
+  var out = StructurePayloadEvent{}
+  if !m.payload.is_empty() {
+    out.payload = from_json_payload_structure(jsonv.parse_body(m.payload)?)?
+  }
+  Ok(out)
+}
+
+fn event_read_union_payload_event(m: eventstream.Message) -> UnionPayloadEvent ! Str {
+  var out = UnionPayloadEvent{}
+  if !m.payload.is_empty() {
+    out.payload = from_json_payload_union(jsonv.parse_body(m.payload)?)?
+  }
+  Ok(out)
+}
+
+fn event_read_headers_and_explicit_payload_event(m: eventstream.Message) -> HeadersAndExplicitPayloadEvent ! Str {
+  var out = HeadersAndExplicitPayloadEvent{}
+  if !m.payload.is_empty() {
+    out.payload = from_json_payload_structure(jsonv.parse_body(m.payload)?)?
+  }
+  if true {
+    if let Some(eventstream.HeaderValue.Str(x)) = m.header("header") {
+      out.header = x
+    }
+  }
+  Ok(out)
+}
+
+fn event_read_headers_and_implicit_payload_event(m: eventstream.Message) -> HeadersAndImplicitPayloadEvent ! Str {
+  var out = if m.payload.is_empty() { HeadersAndImplicitPayloadEvent{} } else { from_json_headers_and_implicit_payload_event(jsonv.parse_body(m.payload)?)? }
+  if true {
+    if let Some(eventstream.HeaderValue.Str(x)) = m.header("header") {
+      out.header = x
+    }
+  }
+  Ok(out)
+}
+
 /// The HTTP request of AllQueryStringTypes.
 pub fn serialize_all_query_string_types(ep: rest.Endpoint, input: AllQueryStringTypesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
   let _ = (idempotency_token, min_compress)
@@ -5635,11 +6285,293 @@ pub fn (c: Client) document_type_as_payload(input: DocumentTypeAsPayloadInputOut
   deserialize_document_type_as_payload(resp) ?? e => Err(DocumentTypeAsPayloadErr.Deserialize(e))
 }
 
-// DuplexStream: event streams are not generated yet.
+/// The HTTP request of DuplexStream.
+pub fn serialize_duplex_stream(ep: rest.Endpoint, input: DuplexStreamInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  if let Some(v) = input.stream {
+    body = json_of_event_stream(v).encode().bytes()
+    headers.push(("Content-Type", "application/json"))
+  }
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/DuplexStream"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
 
-// DuplexStreamWithDistinctStreams: event streams are not generated yet.
+pub fn deserialize_duplex_stream(resp: http.Response) -> DuplexStreamOutput ! Str {
+  var out = DuplexStreamOutput{}
+  if !resp.body.is_empty() {
+    let doc = jsonv.parse_body(resp.body)?
+    out.stream = from_json_event_stream(doc)?
+  }
+  Ok(out)
+}
 
-// DuplexStreamWithInitialMessages: event streams are not generated yet.
+/// The errors of DuplexStream.
+pub enum DuplexStreamErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DuplexStreamErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_duplex_stream_error(resp: http.Response) -> DuplexStreamErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DuplexStreamErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) duplex_stream(input: DuplexStreamInput, first: List[EventStream] = []) -> DuplexStreamStream ! DuplexStreamErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(DuplexStreamErr.InvalidInput(e))
+  var req = serialize_duplex_stream(ep, input, "") ?? e => return Err(DuplexStreamErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  req.headers = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" })
+  req.headers.push(("Content-Type", "application/vnd.amazon.eventstream"))
+  req.body = b""
+  let (w, r) = http.pipe()
+  // the signer is seeded by the request's signature, known only once
+  // it is signed: open_stream signs, then the first events follow
+  let started = transport.open_stream(c.transport, req, signing, r, first.map(fn(e: EventStream) -> Bytes { eventstream.encode(event_message_event_stream(e)) }), w) ?? e => return Err(DuplexStreamErr.Send(e))
+  match started.opened {
+    Done(resp) => {
+      w.close()
+      Err(deserialize_duplex_stream_error(resp))
+    }
+    Stream(head, body) => {
+      match deserialize_duplex_stream(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(DuplexStreamStream{output: o, writer: w, signer: started.signer, clock: c.transport.clock, body: body})
+        Err(msg) => {
+          body.close()
+          w.close()
+          Err(DuplexStreamErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
+
+/// The HTTP request of DuplexStreamWithDistinctStreams.
+pub fn serialize_duplex_stream_with_distinct_streams(ep: rest.Endpoint, input: DuplexStreamWithDistinctStreamsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  if let Some(v) = input.stream {
+    body = json_of_event_stream(v).encode().bytes()
+    headers.push(("Content-Type", "application/json"))
+  }
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/DuplexStreamWithDistinctStreams"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_duplex_stream_with_distinct_streams(resp: http.Response) -> DuplexStreamWithDistinctStreamsOutput ! Str {
+  var out = DuplexStreamWithDistinctStreamsOutput{}
+  if !resp.body.is_empty() {
+    let doc = jsonv.parse_body(resp.body)?
+    out.stream = from_json_singleton_event_stream(doc)?
+  }
+  Ok(out)
+}
+
+/// The errors of DuplexStreamWithDistinctStreams.
+pub enum DuplexStreamWithDistinctStreamsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DuplexStreamWithDistinctStreamsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_duplex_stream_with_distinct_streams_error(resp: http.Response) -> DuplexStreamWithDistinctStreamsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DuplexStreamWithDistinctStreamsErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) duplex_stream_with_distinct_streams(input: DuplexStreamWithDistinctStreamsInput, first: List[EventStream] = []) -> DuplexStreamWithDistinctStreamsStream ! DuplexStreamWithDistinctStreamsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(DuplexStreamWithDistinctStreamsErr.InvalidInput(e))
+  var req = serialize_duplex_stream_with_distinct_streams(ep, input, "") ?? e => return Err(DuplexStreamWithDistinctStreamsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  req.headers = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" })
+  req.headers.push(("Content-Type", "application/vnd.amazon.eventstream"))
+  req.body = b""
+  let (w, r) = http.pipe()
+  // the signer is seeded by the request's signature, known only once
+  // it is signed: open_stream signs, then the first events follow
+  let started = transport.open_stream(c.transport, req, signing, r, first.map(fn(e: EventStream) -> Bytes { eventstream.encode(event_message_event_stream(e)) }), w) ?? e => return Err(DuplexStreamWithDistinctStreamsErr.Send(e))
+  match started.opened {
+    Done(resp) => {
+      w.close()
+      Err(deserialize_duplex_stream_with_distinct_streams_error(resp))
+    }
+    Stream(head, body) => {
+      match deserialize_duplex_stream_with_distinct_streams(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(DuplexStreamWithDistinctStreamsStream{output: o, writer: w, signer: started.signer, clock: c.transport.clock, body: body})
+        Err(msg) => {
+          body.close()
+          w.close()
+          Err(DuplexStreamWithDistinctStreamsErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
+
+/// The HTTP request of DuplexStreamWithInitialMessages.
+pub fn serialize_duplex_stream_with_initial_messages(ep: rest.Endpoint, input: DuplexStreamWithInitialMessagesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.initial_request_member {
+    headers.push(("initial-request-member", v))
+  }
+  var body = b""
+  if let Some(v) = input.stream {
+    body = json_of_event_stream(v).encode().bytes()
+    headers.push(("Content-Type", "application/json"))
+  }
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/DuplexStreamWithInitialMessages"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_duplex_stream_with_initial_messages(resp: http.Response) -> DuplexStreamWithInitialMessagesOutput ! Str {
+  var out = DuplexStreamWithInitialMessagesOutput{}
+  if let Some(hv) = resp.header("initial-response-member") {
+    out.initial_response_member = hv
+  }
+  if !resp.body.is_empty() {
+    let doc = jsonv.parse_body(resp.body)?
+    out.stream = from_json_event_stream(doc)?
+  }
+  Ok(out)
+}
+
+/// The errors of DuplexStreamWithInitialMessages.
+pub enum DuplexStreamWithInitialMessagesErr {
+  ServiceUnavailableError(e: ServiceUnavailableError)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DuplexStreamWithInitialMessagesErr) display() -> Str {
+  match e {
+    ServiceUnavailableError(x) => "ServiceUnavailableError: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_duplex_stream_with_initial_messages_error(resp: http.Response) -> DuplexStreamWithInitialMessagesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ServiceUnavailableError" => match read_error_service_unavailable_error(resp, body) {
+      Ok(x) => return DuplexStreamWithInitialMessagesErr.ServiceUnavailableError(x)
+      Err(msg) => return DuplexStreamWithInitialMessagesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DuplexStreamWithInitialMessagesErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) duplex_stream_with_initial_messages(input: DuplexStreamWithInitialMessagesInput, first: List[EventStream] = []) -> DuplexStreamWithInitialMessagesStream ! DuplexStreamWithInitialMessagesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(DuplexStreamWithInitialMessagesErr.InvalidInput(e))
+  var req = serialize_duplex_stream_with_initial_messages(ep, input, "") ?? e => return Err(DuplexStreamWithInitialMessagesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  req.headers = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" })
+  req.headers.push(("Content-Type", "application/vnd.amazon.eventstream"))
+  req.body = b""
+  let (w, r) = http.pipe()
+  // the signer is seeded by the request's signature, known only once
+  // it is signed: open_stream signs, then the first events follow
+  let started = transport.open_stream(c.transport, req, signing, r, first.map(fn(e: EventStream) -> Bytes { eventstream.encode(event_message_event_stream(e)) }), w) ?? e => return Err(DuplexStreamWithInitialMessagesErr.Send(e))
+  match started.opened {
+    Done(resp) => {
+      w.close()
+      Err(deserialize_duplex_stream_with_initial_messages_error(resp))
+    }
+    Stream(head, body) => {
+      match deserialize_duplex_stream_with_initial_messages(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(DuplexStreamWithInitialMessagesStream{output: o, writer: w, signer: started.signer, clock: c.transport.clock, body: body})
+        Err(msg) => {
+          body.close()
+          w.close()
+          Err(DuplexStreamWithInitialMessagesErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
 
 /// The HTTP request of EmptyInputAndEmptyOutput.
 pub fn serialize_empty_input_and_empty_output(ep: rest.Endpoint, input: EmptyInputAndEmptyOutputInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
@@ -7737,9 +8669,182 @@ pub fn (c: Client) input_and_output_with_headers(input: InputAndOutputWithHeader
   deserialize_input_and_output_with_headers(resp) ?? e => Err(InputAndOutputWithHeadersErr.Deserialize(e))
 }
 
-// InputStream: event streams are not generated yet.
+/// The HTTP request of InputStream.
+pub fn serialize_input_stream(ep: rest.Endpoint, input: InputStreamInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  if let Some(v) = input.stream {
+    body = json_of_event_stream(v).encode().bytes()
+    headers.push(("Content-Type", "application/json"))
+  }
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/InputStream"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
 
-// InputStreamWithInitialRequest: event streams are not generated yet.
+pub fn deserialize_input_stream(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of InputStream.
+pub enum InputStreamErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: InputStreamErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_input_stream_error(resp: http.Response) -> InputStreamErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  InputStreamErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) input_stream(input: InputStreamInput, first: List[EventStream] = []) -> InputStreamStream ! InputStreamErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(InputStreamErr.InvalidInput(e))
+  var req = serialize_input_stream(ep, input, "") ?? e => return Err(InputStreamErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  req.headers = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" })
+  req.headers.push(("Content-Type", "application/vnd.amazon.eventstream"))
+  req.body = b""
+  let (w, r) = http.pipe()
+  // the signer is seeded by the request's signature, known only once
+  // it is signed: open_stream signs, then the first events follow
+  let started = transport.open_stream(c.transport, req, signing, r, first.map(fn(e: EventStream) -> Bytes { eventstream.encode(event_message_event_stream(e)) }), w) ?? e => return Err(InputStreamErr.Send(e))
+  match started.opened {
+    Done(resp) => {
+      w.close()
+      Err(deserialize_input_stream_error(resp))
+    }
+    Stream(head, body) => {
+      match deserialize_input_stream(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(InputStreamStream{output: o, writer: w, signer: started.signer, clock: c.transport.clock, body: body})
+        Err(msg) => {
+          body.close()
+          w.close()
+          Err(InputStreamErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
+
+/// The HTTP request of InputStreamWithInitialRequest.
+pub fn serialize_input_stream_with_initial_request(ep: rest.Endpoint, input: InputStreamWithInitialRequestInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.initial_request_member {
+    headers.push(("initial-request-member", v))
+  }
+  var body = b""
+  if let Some(v) = input.stream {
+    body = json_of_event_stream(v).encode().bytes()
+    headers.push(("Content-Type", "application/json"))
+  }
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/InputStreamWithInitialRequest"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_input_stream_with_initial_request(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of InputStreamWithInitialRequest.
+pub enum InputStreamWithInitialRequestErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: InputStreamWithInitialRequestErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_input_stream_with_initial_request_error(resp: http.Response) -> InputStreamWithInitialRequestErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  InputStreamWithInitialRequestErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) input_stream_with_initial_request(input: InputStreamWithInitialRequestInput, first: List[EventStream] = []) -> InputStreamWithInitialRequestStream ! InputStreamWithInitialRequestErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(InputStreamWithInitialRequestErr.InvalidInput(e))
+  var req = serialize_input_stream_with_initial_request(ep, input, "") ?? e => return Err(InputStreamWithInitialRequestErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  req.headers = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" })
+  req.headers.push(("Content-Type", "application/vnd.amazon.eventstream"))
+  req.body = b""
+  let (w, r) = http.pipe()
+  // the signer is seeded by the request's signature, known only once
+  // it is signed: open_stream signs, then the first events follow
+  let started = transport.open_stream(c.transport, req, signing, r, first.map(fn(e: EventStream) -> Bytes { eventstream.encode(event_message_event_stream(e)) }), w) ?? e => return Err(InputStreamWithInitialRequestErr.Send(e))
+  match started.opened {
+    Done(resp) => {
+      w.close()
+      Err(deserialize_input_stream_with_initial_request_error(resp))
+    }
+    Stream(head, body) => {
+      match deserialize_input_stream_with_initial_request(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(InputStreamWithInitialRequestStream{output: o, writer: w, signer: started.signer, clock: c.transport.clock, body: body})
+        Err(msg) => {
+          body.close()
+          w.close()
+          Err(InputStreamWithInitialRequestErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
 
 /// The HTTP request of JsonBlobs.
 pub fn serialize_json_blobs(ep: rest.Endpoint, input: JsonBlobsInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
@@ -11572,9 +12677,175 @@ pub fn (c: Client) operation_with_nested_structure(input: OperationWithNestedStr
   deserialize_operation_with_nested_structure(resp) ?? e => Err(OperationWithNestedStructureErr.Deserialize(e))
 }
 
-// OutputStream: event streams are not generated yet.
+/// The HTTP request of OutputStream.
+pub fn serialize_output_stream(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/OutputStream"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
 
-// OutputStreamWithInitialResponse: event streams are not generated yet.
+pub fn deserialize_output_stream(resp: http.Response) -> OutputStreamOutput ! Str {
+  var out = OutputStreamOutput{}
+  if !resp.body.is_empty() {
+    let doc = jsonv.parse_body(resp.body)?
+    out.stream = from_json_event_stream(doc)?
+  }
+  Ok(out)
+}
+
+/// The errors of OutputStream.
+pub enum OutputStreamErr {
+  ServiceUnavailableError(e: ServiceUnavailableError)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: OutputStreamErr) display() -> Str {
+  match e {
+    ServiceUnavailableError(x) => "ServiceUnavailableError: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_output_stream_error(resp: http.Response) -> OutputStreamErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ServiceUnavailableError" => match read_error_service_unavailable_error(resp, body) {
+      Ok(x) => return OutputStreamErr.ServiceUnavailableError(x)
+      Err(msg) => return OutputStreamErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  OutputStreamErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) output_stream(input: ()) -> OutputStreamEvents ! OutputStreamErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(OutputStreamErr.InvalidInput(e))
+  var req = serialize_output_stream(ep, input, "") ?? e => return Err(OutputStreamErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let opened = transport.open(c.transport, req, signing, restjson.classify) ?? e => return Err(OutputStreamErr.Send(e))
+  match opened {
+    Done(resp) => Err(deserialize_output_stream_error(resp))
+    Stream(head, body) => {
+      // the other members are in the headers (an initial-response
+      // event carries them in awsJson)
+      match deserialize_output_stream(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(OutputStreamEvents{output: o, body: body})
+        Err(msg) => {
+          body.close()
+          Err(OutputStreamErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
+
+/// The HTTP request of OutputStreamWithInitialResponse.
+pub fn serialize_output_stream_with_initial_response(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/OutputStreamWithInitialResponse"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_output_stream_with_initial_response(resp: http.Response) -> OutputStreamWithInitialResponseOutput ! Str {
+  var out = OutputStreamWithInitialResponseOutput{}
+  if let Some(hv) = resp.header("initial-response-member") {
+    out.initial_response_member = hv
+  }
+  if !resp.body.is_empty() {
+    let doc = jsonv.parse_body(resp.body)?
+    out.stream = from_json_event_stream(doc)?
+  }
+  Ok(out)
+}
+
+/// The errors of OutputStreamWithInitialResponse.
+pub enum OutputStreamWithInitialResponseErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: OutputStreamWithInitialResponseErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_output_stream_with_initial_response_error(resp: http.Response) -> OutputStreamWithInitialResponseErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  OutputStreamWithInitialResponseErr.Api(restjson.api_error(resp, body))
+}
+
+pub fn (c: Client) output_stream_with_initial_response(input: ()) -> OutputStreamWithInitialResponseEvents ! OutputStreamWithInitialResponseErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route() ?? e => return Err(OutputStreamWithInitialResponseErr.InvalidInput(e))
+  var req = serialize_output_stream_with_initial_response(ep, input, "") ?? e => return Err(OutputStreamWithInitialResponseErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let opened = transport.open(c.transport, req, signing, restjson.classify) ?? e => return Err(OutputStreamWithInitialResponseErr.Send(e))
+  match opened {
+    Done(resp) => Err(deserialize_output_stream_with_initial_response_error(resp))
+    Stream(head, body) => {
+      // the other members are in the headers (an initial-response
+      // event carries them in awsJson)
+      match deserialize_output_stream_with_initial_response(http.Response{status: head.status, headers: head.headers, body: b""}) {
+        Ok(o) => Ok(OutputStreamWithInitialResponseEvents{output: o, body: body})
+        Err(msg) => {
+          body.close()
+          Err(OutputStreamWithInitialResponseErr.Deserialize(msg))
+        }
+      }
+    }
+  }
+}
 
 /// The HTTP request of PostPlayerAction.
 pub fn serialize_post_player_action(ep: rest.Endpoint, input: PostPlayerActionInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
@@ -12125,1360 +13396,4 @@ pub fn (c: Client) recursive_shapes(input: RecursiveShapesInputOutput) -> Recurs
     return Err(deserialize_recursive_shapes_error(resp))
   }
   deserialize_recursive_shapes(resp) ?? e => Err(RecursiveShapesErr.Deserialize(e))
-}
-
-/// The HTTP request of ResponseCodeHttpFallback.
-pub fn serialize_response_code_http_fallback(ep: rest.Endpoint, input: ResponseCodeHttpFallbackInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/responseCodeHttpFallback"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_response_code_http_fallback(resp: http.Response) -> ResponseCodeHttpFallbackInputOutput ! Str {
-  var out = ResponseCodeHttpFallbackInputOutput{}
-  Ok(out)
-}
-
-/// The errors of ResponseCodeHttpFallback.
-pub enum ResponseCodeHttpFallbackErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ResponseCodeHttpFallbackErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_response_code_http_fallback_error(resp: http.Response) -> ResponseCodeHttpFallbackErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  ResponseCodeHttpFallbackErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) response_code_http_fallback(input: ResponseCodeHttpFallbackInputOutput) -> ResponseCodeHttpFallbackInputOutput ! ResponseCodeHttpFallbackErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(ResponseCodeHttpFallbackErr.InvalidInput(e))
-  var req = serialize_response_code_http_fallback(ep, input, "") ?? e => return Err(ResponseCodeHttpFallbackErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResponseCodeHttpFallbackErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_response_code_http_fallback_error(resp))
-  }
-  deserialize_response_code_http_fallback(resp) ?? e => Err(ResponseCodeHttpFallbackErr.Deserialize(e))
-}
-
-/// The HTTP request of ResponseCodeRequired.
-pub fn serialize_response_code_required(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/responseCodeRequired"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_response_code_required(resp: http.Response) -> ResponseCodeRequiredOutput ! Str {
-  var out = ResponseCodeRequiredOutput{}
-  out.response_code = resp.status
-  Ok(out)
-}
-
-/// The errors of ResponseCodeRequired.
-pub enum ResponseCodeRequiredErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ResponseCodeRequiredErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_response_code_required_error(resp: http.Response) -> ResponseCodeRequiredErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  ResponseCodeRequiredErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) response_code_required(input: ()) -> ResponseCodeRequiredOutput ! ResponseCodeRequiredErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(ResponseCodeRequiredErr.InvalidInput(e))
-  var req = serialize_response_code_required(ep, input, "") ?? e => return Err(ResponseCodeRequiredErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResponseCodeRequiredErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_response_code_required_error(resp))
-  }
-  deserialize_response_code_required(resp) ?? e => Err(ResponseCodeRequiredErr.Deserialize(e))
-}
-
-/// The HTTP request of SimpleScalarProperties.
-pub fn serialize_simple_scalar_properties(ep: rest.Endpoint, input: SimpleScalarPropertiesInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.foo {
-    headers.push(("X-Foo", v))
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.string_value {
-    fs.push(("stringValue", json.Value.Str(x)))
-  }
-  if let Some(x) = input.true_boolean_value {
-    fs.push(("trueBooleanValue", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.false_boolean_value {
-    fs.push(("falseBooleanValue", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.byte_value {
-    fs.push(("byteValue", json.Value.Int(x)))
-  }
-  if let Some(x) = input.short_value {
-    fs.push(("shortValue", json.Value.Int(x)))
-  }
-  if let Some(x) = input.integer_value {
-    fs.push(("integerValue", json.Value.Int(x)))
-  }
-  if let Some(x) = input.long_value {
-    fs.push(("longValue", json.Value.Int(x)))
-  }
-  if let Some(x) = input.float_value {
-    fs.push(("floatValue", jsonv.float(x)))
-  }
-  if let Some(x) = input.double_value {
-    fs.push(("DoubleDribble", jsonv.float(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/SimpleScalarProperties"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_simple_scalar_properties(resp: http.Response) -> SimpleScalarPropertiesInputOutput ! Str {
-  var out = SimpleScalarPropertiesInputOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  if let Some(hv) = resp.header("X-Foo") {
-    out.foo = hv
-  }
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "stringValue" => out.string_value = jsonv.read_str(fv)?
-      "trueBooleanValue" => out.true_boolean_value = jsonv.read_bool(fv)?
-      "falseBooleanValue" => out.false_boolean_value = jsonv.read_bool(fv)?
-      "byteValue" => out.byte_value = jsonv.read_int(fv)?
-      "shortValue" => out.short_value = jsonv.read_int(fv)?
-      "integerValue" => out.integer_value = jsonv.read_int(fv)?
-      "longValue" => out.long_value = jsonv.read_int(fv)?
-      "floatValue" => out.float_value = jsonv.read_float(fv)?
-      "DoubleDribble" => out.double_value = jsonv.read_float(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of SimpleScalarProperties.
-pub enum SimpleScalarPropertiesErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: SimpleScalarPropertiesErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_simple_scalar_properties_error(resp: http.Response) -> SimpleScalarPropertiesErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  SimpleScalarPropertiesErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) simple_scalar_properties(input: SimpleScalarPropertiesInputOutput) -> SimpleScalarPropertiesInputOutput ! SimpleScalarPropertiesErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(SimpleScalarPropertiesErr.InvalidInput(e))
-  var req = serialize_simple_scalar_properties(ep, input, "") ?? e => return Err(SimpleScalarPropertiesErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SimpleScalarPropertiesErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_simple_scalar_properties_error(resp))
-  }
-  deserialize_simple_scalar_properties(resp) ?? e => Err(SimpleScalarPropertiesErr.Deserialize(e))
-}
-
-/// The HTTP request of SparseJsonLists.
-pub fn serialize_sparse_json_lists(ep: rest.Endpoint, input: SparseJsonListsInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.sparse_string_list {
-    fs.push(("sparseStringList", json_of_sparse_string_list(x)))
-  }
-  if let Some(x) = input.sparse_short_list {
-    fs.push(("sparseShortList", json_of_sparse_short_list(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/SparseJsonLists"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_sparse_json_lists(resp: http.Response) -> SparseJsonListsInputOutput ! Str {
-  var out = SparseJsonListsInputOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "sparseStringList" => out.sparse_string_list = from_json_sparse_string_list(fv)?
-      "sparseShortList" => out.sparse_short_list = from_json_sparse_short_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of SparseJsonLists.
-pub enum SparseJsonListsErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: SparseJsonListsErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_sparse_json_lists_error(resp: http.Response) -> SparseJsonListsErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  SparseJsonListsErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) sparse_json_lists(input: SparseJsonListsInputOutput) -> SparseJsonListsInputOutput ! SparseJsonListsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(SparseJsonListsErr.InvalidInput(e))
-  var req = serialize_sparse_json_lists(ep, input, "") ?? e => return Err(SparseJsonListsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SparseJsonListsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_sparse_json_lists_error(resp))
-  }
-  deserialize_sparse_json_lists(resp) ?? e => Err(SparseJsonListsErr.Deserialize(e))
-}
-
-/// The HTTP request of SparseJsonMaps.
-pub fn serialize_sparse_json_maps(ep: rest.Endpoint, input: SparseJsonMapsInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.sparse_struct_map {
-    fs.push(("sparseStructMap", json_of_sparse_struct_map(x)))
-  }
-  if let Some(x) = input.sparse_number_map {
-    fs.push(("sparseNumberMap", json_of_sparse_number_map(x)))
-  }
-  if let Some(x) = input.sparse_boolean_map {
-    fs.push(("sparseBooleanMap", json_of_sparse_boolean_map(x)))
-  }
-  if let Some(x) = input.sparse_string_map {
-    fs.push(("sparseStringMap", json_of_sparse_string_map(x)))
-  }
-  if let Some(x) = input.sparse_set_map {
-    fs.push(("sparseSetMap", json_of_sparse_set_map(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/SparseJsonMaps"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_sparse_json_maps(resp: http.Response) -> SparseJsonMapsInputOutput ! Str {
-  var out = SparseJsonMapsInputOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "sparseStructMap" => out.sparse_struct_map = from_json_sparse_struct_map(fv)?
-      "sparseNumberMap" => out.sparse_number_map = from_json_sparse_number_map(fv)?
-      "sparseBooleanMap" => out.sparse_boolean_map = from_json_sparse_boolean_map(fv)?
-      "sparseStringMap" => out.sparse_string_map = from_json_sparse_string_map(fv)?
-      "sparseSetMap" => out.sparse_set_map = from_json_sparse_set_map(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of SparseJsonMaps.
-pub enum SparseJsonMapsErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: SparseJsonMapsErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_sparse_json_maps_error(resp: http.Response) -> SparseJsonMapsErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  SparseJsonMapsErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) sparse_json_maps(input: SparseJsonMapsInputOutput) -> SparseJsonMapsInputOutput ! SparseJsonMapsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(SparseJsonMapsErr.InvalidInput(e))
-  var req = serialize_sparse_json_maps(ep, input, "") ?? e => return Err(SparseJsonMapsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SparseJsonMapsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_sparse_json_maps_error(resp))
-  }
-  deserialize_sparse_json_maps(resp) ?? e => Err(SparseJsonMapsErr.Deserialize(e))
-}
-
-/// The HTTP request of StreamingTraits.
-pub fn serialize_streaming_traits(ep: rest.Endpoint, input: StreamingTraitsInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.foo {
-    headers.push(("X-Foo", v))
-  }
-  var body = b""
-  if let Some(v) = input.blob {
-    body = v
-    headers.push(("Content-Type", "application/octet-stream"))
-  }
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/StreamingTraits"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_streaming_traits(resp: http.Response) -> StreamingTraitsInputOutput ! Str {
-  var out = StreamingTraitsInputOutput{}
-  if let Some(hv) = resp.header("X-Foo") {
-    out.foo = hv
-  }
-  if !resp.body.is_empty() {
-    out.blob = resp.body
-  }
-  Ok(out)
-}
-
-/// The errors of StreamingTraits.
-pub enum StreamingTraitsErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: StreamingTraitsErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_streaming_traits_error(resp: http.Response) -> StreamingTraitsErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  StreamingTraitsErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) streaming_traits(input: StreamingTraitsInputOutput) -> StreamingTraitsInputOutput ! StreamingTraitsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(StreamingTraitsErr.InvalidInput(e))
-  var req = serialize_streaming_traits(ep, input, "") ?? e => return Err(StreamingTraitsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StreamingTraitsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_streaming_traits_error(resp))
-  }
-  deserialize_streaming_traits(resp) ?? e => Err(StreamingTraitsErr.Deserialize(e))
-}
-
-/// The HTTP request of StreamingTraitsRequireLength.
-pub fn serialize_streaming_traits_require_length(ep: rest.Endpoint, input: StreamingTraitsRequireLengthInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.foo {
-    headers.push(("X-Foo", v))
-  }
-  var body = b""
-  if let Some(v) = input.blob {
-    body = v
-    headers.push(("Content-Type", "application/octet-stream"))
-  }
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/StreamingTraitsRequireLength"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_streaming_traits_require_length(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of StreamingTraitsRequireLength.
-pub enum StreamingTraitsRequireLengthErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: StreamingTraitsRequireLengthErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_streaming_traits_require_length_error(resp: http.Response) -> StreamingTraitsRequireLengthErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  StreamingTraitsRequireLengthErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) streaming_traits_require_length(input: StreamingTraitsRequireLengthInput) -> () ! StreamingTraitsRequireLengthErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(StreamingTraitsRequireLengthErr.InvalidInput(e))
-  var req = serialize_streaming_traits_require_length(ep, input, "") ?? e => return Err(StreamingTraitsRequireLengthErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StreamingTraitsRequireLengthErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_streaming_traits_require_length_error(resp))
-  }
-  deserialize_streaming_traits_require_length(resp) ?? e => Err(StreamingTraitsRequireLengthErr.Deserialize(e))
-}
-
-/// The HTTP request of StreamingTraitsWithMediaType.
-pub fn serialize_streaming_traits_with_media_type(ep: rest.Endpoint, input: StreamingTraitsWithMediaTypeInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.foo {
-    headers.push(("X-Foo", v))
-  }
-  var body = b""
-  if let Some(v) = input.blob {
-    body = v
-    headers.push(("Content-Type", "text/plain"))
-  }
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/StreamingTraitsWithMediaType"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_streaming_traits_with_media_type(resp: http.Response) -> StreamingTraitsWithMediaTypeInputOutput ! Str {
-  var out = StreamingTraitsWithMediaTypeInputOutput{}
-  if let Some(hv) = resp.header("X-Foo") {
-    out.foo = hv
-  }
-  if !resp.body.is_empty() {
-    out.blob = resp.body
-  }
-  Ok(out)
-}
-
-/// The errors of StreamingTraitsWithMediaType.
-pub enum StreamingTraitsWithMediaTypeErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: StreamingTraitsWithMediaTypeErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_streaming_traits_with_media_type_error(resp: http.Response) -> StreamingTraitsWithMediaTypeErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  StreamingTraitsWithMediaTypeErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) streaming_traits_with_media_type(input: StreamingTraitsWithMediaTypeInputOutput) -> StreamingTraitsWithMediaTypeInputOutput ! StreamingTraitsWithMediaTypeErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(StreamingTraitsWithMediaTypeErr.InvalidInput(e))
-  var req = serialize_streaming_traits_with_media_type(ep, input, "") ?? e => return Err(StreamingTraitsWithMediaTypeErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StreamingTraitsWithMediaTypeErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_streaming_traits_with_media_type_error(resp))
-  }
-  deserialize_streaming_traits_with_media_type(resp) ?? e => Err(StreamingTraitsWithMediaTypeErr.Deserialize(e))
-}
-
-/// The HTTP request of TestBodyStructure.
-pub fn serialize_test_body_structure(ep: rest.Endpoint, input: TestBodyStructureInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.test_id {
-    headers.push(("x-amz-test-id", v))
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.test_config {
-    fs.push(("testConfig", json_of_test_config(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/body"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_body_structure(resp: http.Response) -> TestBodyStructureInputOutput ! Str {
-  var out = TestBodyStructureInputOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  if let Some(hv) = resp.header("x-amz-test-id") {
-    out.test_id = hv
-  }
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "testConfig" => out.test_config = from_json_test_config(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of TestBodyStructure.
-pub enum TestBodyStructureErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestBodyStructureErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_body_structure_error(resp: http.Response) -> TestBodyStructureErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestBodyStructureErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_body_structure(input: TestBodyStructureInputOutput) -> TestBodyStructureInputOutput ! TestBodyStructureErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestBodyStructureErr.InvalidInput(e))
-  var req = serialize_test_body_structure(ep, input, "") ?? e => return Err(TestBodyStructureErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestBodyStructureErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_body_structure_error(resp))
-  }
-  deserialize_test_body_structure(resp) ?? e => Err(TestBodyStructureErr.Deserialize(e))
-}
-
-/// The HTTP request of TestGetNoInputNoPayload.
-pub fn serialize_test_get_no_input_no_payload(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/no_input_no_payload"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_get_no_input_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
-  var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
-    out.test_id = hv
-  }
-  Ok(out)
-}
-
-/// The errors of TestGetNoInputNoPayload.
-pub enum TestGetNoInputNoPayloadErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestGetNoInputNoPayloadErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_get_no_input_no_payload_error(resp: http.Response) -> TestGetNoInputNoPayloadErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestGetNoInputNoPayloadErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_get_no_input_no_payload(input: ()) -> TestNoPayloadInputOutput ! TestGetNoInputNoPayloadErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestGetNoInputNoPayloadErr.InvalidInput(e))
-  var req = serialize_test_get_no_input_no_payload(ep, input, "") ?? e => return Err(TestGetNoInputNoPayloadErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestGetNoInputNoPayloadErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_get_no_input_no_payload_error(resp))
-  }
-  deserialize_test_get_no_input_no_payload(resp) ?? e => Err(TestGetNoInputNoPayloadErr.Deserialize(e))
-}
-
-/// The HTTP request of TestGetNoPayload.
-pub fn serialize_test_get_no_payload(ep: rest.Endpoint, input: TestNoPayloadInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.test_id {
-    headers.push(("X-Amz-Test-Id", v))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/no_payload"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_get_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
-  var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
-    out.test_id = hv
-  }
-  Ok(out)
-}
-
-/// The errors of TestGetNoPayload.
-pub enum TestGetNoPayloadErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestGetNoPayloadErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_get_no_payload_error(resp: http.Response) -> TestGetNoPayloadErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestGetNoPayloadErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_get_no_payload(input: TestNoPayloadInputOutput) -> TestNoPayloadInputOutput ! TestGetNoPayloadErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestGetNoPayloadErr.InvalidInput(e))
-  var req = serialize_test_get_no_payload(ep, input, "") ?? e => return Err(TestGetNoPayloadErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestGetNoPayloadErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_get_no_payload_error(resp))
-  }
-  deserialize_test_get_no_payload(resp) ?? e => Err(TestGetNoPayloadErr.Deserialize(e))
-}
-
-/// The HTTP request of TestPayloadBlob.
-pub fn serialize_test_payload_blob(ep: rest.Endpoint, input: TestPayloadBlobInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.content_type {
-    headers.push(("Content-Type", v))
-  }
-  var body = b""
-  if let Some(v) = input.data {
-    body = v
-  }
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/blob_payload"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_payload_blob(resp: http.Response) -> TestPayloadBlobInputOutput ! Str {
-  var out = TestPayloadBlobInputOutput{}
-  if let Some(hv) = resp.header("Content-Type") {
-    out.content_type = hv
-  }
-  if !resp.body.is_empty() {
-    out.data = resp.body
-  }
-  Ok(out)
-}
-
-/// The errors of TestPayloadBlob.
-pub enum TestPayloadBlobErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestPayloadBlobErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_payload_blob_error(resp: http.Response) -> TestPayloadBlobErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestPayloadBlobErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_payload_blob(input: TestPayloadBlobInputOutput) -> TestPayloadBlobInputOutput ! TestPayloadBlobErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestPayloadBlobErr.InvalidInput(e))
-  var req = serialize_test_payload_blob(ep, input, "") ?? e => return Err(TestPayloadBlobErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestPayloadBlobErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_payload_blob_error(resp))
-  }
-  deserialize_test_payload_blob(resp) ?? e => Err(TestPayloadBlobErr.Deserialize(e))
-}
-
-/// The HTTP request of TestPayloadStructure.
-pub fn serialize_test_payload_structure(ep: rest.Endpoint, input: TestPayloadStructureInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.test_id {
-    headers.push(("x-amz-test-id", v))
-  }
-  var body = b""
-  if let Some(v) = input.payload_config {
-    body = json_of_payload_config(v).encode().bytes()
-    headers.push(("Content-Type", "application/json"))
-  } else {
-    body = b"{}"
-    headers.push(("Content-Type", "application/json"))
-  }
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/payload"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_payload_structure(resp: http.Response) -> TestPayloadStructureInputOutput ! Str {
-  var out = TestPayloadStructureInputOutput{}
-  if let Some(hv) = resp.header("x-amz-test-id") {
-    out.test_id = hv
-  }
-  if !resp.body.is_empty() {
-    let doc = jsonv.parse_body(resp.body)?
-    out.payload_config = from_json_payload_config(doc)?
-  }
-  Ok(out)
-}
-
-/// The errors of TestPayloadStructure.
-pub enum TestPayloadStructureErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestPayloadStructureErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_payload_structure_error(resp: http.Response) -> TestPayloadStructureErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestPayloadStructureErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_payload_structure(input: TestPayloadStructureInputOutput) -> TestPayloadStructureInputOutput ! TestPayloadStructureErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestPayloadStructureErr.InvalidInput(e))
-  var req = serialize_test_payload_structure(ep, input, "") ?? e => return Err(TestPayloadStructureErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestPayloadStructureErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_payload_structure_error(resp))
-  }
-  deserialize_test_payload_structure(resp) ?? e => Err(TestPayloadStructureErr.Deserialize(e))
-}
-
-/// The HTTP request of TestPostNoInputNoPayload.
-pub fn serialize_test_post_no_input_no_payload(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/no_input_no_payload"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_post_no_input_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
-  var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
-    out.test_id = hv
-  }
-  Ok(out)
-}
-
-/// The errors of TestPostNoInputNoPayload.
-pub enum TestPostNoInputNoPayloadErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestPostNoInputNoPayloadErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_post_no_input_no_payload_error(resp: http.Response) -> TestPostNoInputNoPayloadErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestPostNoInputNoPayloadErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_post_no_input_no_payload(input: ()) -> TestNoPayloadInputOutput ! TestPostNoInputNoPayloadErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestPostNoInputNoPayloadErr.InvalidInput(e))
-  var req = serialize_test_post_no_input_no_payload(ep, input, "") ?? e => return Err(TestPostNoInputNoPayloadErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestPostNoInputNoPayloadErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_post_no_input_no_payload_error(resp))
-  }
-  deserialize_test_post_no_input_no_payload(resp) ?? e => Err(TestPostNoInputNoPayloadErr.Deserialize(e))
-}
-
-/// The HTTP request of TestPostNoPayload.
-pub fn serialize_test_post_no_payload(ep: rest.Endpoint, input: TestNoPayloadInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.test_id {
-    headers.push(("X-Amz-Test-Id", v))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/no_payload"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_test_post_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
-  var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
-    out.test_id = hv
-  }
-  Ok(out)
-}
-
-/// The errors of TestPostNoPayload.
-pub enum TestPostNoPayloadErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TestPostNoPayloadErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_test_post_no_payload_error(resp: http.Response) -> TestPostNoPayloadErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TestPostNoPayloadErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) test_post_no_payload(input: TestNoPayloadInputOutput) -> TestNoPayloadInputOutput ! TestPostNoPayloadErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TestPostNoPayloadErr.InvalidInput(e))
-  var req = serialize_test_post_no_payload(ep, input, "") ?? e => return Err(TestPostNoPayloadErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TestPostNoPayloadErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_test_post_no_payload_error(resp))
-  }
-  deserialize_test_post_no_payload(resp) ?? e => Err(TestPostNoPayloadErr.Deserialize(e))
-}
-
-/// The HTTP request of TimestampFormatHeaders.
-pub fn serialize_timestamp_format_headers(ep: rest.Endpoint, input: TimestampFormatHeadersIO, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.member_epoch_seconds {
-    headers.push(("X-memberEpochSeconds", rest.epoch_seconds(v)))
-  }
-  if let Some(v) = input.member_http_date {
-    headers.push(("X-memberHttpDate", rest.http_date(v)))
-  }
-  if let Some(v) = input.member_date_time {
-    headers.push(("X-memberDateTime", rest.date_time(v)))
-  }
-  if let Some(v) = input.default_format {
-    headers.push(("X-defaultFormat", rest.http_date(v)))
-  }
-  if let Some(v) = input.target_epoch_seconds {
-    headers.push(("X-targetEpochSeconds", rest.epoch_seconds(v)))
-  }
-  if let Some(v) = input.target_http_date {
-    headers.push(("X-targetHttpDate", rest.http_date(v)))
-  }
-  if let Some(v) = input.target_date_time {
-    headers.push(("X-targetDateTime", rest.date_time(v)))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/TimestampFormatHeaders"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_timestamp_format_headers(resp: http.Response) -> TimestampFormatHeadersIO ! Str {
-  var out = TimestampFormatHeadersIO{}
-  if let Some(hv) = resp.header("X-memberEpochSeconds") {
-    out.member_epoch_seconds = (rest.parse_epoch_seconds(hv) ?? return Err("bad timestamp header"))
-  }
-  if let Some(hv) = resp.header("X-memberHttpDate") {
-    out.member_http_date = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
-  }
-  if let Some(hv) = resp.header("X-memberDateTime") {
-    out.member_date_time = (rest.parse_date_time(hv) ?? return Err("bad timestamp header"))
-  }
-  if let Some(hv) = resp.header("X-defaultFormat") {
-    out.default_format = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
-  }
-  if let Some(hv) = resp.header("X-targetEpochSeconds") {
-    out.target_epoch_seconds = (rest.parse_epoch_seconds(hv) ?? return Err("bad timestamp header"))
-  }
-  if let Some(hv) = resp.header("X-targetHttpDate") {
-    out.target_http_date = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
-  }
-  if let Some(hv) = resp.header("X-targetDateTime") {
-    out.target_date_time = (rest.parse_date_time(hv) ?? return Err("bad timestamp header"))
-  }
-  Ok(out)
-}
-
-/// The errors of TimestampFormatHeaders.
-pub enum TimestampFormatHeadersErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: TimestampFormatHeadersErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_timestamp_format_headers_error(resp: http.Response) -> TimestampFormatHeadersErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  TimestampFormatHeadersErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) timestamp_format_headers(input: TimestampFormatHeadersIO) -> TimestampFormatHeadersIO ! TimestampFormatHeadersErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(TimestampFormatHeadersErr.InvalidInput(e))
-  var req = serialize_timestamp_format_headers(ep, input, "") ?? e => return Err(TimestampFormatHeadersErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TimestampFormatHeadersErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_timestamp_format_headers_error(resp))
-  }
-  deserialize_timestamp_format_headers(resp) ?? e => Err(TimestampFormatHeadersErr.Deserialize(e))
-}
-
-/// The HTTP request of UnitInputAndOutput.
-pub fn serialize_unit_input_and_output(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/UnitInputAndOutput"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_unit_input_and_output(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of UnitInputAndOutput.
-pub enum UnitInputAndOutputErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UnitInputAndOutputErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_unit_input_and_output_error(resp: http.Response) -> UnitInputAndOutputErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  UnitInputAndOutputErr.Api(restjson.api_error(resp, body))
-}
-
-pub fn (c: Client) unit_input_and_output(input: ()) -> () ! UnitInputAndOutputErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route() ?? e => return Err(UnitInputAndOutputErr.InvalidInput(e))
-  var req = serialize_unit_input_and_output(ep, input, "") ?? e => return Err(UnitInputAndOutputErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UnitInputAndOutputErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_unit_input_and_output_error(resp))
-  }
-  deserialize_unit_input_and_output(resp) ?? e => Err(UnitInputAndOutputErr.Deserialize(e))
 }

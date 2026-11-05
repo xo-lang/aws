@@ -247,3 +247,38 @@ require cycles resolve by MVS. `xo mod graph` remains a later item. Verified
 here with xo 9ee7f840f: the repro now reports XO1306 in the root, tidy
 keeps the require, and `xo get` explains the higher selected version;
 the release checklist's workaround is removed.
+
+## 8. A new package dependency makes native reject List.push in unrelated functions (XO1201, FIXED)
+
+xo 9ee7f840f (native arm64). With the event stream work, the generated
+S3 client imports one more package (github.com/xo-lang/aws/eventstream).
+`xo test --real` of the integration tests (which reach
+serialize_put_object and deserialize_put_object) then fails to build:
+
+    service/s3/client.xo:29342:5: error XO1201: not available on the
+    native backends (arm64, amd64, LLVM) yet: the method `List.push`
+    (support is planned)
+    service/s3/client.xo:29400:3: error XO1201: ... assigning to this
+    expression
+
+The flagged lines are ordinary `headers.push((name, v))` and
+`out.field = hv`, which build fine without the import. Bisected: the
+trigger is any new package dependency (a one-function package does
+it), together with the newly generated SelectObjectContent serializer
+code; either alone builds. Not a cache effect (fresh HOME and backend
+cache give the same). Without `--real` the code is unreachable and the
+build passes. A repro outside this repository's working tree: the two
+client files differ only in importing and calling the one-function
+package; `repro.sh WORKDIR` clones this repository at 91c7c6c, swaps
+each in and builds.
+Status: FIXED upstream in 7e82ae5c6 (Lang 1, 2026-11-04). The cause:
+the checker keyed a node by its file, start and end packed in 20 bits
+each, so a node past 1 MiB of a file took the records of a node in the
+next file (the new import renumbered the files). It could also resolve a
+call to the wrong function with no error, so every earlier build that
+included a generated file over 1 MiB (EC2's client.xo, 8.2 MB, and
+types.xo, 2.2 MB; S3's client.xo, 1.27 MB) is untrusted and was rerun.
+Verified here with xo 7e82ae5c6: the repro builds and fails only at run
+time, as expected with no emulator. The generator now also cuts every
+file at about 448 KiB (split_file) and fails on one over 512 KiB, and
+the gate and scripts/check-all-services.sh check that limit.

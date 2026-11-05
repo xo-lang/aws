@@ -84,7 +84,24 @@ fn main(os: Os) -> () ! Error {
     }
   }
   let files = if args[0] == "endpoints" { gen.endpoint_files(m, true)? } else { gen.generate(m, gen.Options{package: dir, protocol_tests: tests}) }
+  let big = gen.oversized(files)
+  if !big.is_empty() {
+    return Err("generated files over ${gen.MAX_FILE_BYTES} bytes (xo issue 8): ${big.join(", ")}")
+  }
   os.fs.create_dir_all(out)?
+  // drop split files a larger earlier generation left
+  if args[0] != "endpoints" {
+    let keep = files.map(fn(f: gen.File) -> Str { f.path })
+    for base in ["types", "client", "waiters", "paginators"] {
+      for path in os.fs.glob("${out}/${base}*.xo")? {
+        let name = path.split("/").last() ?? ""
+        let generated = name == "${base}.xo" || name.starts_with("${base}_")
+        if generated && !name.ends_with("_test.xo") && !keep.contains(name) {
+          os.fs.remove(path)?
+        }
+      }
+    }
+  }
   for f in files {
     os.fs.write("${out}/${f.path}", f.text.bytes())?
     os.stdio.println("wrote ${out}/${f.path}")

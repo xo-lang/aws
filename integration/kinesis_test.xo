@@ -1,0 +1,62 @@
+// Kinesis (awsJson1_1) against LocalStack (decision 0005, emulator
+// tests): run by scripts/integration-localstack.sh, with invented
+// credentials. SubscribeToShard is an output event stream: the records
+// put before it arrive as SubscribeToShardEvent messages.
+
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/kinesis
+
+test "kinesis event stream against LocalStack" uses net, env, clock {
+  let endpoint = os.env.get("XO_AWS_TEST_ENDPOINT") ?? "http://127.0.0.1:14566"
+  let id = os.env.get("XO_AWS_TEST_KEY_ID") ?? "AKIDTEST0000000000"
+  let secret = os.env.get("XO_AWS_TEST_SECRET") ?? ""
+  let c = kinesis.new(os.net.only(["127.0.0.1", "localhost"]), os.clock, os.rand, kinesis.Options{
+    endpoint: endpoint,
+    credentials: credentials.static_provider(id, secret),
+  })?
+  let stream = "xo-lang-aws-it"
+  c.create_stream(kinesis.CreateStreamInput{stream_name: stream, shard_count: 1})?
+  kinesis.wait_until_stream_exists(c, kinesis.DescribeStreamInput{stream_name: stream}, 60s, min_delay: 1s, max_delay: 2s)?
+  for (i, text) in ["one", "two", "three"].indexed() {
+    c.put_record(kinesis.PutRecordInput{stream_name: stream, data: text.bytes(), partition_key: "k${i}"})?
+  }
+  let summary = c.describe_stream_summary(kinesis.DescribeStreamSummaryInput{stream_name: stream})?
+  let arn = summary.stream_description_summary?.stream_arn ?? ""
+  let shards = c.list_shards(kinesis.ListShardsInput{stream_name: stream})?.shards ?? []
+  expect(shards.len()) == 1
+  let consumer = c.register_stream_consumer(kinesis.RegisterStreamConsumerInput{stream_arn: arn, consumer_name: "xo-it"})?.consumer
+  let consumer_arn = consumer?.consumer_arn ?? ""
+  // a new consumer is CREATING; SubscribeToShard needs it ACTIVE
+  var tries = 0
+  while tries < 30 {
+    tries += 1
+    let d = c.describe_stream_consumer(kinesis.DescribeStreamConsumerInput{consumer_arn: consumer_arn})?
+    if d.consumer_description?.consumer_status == Some(kinesis.ConsumerStatus.Active) {
+      break
+    }
+    os.clock.sleep(1s)
+  }
+  var events = c.subscribe_to_shard(kinesis.SubscribeToShardInput{
+    consumer_arn: consumer_arn,
+    shard_id: shards[0].shard_id ?? "",
+    starting_position: kinesis.StartingPosition{type_value: kinesis.ShardIteratorType.TrimHorizon},
+  })?
+  var got: List[Str] = []
+  var n = 0
+  while got.len() < 3 && n < 20 {
+    n += 1
+    match events.next()? {
+      Some(SubscribeToShardEvent(e)) => {
+        for r in e.records ?? [] {
+          got.push((r.data ?? b"").to_str() ?? "")
+        }
+      }
+      Some(_) => {}
+      None => break
+    }
+  }
+  events.close()
+  expect(got) == ["one", "two", "three"]
+  c.deregister_stream_consumer(kinesis.DeregisterStreamConsumerInput{consumer_arn: consumer_arn})?
+  c.delete_stream(kinesis.DeleteStreamInput{stream_name: stream, enforce_consumer_deletion: true})?
+}

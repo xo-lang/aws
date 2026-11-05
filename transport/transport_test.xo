@@ -139,3 +139,28 @@ test "gzip bodies come back as stored (decision 0006 item 9)" {
     expect(resp.header("Content-Encoding")) == Some("gzip")
   }
 }
+
+test "open streams a 2xx body and reads an error body whole" {
+  let calls = Atomic[Int].new(0)
+  os.net.handle("POST https://sts.test/", fn(_req: http.Request) -> http.Response {
+    let n = calls.add(1)
+    if n == 1 { http.empty(503) } else if n == 2 { http.text(200, "streamed body") } else { http.text(400, "<Error><Code>Bad</Code></Error>") }
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  match open(c, sts_request(), SIGNING, status_failure)? {
+    Stream(head, body) => {
+      expect(head.status) == 200
+      let all = body.read_all()?
+      body.close()
+      expect(all) == b"streamed body"
+    }
+    Done(resp) => expect(resp.status) == 200
+  }
+  match open(c, sts_request(), SIGNING, status_failure)? {
+    Stream(head, body) => {
+      body.close()
+      expect(head.status) == 400
+    }
+    Done(resp) => expect(resp.text()) == Some("<Error><Code>Bad</Code></Error>")
+  }
+}

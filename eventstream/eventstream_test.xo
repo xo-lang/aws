@@ -1,0 +1,116 @@
+// The aws-sdk-go-v2 event stream test vectors (testdata, Apache-2.0, see
+// testdata/LICENSE-aws-sdk-go-v2): every encoded message decodes to its
+// description and encodes back to the same bytes; every corrupted one
+// fails with the expected error.
+
+use std/embed
+use std/json
+use github.com/xo-lang/aws/sigv4
+
+const DATA: embed.Dir = embed("testdata")
+
+fn value_of(t: Int, v: json.Value) -> HeaderValue {
+  let n = match v {
+    json.Value.Int(n) => n
+    _ => 0
+  }
+  let s = match v {
+    json.Value.Str(s) => s
+    _ => ""
+  }
+  match t {
+    0 | 1 => HeaderValue.Bool(t == 0)
+    2 => HeaderValue.Byte(n)
+    3 => HeaderValue.Short(n)
+    4 => HeaderValue.Integer(n)
+    5 => HeaderValue.Long(n)
+    6 => HeaderValue.ByteArray(Bytes.from_base64(s) ?? b"")
+    7 => HeaderValue.Str((Bytes.from_base64(s) ?? b"").to_str() ?? "")
+    8 => HeaderValue.Timestamp(n)
+    _ => HeaderValue.Uuid(Bytes.from_base64(s) ?? b"")
+  }
+}
+
+test "positive vectors" {
+  for name in ["all_headers", "empty_message", "int32_header", "payload_no_headers", "payload_one_str_header"] {
+    let raw = DATA.read("testdata/encoded/positive/${name}") ?? b""
+    let want = json.parse_value(DATA.read_text("testdata/decoded/positive/${name}") ?? "").ok() ?? json.Value.Null
+    var hs: List[Header] = []
+    if let Some(json.Value.List(xs)) = want.get("headers") {
+      for h in xs {
+        let t = match h.get("type") {
+          Some(json.Value.Int(t)) => t
+          _ => -1
+        }
+        let n = match h.get("name") {
+          Some(json.Value.Str(n)) => n
+          _ => ""
+        }
+        hs.push(Header{name: n, value: value_of(t, h.get("value") ?? json.Value.Null)})
+      }
+    }
+    let payload = match want.get("payload") {
+      Some(json.Value.Str(p)) => Bytes.from_base64(p) ?? b""
+      _ => b""
+    }
+    let m = decode(raw)?
+    expect("${name}: ${m.headers:?}") == "${name}: ${hs:?}"
+    expect(m.payload) == payload
+    expect(encode(Message{headers: hs, payload: payload})) == raw
+  }
+}
+
+test "negative vectors" {
+  for name in ["corrupted_header_len", "corrupted_headers", "corrupted_length", "corrupted_payload"] {
+    let raw = DATA.read("testdata/encoded/negative/${name}") ?? b""
+    let want = (DATA.read_text("testdata/decoded/negative/${name}") ?? "").trim()
+    match decode(raw) {
+      Ok(_) => expect("${name} decoded") == "${name} fails"
+      Err(e) => expect("${name}: ${e.msg}") == "${name}: ${want}"
+    }
+  }
+}
+
+test "a decoder fed one byte at a time" {
+  let a = encode(Message{headers: [Header{name: ":event-type", value: HeaderValue.Str("Records")}], payload: b"abc"})
+  let b = encode(Message{payload: b"def"})
+  var all = BytesBuilder.new()
+  all.write(a)
+  all.write(b)
+  let stream = all.freeze()
+  var d = decoder()
+  var got: List[Bytes] = []
+  for i in 0..stream.len() {
+    d.feed(stream[i..i + 1])
+    while let Some(m) = d.next()? {
+      got.push(m.payload)
+    }
+  }
+  expect(got) == [b"abc", b"def"]
+  expect(d.pending()) == 0
+}
+
+test "signed envelopes chain their signatures" {
+  var signer = sigv4.StreamSigner{
+    creds: sigv4.Credentials{access_key_id: "AKID", secret_access_key: Secret.new("SECRET")},
+    region: "us-east-1",
+    service: "transcribestreaming",
+    prev: b"foobarbazqux",
+  }
+  let inner = encode(Message{payload: b"foo"})
+  let env = decode(signed(signer, inner, Time.from_unix_millis(10000)))?
+  expect(env.payload) == inner
+  expect(env.header(":date")) == Some(HeaderValue.Timestamp(10000))
+  // the same signature a fresh signer gives for the same headers and payload
+  var check = sigv4.StreamSigner{
+    creds: sigv4.Credentials{access_key_id: "AKID", secret_access_key: Secret.new("SECRET")},
+    region: "us-east-1",
+    service: "transcribestreaming",
+    prev: b"foobarbazqux",
+  }
+  let want = check.sign(encode_headers([Header{name: ":date", value: HeaderValue.Timestamp(10000)}]), inner, Time.from_unix_millis(10000))
+  expect(env.header(":chunk-signature")) == Some(HeaderValue.ByteArray(want))
+  expect(signer.prev) == want
+  let end = decode(signed(signer, b"", Time.from_unix_millis(20000)))?
+  expect(end.payload) == b""
+}

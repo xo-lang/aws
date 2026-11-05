@@ -217,3 +217,31 @@ says what happened, not a general opinion. Bugs with repros go in
 - Disliked: `xo mod tidy` removing a require the module needs (issue 7);
   a tool that rewrites xo.mod should never make the module unbuildable
   for its users.
+
+## 2026-11-04: paginators, JMESPath, waiters, event streams
+
+- Liked: a JMESPath implementation (Pratt parser, every builtin) passed
+  all 892 compliance cases on its first run once it type checked. The
+  exhaustive `match` over a 20 variant `Node` enum caught every missing
+  case at compile time.
+- Liked: generic enums with `derive Display` (`WaitErr[E]`) give each
+  waiter a typed error that wraps the operation's own error, with no
+  boxing and no interface.
+- Liked: `http.Client.open`, `ClientStream.read` and `http.pipe` cover
+  event streams and bidirectional streams with no extra library, and
+  `os.net.handle` in tests serves a streamed body, so the event stream
+  readers are tested without an emulator.
+- Liked: std/crc32 and std/binary made the event stream codec about 200
+  lines; the aws-sdk-go-v2 vectors pass byte for byte.
+- Disliked: `XO0403`, which requires naming the fields of multi-field
+  variants when constructing them (`Subexpr(l: a, r: b)`), cost a 30
+  line mechanical pass on the parser. Fine for clarity, but positional
+  construction when the field types differ, or a fix-it that rewrites the
+  call, would help.
+- Disliked: no `loop`, `Str.index_of` or `Str.replace_all`; the names
+  differ from what I expected (`while true`, `split`, `replace`). Small,
+  but each is a failed check and a spec lookup.
+- Disliked: issue 8, a native XO1201 on unrelated `List.push` calls that
+  appears when a large module gains one more package dependency. It
+  shows only when the code is reachable (`--real`), so `xo check` and the
+  ordinary tests stay green while the emulator run fails to build.

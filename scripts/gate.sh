@@ -23,5 +23,8 @@ for d in $dirs; do
   for p in ${XO_GATE_LLVM-}; do [ "$p" = "$d" ] && flags=--backend=llvm; done
   (cd "$mod" && "$xo" test $flags "./$rel") || fail=1
 done
+# no committed .xo file may pass 512 KiB (xo issue 8)
+big=$(git ls-files -co --exclude-standard '*.xo' | xargs find 2>/dev/null -size +512k)
+if [ -n "$big" ]; then echo "gate: files over 512 KiB (xo issue 8): $big"; fail=1; fi
 [ $fail -eq 0 ] && echo "gate: ok" || echo "gate: FAILED"
 exit $fail

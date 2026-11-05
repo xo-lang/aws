@@ -1,0 +1,99 @@
+// Output event streams against a fake network (no emulator): the
+// handler answers with event stream messages, and the generated stream
+// readers decode them into the operation's union.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/eventstream
+use github.com/xo-lang/aws/service/lambda
+use github.com/xo-lang/aws/service/s3
+
+fn msg(event: Str, payload: Bytes, extra: List[eventstream.Header] = []) -> Bytes {
+  var hs = [
+    eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("event")},
+    eventstream.Header{name: ":event-type", value: eventstream.HeaderValue.Str(event)},
+  ]
+  for h in extra {
+    hs.push(h)
+  }
+  eventstream.encode(eventstream.Message{headers: hs, payload: payload})
+}
+
+fn join(parts: List[Bytes]) -> Bytes {
+  var b = BytesBuilder.new()
+  for p in parts {
+    b.write(p)
+  }
+  b.freeze()
+}
+
+test "S3 SelectObjectContent events" {
+  let body = join([
+    msg("Records", b"a,1\n"),
+    msg("Records", b"b,2\n"),
+    msg("Stats", b"<Stats><BytesScanned>20</BytesScanned><BytesProcessed>20</BytesProcessed><BytesReturned>8</BytesReturned></Stats>"),
+    msg("End", b""),
+  ])
+  os.net.handle("POST https://s3.test/bkt/data.csv", fn(_req: http.Request) -> http.Response {
+    http.Response{status: 200, headers: {"Content-Type": "application/vnd.amazon.eventstream"}, body: body}
+  })
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-east-1", endpoint: "https://s3.test", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"), force_path_style: true})?
+  var events = c.select_object_content(s3.SelectObjectContentRequest{
+    bucket: "bkt",
+    key: "data.csv",
+    expression: "SELECT * FROM S3Object",
+    expression_type: s3.ExpressionType.Sql,
+  })?
+  var records = BytesBuilder.new()
+  var scanned = 0
+  var ended = false
+  while let Some(e) = events.next()? {
+    match e {
+      Records(r) => records.write(r.payload ?? b"")
+      Stats(s) => scanned = s.details?.bytes_scanned ?? 0
+      End(_) => ended = true
+      _ => {}
+    }
+  }
+  expect(records.freeze()) == b"a,1\nb,2\n"
+  expect(scanned) == 20
+  expect(ended) == true
+}
+
+test "Lambda InvokeWithResponseStream events, headers and an error message" {
+  let body = join([
+    msg("PayloadChunk", b"hello "),
+    msg("PayloadChunk", b"world"),
+    msg("InvokeComplete", b"{\"LogResult\":\"bG9n\"}"),
+    eventstream.encode(eventstream.Message{headers: [
+      eventstream.Header{name: ":message-type", value: eventstream.HeaderValue.Str("error")},
+      eventstream.Header{name: ":error-code", value: eventstream.HeaderValue.Str("InternalFailure")},
+      eventstream.Header{name: ":error-message", value: eventstream.HeaderValue.Str("invented failure")},
+    ]}),
+  ])
+  os.net.handle("POST https://lambda.test/2021-11-15/functions/fn/response-streaming-invocations", fn(_req: http.Request) -> http.Response {
+    http.Response{status: 200, headers: {"Content-Type": "application/vnd.amazon.eventstream", "X-Amz-Executed-Version": "7"}, body: body}
+  })
+  let c = lambda.new(os.net, os.clock, os.rand, lambda.Options{region: "us-east-1", endpoint: "https://lambda.test", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  var events = c.invoke_with_response_stream(lambda.InvokeWithResponseStreamRequest{function_name: "fn"})?
+  expect(events.output.executed_version) == Some("7")
+  var text = ""
+  var log = ""
+  var failed = ""
+  while true {
+    match events.next() {
+      Ok(Some(PayloadChunk(p))) => text = "${text}${(p.payload ?? b"").to_str() ?? ""}"
+      Ok(Some(InvokeComplete(d))) => log = d.log_result ?? ""
+      Ok(Some(_)) => {}
+      Ok(None) => break
+      Err(e) => {
+        failed = e.display()
+        break
+      }
+    }
+  }
+  events.close()
+  expect(text) == "hello world"
+  expect(log) == "bG9n"
+  expect(failed.contains("InternalFailure")) == true
+}

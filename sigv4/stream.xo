@@ -1,0 +1,30 @@
+// Event stream signing (an input event stream): each message is signed
+// with the previous message's signature, starting from the request's
+// own (the seed), as aws-sdk-go-v2's v4.StreamSigner does.
+
+use std/crypto
+
+/// The payload hash a request with a signed input event stream sends.
+pub const STREAMING_EVENTS_PAYLOAD: Str = "STREAMING-AWS4-HMAC-SHA256-EVENTS"
+
+/// Signs a stream's messages in order; `prev` starts as the seed
+/// signature (the request's, decoded from hex).
+pub struct StreamSigner {
+  pub creds: Credentials
+  pub region: Str
+  pub service: Str
+  pub prev: Bytes
+}
+
+/// The signature of a message with encoded headers `headers` and payload
+/// `payload` sent at `now`; it becomes the next message's previous one.
+pub fn (var s: StreamSigner) sign(headers: Bytes, payload: Bytes, now: Time) -> Bytes {
+  let date = amz_date(now)
+  let day = date[0..8]
+  let scope = "${day}/${s.region}/${s.service}/aws4_request"
+  let sts = "AWS4-HMAC-SHA256-PAYLOAD\n${date}\n${scope}\n${s.prev.to_hex()}\n${crypto.sha256(headers).to_hex()}\n${crypto.sha256(payload).to_hex()}"
+  let key = signing_key(s.creds.secret_access_key, day, s.region, s.service)
+  let sig = crypto.hmac_sha256(key, sts.bytes())
+  s.prev = sig
+  sig
+}

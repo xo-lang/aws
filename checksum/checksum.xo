@@ -69,6 +69,19 @@ pub fn add(var headers: List[(Str, Str)], body: Bytes, algorithm: Str?, required
   Ok(())
 }
 
+/// The algorithm of a streamed body's trailing checksum: as `add`
+/// chooses it (the caller's, else DEFAULT when required), None when the
+/// caller supplied a checksum header or none is wanted.
+pub fn trailer(headers: List[(Str, Str)], algorithm: Str?, required: Bool) -> Str? {
+  if has_checksum(headers) {
+    return None
+  }
+  match algorithm {
+    Some(a) => Some(a)
+    None => if required { Some(DEFAULT) } else { None }
+  }
+}
+
 /// The mismatch of a response checksum the caller asked to validate.
 pub struct Mismatch {
   pub algorithm: Str
@@ -130,4 +143,106 @@ pub fn tree_hash(body: Bytes) -> Str {
     level = next
   }
   level[0].to_hex()
+}
+
+/// A checksum computed a piece at a time (a streamed body's trailer).
+pub struct Running {
+  pub algorithm: Str
+  crc: Int = 0
+  hasher: crypto.Hasher? = None
+}
+
+/// A running checksum of `algorithm`, or None for one this SDK cannot
+/// compute.
+pub fn running(algorithm: Str) -> Running? {
+  let alg = algorithm.to_upper()
+  match alg {
+    "CRC32" | "CRC32C" | "CRC64NVME" => Some(Running{algorithm: alg})
+    "SHA1" => Some(Running{algorithm: alg, hasher: Some(crypto.hasher(crypto.Hash.Sha1))})
+    "SHA256" => Some(Running{algorithm: alg, hasher: Some(crypto.hasher(crypto.Hash.Sha256))})
+    "SHA512" => Some(Running{algorithm: alg, hasher: Some(crypto.hasher(crypto.Hash.Sha512))})
+    "MD5" => Some(Running{algorithm: alg, hasher: Some(crypto.hasher(crypto.Hash.Md5))})
+    _ => None
+  }
+}
+
+/// Adds `data` to the checksum.
+pub fn write(var r: Running, data: Bytes) {
+  match r.algorithm {
+    "CRC32" => r.crc = crc32.update(r.crc, data)
+    "CRC32C" => r.crc = crc32.update(r.crc, data, crc32.Poly.Castagnoli)
+    "CRC64NVME" => r.crc = crc64.update(r.crc, data, crc64.Poly.Nvme)
+    _ => if let Some(h) = r.hasher {
+      var x = h
+      x.write(data)
+      r.hasher = Some(x)
+    }
+  }
+}
+
+/// The base64 checksum of everything written.
+pub fn sum(r: Running) -> Str {
+  let raw = match r.algorithm {
+    "CRC32" | "CRC32C" => binary.u32_be(r.crc)
+    "CRC64NVME" => binary.u64_be(r.crc)
+    _ => r.hasher.map(fn(h: crypto.Hasher) -> Bytes { h.sum() }) ?? b""
+  }
+  base64.encode(raw)
+}
+
+/// The length of `algorithm`'s base64 checksum (0 for an unknown one).
+pub fn encoded_len(algorithm: Str) -> Int {
+  let n = match algorithm.to_upper() {
+    "CRC32" | "CRC32C" => 4
+    "CRC64NVME" => 8
+    "SHA1" => 20
+    "SHA256" => 32
+    "SHA512" => 64
+    "MD5" => 16
+    _ => 0
+  }
+  (n + 2) / 3 * 4
+}
+
+/// The size of one chunk of the aws-chunked encoding (aws-sdk-go-v2's).
+pub const CHUNK: Int = 65536
+
+fn hex(n: Int) -> Str {
+  if n == 0 {
+    return "0"
+  }
+  let digits = "0123456789abcdef"
+  var out = ""
+  var v = n
+  while v > 0 {
+    out = digits[v % 16..v % 16 + 1] + out
+    v = v / 16
+  }
+  out
+}
+
+/// One chunk of an unsigned aws-chunked body: its size in hex, CRLF, the
+/// data, CRLF.
+pub fn chunk(data: Bytes) -> Bytes {
+  "${hex(data.len())}\r\n".bytes() + data + b"\r\n"
+}
+
+/// The end of an unsigned aws-chunked body: the zero chunk and the
+/// checksum trailer (`x-amz-checksum-crc32:<value>`), then a blank line,
+/// as aws-sdk-go-v2's unsigned aws-chunked encoding writes it.
+pub fn chunked_end(algorithm: Str, value: Str) -> Bytes {
+  "0\r\n${header_name(algorithm)}:${value}\r\n\r\n".bytes()
+}
+
+/// The encoded length of a `decoded` byte body sent in CHUNK sized
+/// chunks with `algorithm`'s trailer: the request's Content-Length.
+pub fn chunked_length(decoded: Int, algorithm: Str) -> Int {
+  var n = 0
+  var left = decoded
+  while left > 0 {
+    let c = if left > CHUNK { CHUNK } else { left }
+    n += hex(c).len() + 2 + c + 2
+    left -= c
+  }
+  n + 3 + header_name(algorithm).len() + 1 + encoded_len(algorithm) + 2 + 2
 }

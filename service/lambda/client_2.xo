@@ -4468,6 +4468,14 @@ pub fn serialize_invoke_async(ep: rest.Endpoint, input: InvokeAsyncRequest, idem
     return Err("input member FunctionName must not be empty")
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.invoke_args_stream {
+    let r = u.open()?
+    body = r.read_all() ?? e => return Err("reading invoke_args_stream: ${e.display()}")
+    u.done()
+    headers.push(("Content-Type", "application/octet-stream"))
+  }
   if let Some(v) = input.invoke_args {
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
@@ -4484,6 +4492,8 @@ pub fn serialize_invoke_async(ep: rest.Endpoint, input: InvokeAsyncRequest, idem
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
   })
 }
 
@@ -10086,9 +10096,4 @@ pub fn (c: Client) update_event_source_mapping(input: UpdateEventSourceMappingRe
     return Err(deserialize_update_event_source_mapping_error(resp))
   }
   deserialize_update_event_source_mapping(resp) ?? e => Err(UpdateEventSourceMappingErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_function_code(base: EndpointParameters, input: UpdateFunctionCodeRequest) -> EndpointParameters {
-  let _ = input
-  base
 }

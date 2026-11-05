@@ -1,0 +1,129 @@
+// Streamed uploads (decision 0009): S3 PutObject with a body read from a
+// file as it is sent, in the unsigned aws-chunked encoding with a
+// trailing checksum, as aws-sdk-go-v2 sends S3 uploads; retried from the
+// file's start, and sent once when the body cannot be read again.
+
+use std/http
+use std/testing
+use github.com/xo-lang/aws
+use github.com/xo-lang/aws/checksum
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+fn upload_client(net: testing.FakeNet, clock: Clock, rand: Rand) -> s3.Client ! Str {
+  s3.new(net, clock, rand, s3.Options{
+    region: "us-west-2",
+    credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret"),
+  })
+}
+
+fn hex_value(s: Str) -> Int {
+  var n = 0
+  for r in s.runes() {
+    let d = if r >= '0' && r <= '9' { Int(r) - Int('0') } else { Int(r) - Int('a') + 10 }
+    n = n * 16 + d
+  }
+  n
+}
+
+/// The data and trailer lines of an unsigned aws-chunked body.
+fn decode_chunked(body: Bytes) -> (Bytes, List[Str]) {
+  var data = b""
+  var i = 0
+  while true {
+    var j = i
+    while body[j] != 13 {
+      j += 1
+    }
+    let size = hex_value(body[i..j].to_str_lossy())
+    i = j + 2
+    if size == 0 {
+      break
+    }
+    data = data + body[i..i + size]
+    i += size + 2
+  }
+  let trailers = body[i..body.len()].to_str_lossy().split("\r\n").filter(fn(l: Str) -> Bool { l != "" })
+  (data, trailers)
+}
+
+fn content(n: Int) -> Bytes {
+  var b = b""
+  var i = 0
+  while i < n {
+    b = b + "${i % 10}".bytes()
+    i += 1
+  }
+  b
+}
+
+test "PutObject streams a file in aws-chunked chunks with a CRC32 trailer" {
+  let data = content(2 * checksum.CHUNK + 1000)
+  os.fs.create_dir_all("/up")?
+  os.fs.write("/up/big.bin", data)?
+  let seen = Mutex[List[http.Request]].new([])
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/big", fn(req: http.Request) -> http.Response {
+    seen.with(fn(var xs: List[http.Request]) { xs.push(req) })
+    http.text(200, "")
+  })
+  let c = upload_client(os.net, os.clock, os.rand)?
+  let up = aws.upload_file(os.tasks, os.fs, "/up/big.bin")?
+  c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "big", body_stream: Some(up)})?
+  let reqs = seen.with_read(fn(xs: List[http.Request]) -> List[http.Request] { xs })
+  expect(reqs.len()) == 1
+  let r = reqs[0]
+  expect(r.header("Content-Encoding")) == Some("aws-chunked")
+  expect(r.header("X-Amz-Decoded-Content-Length")) == Some("${data.len()}")
+  expect(r.header("X-Amz-Trailer")) == Some("x-amz-checksum-crc32")
+  expect(r.header("X-Amz-Content-Sha256")) == Some("STREAMING-UNSIGNED-PAYLOAD-TRAILER")
+  expect(r.header("Content-Length")) == Some("${checksum.chunked_length(data.len(), "CRC32")}")
+  expect(r.body.len()) == checksum.chunked_length(data.len(), "CRC32")
+  expect((r.header("Authorization") ?? "").contains("x-amz-trailer")) == true
+  let (got, trailers) = decode_chunked(r.body)
+  expect(got == data) == true
+  expect(trailers) == ["x-amz-checksum-crc32:${checksum.compute("CRC32", data) ?? ""}"]
+  // the request checksum's user agent code comes from the trailer
+  expect((r.header("User-Agent") ?? "").contains(",U,")) == true
+}
+
+test "a streamed file is sent again from its start on a retry" {
+  os.fs.create_dir_all("/up")?
+  os.fs.write("/up/small.txt", b"retry me")?
+  let n = Atomic[Int].new(0)
+  let bodies = Mutex[List[Bytes]].new([])
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/small", fn(req: http.Request) -> http.Response {
+    bodies.with(fn(var xs: List[Bytes]) { xs.push(decode_chunked(req.body).0) })
+    if n.add(1) == 1 {
+      return http.text(503, "<Error><Code>SlowDown</Code></Error>").with_header("Content-Type", "application/xml")
+    }
+    http.text(200, "")
+  })
+  let c = upload_client(os.net, os.clock, os.rand)?
+  let up = aws.upload_file(os.tasks, os.fs, "/up/small.txt")?
+  c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "small", body_stream: Some(up)})?
+  expect(bodies.with_read(fn(xs: List[Bytes]) -> List[Bytes] { xs })) == [b"retry me", b"retry me"]
+}
+
+test "a reader body is sent once, and its length must match" {
+  let n = Atomic[Int].new(0)
+  os.net.handle("PUT https://bucket.s3.us-west-2.amazonaws.com/once", fn(req: http.Request) -> http.Response {
+    n.add(1)
+    http.text(503, "<Error><Code>SlowDown</Code></Error>").with_header("Content-Type", "application/xml")
+  })
+  let c = upload_client(os.net, os.clock, os.rand)?
+  let (w, r) = http.pipe()
+  w.write(b"once")?
+  w.close()
+  match c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "once", body_stream: Some(aws.upload_reader(r, Some(4)))}) {
+    Err(s3.PutObjectErr.Api(_)) => {}
+    other => expect("${other:?}") == "Api"
+  }
+  expect(n.get()) == 1
+  // S3 needs the length
+  let (w2, r2) = http.pipe()
+  w2.close()
+  match c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "once", body_stream: Some(aws.upload_reader(r2))}) {
+    Err(s3.PutObjectErr.InvalidInput(m)) => expect(m.contains("length")) == true
+    other => expect("${other:?}") == "InvalidInput"
+  }
+}

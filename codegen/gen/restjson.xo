@@ -496,6 +496,11 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   let body_members = input.members.filter(fn(m: model.Member) -> Bool { bind(g, m.traits, h.path, m.name) is Binding.Body })
   let has_ct = input.members.any(fn(m: model.Member) -> Bool { (model.trait_str(m.traits, "httpHeader") ?? "").to_lower() == "content-type" })
   out.push("  var body = b\"\"")
+  let streams = streaming_payload(g, input).is_some()
+  if streams {
+    out.push("  var upload: aws.Upload? = None")
+    out.push("  var trailer: Str? = None")
+  }
   if g.query {
     out.push("  var f = query.form(${lit_str(model.name_of(op))}, ${lit_str(shape_of(g, g.m.service).version)})")
     query_members(g, input, "input", "\"\"", "idempotency_token", "  ", out)
@@ -515,6 +520,28 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
         } else {
           ("${json_expr(g, m.traits, m.target, "v")}.encode().bytes()", "application/json")
         }
+      }
+      if streaming_payload(g, input).is_some() {
+        out.push("  if let Some(u) = input.${f}_stream {")
+        // S3 refuses a body without a length (411 MissingContentLength)
+        if g.s3 || has(t.traits, "requiresLength") || has(m.traits, "requiresLength") {
+          out.push("    if u.length.is_none() {")
+          out.push("      return Err(\"${model.name_of(op)} needs the length of ${f}_stream\")")
+          out.push("    }")
+        }
+        if g.s3 || has(shape_of(g, op).traits, "aws.auth#unsignedPayload") {
+          out.push("    upload = Some(u)")
+        } else {
+          // the signature (and Glacier's tree hash) covers the body's
+          // hash, so the body is read whole here
+          out.push("    let r = u.open()?")
+          out.push("    body = r.read_all() ?? e => return Err(\"reading ${f}_stream: \${e.display()}\")")
+          out.push("    u.done()")
+        }
+        if !has_ct {
+          out.push("    headers.push((\"Content-Type\", ${lit_str(ct)}))")
+        }
+        out.push("  }")
       }
       out.push("  if let Some(v) = input.${f} {")
       out.push("    body = ${expr}")
@@ -617,7 +644,16 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       }
     }
     if required || alg != "None" {
-      out.push("  checksum.add(headers, body, ${alg}, ${required})?")
+      if streams {
+        // a streamed body's checksum goes in its trailer (aws-chunked)
+        out.push("  if upload.is_some() {")
+        out.push("    trailer = checksum.trailer(headers, ${alg}, ${required})")
+        out.push("  } else {")
+        out.push("    checksum.add(headers, body, ${alg}, ${required})?")
+        out.push("  }")
+      } else {
+        out.push("  checksum.add(headers, body, ${alg}, ${required})?")
+      }
     }
   }
   out.push("  if !body.is_empty() {")
@@ -654,6 +690,10 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   out.push("    query: rest.query(qs),")
   out.push("    headers: headers,")
   out.push("    body: body,")
+  if streams {
+    out.push("    upload: upload,")
+    out.push("    trailer_checksum: trailer,")
+  }
   if s3_error_in_2xx(g, s) {
     out.push("    error_in_2xx: true,")
   }

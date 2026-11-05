@@ -1,0 +1,95 @@
+// A request body sent as it is read, for an operation whose payload is a
+// streaming blob (S3 PutObject and UploadPart, and others): a large file
+// is uploaded without holding it in memory (decision 0009).
+//
+// An attempt reads the body from its start, so a body that can be read
+// again (`upload_file`) is retried like any other; one that cannot
+// (`upload_reader`) gets one attempt. A file is read on a background
+// task started on the caller's group (`os.tasks`), since the transport
+// has no file effect: each attempt asks the task for a fresh copy
+// through a pipe.
+
+use std/http
+use std/task
+
+enum Source {
+  /// A reader that can be sent once.
+  Once(reader: http.BodyReader, used: Atomic[Bool])
+  /// A task that writes the whole body into each pipe it is given.
+  Reopen(requests: Chan[http.PipeWriter])
+}
+
+/// A streamed request body; copies share it.
+pub struct Upload {
+  /// The body's length in bytes, when known. S3 needs it (its
+  /// `requiresLength` operations); without it the body is sent chunked.
+  pub length: Int?
+  source: Source
+}
+
+/// The bytes of `reader`, sent once (no retries). `length`, when given,
+/// must be the number of bytes the reader gives.
+pub fn upload_reader(reader: http.BodyReader, length: Int? = None) -> Upload {
+  Upload{length: length, source: Source.Once(reader: reader, used: Atomic.new(false))}
+}
+
+/// The file at `path`, read on a task started on `tasks` (a group that
+/// outlives the call, such as `os.tasks`) each time an attempt sends it.
+/// The length is the file's size now. The operation that sends it ends
+/// the task when it returns (`done`), so an upload is used once.
+pub fn upload_file(tasks: task.Group, fs: Fs, path: Str, piece: Int = 65536) -> Upload ! FsErr uses fs.read {
+  let info = fs.stat(path)? ?? return Err(FsErr.NotFound(path))
+  let requests = Chan[http.PipeWriter].new()
+  tasks.spawn_background(fn() { serve_file(fs, path, piece, requests) })
+  Ok(Upload{length: Some(info.size), source: Source.Reopen(requests: requests)})
+}
+
+fn serve_file(fs: Fs, path: Str, piece: Int, requests: Chan[http.PipeWriter]) uses fs.read {
+  while let Some(w) = requests.recv() {
+    match copy_file(fs, path, piece, w) {
+      Ok(_) => w.close()
+      Err(e) => w.close_with_error(IoErr.Io("reading ${path}: ${e}"))
+    }
+  }
+}
+
+fn copy_file(fs: Fs, path: Str, piece: Int, w: http.PipeWriter) -> () ! Str uses fs.read {
+  let f = fs.open(path) ?? e => return Err(e.display())
+  while let Some(b) = f.read(piece) ?? e => {
+    f.close().ignore_err("closing a file read to upload")
+    return Err(e.display())
+  } {
+    // the client stopped reading (the attempt ended): stop too
+    w.write(b) ?? e => {
+      f.close().ignore_err("closing a file read to upload")
+      return Err(e.display())
+    }
+  }
+  f.close().ignore_err("closing a file read to upload")
+  Ok(())
+}
+
+/// The reader for the next attempt, or Err when the body cannot be read
+/// again.
+pub fn (u: Upload) open() -> http.BodyReader ! Str {
+  match u.source {
+    Once(reader, used) => if used.swap(true) { Err("the body cannot be read again (upload_reader); use upload_file to retry") } else { Ok(reader) }
+    Reopen(requests) => {
+      let (w, r) = http.pipe()
+      requests.send(w)
+      Ok(r)
+    }
+  }
+}
+
+/// Whether every attempt can send the body.
+pub fn (u: Upload) reopenable() -> Bool {
+  u.source is Source.Reopen(..)
+}
+
+/// Ends a file's task; the upload cannot be opened afterwards.
+pub fn (u: Upload) done() {
+  if let Source.Reopen(requests) = u.source {
+    requests.close()
+  }
+}

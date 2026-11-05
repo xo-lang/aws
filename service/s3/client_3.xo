@@ -5724,10 +5724,22 @@ pub fn serialize_put_object(ep: rest.Endpoint, input: PutObjectRequest, idempote
     }
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.body_stream {
+    if u.length.is_none() {
+      return Err("PutObject needs the length of body_stream")
+    }
+    upload = Some(u)
+  }
   if let Some(v) = input.body {
     body = v
   }
-  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
+  if upload.is_some() {
+    trailer = checksum.trailer(headers, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)
+  } else {
+    checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
+  }
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -5740,6 +5752,8 @@ pub fn serialize_put_object(ep: rest.Endpoint, input: PutObjectRequest, idempote
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
     error_in_2xx: true,
   })
 }
@@ -6322,11 +6336,24 @@ pub fn serialize_put_object_annotation(ep: rest.Endpoint, input: PutObjectAnnota
     headers.push(("x-amz-expected-bucket-owner", v))
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.annotation_payload_stream {
+    if u.length.is_none() {
+      return Err("PutObjectAnnotation needs the length of annotation_payload_stream")
+    }
+    upload = Some(u)
+    headers.push(("Content-Type", "application/octet-stream"))
+  }
   if let Some(v) = input.annotation_payload {
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
   }
-  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
+  if upload.is_some() {
+    trailer = checksum.trailer(headers, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)
+  } else {
+    checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
+  }
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -6339,6 +6366,8 @@ pub fn serialize_put_object_annotation(ep: rest.Endpoint, input: PutObjectAnnota
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
     error_in_2xx: true,
   })
 }
@@ -8387,11 +8416,24 @@ pub fn serialize_upload_part(ep: rest.Endpoint, input: UploadPartRequest, idempo
     headers.push(("x-amz-expected-bucket-owner", v))
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.body_stream {
+    if u.length.is_none() {
+      return Err("UploadPart needs the length of body_stream")
+    }
+    upload = Some(u)
+    headers.push(("Content-Type", "application/octet-stream"))
+  }
   if let Some(v) = input.body {
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
   }
-  checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
+  if upload.is_some() {
+    trailer = checksum.trailer(headers, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)
+  } else {
+    checksum.add(headers, body, input.checksum_algorithm.map(fn(a: ChecksumAlgorithm) -> Str { a.value() }), false)?
+  }
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
@@ -8404,6 +8446,8 @@ pub fn serialize_upload_part(ep: rest.Endpoint, input: UploadPartRequest, idempo
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
     error_in_2xx: true,
   })
 }
@@ -9072,6 +9116,15 @@ pub fn serialize_write_get_object_response(ep: rest.Endpoint, input: WriteGetObj
     }
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.body_stream {
+    if u.length.is_none() {
+      return Err("WriteGetObjectResponse needs the length of body_stream")
+    }
+    upload = Some(u)
+    headers.push(("Content-Type", "application/octet-stream"))
+  }
   if let Some(v) = input.body {
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
@@ -9089,6 +9142,8 @@ pub fn serialize_write_get_object_response(ep: rest.Endpoint, input: WriteGetObj
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
     error_in_2xx: true,
   })
 }

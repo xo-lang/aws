@@ -199,7 +199,32 @@ pub fn presign_autofill(g: G, op: Str) -> Str? {
 /// Fields a structure gets beyond its model: the source region of an
 /// input whose operation fills in a cross-region presigned URL, where
 /// the model has none (RDS, Neptune, DocumentDB; EC2 models it).
+/// The member of operation input `s` that is its streaming blob payload
+/// (S3 PutObject's Body), sent as it is read when the caller gives an
+/// `aws.Upload` (decision 0009). None for query and JSON RPC protocols,
+/// which have no payload binding.
+pub fn streaming_payload(g: G, s: model.Shape) -> model.Member? {
+  if g.query || g.rpc != "" {
+    return None
+  }
+  if !model.operations(g.m).any(fn(op: Str) -> Bool { shape_of(g, op).input == s.id }) {
+    return None
+  }
+  s.members.find(fn(m: model.Member) -> Bool {
+    let t = shape_of(g, m.target)
+    has(m.traits, "httpPayload") && t.kind is model.Kind.Blob && has(t.traits, "streaming")
+  })
+}
+
 pub fn extra_fields(g: G, s: model.Shape) -> List[Str] {
+  if let Some(m) = streaming_payload(g, s) {
+    let f = field_name(m.name)
+    return [
+      "  /// `${f}` sent as it is read (`aws.upload_file`, `aws.upload_reader`),",
+      "  /// in place of `${f}`: a large body without holding it in memory.",
+      "  pub ${f}_stream: aws.Upload? = None",
+    ]
+  }
   for op in model.operations(g.m) {
     let o = shape_of(g, op)
     if o.input == s.id && presign_autofill(g, op).is_some() {

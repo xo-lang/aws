@@ -1780,6 +1780,11 @@ pub fn serialize_post_content(ep: rest.Endpoint, input: PostContentRequest, idem
     headers.push(("x-amz-lex-active-contexts", v.bytes().to_base64()))
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.input_stream_stream {
+    upload = Some(u)
+  }
   if let Some(v) = input.input_stream {
     body = v
   }
@@ -1795,6 +1800,8 @@ pub fn serialize_post_content(ep: rest.Endpoint, input: PostContentRequest, idem
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
   })
 }
 
@@ -1987,7 +1994,8 @@ pub fn deserialize_post_content_error(resp: http.Response) -> PostContentErr {
 /// returns your application-specific sessionAttributes . For more
 /// information, see Managing Conversation Context .
 pub fn (c: Client) post_content(input: PostContentRequest) -> PostContentResponse ! PostContentErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_post_content(c.params, input)) ?? e => return Err(PostContentErr.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_post_content(c.params, input)) ?? e => return Err(PostContentErr.InvalidInput(e))
+  let signing = routed with {unsigned_payload: true}
   var req = serialize_post_content(ep, input, "") ?? e => return Err(PostContentErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

@@ -153,6 +153,25 @@ The error is `waiter.WaitErr[OpErr]`: `Failure` (a failure acceptor
 matched), `TimedOut(attempts)`, or `Failed(e)` (an error no acceptor
 expected).
 
+## Streamed uploads
+
+An operation whose payload is a streaming blob (S3 PutObject and
+UploadPart) also takes `<payload>_stream`, a body sent as it is read, so
+a large file is not held in memory (decision 0009):
+
+```
+let up = aws.upload_file(os.tasks, os.fs, "backup.tar")?
+c.put_object(s3.PutObjectRequest{bucket: "b", key: "backup.tar", body_stream: Some(up)})?
+```
+
+The file is read on a task started on `os.tasks`, again from its start
+when an attempt is retried. `aws.upload_reader(reader, length)` sends
+any `http.BodyReader` (an `http.pipe()` a task writes) once, with no
+retries. S3 needs the length, and sends the body in the `aws-chunked`
+encoding with its checksum (CRC32 by default) as a trailer, computed as
+the body goes out. Other services sign the body's hash, so they read it
+whole first.
+
 ## Event streams
 
 An operation with an output stream returns a reader of its union's

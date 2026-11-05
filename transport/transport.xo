@@ -7,6 +7,7 @@ use std/http
 use std/json
 use std/time
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/checksum
 use github.com/xo-lang/aws/eventstream
 use github.com/xo-lang/aws/retry
 use github.com/xo-lang/aws/sigv4
@@ -24,6 +25,11 @@ pub struct Request {
   pub query: Str = ""
   pub headers: List[(Str, Str)] = []
   pub body: Bytes = b""
+  /// A body sent as it is read, in place of `body` (decision 0009).
+  pub upload: aws.Upload? = None
+  /// The checksum algorithm sent as a streamed body's trailer, in the
+  /// aws-chunked encoding (S3's flexible checksums).
+  pub trailer_checksum: Str? = None
   /// S3's rule for operations with a structured XML response: a 2xx
   /// whose root element is `<Error>` is a failure (treated as a 500, so
   /// it is retried and then returned as the error it names), as in
@@ -104,6 +110,9 @@ pub enum SendErr {
   Http(e: http.ClientErr)
   /// The retry quota stopped a retry; `last` is the last failure's text.
   QuotaExceeded(last: Str, attempts: Int)
+  /// A streamed body could not be sent: its length is missing or wrong,
+  /// or it cannot be read again for a retry.
+  Body(msg: Str)
 }
 
 pub fn (e: SendErr) display() -> Str {
@@ -111,6 +120,7 @@ pub fn (e: SendErr) display() -> Str {
     Credentials(ce) => ce.display()
     Http(he) => "http: ${he.display()}"
     QuotaExceeded(last, n) => "retry quota exceeded after ${n} attempts: ${last}"
+    Body(m) => "request body: ${m}"
   }
 }
 
@@ -168,6 +178,11 @@ pub fn skew(c: Client) -> Duration {
 /// `classify` reads an error response (status >= 300) into a retry
 /// decision; it is the protocol's, since error codes live in the body.
 pub fn send(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure) -> http.Response ! SendErr uses (net.dial, clock, rand) {
+  if let Some(u) = req.upload {
+    let r = send_upload(c, req, signing, classify, u)
+    u.done()
+    return r
+  }
   let max = c.retryer.max_attempts
   let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
     attempt_once(c, req, signing, classify, attempt, max)
@@ -301,6 +316,14 @@ pub fn user_agent_for(c: Client, headers: List[(Str, Str)], session: Bool, creds
       "x-amz-checksum-crc64nvme" => all.push("W")
       "x-amz-checksum-sha1" => all.push("X")
       "x-amz-checksum-sha256" => all.push("Y")
+      "x-amz-trailer" => match value.to_lower() {
+        "x-amz-checksum-crc32" => all.push("U")
+        "x-amz-checksum-crc32c" => all.push("V")
+        "x-amz-checksum-crc64nvme" => all.push("W")
+        "x-amz-checksum-sha1" => all.push("X")
+        "x-amz-checksum-sha256" => all.push("Y")
+        _ => {}
+      }
       "content-encoding" => if value.to_lower().contains("gzip") { all.push("L") }
       _ => {}
     }
@@ -337,6 +360,143 @@ fn unsigned_request(c: Client, req: Request, headers: List[(Str, Str)]) -> http.
     hreq = hreq.with_header("Accept-Encoding", "identity")
   }
   hreq
+}
+
+/// Sends a request with a streamed body. S3 and operations with an
+/// unsigned payload stream it: with a trailing checksum in the
+/// aws-chunked encoding (`STREAMING-UNSIGNED-PAYLOAD-TRAILER`, as
+/// aws-sdk-go-v2 sends S3 uploads), else as it is with
+/// `UNSIGNED-PAYLOAD`. Other operations sign the body's hash, so the
+/// body is read whole first. A body that cannot be read again gets one
+/// attempt.
+fn send_upload(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, u: aws.Upload) -> http.Response ! SendErr uses (net.dial, clock, rand) {
+  if !signing.s3 && !signing.unsigned_payload {
+    let r = u.open() ?? e => return Err(SendErr.Body(e))
+    let body = r.read_all() ?? e => return Err(SendErr.Body(e.display()))
+    if let Some(n) = u.length {
+      if n != body.len() {
+        return Err(SendErr.Body("the body has ${body.len()} bytes, its length says ${n}"))
+      }
+    }
+    return send(c, req with {upload: None, body: body}, signing, classify)
+  }
+  var headers = req.headers
+  var content_length = u.length
+  if let Some(alg) = req.trailer_checksum {
+    let n = u.length ?? return Err(SendErr.Body("a trailing checksum needs the body's length (S3 needs it too)"))
+    if checksum.running(alg).is_none() {
+      return Err(SendErr.Body("checksum algorithm ${alg} is not supported by this SDK"))
+    }
+    headers = headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-length" && h.0.to_lower() != "content-encoding" })
+    let enc = req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() == "content-encoding" }).map(fn(h: (Str, Str)) -> Str { h.1 })
+    headers.push(("Content-Encoding", (enc + ["aws-chunked"]).join(", ")))
+    headers.push(("X-Amz-Decoded-Content-Length", "${n}"))
+    headers.push(("X-Amz-Trailer", checksum.header_name(alg)))
+    content_length = Some(checksum.chunked_length(n, alg))
+  }
+  let sreq = req with {headers: headers}
+  let payload = if req.trailer_checksum.is_some() { sigv4.STREAMING_UNSIGNED_TRAILER } else { sigv4.UNSIGNED_PAYLOAD }
+  let max = if u.reopenable() { c.retryer.max_attempts } else { 1 }
+  let retryer = c.retryer with {max_attempts: max}
+  let r = retry.run(retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
+    let (signed, _, _, _) = sign_attempt(c, sreq, signing, attempt, max, Some(payload))?
+    let source = u.open() ?? e => return Err(AttemptErr.Net(http.ClientErr.Protocol(e)))
+    var hreq = signed
+    if let Some(n) = content_length {
+      hreq = hreq.with_header("Content-Length", "${n}")
+    }
+    let sent = match req.trailer_checksum {
+      Some(alg) => scope s {
+        let (w, body) = http.pipe()
+        let n = u.length ?? 0
+        s.spawn_background(fn() { encode_chunked(source, w, alg, n) })
+        c.http.send(hreq.with_body_reader(body))
+      }
+      None => c.http.send(hreq.with_body_reader(source))
+    }
+    let resp = match sent {
+      Ok(x) => x
+      Err(e) => return Err(AttemptErr.Net(e))
+    }
+    finish_attempt(c, req, classify, resp)
+  }, fn(e: AttemptErr) -> retry.Failure { failure_of(e) })
+  match r {
+    Ok(resp) => Ok(resp)
+    Err(a) => match a.err {
+      Status(resp, _) => if a.quota_exceeded { Err(SendErr.QuotaExceeded(last: "HTTP ${resp.status}", attempts: a.attempts)) } else { Ok(resp) }
+      Creds(ce) => Err(SendErr.Credentials(ce))
+      Net(he) => if a.quota_exceeded { Err(SendErr.QuotaExceeded(last: he.display(), attempts: a.attempts)) } else { Err(SendErr.Http(he)) }
+    }
+  }
+}
+
+/// Writes `src`'s `n` bytes to `w` in the unsigned aws-chunked encoding:
+/// CHUNK sized chunks, then the zero chunk with the checksum trailer. A
+/// source that gives another number of bytes fails the request.
+fn encode_chunked(src: http.BodyReader, w: http.PipeWriter, alg: Str, n: Int) {
+  var run = checksum.running(alg) ?? checksum.Running{algorithm: alg}
+  var buf = b""
+  var total = 0
+  while true {
+    let got = match src.read(checksum.CHUNK) {
+      Ok(g) => g
+      Err(e) => {
+        w.close_with_error(e)
+        return
+      }
+    }
+    let b = got ?? break
+    total += b.len()
+    if total > n {
+      w.close_with_error(IoErr.Io("the body is longer than its length, ${n} bytes"))
+      return
+    }
+    checksum.write(run, b)
+    buf = buf + b
+    while buf.len() >= checksum.CHUNK {
+      w.write(checksum.chunk(buf[0..checksum.CHUNK])) ?? _ => return
+      buf = buf[checksum.CHUNK..buf.len()]
+    }
+  }
+  if total != n {
+    w.close_with_error(IoErr.Io("the body has ${total} bytes, its length says ${n}"))
+    return
+  }
+  if !buf.is_empty() {
+    w.write(checksum.chunk(buf)) ?? _ => return
+  }
+  w.write(checksum.chunked_end(alg, checksum.sum(run))) ?? _ => return
+  w.close()
+}
+
+/// How a failed attempt is retried.
+fn failure_of(e: AttemptErr) -> retry.Failure {
+  match e {
+    Creds(_) => retry.Failure.Permanent
+    Net(he) => match he {
+      Connect(_) => retry.Failure.Transient
+      Timeout => retry.Failure.Timeout
+      Protocol(_) => retry.Failure.Transient
+      InvalidUrl(_) | Canceled => retry.Failure.Permanent
+    }
+    Status(_, f) => f
+  }
+}
+
+/// A sent attempt's response: Ok when final, else the retry decision.
+fn finish_attempt(c: Client, req: Request, classify: fn(http.Response) -> retry.Failure, sent: http.Response) -> http.Response ! AttemptErr uses clock {
+  let resp = if req.error_in_2xx && sent.status < 300 && xml_root_is_error(sent.body) { sent with {status: 500} } else { sent }
+  if resp.status < 300 {
+    return Ok(resp)
+  }
+  if note_skew(c, resp) {
+    return Err(AttemptErr.Status(resp: resp, f: retry.Failure.Transient))
+  }
+  let f = classify(resp)
+  if f is retry.Failure.Permanent {
+    return Ok(resp)
+  }
+  Err(AttemptErr.Status(resp: resp, f: f))
 }
 
 fn attempt_once(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure, attempt: Int, max: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {

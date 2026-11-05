@@ -10132,6 +10132,14 @@ pub fn serialize_publish_package_version(ep: rest.Endpoint, input: PublishPackag
     qs.push(("unfinished", "${v}"))
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.asset_content_stream {
+    let r = u.open()?
+    body = r.read_all() ?? e => return Err("reading asset_content_stream: ${e.display()}")
+    u.done()
+    headers.push(("Content-Type", "application/octet-stream"))
+  }
   if let Some(v) = input.asset_content {
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
@@ -10148,6 +10156,8 @@ pub fn serialize_publish_package_version(ep: rest.Endpoint, input: PublishPackag
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
   })
 }
 

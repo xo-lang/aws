@@ -5,6 +5,7 @@
 
 use std/http
 use std/multipart
+use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/service/s3
 
@@ -26,6 +27,22 @@ test "s3 round trip against MinIO" uses net, env, clock {
   let list = c.list_objects_v2(s3.ListObjectsV2Request{bucket: bucket})?
   let keys = (list.contents ?? []).map(fn(o: s3.Object) -> Str { o.key ?? "" })
   expect(keys) == ["dir/hello world.txt"]
+  // a streamed body, three aws-chunked chunks with a CRC32 trailer
+  // (decision 0009), written by a task as the client sends it
+  var big = b""
+  while big.len() < 150000 {
+    big = big + "streamed body ${big.len()}\n".bytes()
+  }
+  let (w, r) = http.pipe()
+  os.tasks.spawn_background(fn() {
+    if w.write(big).is_ok() {
+      w.close()
+    }
+  })
+  c.put_object(s3.PutObjectRequest{bucket: bucket, key: "streamed.bin", body_stream: Some(aws.upload_reader(r, Some(big.len())))})?
+  let back = c.get_object(s3.GetObjectRequest{bucket: bucket, key: "streamed.bin"})?
+  expect(back.body == Some(big)) == true
+  c.delete_object(s3.DeleteObjectRequest{bucket: bucket, key: "streamed.bin"})?
   let head = c.head_object(s3.HeadObjectRequest{bucket: bucket, key: "dir/hello world.txt"})?
   expect(head.content_length) == Some(13)
   match c.get_object(s3.GetObjectRequest{bucket: bucket, key: "missing"}) {

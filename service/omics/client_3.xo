@@ -2865,6 +2865,15 @@ pub fn serialize_upload_read_set_part(ep: rest.Endpoint, input: UploadReadSetPar
     qs.push(("partNumber", "${v}"))
   }
   var body = b""
+  var upload: aws.Upload? = None
+  var trailer: Str? = None
+  if let Some(u) = input.payload_stream {
+    if u.length.is_none() {
+      return Err("UploadReadSetPart needs the length of payload_stream")
+    }
+    upload = Some(u)
+    headers.push(("Content-Type", "application/octet-stream"))
+  }
   if let Some(v) = input.payload {
     body = v
     headers.push(("Content-Type", "application/octet-stream"))
@@ -2881,6 +2890,8 @@ pub fn serialize_upload_read_set_part(ep: rest.Endpoint, input: UploadReadSetPar
     query: rest.query(qs),
     headers: headers,
     body: body,
+    upload: upload,
+    trailer_checksum: trailer,
   })
 }
 
@@ -2984,7 +2995,8 @@ pub fn deserialize_upload_read_set_part_error(resp: http.Response) -> UploadRead
 /// Direct upload to a sequence store in the Amazon Web Services HealthOmics
 /// User Guide .
 pub fn (c: Client) upload_read_set_part(input: UploadReadSetPartRequest) -> UploadReadSetPartResponse ! UploadReadSetPartErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_upload_read_set_part(c.params, input)) ?? e => return Err(UploadReadSetPartErr.InvalidInput(e))
+  let (ep, routed, extra) = c.route(endpoint_params_upload_read_set_part(c.params, input)) ?? e => return Err(UploadReadSetPartErr.InvalidInput(e))
+  let signing = routed with {unsigned_payload: true}
   var req = serialize_upload_read_set_part(ep, input, "") ?? e => return Err(UploadReadSetPartErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

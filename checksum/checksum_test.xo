@@ -73,3 +73,26 @@ test "Glacier's tree hash: one chunk is its SHA-256; several combine pairwise" {
   let c = crypto.digest(crypto.Hash.Sha256, body3[2 * mib..body3.len()])
   expect(tree_hash(body3)) == crypto.digest(crypto.Hash.Sha256, crypto.digest(crypto.Hash.Sha256, a + b) + c).to_hex()
 }
+
+test "a running checksum matches the whole body's" {
+  let body = "hello, streaming world".bytes()
+  for alg in ["CRC32", "CRC32C", "CRC64NVME", "SHA1", "SHA256"] {
+    var r = running(alg) ?? return Err("no ${alg}")
+    write(r, body[0..5])
+    write(r, body[5..body.len()])
+    expect(sum(r)) == (compute(alg, body) ?? "")
+    expect(sum(r).len()) == encoded_len(alg)
+  }
+}
+
+test "the unsigned aws-chunked encoding and its length" {
+  let data = "hello".bytes()
+  let v = compute("CRC32", data) ?? ""
+  let enc = chunk(data) + chunked_end("CRC32", v)
+  expect(enc.to_str_lossy()) == "5\r\nhello\r\n0\r\nx-amz-checksum-crc32:${v}\r\n\r\n"
+  expect(chunked_length(5, "CRC32")) == enc.len()
+  expect(chunked_length(0, "SHA256")) == chunked_end("SHA256", compute("SHA256", b"") ?? "").len()
+  // two full chunks and a partial one
+  let big = 2 * CHUNK + 10
+  expect(chunked_length(big, "CRC32")) == 2 * (5 + 2 + CHUNK + 2) + (1 + 2 + 10 + 2) + "0\r\nx-amz-checksum-crc32:AAAAAA==\r\n\r\n".len()
+}

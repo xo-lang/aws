@@ -1,0 +1,82 @@
+// Service customizations on the test network (docs/customizations.md):
+// API Gateway's Accept header, Route 53's id prefixes, Glacier's account
+// default, version header and tree hash, and Machine Learning's Predict
+// endpoint.
+
+use std/crypto
+use std/http
+use github.com/xo-lang/aws/checksum
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/apigateway
+use github.com/xo-lang/aws/service/glacier
+use github.com/xo-lang/aws/service/machinelearning
+use github.com/xo-lang/aws/service/route53
+
+fn creds() -> credentials.StaticProvider {
+  credentials.static_provider("AKIDTEST0000000000", "invented-secret")
+}
+
+test "API Gateway asks for JSON" {
+  os.net.handle("GET https://apigateway.us-west-2.amazonaws.com/restapis", fn(req: http.Request) -> http.Response {
+    expect(req.header("Accept")) == Some("application/json")
+    http.text(200, "{\"item\":[]}").with_header("Content-Type", "application/json")
+  })
+  let c = apigateway.new(os.net, os.clock, os.rand, apigateway.Options{region: "us-west-2", credentials: creds()})?
+  c.get_rest_apis(apigateway.GetRestApisRequest{})?
+}
+
+test "Route 53 takes an id with its /hostedzone/ prefix" {
+  os.net.handle("GET https://route53.amazonaws.com/2013-04-01/hostedzone/Z0000000EXAMPLE", fn(req: http.Request) -> http.Response {
+    http.text(200, "<GetHostedZoneResponse xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\"><HostedZone><Id>/hostedzone/Z0000000EXAMPLE</Id><Name>example.com.</Name><CallerReference>r</CallerReference></HostedZone></GetHostedZoneResponse>").with_header("Content-Type", "text/xml")
+  })
+  let c = route53.new(os.net, os.clock, os.rand, route53.Options{region: "us-east-1", credentials: creds()})?
+  let out = c.get_hosted_zone(route53.GetHostedZoneRequest{id: "/hostedzone/Z0000000EXAMPLE"})?
+  // the id the response gives works as the next call's input
+  let id = out.hosted_zone.map(fn(z: route53.HostedZone) -> Str { z.id ?? "" }) ?? ""
+  c.get_hosted_zone(route53.GetHostedZoneRequest{id: id})?
+  c.get_hosted_zone(route53.GetHostedZoneRequest{id: "Z0000000EXAMPLE"})?
+  expect(os.net.requests().len()) == 3
+}
+
+test "Glacier defaults the account, sends its version and the upload's tree hash" {
+  let body = b"archive bytes"
+  os.net.handle("POST https://glacier.us-west-2.amazonaws.com/-/vaults/v/archives", fn(req: http.Request) -> http.Response {
+    expect(req.header("x-amz-glacier-version")) == Some("2012-06-01")
+    expect(req.header("x-amz-sha256-tree-hash")) == Some(checksum.tree_hash(body))
+    expect(req.header("X-Amz-Content-Sha256")) == Some(crypto.digest(crypto.Hash.Sha256, body).to_hex())
+    http.empty(201).with_header("x-amz-archive-id", "a1")
+  })
+  let c = glacier.new(os.net, os.clock, os.rand, glacier.Options{region: "us-west-2", credentials: creds()})?
+  let out = c.upload_archive(glacier.UploadArchiveInput{vault_name: "v", body: body})?
+  expect(out.archive_id) == Some("a1")
+}
+
+test "Machine Learning's Predict goes to the PredictEndpoint it is given" {
+  os.net.handle("POST https://realtime.machinelearning.us-east-1.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    expect(req.header("X-Amz-Target")) == Some("AmazonML_20141212.Predict")
+    http.text(200, "{\"Prediction\":{\"predictedLabel\":\"1\"}}").with_header("Content-Type", "application/x-amz-json-1.1")
+  })
+  let c = machinelearning.new(os.net, os.clock, os.rand, machinelearning.Options{region: "us-east-1", credentials: creds()})?
+  let out = c.predict(machinelearning.PredictInput{ml_model_id: "ml-1", record: {}, predict_endpoint: "https://realtime.machinelearning.us-east-1.amazonaws.com"})?
+  expect(out.prediction.map(fn(p: machinelearning.Prediction) -> Str { p.predicted_label ?? "" })) == Some("1")
+}
+
+test "Route 53 errors: the message of a modeled error, and InvalidChangeBatch's messages" {
+  os.net.handle("GET https://route53.amazonaws.com/2013-04-01/hostedzone/ZMISSING", fn(req: http.Request) -> http.Response {
+    http.text(404, "<ErrorResponse xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\"><Error><Type>Sender</Type><Code>NoSuchHostedZone</Code><Message>No hosted zone found with ID: ZMISSING</Message></Error><RequestId>r1</RequestId></ErrorResponse>").with_header("Content-Type", "text/xml")
+  })
+  os.net.handle("POST https://route53.amazonaws.com/2013-04-01/hostedzone/Z0000000EXAMPLE/rrset/", fn(req: http.Request) -> http.Response {
+    http.text(400, "<InvalidChangeBatch xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\"><Messages><Message>Tried to create resource record set [name='a.example.com.', type='A'] but it already exists</Message></Messages><RequestId>r2</RequestId></InvalidChangeBatch>").with_header("Content-Type", "text/xml")
+  })
+  let c = route53.new(os.net, os.clock, os.rand, route53.Options{region: "us-east-1", credentials: creds()})?
+  match c.get_hosted_zone(route53.GetHostedZoneRequest{id: "ZMISSING"}) {
+    Err(route53.GetHostedZoneErr.NoSuchHostedZone(e)) => expect(e.message) == Some("No hosted zone found with ID: ZMISSING")
+    Err(e) => return Err("want NoSuchHostedZone, got ${e:?}")
+    Ok(_) => return Err("want an error")
+  }
+  match c.change_resource_record_sets(route53.ChangeResourceRecordSetsRequest{hosted_zone_id: "/hostedzone/Z0000000EXAMPLE", change_batch: route53.ChangeBatch{changes: []}}) {
+    Err(route53.ChangeResourceRecordSetsErr.InvalidChangeBatch(e)) => expect(e.messages) == Some(["Tried to create resource record set [name='a.example.com.', type='A'] but it already exists"])
+    Err(e) => return Err("want InvalidChangeBatch, got ${e:?}")
+    Ok(_) => return Err("want an error")
+  }
+}

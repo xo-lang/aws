@@ -344,10 +344,23 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
   let input = shape_of(g, s.input)
   let in_t = if s.input == "smithy.api#Unit" { "()" } else { xo_type(g, s.input) }
   let name = op_name(op)
+  let rewrites = if s.input == "smithy.api#Unit" { [] } else { input_rewrites(g, input) }
+  let ep_rewrite = endpoint_rewrite(g, op, input)
+  let in_param = if rewrites.is_empty() && ep_rewrite.is_none() { "input" } else { "given" }
+  let ep_param = if ep_rewrite.is_none() { "ep" } else { "resolved" }
   out.push("/// The HTTP request of ${model.name_of(op)}.")
-  out.push("pub fn serialize_${name}(ep: rest.Endpoint, input: ${in_t}, idempotency_token: Str = \"\", min_compress: Int = 10240) -> transport.Request ! Str {")
+  out.push("pub fn serialize_${name}(${ep_param}: rest.Endpoint, ${in_param}: ${in_t}, idempotency_token: Str = \"\", min_compress: Int = 10240) -> transport.Request ! Str {")
   out.push("  let _ = (idempotency_token, min_compress)")
+  if let Some(e) = ep_rewrite {
+    out.push("  let ep = ${e}")
+  }
+  if in_param == "given" {
+    out.push(if rewrites.is_empty() { "  let input = given" } else { "  let input = given with {${rewrites.join(", ")}}" })
+  }
   out.push("  var headers: List[(Str, Str)] = []")
+  for l in service_headers(g) {
+    out.push(l)
+  }
   // constant query from the uri
   var consts: List[Str] = []
   for part in h.query.split("&") {
@@ -584,6 +597,9 @@ fn emit_serializer(g: G, op: Str, var out: List[Str]) {
       out.push("    }")
       out.push("  }")
     }
+  }
+  for l in body_headers(g, input) {
+    out.push(l)
   }
   // flexible checksums (aws.protocols#httpChecksum): the caller's
   // algorithm, or CRC32 when the operation requires a checksum
@@ -913,7 +929,11 @@ fn emit_error_readers(g: G, var out: List[Str]) {
     out.push("fn read_error_${fn_key(g, id)}(resp: http.Response, body: ${body_t}) -> ${t} ! Str {")
     out.push("  let _ = (resp, body)")
     out.push("  var out = ${t}{}")
-    emit_read_members(g, s, out)
+    var lines: List[Str] = []
+    emit_read_members(g, s, lines)
+    for l in if g.xml { fold_xml_names(lines) } else { lines } {
+      out.push(l)
+    }
     out.push("  Ok(out)")
     out.push("}")
     out.push("")
@@ -1006,4 +1026,33 @@ fn emit_xml_bodies(g: G, var out: List[Str]) {
     out.push("}")
     out.push("")
   }
+}
+
+/// An XML error reader's element names matched without case, as
+/// aws-sdk-go-v2's deserializers do: Route 53 models its errors' members
+/// as `message` and `messages` and sends `<Message>` and `<Messages>`.
+fn fold_xml_names(lines: List[Str]) -> List[Str] {
+  var out: List[Str] = []
+  var seen: Set[Str] = [].to_set()
+  for l in lines {
+    if l.ends_with("match c.name.local {") {
+      out.push(l.replace("match c.name.local {", "match c.name.local.to_lower() {"))
+      seen = [].to_set()
+      continue
+    }
+    let t = l.trim_start()
+    if t.starts_with("\"") {
+      if let Some((name, rest)) = t[1..t.len()].cut("\" =>") {
+        let key = name.to_lower()
+        if seen.contains(key) {
+          continue
+        }
+        seen.add(key)
+        out.push("${l[0..l.len() - t.len()]}\"${key}\" =>${rest}")
+        continue
+      }
+    }
+    out.push(l)
+  }
+  out
 }

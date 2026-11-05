@@ -101,6 +101,11 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
     out.push("  pub endpoint: rest.Endpoint")
   }
   out.push("  rand: Rand")
+  if discovery_op(g).is_some() {
+    out.push("  /// Addresses DescribeEndpoints returned (endpoint discovery).")
+    out.push("  discovered: discovery.Cache")
+    out.push("  clock: Clock")
+  }
   out.push("}")
   out.push("")
   out.push("pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {")
@@ -129,12 +134,17 @@ pub fn emit_client_head(g: G, var out: List[Str]) {
   out.push("    region: options.region,")
   out.push("    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),")
   out.push("    rand: rand,")
+  if discovery_op(g).is_some() {
+    out.push("    discovered: discovery.new_cache(),")
+    out.push("    clock: clock,")
+  }
   out.push("  })")
   out.push("}")
   out.push("")
   if with_rules {
     emit_from_config(g, out)
   }
+  emit_discover(g, out)
   out.push("const SIGNING_NAME: Str = ${lit_str(sigv4_name(g))}")
   out.push("")
   out.push("/// Where one call goes: the endpoint, how to sign, extra headers.")
@@ -297,11 +307,79 @@ pub fn op_auth(g: G, op: Str) -> Str {
 /// signing (with the operation's auth) and the endpoint's extra headers.
 pub fn route_binding(g: G, op: Str, route: Str, en: Str) -> List[Str] {
   let auth = op_auth(g, op)
-  if auth == "Required" {
-    return ["  let (ep, signing, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
+  let discovered = needs_discovery(g, op)
+  let ep_name = if discovered { "found" } else { "ep" }
+  let sig_name = if auth == "Required" { "signing" } else { "routed" }
+  var out = ["  let (${ep_name}, ${sig_name}, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))"]
+  if auth != "Required" {
+    out.push("  let signing = routed with {auth: transport.Auth.${auth}}")
   }
-  [
-    "  let (ep, routed, extra) = ${route} ?? e => return Err(${en}.InvalidInput(e))",
-    "  let signing = routed with {auth: transport.Auth.${auth}}",
-  ]
+  if discovered {
+    out.push("  let ep = c.discover(found) ?? e => return Err(${en}.InvalidInput(e))")
+  }
+  out
+}
+
+/// The service's endpoint discovery operation (DescribeEndpoints), when
+/// it has `aws.api#clientEndpointDiscovery`.
+pub fn discovery_op(g: G) -> Str? {
+  let svc = g.m.shapes.get(g.m.service) ?? return None
+  let t = model.trait_of(svc.traits, "aws.api#clientEndpointDiscovery") ?? return None
+  match t.get("operation") {
+    Some(json.Value.Str(op)) => Some(op)
+    _ => None
+  }
+}
+
+/// Whether operation `op` must use a discovered endpoint: its
+/// `aws.api#clientDiscoveredEndpoint` says required (Timestream). An
+/// optional one (DynamoDB) uses the regional endpoint, as aws-sdk-go-v2
+/// does by default.
+fn needs_discovery(g: G, op: Str) -> Bool {
+  if discovery_op(g).is_none() {
+    return false
+  }
+  match model.trait_of(shape_of(g, op).traits, "aws.api#clientDiscoveredEndpoint") {
+    Some(t) => match t.get("required") {
+      Some(json.Value.Bool(b)) => b
+      _ => false
+    }
+    None => false
+  }
+}
+
+/// `discover`: the endpoint to use instead of the resolved one, from
+/// DescribeEndpoints, cached per region; the resolved one when the caller
+/// configured an endpoint (an emulator, a proxy).
+fn emit_discover(g: G, var out: List[Str]) {
+  let op = discovery_op(g) ?? return
+  let s = shape_of(g, op)
+  let endpoint_param = match param_of(g, "SDK::Endpoint") {
+    Some(e) => field_name(e)
+    None => return
+  }
+  out.push("/// The discovered endpoint for this client's region (DescribeEndpoints,")
+  out.push("/// cached for the period it gives), or `found` when an endpoint was")
+  out.push("/// configured.")
+  out.push("fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {")
+  out.push("  if c.params.${endpoint_param}.is_some() {")
+  out.push("    return Ok(found)")
+  out.push("  }")
+  out.push("  let now = c.clock.now().unix_millis()")
+  out.push("  let host = match c.discovered.get(c.region, now) {")
+  out.push("    Some(h) => h")
+  out.push("    None => {")
+  out.push("      let out = c.${op_name(op)}(${xo_type(g, s.input)}{}) ?? e => return Err(\"endpoint discovery: \${e:?}\")")
+  out.push("      let all = out.endpoints ?? []")
+  out.push("      if all.is_empty() {")
+  out.push("        return Err(\"endpoint discovery: DescribeEndpoints returned no endpoints\")")
+  out.push("      }")
+  out.push("      let h = discovery.host_of(all[0].address ?? \"\")")
+  out.push("      c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)")
+  out.push("      h")
+  out.push("    }")
+  out.push("  }")
+  out.push("  Ok(found with {host: host, port: None})")
+  out.push("}")
+  out.push("")
 }

@@ -3,6 +3,7 @@
 use std/http
 use std/json
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/discovery
 use github.com/xo-lang/aws/endpoints
 use github.com/xo-lang/aws/protocol/jsonv
 use github.com/xo-lang/aws/protocol/rest
@@ -38,6 +39,9 @@ pub struct Client {
   /// The endpoint rule parameters every call shares.
   pub params: EndpointParameters
   rand: Rand
+  /// Addresses DescribeEndpoints returned (endpoint discovery).
+  discovered: discovery.Cache
+  clock: Clock
 }
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
@@ -61,6 +65,8 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
     region: options.region,
     transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
     rand: rand,
+    discovered: discovery.new_cache(),
+    clock: clock,
   })
 }
 
@@ -86,6 +92,30 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
 /// A client from shared configuration: `new` with `options_from_config`.
 pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
   new(net, clock, rand, options_from_config(cfg)?)
+}
+
+/// The discovered endpoint for this client's region (DescribeEndpoints,
+/// cached for the period it gives), or `found` when an endpoint was
+/// configured.
+fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {
+  if c.params.endpoint.is_some() {
+    return Ok(found)
+  }
+  let now = c.clock.now().unix_millis()
+  let host = match c.discovered.get(c.region, now) {
+    Some(h) => h
+    None => {
+      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err("endpoint discovery: ${e:?}")
+      let all = out.endpoints ?? []
+      if all.is_empty() {
+        return Err("endpoint discovery: DescribeEndpoints returned no endpoints")
+      }
+      let h = discovery.host_of(all[0].address ?? "")
+      c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)
+      h
+    }
+  }
+  Ok(found with {host: host, port: None})
 }
 
 const SIGNING_NAME: Str = "dynamodb"
@@ -13083,40 +13113,4 @@ pub fn (c: Client) describe_import(input: DescribeImportInput) -> DescribeImport
     return Err(deserialize_describe_import_error(resp))
   }
   deserialize_describe_import(resp) ?? e => Err(DescribeImportErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_kinesis_streaming_destination(base: EndpointParameters, input: DescribeKinesisStreamingDestinationInput) -> EndpointParameters {
-  var p = base
-  if let Some(x) = input.table_name {
-    p.resource_arn = x
-  }
-  p
-}
-
-/// The HTTP request of DescribeKinesisStreamingDestination.
-pub fn serialize_describe_kinesis_streaming_destination(ep: rest.Endpoint, input: DescribeKinesisStreamingDestinationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.table_name {
-    fs.push(("TableName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeKinesisStreamingDestination"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

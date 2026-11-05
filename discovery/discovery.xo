@@ -1,0 +1,56 @@
+// Endpoint discovery (aws.api#clientEndpointDiscovery, as in
+// aws-sdk-go-v2's service/internal/endpoint-discovery): the addresses a
+// service's DescribeEndpoints returned, cached per key (the region) for
+// the period the service gave. Timestream requires it.
+
+/// A discovered address and when it stops being used.
+struct Entry {
+  address: Str
+  expires_ms: Int
+}
+
+/// The cache a client shares across calls and copies.
+pub struct Cache {
+  entries: Mutex[Map[Str, Entry]]
+}
+
+pub fn new_cache() -> Cache {
+  Cache{entries: Mutex.new({})}
+}
+
+/// The address cached for `key`, None when there is none or it expired.
+pub fn (c: Cache) get(key: Str, now_ms: Int) -> Str? {
+  c.entries.with_read(fn(m: Map[Str, Entry]) -> Str? {
+    match m.get(key) {
+      Some(e) => if e.expires_ms > now_ms { Some(e.address) } else { None }
+      None => None
+    }
+  })
+}
+
+/// Caches `address` for `key` for `minutes` (at least one, as a service
+/// that answers 0 still means "use it now").
+pub fn (c: Cache) put(key: Str, address: Str, minutes: Int, now_ms: Int) {
+  let ttl = if minutes < 1 { 1 } else { minutes }
+  c.entries.with(fn(var m: Map[Str, Entry]) {
+    m[key] = Entry{address: address, expires_ms: now_ms + ttl * 60000}
+  })
+}
+
+/// Drops `key`'s address (the service said it is no longer valid).
+pub fn (c: Cache) forget(key: Str) {
+  c.entries.with(fn(var m: Map[Str, Entry]) {
+    m.remove(key)
+  })
+}
+
+/// An address as a host: a scheme or a path some services include is
+/// cut off.
+pub fn host_of(address: Str) -> Str {
+  var a = address.cut_prefix("https://") ?? address
+  a = a.cut_prefix("http://") ?? a
+  match a.cut("/") {
+    Some((h, _)) => h
+    None => a
+  }
+}

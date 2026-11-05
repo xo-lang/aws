@@ -1,0 +1,40 @@
+// Endpoint discovery on the test network (Timestream requires it): the
+// first call asks DescribeEndpoints on the regional endpoint and is sent
+// to the address it returns; later calls reuse the cached address; a
+// configured endpoint (an emulator) is used as is, with no discovery.
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/timestreamwrite
+
+const CELL: Str = "ingest-cell1.timestream.us-west-2.amazonaws.com"
+
+test "Timestream discovers its cell endpoint once and sends calls there" {
+  let describes = Mutex[Int].new(0)
+  let writes = Mutex[Int].new(0)
+  os.net.handle("POST https://ingest.timestream.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    describes.with(fn(var n: Int) { n += 1 })
+    expect(req.header("X-Amz-Target")) == Some("Timestream_20181101.DescribeEndpoints")
+    http.text(200, "{\"Endpoints\":[{\"Address\":\"${CELL}\",\"CachePeriodInMinutes\":1440}]}").with_header("Content-Type", "application/x-amz-json-1.0")
+  })
+  os.net.handle("POST https://${CELL}/", fn(req: http.Request) -> http.Response {
+    writes.with(fn(var n: Int) { n += 1 })
+    http.text(200, "{\"RecordsIngested\":{\"Total\":0}}").with_header("Content-Type", "application/x-amz-json-1.0")
+  })
+  let c = timestreamwrite.new(os.net, os.clock, os.rand, timestreamwrite.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let input = timestreamwrite.WriteRecordsRequest{database_name: "db", table_name: "t", records: []}
+  c.write_records(input)?
+  c.write_records(input)?
+  expect(describes.with_read(fn(n: Int) -> Int { n })) == 1
+  expect(writes.with_read(fn(n: Int) -> Int { n })) == 2
+}
+
+test "a configured endpoint is used without discovery" {
+  os.net.handle("POST http://127.0.0.1:4566/", fn(req: http.Request) -> http.Response {
+    expect(req.header("X-Amz-Target")) == Some("Timestream_20181101.WriteRecords")
+    http.text(200, "{}").with_header("Content-Type", "application/x-amz-json-1.0")
+  })
+  let c = timestreamwrite.new(os.net, os.clock, os.rand, timestreamwrite.Options{region: "us-west-2", endpoint: "http://127.0.0.1:4566", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  c.write_records(timestreamwrite.WriteRecordsRequest{database_name: "db", table_name: "t", records: []})?
+  expect(os.net.requests().len()) == 1
+}

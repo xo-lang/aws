@@ -3,6 +3,7 @@
 use std/http
 use std/json
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/discovery
 use github.com/xo-lang/aws/endpoints
 use github.com/xo-lang/aws/protocol/jsonv
 use github.com/xo-lang/aws/protocol/rest
@@ -34,6 +35,9 @@ pub struct Client {
   /// The endpoint rule parameters every call shares.
   pub params: EndpointParameters
   rand: Rand
+  /// Addresses DescribeEndpoints returned (endpoint discovery).
+  discovered: discovery.Cache
+  clock: Clock
 }
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
@@ -51,6 +55,8 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
     region: options.region,
     transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
     rand: rand,
+    discovered: discovery.new_cache(),
+    clock: clock,
   })
 }
 
@@ -76,6 +82,30 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
 /// A client from shared configuration: `new` with `options_from_config`.
 pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
   new(net, clock, rand, options_from_config(cfg)?)
+}
+
+/// The discovered endpoint for this client's region (DescribeEndpoints,
+/// cached for the period it gives), or `found` when an endpoint was
+/// configured.
+fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {
+  if c.params.endpoint.is_some() {
+    return Ok(found)
+  }
+  let now = c.clock.now().unix_millis()
+  let host = match c.discovered.get(c.region, now) {
+    Some(h) => h
+    None => {
+      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err("endpoint discovery: ${e:?}")
+      let all = out.endpoints ?? []
+      if all.is_empty() {
+        return Err("endpoint discovery: DescribeEndpoints returned no endpoints")
+      }
+      let h = discovery.host_of(all[0].address ?? "")
+      c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)
+      h
+    }
+  }
+  Ok(found with {host: host, port: None})
 }
 
 const SIGNING_NAME: Str = "timestream"
@@ -2792,7 +2822,8 @@ pub fn deserialize_cancel_query_error(resp: http.Response) -> CancelQueryErr {
 /// cancellation requests will return a CancellationMessage , indicating
 /// that the query has already been canceled. See code sample for details.
 pub fn (c: Client) cancel_query(input: CancelQueryRequest) -> CancelQueryResponse ! CancelQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_cancel_query(c.params, input)) ?? e => return Err(CancelQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_cancel_query(c.params, input)) ?? e => return Err(CancelQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(CancelQueryErr.InvalidInput(e))
   var req = serialize_cancel_query(ep, input, "") ?? e => return Err(CancelQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2958,7 +2989,8 @@ pub fn deserialize_create_scheduled_query_error(resp: http.Response) -> CreateSc
 /// You can use the NotificationConfiguration parameter to configure
 /// notification for your scheduled query operations.
 pub fn (c: Client) create_scheduled_query(input: CreateScheduledQueryRequest) -> CreateScheduledQueryResponse ! CreateScheduledQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_scheduled_query(c.params, input)) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_create_scheduled_query(c.params, input)) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
   var req = serialize_create_scheduled_query(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3075,7 +3107,8 @@ pub fn deserialize_delete_scheduled_query_error(resp: http.Response) -> DeleteSc
 
 /// Deletes a given scheduled query. This is an irreversible operation.
 pub fn (c: Client) delete_scheduled_query(input: DeleteScheduledQueryRequest) -> () ! DeleteScheduledQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_scheduled_query(c.params, input)) ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_delete_scheduled_query(c.params, input)) ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
   var req = serialize_delete_scheduled_query(ep, input, "") ?? e => return Err(DeleteScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3191,7 +3224,8 @@ pub fn deserialize_describe_account_settings_error(resp: http.Response) -> Descr
 /// workload. You're charged only for the duration of compute units used for
 /// your workloads.
 pub fn (c: Client) describe_account_settings(input: DescribeAccountSettingsRequest) -> DescribeAccountSettingsResponse ! DescribeAccountSettingsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_account_settings(c.params, input)) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_describe_account_settings(c.params, input)) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
   var req = serialize_describe_account_settings(ep, input, "") ?? e => return Err(DescribeAccountSettingsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3433,7 +3467,8 @@ pub fn deserialize_describe_scheduled_query_error(resp: http.Response) -> Descri
 
 /// Provides detailed information about a scheduled query.
 pub fn (c: Client) describe_scheduled_query(input: DescribeScheduledQueryRequest) -> DescribeScheduledQueryResponse ! DescribeScheduledQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_scheduled_query(c.params, input)) ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_describe_scheduled_query(c.params, input)) ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
   var req = serialize_describe_scheduled_query(ep, input, "") ?? e => return Err(DescribeScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3566,7 +3601,8 @@ pub fn deserialize_execute_scheduled_query_error(resp: http.Response) -> Execute
 /// information about QueryInsights , see Using query insights to optimize
 /// queries in Amazon Timestream .
 pub fn (c: Client) execute_scheduled_query(input: ExecuteScheduledQueryRequest) -> () ! ExecuteScheduledQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_execute_scheduled_query(c.params, input)) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_execute_scheduled_query(c.params, input)) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
   var req = serialize_execute_scheduled_query(ep, input, rest.uuid(c.rand)) ?? e => return Err(ExecuteScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3692,7 +3728,8 @@ pub fn deserialize_list_scheduled_queries_error(resp: http.Response) -> ListSche
 /// Gets a list of all scheduled queries in the caller's Amazon account and
 /// Region. ListScheduledQueries is eventually consistent.
 pub fn (c: Client) list_scheduled_queries(input: ListScheduledQueriesRequest) -> ListScheduledQueriesResponse ! ListScheduledQueriesErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_scheduled_queries(c.params, input)) ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_list_scheduled_queries(c.params, input)) ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
   var req = serialize_list_scheduled_queries(ep, input, "") ?? e => return Err(ListScheduledQueriesErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3814,7 +3851,8 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
 
 /// List all tags on a Timestream query resource.
 pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> ListTagsForResourceResponse ! ListTagsForResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3942,7 +3980,8 @@ pub fn deserialize_prepare_query_error(resp: http.Response) -> PrepareQueryErr {
 /// parameters to be stored by Timestream for later running. Timestream only
 /// supports using this operation with ValidateOnly set to true .
 pub fn (c: Client) prepare_query(input: PrepareQueryRequest) -> PrepareQueryResponse ! PrepareQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_prepare_query(c.params, input)) ?? e => return Err(PrepareQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_prepare_query(c.params, input)) ?? e => return Err(PrepareQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(PrepareQueryErr.InvalidInput(e))
   var req = serialize_prepare_query(ep, input, "") ?? e => return Err(PrepareQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4114,7 +4153,8 @@ pub fn deserialize_query_error(resp: http.Response) -> QueryErr {
 /// result reader do not have the same query string in the query requests,
 /// the query will fail with an Invalid pagination token error.
 pub fn (c: Client) query(input: QueryRequest) -> QueryResponse ! QueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_query(c.params, input)) ?? e => return Err(QueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_query(c.params, input)) ?? e => return Err(QueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(QueryErr.InvalidInput(e))
   var req = serialize_query(ep, input, rest.uuid(c.rand)) ?? e => return Err(QueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4230,7 +4270,8 @@ pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
 /// activate these user-defined tags so that they appear on the Billing and
 /// Cost Management console for cost allocation tracking.
 pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceResponse ! TagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(TagResourceErr.InvalidInput(e))
   var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4338,7 +4379,8 @@ pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr
 
 /// Removes the association of tags from a Timestream query resource.
 pub fn (c: Client) untag_resource(input: UntagResourceRequest) -> UntagResourceResponse ! UntagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(UntagResourceErr.InvalidInput(e))
   var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4472,7 +4514,8 @@ pub fn deserialize_update_account_settings_error(resp: http.Response) -> UpdateA
 /// to use TCUs for query pricing, you can't transition to using bytes
 /// scanned for query pricing.
 pub fn (c: Client) update_account_settings(input: UpdateAccountSettingsRequest) -> UpdateAccountSettingsResponse ! UpdateAccountSettingsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_account_settings(c.params, input)) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_update_account_settings(c.params, input)) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
   var req = serialize_update_account_settings(ep, input, "") ?? e => return Err(UpdateAccountSettingsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4592,7 +4635,8 @@ pub fn deserialize_update_scheduled_query_error(resp: http.Response) -> UpdateSc
 
 /// Update a scheduled query.
 pub fn (c: Client) update_scheduled_query(input: UpdateScheduledQueryRequest) -> () ! UpdateScheduledQueryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_scheduled_query(c.params, input)) ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_update_scheduled_query(c.params, input)) ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
   var req = serialize_update_scheduled_query(ep, input, "") ?? e => return Err(UpdateScheduledQueryErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

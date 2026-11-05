@@ -3,6 +3,7 @@
 use std/http
 use std/json
 use github.com/xo-lang/aws
+use github.com/xo-lang/aws/discovery
 use github.com/xo-lang/aws/endpoints
 use github.com/xo-lang/aws/protocol/jsonv
 use github.com/xo-lang/aws/protocol/rest
@@ -34,6 +35,9 @@ pub struct Client {
   /// The endpoint rule parameters every call shares.
   pub params: EndpointParameters
   rand: Rand
+  /// Addresses DescribeEndpoints returned (endpoint discovery).
+  discovered: discovery.Cache
+  clock: Clock
 }
 
 pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str {
@@ -51,6 +55,8 @@ pub fn new(net: Net, clock: Clock, rand: Rand, options: Options) -> Client ! Str
     region: options.region,
     transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)),
     rand: rand,
+    discovered: discovery.new_cache(),
+    clock: clock,
   })
 }
 
@@ -76,6 +82,30 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
 /// A client from shared configuration: `new` with `options_from_config`.
 pub fn from_config(net: Net, clock: Clock, rand: Rand, cfg: aws.Config) -> Client ! Str {
   new(net, clock, rand, options_from_config(cfg)?)
+}
+
+/// The discovered endpoint for this client's region (DescribeEndpoints,
+/// cached for the period it gives), or `found` when an endpoint was
+/// configured.
+fn (c: Client) discover(found: rest.Endpoint) -> rest.Endpoint ! Str uses (net.dial, clock, rand) {
+  if c.params.endpoint.is_some() {
+    return Ok(found)
+  }
+  let now = c.clock.now().unix_millis()
+  let host = match c.discovered.get(c.region, now) {
+    Some(h) => h
+    None => {
+      let out = c.describe_endpoints(DescribeEndpointsRequest{}) ?? e => return Err("endpoint discovery: ${e:?}")
+      let all = out.endpoints ?? []
+      if all.is_empty() {
+        return Err("endpoint discovery: DescribeEndpoints returned no endpoints")
+      }
+      let h = discovery.host_of(all[0].address ?? "")
+      c.discovered.put(c.region, h, all[0].cache_period_in_minutes ?? 0, now)
+      h
+    }
+  }
+  Ok(found with {host: host, port: None})
 }
 
 const SIGNING_NAME: Str = "timestream"
@@ -2685,7 +2715,8 @@ pub fn deserialize_create_batch_load_task_error(resp: http.Response) -> CreateBa
 /// thrown. For more information, see Amazon Web Services managed keys .
 /// Service quotas apply . For details, see code sample .
 pub fn (c: Client) create_batch_load_task(input: CreateBatchLoadTaskRequest) -> CreateBatchLoadTaskResponse ! CreateBatchLoadTaskErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_batch_load_task(c.params, input)) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_create_batch_load_task(c.params, input)) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
   var req = serialize_create_batch_load_task(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateBatchLoadTaskErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2827,7 +2858,8 @@ pub fn deserialize_create_database_error(resp: http.Response) -> CreateDatabaseE
 /// your account. For more information, see Amazon Web Services managed keys
 /// . Service quotas apply . For details, see code sample .
 pub fn (c: Client) create_database(input: CreateDatabaseRequest) -> CreateDatabaseResponse ! CreateDatabaseErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_database(c.params, input)) ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_create_database(c.params, input)) ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
   var req = serialize_create_database(ep, input, "") ?? e => return Err(CreateDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -2987,7 +3019,8 @@ pub fn deserialize_create_table_error(resp: http.Response) -> CreateTableErr {
 /// the retention properties. Service quotas apply . See code sample for
 /// details.
 pub fn (c: Client) create_table(input: CreateTableRequest) -> CreateTableResponse ! CreateTableErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_table(c.params, input)) ?? e => return Err(CreateTableErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_create_table(c.params, input)) ?? e => return Err(CreateTableErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(CreateTableErr.InvalidInput(e))
   var req = serialize_create_table(ep, input, "") ?? e => return Err(CreateTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3110,7 +3143,8 @@ pub fn deserialize_delete_database_error(resp: http.Response) -> DeleteDatabaseE
 /// ResourceNotFoundException. Clients should consider them equivalent. See
 /// code sample for details.
 pub fn (c: Client) delete_database(input: DeleteDatabaseRequest) -> () ! DeleteDatabaseErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_database(c.params, input)) ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_delete_database(c.params, input)) ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
   var req = serialize_delete_database(ep, input, "") ?? e => return Err(DeleteDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3235,7 +3269,8 @@ pub fn deserialize_delete_table_error(resp: http.Response) -> DeleteTableErr {
 /// ResourceNotFoundException. Clients should consider them equivalent. See
 /// code sample for details.
 pub fn (c: Client) delete_table(input: DeleteTableRequest) -> () ! DeleteTableErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_table(c.params, input)) ?? e => return Err(DeleteTableErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_delete_table(c.params, input)) ?? e => return Err(DeleteTableErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DeleteTableErr.InvalidInput(e))
   var req = serialize_delete_table(ep, input, "") ?? e => return Err(DeleteTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3358,7 +3393,8 @@ pub fn deserialize_describe_batch_load_task_error(resp: http.Response) -> Descri
 /// mappings, progress, and other details. Service quotas apply . See code
 /// sample for details.
 pub fn (c: Client) describe_batch_load_task(input: DescribeBatchLoadTaskRequest) -> DescribeBatchLoadTaskResponse ! DescribeBatchLoadTaskErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_batch_load_task(c.params, input)) ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_describe_batch_load_task(c.params, input)) ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
   var req = serialize_describe_batch_load_task(ep, input, "") ?? e => return Err(DescribeBatchLoadTaskErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3487,7 +3523,8 @@ pub fn deserialize_describe_database_error(resp: http.Response) -> DescribeDatab
 /// time that the database was created, and the total number of tables found
 /// within the database. Service quotas apply . See code sample for details.
 pub fn (c: Client) describe_database(input: DescribeDatabaseRequest) -> DescribeDatabaseResponse ! DescribeDatabaseErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_database(c.params, input)) ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_describe_database(c.params, input)) ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
   var req = serialize_describe_database(ep, input, "") ?? e => return Err(DescribeDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3734,7 +3771,8 @@ pub fn deserialize_describe_table_error(resp: http.Response) -> DescribeTableErr
 /// name, retention duration of the memory store and the magnetic store.
 /// Service quotas apply . See code sample for details.
 pub fn (c: Client) describe_table(input: DescribeTableRequest) -> DescribeTableResponse ! DescribeTableErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_table(c.params, input)) ?? e => return Err(DescribeTableErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_describe_table(c.params, input)) ?? e => return Err(DescribeTableErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(DescribeTableErr.InvalidInput(e))
   var req = serialize_describe_table(ep, input, "") ?? e => return Err(DescribeTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3864,7 +3902,8 @@ pub fn deserialize_list_batch_load_tasks_error(resp: http.Response) -> ListBatch
 /// the task is resumable until, and other details. See code sample for
 /// details.
 pub fn (c: Client) list_batch_load_tasks(input: ListBatchLoadTasksRequest) -> ListBatchLoadTasksResponse ! ListBatchLoadTasksErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_batch_load_tasks(c.params, input)) ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_list_batch_load_tasks(c.params, input)) ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
   var req = serialize_list_batch_load_tasks(ep, input, "") ?? e => return Err(ListBatchLoadTasksErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -3990,7 +4029,8 @@ pub fn deserialize_list_databases_error(resp: http.Response) -> ListDatabasesErr
 /// Returns a list of your Timestream databases. Service quotas apply . See
 /// code sample for details.
 pub fn (c: Client) list_databases(input: ListDatabasesRequest) -> ListDatabasesResponse ! ListDatabasesErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_databases(c.params, input)) ?? e => return Err(ListDatabasesErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_list_databases(c.params, input)) ?? e => return Err(ListDatabasesErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ListDatabasesErr.InvalidInput(e))
   var req = serialize_list_databases(ep, input, "") ?? e => return Err(ListDatabasesErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4125,7 +4165,8 @@ pub fn deserialize_list_tables_error(resp: http.Response) -> ListTablesErr {
 /// Provides a list of tables, along with the name, status, and retention
 /// properties of each table. See code sample for details.
 pub fn (c: Client) list_tables(input: ListTablesRequest) -> ListTablesResponse ! ListTablesErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_tables(c.params, input)) ?? e => return Err(ListTablesErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_list_tables(c.params, input)) ?? e => return Err(ListTablesErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ListTablesErr.InvalidInput(e))
   var req = serialize_list_tables(ep, input, "") ?? e => return Err(ListTablesErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4240,7 +4281,8 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
 
 /// Lists all tags on a Timestream resource.
 pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> ListTagsForResourceResponse ! ListTagsForResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4356,7 +4398,8 @@ pub fn deserialize_resume_batch_load_task_error(resp: http.Response) -> ResumeBa
 }
 
 pub fn (c: Client) resume_batch_load_task(input: ResumeBatchLoadTaskRequest) -> ResumeBatchLoadTaskResponse ! ResumeBatchLoadTaskErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_resume_batch_load_task(c.params, input)) ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_resume_batch_load_task(c.params, input)) ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
   var req = serialize_resume_batch_load_task(ep, input, "") ?? e => return Err(ResumeBatchLoadTaskErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4472,7 +4515,8 @@ pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
 /// activate these user-defined tags so that they appear on the Billing and
 /// Cost Management console for cost allocation tracking.
 pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceResponse ! TagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(TagResourceErr.InvalidInput(e))
   var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4586,7 +4630,8 @@ pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr
 
 /// Removes the association of tags from a Timestream resource.
 pub fn (c: Client) untag_resource(input: UntagResourceRequest) -> UntagResourceResponse ! UntagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(UntagResourceErr.InvalidInput(e))
   var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4725,7 +4770,8 @@ pub fn deserialize_update_database_error(resp: http.Response) -> UpdateDatabaseE
 /// new KMS key to be used ( KmsKeyId ). If there are any concurrent
 /// UpdateDatabase requests, first writer wins. See code sample for details.
 pub fn (c: Client) update_database(input: UpdateDatabaseRequest) -> UpdateDatabaseResponse ! UpdateDatabaseErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_database(c.params, input)) ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_update_database(c.params, input)) ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
   var req = serialize_update_database(ep, input, "") ?? e => return Err(UpdateDatabaseErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -4871,7 +4917,8 @@ pub fn deserialize_update_table_error(resp: http.Response) -> UpdateTableErr {
 /// Timestream does not retrieve data from the magnetic store to populate
 /// the memory store. See code sample for details.
 pub fn (c: Client) update_table(input: UpdateTableRequest) -> UpdateTableResponse ! UpdateTableErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_table(c.params, input)) ?? e => return Err(UpdateTableErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_update_table(c.params, input)) ?? e => return Err(UpdateTableErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(UpdateTableErr.InvalidInput(e))
   var req = serialize_update_table(ep, input, "") ?? e => return Err(UpdateTableErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -5048,7 +5095,8 @@ pub fn deserialize_write_records_error(resp: http.Response) -> WriteRecordsErr {
 /// updates would need to send a version number greater than 3 , or the
 /// update requests would receive a RejectedRecordsException .
 pub fn (c: Client) write_records(input: WriteRecordsRequest) -> WriteRecordsResponse ! WriteRecordsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_write_records(c.params, input)) ?? e => return Err(WriteRecordsErr.InvalidInput(e))
+  let (found, signing, extra) = c.route(endpoint_params_write_records(c.params, input)) ?? e => return Err(WriteRecordsErr.InvalidInput(e))
+  let ep = c.discover(found) ?? e => return Err(WriteRecordsErr.InvalidInput(e))
   var req = serialize_write_records(ep, input, "") ?? e => return Err(WriteRecordsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

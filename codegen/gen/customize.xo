@@ -1,0 +1,105 @@
+// Service customizations the models do not describe, as aws-sdk-go-v2
+// makes them by hand (docs/customizations.md): each keyed by the
+// service's sdkId and applied in the generated serializer.
+
+use std/json
+use github.com/xo-lang/aws/codegen/model
+
+/// The service's sdkId ("" when it has none).
+pub fn sdk_id(g: G) -> Str {
+  let svc = g.m.shapes.get(g.m.service) ?? return ""
+  match model.trait_of(svc.traits, "aws.api#service") {
+    Some(t) => match t.get("sdkId") {
+      Some(json.Value.Str(x)) => x
+      _ => ""
+    }
+    None => ""
+  }
+}
+
+/// Input members replaced before serializing, as `field: expression`
+/// over `given` (the caller's input):
+/// - Route 53: ids given with their `/hostedzone/`, `/change/` or
+///   `/delegationset/` prefix (as other calls return them) are cut to
+///   the id (aws-sdk-go-v2's sanitizeURL);
+/// - Glacier: the account id defaults to `-`, the credentials' account.
+pub fn input_rewrites(g: G, input: model.Shape) -> List[Str] {
+  let id = sdk_id(g)
+  var out: List[Str] = []
+  for m in input.members {
+    let f = field_name(m.name)
+    if id == "Route 53" {
+      let t = model.name_of(m.target)
+      if t == "ResourceId" || t == "DelegationSetId" || t == "ChangeId" {
+        out.push("${f}: given.${f}.map(fn(v: Str) -> Str { v.split(\"/\").last() ?? v })")
+      }
+    }
+    if id == "Glacier" && m.name == "accountId" {
+      out.push("${f}: Some(given.${f} ?? \"-\")")
+    }
+  }
+  out
+}
+
+/// Header lines added to every request of the service:
+/// - API Gateway: `Accept: application/json` (it answers HAL otherwise);
+/// - Glacier: `x-amz-glacier-version`, the API version.
+pub fn service_headers(g: G) -> List[Str] {
+  let id = sdk_id(g)
+  if id == "API Gateway" {
+    return ["  headers.push((\"Accept\", \"application/json\"))"]
+  }
+  if id == "Glacier" {
+    let svc = g.m.shapes.get(g.m.service)
+    let version = match svc {
+      Some(s) => s.version
+      None => ""
+    }
+    return ["  headers.push((\"x-amz-glacier-version\", ${lit_str(version)}))"]
+  }
+  []
+}
+
+/// Lines run once the body is built: Glacier's tree hash and the linear
+/// SHA-256 of an upload, unless the caller gave the tree hash.
+pub fn body_headers(g: G, input: model.Shape) -> List[Str] {
+  if sdk_id(g) != "Glacier" {
+    return []
+  }
+  var has_checksum = false
+  var has_body = false
+  for m in input.members {
+    if m.name == "checksum" {
+      has_checksum = true
+    }
+    if m.name == "body" {
+      has_body = true
+    }
+  }
+  if !has_checksum || !has_body {
+    return []
+  }
+  [
+    "  if !body.is_empty() && !headers.any(fn(h: (Str, Str)) -> Bool { h.0.to_lower() == \"x-amz-sha256-tree-hash\" }) {",
+    "    headers.push((\"x-amz-sha256-tree-hash\", checksum.tree_hash(body)))",
+    "  }",
+    "  if !body.is_empty() {",
+    "    headers.push((\"X-Amz-Content-Sha256\", crypto.digest(crypto.Hash.Sha256, body).to_hex()))",
+    "  }",
+  ]
+}
+
+/// The endpoint expression the request uses instead of `resolved`, for
+/// an operation whose input names its own endpoint (Machine Learning's
+/// Predict and its PredictEndpoint).
+pub fn endpoint_rewrite(g: G, op: Str, input: model.Shape) -> Str? {
+  if sdk_id(g) != "Machine Learning" || model.name_of(op) != "Predict" {
+    return None
+  }
+  for m in input.members {
+    if m.name == "PredictEndpoint" {
+      return Some("if let Some(u) = given.${field_name(m.name)} { rest.parse_endpoint(u) ?? resolved } else { resolved }")
+    }
+  }
+  None
+}

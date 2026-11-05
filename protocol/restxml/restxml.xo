@@ -10,7 +10,8 @@ use github.com/xo-lang/aws/retry
 /// The `<Error>` element of an error body (wrapped or not).
 pub fn error_element(body: Bytes) -> xml.Element? {
   let root = xmlv.parse_body(body).ok() ?? return None
-  if root.name.local == "Error" {
+  // Route 53's ChangeResourceRecordSets: a bare <InvalidChangeBatch>
+  if root.name.local == "Error" || root.name.local == "InvalidChangeBatch" {
     return Some(root)
   }
   // ec2Query: <Response><Errors><Error>
@@ -24,7 +25,7 @@ pub fn error_element(body: Bytes) -> xml.Element? {
 /// `NotFound`.
 pub fn error_code(resp: http.Response) -> Str {
   match error_element(resp.body) {
-    Some(e) => xmlv.child_text(e, "Code") ?? ""
+    Some(e) => if e.name.local == "InvalidChangeBatch" { "InvalidChangeBatch" } else { xmlv.child_text(e, "Code") ?? "" }
     None => if resp.status == 404 && resp.body.is_empty() { "NotFound" } else { "" }
   }
 }

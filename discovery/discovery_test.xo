@@ -1,0 +1,28 @@
+test "an address is used until its period ends" {
+  let c = new_cache()
+  expect(c.get("us-east-1", 0)) == None
+  c.put("us-east-1", "ingest-cell2.timestream.us-east-1.amazonaws.com", 5, 1000)
+  expect(c.get("us-east-1", 1000 + 5 * 60000 - 1)) == Some("ingest-cell2.timestream.us-east-1.amazonaws.com")
+  expect(c.get("us-east-1", 1000 + 5 * 60000)) == None
+  expect(c.get("us-west-2", 1000)) == None
+}
+
+test "a period of zero still caches for a minute, and forget drops it" {
+  let c = new_cache()
+  c.put("k", "a.example.com", 0, 0)
+  expect(c.get("k", 59999)) == Some("a.example.com")
+  c.forget("k")
+  expect(c.get("k", 1)) == None
+}
+
+test "copies share the cache" {
+  let c = new_cache()
+  let d = c
+  d.put("k", "a.example.com", 1, 0)
+  expect(c.get("k", 0)) == Some("a.example.com")
+}
+
+test "addresses become hosts" {
+  expect(host_of("ingest-cell1.timestream.us-east-1.amazonaws.com")) == "ingest-cell1.timestream.us-east-1.amazonaws.com"
+  expect(host_of("https://a.example.com/path")) == "a.example.com"
+}

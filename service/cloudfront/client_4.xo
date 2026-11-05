@@ -7,6 +7,39 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn (e: ListDistributionsByCachePolicyIdErr) display() -> Str {
+  match e {
+    AccessDenied(x) => "AccessDenied: ${x:?}"
+    InvalidArgument(x) => "InvalidArgument: ${x:?}"
+    NoSuchCachePolicy(x) => "NoSuchCachePolicy: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_distributions_by_cache_policy_id_error(resp: http.Response) -> ListDistributionsByCachePolicyIdErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "AccessDenied" => match read_error_access_denied(resp, body) {
+      Ok(x) => return ListDistributionsByCachePolicyIdErr.AccessDenied(x)
+      Err(msg) => return ListDistributionsByCachePolicyIdErr.Deserialize(msg)
+    }
+    "InvalidArgument" => match read_error_invalid_argument(resp, body) {
+      Ok(x) => return ListDistributionsByCachePolicyIdErr.InvalidArgument(x)
+      Err(msg) => return ListDistributionsByCachePolicyIdErr.Deserialize(msg)
+    }
+    "NoSuchCachePolicy" => match read_error_no_such_cache_policy(resp, body) {
+      Ok(x) => return ListDistributionsByCachePolicyIdErr.NoSuchCachePolicy(x)
+      Err(msg) => return ListDistributionsByCachePolicyIdErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListDistributionsByCachePolicyIdErr.Api(restxml.api_error(resp))
+}
+
 /// Gets a list of distribution IDs for distributions that have a cache
 /// behavior that's associated with the specified cache policy. You can
 /// optionally specify the maximum number of items to receive in the

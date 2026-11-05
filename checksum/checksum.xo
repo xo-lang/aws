@@ -99,3 +99,35 @@ pub fn validate(headers: List[(Str, Str)], body: Bytes) -> Str? ! Mismatch {
   }
   Ok(None)
 }
+
+/// Glacier's SHA-256 tree hash, in hex: the SHA-256 of each 1 MiB chunk,
+/// then of each pair of hashes, level by level (an odd one is carried up
+/// as is), as aws-sdk-go-v2's glacier customization computes it. "" for
+/// an empty body.
+pub fn tree_hash(body: Bytes) -> Str {
+  let chunk = 1048576
+  var level: List[Bytes] = []
+  var i = 0
+  while i < body.len() {
+    let end = if i + chunk < body.len() { i + chunk } else { body.len() }
+    level.push(crypto.digest(crypto.Hash.Sha256, body[i..end]))
+    i = end
+  }
+  if level.is_empty() {
+    return ""
+  }
+  while level.len() > 1 {
+    var next: List[Bytes] = []
+    var j = 0
+    while j < level.len() {
+      if j + 1 < level.len() {
+        next.push(crypto.digest(crypto.Hash.Sha256, level[j] + level[j + 1]))
+      } else {
+        next.push(level[j])
+      }
+      j += 2
+    }
+    level = next
+  }
+  level[0].to_hex()
+}

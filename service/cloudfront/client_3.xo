@@ -7,6 +7,36 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_create_field_level_encryption_profile(base: EndpointParameters, input: CreateFieldLevelEncryptionProfileRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateFieldLevelEncryptionProfile.
+pub fn serialize_create_field_level_encryption_profile(ep: rest.Endpoint, input: CreateFieldLevelEncryptionProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  if let Some(v) = input.field_level_encryption_profile_config {
+    body = xml_body_field_level_encryption_profile_config(v, "FieldLevelEncryptionProfileConfig", [("xmlns", "http://cloudfront.amazonaws.com/doc/2020-05-31/")])
+    headers.push(("Content-Type", "application/xml"))
+  }
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2020-05-31/field-level-encryption-profile"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_create_field_level_encryption_profile(resp: http.Response) -> CreateFieldLevelEncryptionProfileResult ! Str {
   var out = CreateFieldLevelEncryptionProfileResult{}
   if let Some(hv) = resp.header("Location") {
@@ -10880,37 +10910,4 @@ pub enum ListDistributionsByCachePolicyIdErr {
   InvalidInput(msg: Str)
   /// The response is not what the protocol says.
   Deserialize(msg: Str)
-}
-
-pub fn (e: ListDistributionsByCachePolicyIdErr) display() -> Str {
-  match e {
-    AccessDenied(x) => "AccessDenied: ${x:?}"
-    InvalidArgument(x) => "InvalidArgument: ${x:?}"
-    NoSuchCachePolicy(x) => "NoSuchCachePolicy: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_list_distributions_by_cache_policy_id_error(resp: http.Response) -> ListDistributionsByCachePolicyIdErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "AccessDenied" => match read_error_access_denied(resp, body) {
-      Ok(x) => return ListDistributionsByCachePolicyIdErr.AccessDenied(x)
-      Err(msg) => return ListDistributionsByCachePolicyIdErr.Deserialize(msg)
-    }
-    "InvalidArgument" => match read_error_invalid_argument(resp, body) {
-      Ok(x) => return ListDistributionsByCachePolicyIdErr.InvalidArgument(x)
-      Err(msg) => return ListDistributionsByCachePolicyIdErr.Deserialize(msg)
-    }
-    "NoSuchCachePolicy" => match read_error_no_such_cache_policy(resp, body) {
-      Ok(x) => return ListDistributionsByCachePolicyIdErr.NoSuchCachePolicy(x)
-      Err(msg) => return ListDistributionsByCachePolicyIdErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  ListDistributionsByCachePolicyIdErr.Api(restxml.api_error(resp))
 }

@@ -1,6 +1,8 @@
 // Known answers: "Hello world" as in aws-sdk-go-v2's
 // service/internal/checksum tests, and the CRC catalogue's "123456789".
 
+use std/crypto
+
 test "checksums match aws-sdk-go-v2's values" {
   let b = b"Hello world"
   expect(compute("CRC32", b)) == Some("i9aeUg==")
@@ -48,4 +50,26 @@ test "response validation checks the strongest fast checksum and skips composite
   expect(validate([("x-amz-checksum-crc32", "AAAAAA==")], b).is_err()) == true
   expect(validate([("x-amz-checksum-crc32", "i9aeUg==-3")], b)) == Ok(None)
   expect(validate([], b)) == Ok(None)
+}
+
+test "Glacier's tree hash: one chunk is its SHA-256; several combine pairwise" {
+  let one = b"Hello world"
+  expect(tree_hash(one)) == crypto.digest(crypto.Hash.Sha256, one).to_hex()
+  expect(tree_hash(b"")) == ""
+  // 3 MiB and a byte: four chunks, hashed in pairs then together
+  let mib = 1048576
+  let body = "a".repeat(3 * mib + 1).bytes()
+  let h = [0, 1, 2, 3].map(fn(k: Int) -> Bytes {
+    let end = if (k + 1) * mib < body.len() { (k + 1) * mib } else { body.len() }
+    crypto.digest(crypto.Hash.Sha256, body[k * mib..end])
+  })
+  let left = crypto.digest(crypto.Hash.Sha256, h[0] + h[1])
+  let right = crypto.digest(crypto.Hash.Sha256, h[2] + h[3])
+  expect(tree_hash(body)) == crypto.digest(crypto.Hash.Sha256, left + right).to_hex()
+  // three chunks: the third is carried up unpaired
+  let body3 = "b".repeat(2 * mib + 5).bytes()
+  let a = crypto.digest(crypto.Hash.Sha256, body3[0..mib])
+  let b = crypto.digest(crypto.Hash.Sha256, body3[mib..2 * mib])
+  let c = crypto.digest(crypto.Hash.Sha256, body3[2 * mib..body3.len()])
+  expect(tree_hash(body3)) == crypto.digest(crypto.Hash.Sha256, crypto.digest(crypto.Hash.Sha256, a + b) + c).to_hex()
 }

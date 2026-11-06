@@ -462,3 +462,35 @@ both. Workarounds here: the unreleased providers are
 Status: FIXED upstream in b7fcf7351 (xo-lang-4, 2026-11-05): interface
 type numbers and show thunks are keyed by module path when two program
 types share a name. 0.39.0 still needs the rename.
+
+## 16. std/http sends header names canonicalized, losing their case (Azure SDK)
+
+Found in the Azure SDK (xo-lang/azure storage/azblob, against Azurite
+3.35.0, xo 9f557bad4). A request header added as `x-ms-meta-project`
+reaches the server as `X-Ms-Meta-Project`, so Blob Storage, which keeps
+metadata names as sent, stores `Project`; a later list returns
+`<Metadata><Project>xo</Project></Metadata>`. Go's azblob sets
+`req.Header["x-ms-meta-"+k]` directly, so Go keeps the caller's case
+(captured from azblob v1.6.1: `x-ms-meta-Project`, `x-ms-meta-a_b`).
+Shared Key signatures are unaffected (the string to sign lowercases
+x-ms- names). The response side matches Go: names come back
+canonicalized (`Kind`), as Go's http does.
+Wanted: send a header name as given, as Go does for a name set without
+`Header.Set` (or an opt-in, `Request.with_header_raw`), since Azure
+metadata, Table properties and a few AWS headers (S3 user metadata is
+lowercased by S3 anyway) are case preserving.
+Workaround: none; the SDK documents that metadata names come back
+canonicalized. Status: OPEN.
+
+## 17. testing.FakeNet cannot match a request whose path has an escaped character
+
+Found in the Azure SDK's unit tests (xo 9f557bad4). A client request to
+`http://127.0.0.1:10000/devstoreaccount1/photos/my%20file.txt` (the
+fake sees path `/devstoreaccount1/photos/my file.txt`) matches no
+handler, whether the pattern is written `.../my%20file.txt`,
+`.../my file.txt` or `.../photos/{name}`; `%2F` names fail the same
+way. Unescaped paths match.
+Workaround: unit tests use plain names and test the escaping as a pure
+function; the Azurite run checks escaped names on the wire (they work:
+`dir%2Fhello%20world%20%C3%BC.txt` uploads, signs and downloads).
+Status: OPEN.

@@ -1430,3 +1430,25 @@ Disliked:
   call. It isn't missing, but an infallible
   `Time.utc(y, m, d, h, min, s)` for literals would make test fixtures
   read better.
+
+### 2026-11-06: storage helper dedupe (azure 5082338)
+
+Liked:
+- A constant can be defined as another module's constant
+  (`pub const TIME_FORMAT: Str = blobsas.TIME_FORMAT`), so azfile
+  kept its public names while the values come from one place.
+- Moving 160 lines of copied helpers onto azblob's needed no change
+  to any vectors file, and every module's tests passed on the first
+  run.
+
+Disliked:
+- Keeping a module's private name meant writing a one-line forwarding
+  function for each helper (`fn go_quote(s: Str) -> Str {
+  exported.go_quote(s) }`). I didn't find an import form that brings
+  a single function into scope under its own name.
+- The copies had already drifted. azqueue's `go_quote` turned out
+  not to escape `\n`, `\t` or `\r`, unlike azblob's and Go's. Nothing
+  flagged two same-named private functions that differed; I found it
+  only by diffing them. That is a project-hygiene problem more than a
+  language one, but an easy way to share a single function would
+  have prevented the copies in the first place.

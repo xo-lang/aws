@@ -1701,3 +1701,20 @@ Disliked:
 - `v[0..v.find(":").map(...) ?? 0]` parsed `??` against the range, not
   the bound; the error (`??` needs an optional value, found
   `Range[Int]`) was clear once read, but the precedence surprised me.
+
+### 2026-11-06: azcore.DateTime keeps its offset
+
+Liked:
+- `std/time` had what the fix needed: `time.fixed("", offset)` with the
+  `RFC3339` layout writes `+01:00`, `-01:30` or `Z` for zero, and its
+  `{frac}` trims zeros as Go's RFC3339Nano does, so 12 texts matched
+  Go's write-back with no custom formatter.
+- `derive Json(via: Str, ...)` moved from a newtype to a struct with no
+  change at the 200-odd generated model fields that use it.
+
+Disliked:
+- `Time.parse_rfc3339` reads the offset and then drops it; getting it
+  back meant parsing the `+hh:mm` again by hand. A parse that returns
+  the offset too (or a `Time` that keeps it, as Go's does) would have
+  saved that.
+- `Duration` has no unary minus here; a negative offset was `0s - d`.

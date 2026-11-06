@@ -87,7 +87,9 @@ for m in "${mods[@]}"; do
       if [ -z "$a" ]; then
         if [ -z "$p" ]; then a=aws; else a=$(basename "$p"); fi
       fi
-      grep -oE "(^|[^A-Za-z0-9_.])$a\.[A-Za-z_][A-Za-z0-9_]*" "$f" | sed -E "s/^.*$a\.//" | sort -u | while read -r n; do
+      # code only: comment lines and string literals dropped (a doc line
+      # or a string may say `aws.amazon.com`)
+      grep -vE '^[[:space:]]*//' "$f" | sed -E 's/"([^"\\]|\\.)*"/""/g' | grep -oE "(^|[^A-Za-z0-9_.])$a\.[A-Za-z_][A-Za-z0-9_]*" | sed -E "s/^.*$a\.//" | sort -u | while read -r n; do
         names_of "$ref" "$dir" | grep -qx "$n" || echo "$dir.$n"
       done
     done

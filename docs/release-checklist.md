@@ -38,7 +38,14 @@ current as work finds new ones.
    pushes them, the root first, then service/sts, then the rest. Check it
    first against a scratch clone (`TAG_REMOTE` set to a bare clone, then
    an app that gets the root and two services with no workspace). Later
-   releases use `scripts/tag-modules.sh`.
+   releases use `scripts/tag-modules.sh`, which first runs
+   `scripts/check-core-requires.sh --typecheck` over the changed
+   services against the root it is about to tag (no call of a core
+   function, type or field newer than it), then tags the root, raises
+   each changed service's `require github.com/xo-lang/aws` to that tag in
+   one commit, and tags the services there. Before 2026-11-06 it tagged
+   services that still required v0.1.0 while calling newer core
+   functions; check a release the same way, against a scratch clone.
 9. **CI.** Push `.github/workflows/models.yml` only after the repository
    is public, run it once by hand (a `workflow_dispatch` dry run) and
    report its timings before the first scheduled Wednesday run

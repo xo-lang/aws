@@ -1758,3 +1758,24 @@ Disliked:
   generator spells one per shape (`T{}`, `[]`, `{}`, `""`,
   `json.Value.Null`) and a polymorphic interface result has none at
   all; that one operation keeps the old error.
+
+### 2026-11-06: azeventgrid, key credentials and CloudEvent
+
+Liked:
+- `derive Json(via: json.Value, to:, from:)` carried CloudEvent's
+  hand-written JSON (extensions merged into the object, `data` kept as
+  text, Go's required-field errors) with no other machinery; the
+  marshal side matched Go's bytes on its first run.
+- `xo check` caught a pure `pub fn` that read the clock and rand and
+  named where (`Clock.now` uses `clock` here); adding `uses (clock,
+  rand)` was the whole fix.
+
+Disliked:
+- An error returned from a `via` decoder comes back prefixed `at $: `,
+  so Go's exact message needed the prefix stripped in the test; a way to
+  return a message as it is would keep error texts equal.
+- `match` arms cannot share a line, so a two-arm match inside a string
+  interpolation does not parse; the test used `.err() ?? ...` instead.
+- `derive Json` on a struct asked for `Json` on a field's enum type
+  even though the struct's JSON comes from its own `via` functions, so
+  the enum got a `derive Json` it never uses.

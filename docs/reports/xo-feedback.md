@@ -1669,3 +1669,35 @@ Disliked:
   `offset`) and still compares as an instant would have avoided it.
 - `List` has no `clear`; emptying a list inside a `Mutex.with`
   closure is `q = []`, which works but is not where one looks first.
+
+### 2026-11-06: azblob block blobs, UploadFile and DownloadFile
+
+Liked:
+- `File.write_at`, `truncate` and `stat` (new in xo at 08c33efee) were
+  all DownloadFile needed, and they work on the test's MemFs, so the
+  Go program's seven file cases replay with no real disk.
+- `BytesBuilder.with_capacity` built the 256 MiB + 5 byte pattern for
+  the 65 block upload fast enough that the whole replay (1262 lines
+  against Go, 65 block bodies hashed) runs in about 2 s.
+- The checker's hints were exact: `.insert` on a Map named `.put` and
+  said `.insert` is the Rust name; `enumerate` listed `indexed`.
+
+Disliked:
+- `xo test` now builds natively by default, and one `==` on a
+  `Result[_, CallErr]` in a new test file (XO1201: the error holds a
+  response) also printed eight XO1201 "interface value's type number
+  given after skipped code" errors at untouched files
+  (runtime/pipeline.xo, client.xo, core.xo). They went away with the
+  one fix; the extra errors pointed away from the cause.
+- `xo check` in the package directory said 0 errors for that same
+  test file; only `xo test` showed the XO1201.
+- No way to open an existing file for reading and writing without
+  truncating it (Go's `os.OpenFile(p, O_RDWR, 0)`): `create` truncates
+  and is write only, `open` is read only, `open_append` refuses
+  `write_at`. The Go cases that download over an existing file were
+  reproduced by writing the old contents through the `create` handle
+  first; a real "download into this existing file" caller cannot do
+  that.
+- `v[0..v.find(":").map(...) ?? 0]` parsed `??` against the range, not
+  the bound; the error (`??` needs an optional value, found
+  `Range[Int]`) was clear once read, but the precedence surprised me.

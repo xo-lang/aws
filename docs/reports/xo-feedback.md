@@ -1352,3 +1352,19 @@ Liked:
 Disliked:
 - Nothing new in this slice; it was a list of constants and one
   matcher.
+
+### 2026-11-06: azqueue responses and errors (azure e35ed16)
+
+Liked:
+- A match guard on an option (`Some(v) if v != "" => ...`) read the
+  Go "header set and non-empty" rule in one arm.
+- `with` on a defaulted struct field (`page with {response: resp}`)
+  let a pager page gain Go's response fields without changing the
+  parser.
+
+Disliked:
+- `Time.parse_rfc3339(x) ?? Err(...)` in a function returning
+  `Time ! Str` is a type error (XO0401: the right side is a Result,
+  the left a Time); it takes `?? return Err(...)` and a separate
+  `Ok(t)`. An option-to-result helper (`.ok_or(e)?`) would make it one
+  expression.

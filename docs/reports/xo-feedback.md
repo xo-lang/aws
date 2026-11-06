@@ -1392,3 +1392,20 @@ Disliked:
   at the fix.
 - `xo test --run` takes a substring, not a regex: `--run="a\|b"`
   matched nothing, and the message said only that no tests matched.
+
+### 2026-11-06: azqueue SAS and URLs (azure 40ef4f4)
+
+Liked:
+- `pub type URLParts = sas.URLParts` mirrored Go's
+  `type URLParts = sas.URLParts` alias exactly, and existing callers
+  of the root name kept compiling.
+- `match k.to_lower() { "sv" => { ... } ... _ => { known = false } }`
+  read like Go's string switch, which made the field-by-field port
+  easy to check against the source.
+
+Disliked:
+- Turning bytes back into a `Bytes` took a detour.
+  `Bytes.from_list(out)` was XO0601 ("no associated function or
+  constant `from_list`") with no note. The answer was `BytesBuilder`
+  (`write_byte`, then `freeze`), which I found by grepping the prelude.
+  A note naming `BytesBuilder` would have saved that.

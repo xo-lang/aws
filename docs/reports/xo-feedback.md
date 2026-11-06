@@ -1074,3 +1074,25 @@ Disliked:
   `escaped_path()` while a URL string does not. A `url.escape_path(p)`
   (Go's encodePath mode) would remove both this and azfile's own
   `escape_path`.
+
+### 2026-11-06: azfile file data calls (azure 649bcb2)
+
+Liked:
+- `Bytes.quote()` is Go's `%q` of a byte slice exactly (`\a`, `\x7f`,
+  `\xff` included), which replaced a hand-written escaper in the test
+  dumps; `binary.u64_le` covered the CRC64 header, -1 included.
+- The data slice matched Go's 31 cases on its first run, the empty
+  `x-ms-range` header Go sends for a count of 0 included. 25 mutations;
+  the 2 survivors were test gaps, now Go cases.
+- `while start < count` chunk loops read plainly, with no XO0401 (only
+  a `while true` that exits by return is flagged).
+
+Disliked:
+- No way to test-print: `println` is not in scope in a test, and the
+  XO0601 note points at `os.stdio.println` or `dbg`. I probed with
+  `expect` instead. A note that `dbg(x)` works in tests, or an example,
+  would save a round trip.
+- Go's chunked helpers run in parallel; a sequential port is simpler
+  but slower on real transfers. A small std helper for "run these N
+  calls with at most K in flight, keep the first error" (Go's
+  DoBatchTransfer shape) would make a faithful port cheap.

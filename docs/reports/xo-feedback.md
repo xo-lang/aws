@@ -713,10 +713,12 @@ Disliked:
   without a word: the first handler keeps serving, so a test that
   swaps a route to make it fail silently tests nothing. spec/std.md 8.1
   does not say which wins. Either replace (and say so) or fault.
+  Fixed upstream (xo 18d7ab44b): the last `handle` now wins.
 - `req.param("name")` faults when the matched route has no such
   parameter. One handler shared by `PUT .../c/{name}` and `GET .../c`
   needs a method check first; an `Option` returning variant (or `param`
-  returning `Str?`) would fit the rest of std.
+  returning `Str?`) would fit the rest of std. Fixed upstream (xo
+  18d7ab44b): `req.param_opt` returns `Str?`.
 
 ### 2026-11-06: custom endpoints in azeventhubs and azservicebus (azure f1314c9)
 
@@ -734,10 +736,13 @@ Disliked:
   the prelude's `Conn`, and the error prints both bare. It should
   qualify them (`prelude.Conn` vs `azeventhubs.Conn`) or say one hides
   the other; there seems to be no way to name the prelude's type once
-  it is hidden.
+  it is hidden. Fixed upstream (xo 71583ef3b): the mismatch now names
+  each type by module path.
 - std/amqp's `dial` takes the TLS server name from the address, with no
   option to set it: a proxy in front of a TLS service cannot be checked
-  against the service's name (go-amqp uses the Open's hostname).
+  against the service's name (go-amqp uses the Open's hostname). Fixed
+  upstream (xo 4bd90321b): `ConnOptions.hostname` is the SNI and
+  certificate name; azure 150fb2f dropped the README deviation.
 - No `List.dedup` or `distinct`; a for loop with `contains` stood in.
 
 ### 2026-11-06: storage/azqueue (azure c3d8de4)

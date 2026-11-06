@@ -1,7 +1,10 @@
 #!/bin/sh
 # Tags the published modules (the root and service/*) that changed since a
 # commit, by scripts/changed-modules.sh: the root as vX.Y.Z, a service as
-# service/<name>/vX.Y.Z, each one minor or patch past its newest tag. A
+# service/<name>/vX.Y.Z, each one minor or patch past its newest tag.
+# Each changed service is first checked against the newest root (the one
+# this run tags) and tagged requiring it, so no tagged service calls a
+# core function newer than the core it requires. A
 # module with no tag yet is left for the first release, which is made by
 # hand (docs/release-checklist.md). The root and service/sts require each
 # other (decision 0003), so the order is the checklist's: the root first,
@@ -72,9 +75,49 @@ tidy_commit() {
 }
 root=$(bump_of .)
 sts=$(bump_of service/sts)
+# every changed service is tagged requiring the newest root: the one this
+# run tags, or else the newest root tag. Before any tag, each of them is
+# checked against that root's tree (HEAD for a root about to be tagged):
+# no call of a core function, type or field newer than it
+# (scripts/check-core-requires.sh, names and a type check).
+if [ -n "$root" ]; then
+  target=$(bumped . "$root")
+  target_ref=HEAD
+else
+  target=v$(latest .)
+  target_ref=refs/tags/$target
+fi
+svcs=$(awk -F'\t' '$1 ~ /^service\//{ print $1 }' "$plan")
+if [ -n "$svcs" ]; then
+  # shellcheck disable=SC2086
+  if ! XO_CLI=$xo scripts/check-core-requires.sh --typecheck --core="$target" --core-ref="$target_ref" $svcs; then
+    echo "tag-modules: a changed service does not build with the root $target; nothing tagged" >&2
+    exit 1
+  fi
+fi
 root_tagged=0
 if [ -n "$root" ]; then
   tag . "$root" && root_tagged=1
+fi
+# the requires, raised to the root checked above, in one commit
+raise=""
+for m in $svcs; do
+  grep -qx "require github.com/xo-lang/aws $target" "$m/xo.mod" || raise="$raise $m"
+done
+if [ -n "$raise" ]; then
+  n=$(echo "$raise" | wc -w | tr -d ' ')
+  if [ $push -eq 0 ]; then
+    echo "then: $n service(s) require the root $target, in one commit"
+  else
+    for m in $raise; do
+      sed -i.bak -E "s#^require github\.com/xo-lang/aws v[^ ]+\$#require github.com/xo-lang/aws $target#" "$m/xo.mod"
+      rm -f "$m/xo.mod.bak"
+      grep -qx "require github.com/xo-lang/aws $target" "$m/xo.mod" || { echo "tag-modules: $m/xo.mod has no core require to raise" >&2; exit 1; }
+      git add -- "$m/xo.mod"
+    done
+    git commit -q -m "Changed services require the root $target"
+    git push -q "$remote" HEAD:main
+  fi
 fi
 # every other service
 awk -F'\t' '$1 != "." && $1 != "service/sts"' "$plan" | while IFS='	' read -r m b; do

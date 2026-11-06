@@ -1779,3 +1779,27 @@ Disliked:
 - `derive Json` on a struct asked for `Json` on a field's enum type
   even though the struct's JSON comes from its own `via` functions, so
   the enum got a `derive Json` it never uses.
+
+### 2026-11-06: azcore v1.23.0 root changes
+
+Liked:
+- The `failed: CallErr? = None` field with a default added Go's terminal
+  pager state to `runtime.Pager` and azcosmos's pager without touching a
+  single caller, and a mutation (dropping the assignment) failed the
+  vector test in each.
+- xo 975246c99 now reports a test-only XO1201 from `xo check` too, so
+  the check and test counts agree.
+
+Disliked:
+- `std/json.indent` says it is Go's Indent but drops the text's trailing
+  white space, which Go keeps; ResponseError's body had to add it back
+  by hand to match Go's text.
+- Bytes iterate as `UInt8`, so byte classification needed `Int(c)` at
+  every comparison, and there is no `Bytes` builder from a list; the
+  escaped-path code fell back to slicing a `Str` one byte at a time.
+- `time.parse` checks the weekday against the date, which Go does not,
+  so reading Go's RFC 7231 times needed a layout without the weekday
+  plus a hand check of the name.
+- std/http has no public `status_text`, though the runtime has one
+  inside (`http1w.status_text`), so azcore carries its own copy of
+  net/http's table.

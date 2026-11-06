@@ -638,3 +638,34 @@ Disliked:
   gate passed, but there is no way to pin one without the other.
 - amqptest ignores the Modified outcome's annotations, so
   properties_to_modify is sent but not checked against the broker.
+
+### 2026-11-06: azeventhubs over std/amqp (azure 72af2ff)
+
+Liked:
+- std/amqp's encoding matched go-amqp's byte for byte on the first try:
+  a keyed two-event batch and a 300 byte one hash the same as Go's
+  EventDataBatch output (Go run locally on a copy of the module).
+- amqptest's event hub mode (partitions, selector filters, epoch with
+  `amqp:link:stolen`, the namespace `$management` READ) landed within a
+  day of the ask, and the client passed against it with one change to
+  a test; the get-message-sessions and string expiration asks landed the
+  same day.
+- XO0701 caught two public constructors that draw a UUID (`uses rand`
+  missing), which in Go would be an invisible global.
+- `x ?? continue` and `?? return Err(..)` keep the annotation loop as
+  flat as Go's switch.
+
+Disliked:
+- `Str.parse_int` does not exist; it is the static `Int.parse(s)`. The
+  error lists the methods of Str, so the hint never names the function
+  that does it.
+- A field and a method cannot share a name (XO0603), so Go's
+  `InstanceID()` accessor forces the field to be renamed (`id`).
+- `amqp.AmqpErr` has no `display`, so `?` on it in a test is an error
+  (XO0202) where a library error with `display` converts; tests need a
+  wrapper.
+- `is amqp.Value.Map` needs `(..)` even when only the variant matters
+  (the fix is offered, but it is noise for a variant check).
+- A `match` arm cannot be a bare `for` (second time; it bit again here).
+- `Bytes.repeat` is a method (`b"a".repeat(200)`), not a constructor;
+  the error said so clearly.

@@ -829,9 +829,15 @@ Disliked:
   private, so the Cosmos AAD policy copied it. Fixed in azure fac0f57
   with a public `runtime.TokenCache` (decision 0003 amendment 1,
   Proposed).
-- A closure inside a `${...}` interpolation is rejected. That is a
-  reasonable rule, but the error points at the closing brace rather
-  than saying closures are not allowed there.
+- A closure inside a `${...}` interpolation is rejected when it spans
+  lines inside a one-line `"..."` string: `"[${xs.map(fn(v: Int) -> Str {`
+  then the body on the next lines gives XO0151 "string literal not
+  terminated" and XO0156 "`${` is not closed by `}`" at the string's
+  start, then follow-on errors (`v` not found). A one-line closure in
+  `${}` checks clean (Xo Lang 1 checked). The error could say that a
+  `"..."` string cannot span lines and suggest `"""` or a `let`.
+  (Corrected: this entry first said the error pointed at the closing
+  brace.)
 - Process note, not the language: a fake that returned one document
   hid an untrimmed slice bug until a two-document test was added.
 

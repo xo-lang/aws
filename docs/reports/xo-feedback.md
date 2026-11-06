@@ -1744,3 +1744,17 @@ Disliked:
 - `tok ?? ""` on a `Result[Str, Str]` is rejected (name the error or
   use `.ok()`); the note said what to write, but it is one more step
   than for an optional.
+
+### 2026-11-06: an empty body is the zero value in every module
+
+Liked:
+- One generator change regenerated 254 files across every module and
+  all of them compiled and passed the gate on the first run; a struct
+  whose fields all have defaults made `T{}` a valid zero value for
+  every model with no per-model work.
+
+Disliked:
+- There is no generic zero value for a type (Go's `var zero T`), so the
+  generator spells one per shape (`T{}`, `[]`, `{}`, `""`,
+  `json.Value.Null`) and a polymorphic interface result has none at
+  all; that one operation keeps the old error.

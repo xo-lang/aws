@@ -1046,3 +1046,31 @@ Disliked:
 - Process, not language: I once chained the pre-push checks with `;`
   instead of `&&`, so a gitleaks finding did not stop the push. The
   checks now gate the push with `&&`.
+
+### 2026-11-06: azfile file client, no data calls (azure 7132e26)
+
+Liked:
+- Payload enums replaced Go's sealed-interface trick for copy
+  properties (`SourceCopyFileCreationTime{}` vs
+  `DestinationCopyFileCreationTime(t)`, each with an unexported marker
+  method): `enum CopyFileTime { Source, Destination(t: Time) }` and a
+  three-arm match say the same thing in five lines.
+- `FileReads{...}` with defaulted fields scaled from the directory port
+  to eleven calls that read eleven different header subsets; 23
+  mutations of the read and request rules, one survivor (a test gap,
+  now a Go case).
+- XO0406 on `r ?? default` for a Result named both fixes (`?? e =>` or
+  `.ok() ??`).
+- The byte-for-byte replay caught a real signing bug in the shared
+  azblob Shared Key code: a URL joined with a raw space was signed as
+  written, where Go signs `EscapedPath()` (`%20`). Every earlier vector
+  used already-escaped paths.
+
+Disliked:
+- Escaping a path the way Go's url.EscapedPath does needed a hand loop
+  over runes with `"${c}".bytes().to_hex()` per character: std/url has
+  `path_escape` (one segment, escapes `/` and `;,`) but no "escape a
+  path, keep the reserved characters" function, and an http.Request has
+  `escaped_path()` while a URL string does not. A `url.escape_path(p)`
+  (Go's encodePath mode) would remove both this and azfile's own
+  `escape_path`.

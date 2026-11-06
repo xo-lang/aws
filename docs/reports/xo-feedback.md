@@ -1452,3 +1452,29 @@ Disliked:
   only by diffing them. That is a project-hygiene problem more than a
   language one, but an easy way to share a single function would
   have prevented the copies in the first place.
+
+### 2026-11-06: Go url.Parse for storage URLs, azfile parse_url (azure 263ad6f)
+
+Liked:
+- std/netip's errors are Go's text word for word, so wrapping them as
+  Go's url.Parse does (`invalid host: ParseAddr("zz::1"): each
+  colon-separated field must have at least one digit (at "zz::1")`)
+  matched the Go vectors on the first run, as did the cases with two
+  closing brackets.
+- core.md 1.6 lists the escapes on one line (`\n \t \r \0 \\ \" \' \$
+  \xHH \u{...}`, with `\xHH` at most `\x7f` in `Str`), so the generated
+  test could keep Go's `"\x01"` literals as they were.
+- std.md states plainly where `url.parse_query` differs from Go
+  ("Go keeps the pairs parsed around an error; Xo returns the error
+  alone"). That told me why a URL with one bad pair lost all its
+  parameters, without any debugging.
+- 263 lines of Go output matched after one fix (go_quote's control
+  bytes), and a 31-mutant run killed 29. Of the two survivors, one
+  pointed at a missing test case and the other at a redundant branch,
+  which I removed.
+
+Disliked:
+- Because of that `parse_query` difference I wrote my own
+  `go_query`. A port from Go wants Go's behavior. A form that returns
+  the pairs it read along with the first error (Go's own shape) would
+  let ports use std directly.

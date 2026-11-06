@@ -1226,3 +1226,27 @@ Disliked:
 - Under `testing.FakeNet`, `req.host()` is empty while `req.url.host`
   has the host. Either both should be set or `host()`'s doc should say
   it is the Host header only.
+
+### 2026-11-06: azdatalake list pagers and the DFS core (azure 777bb91)
+
+Liked:
+- `json.parse_value` plus a `match k { ... }` over the object's fields
+  ported Go's hand-written `Path.UnmarshalJSON` (string-encoded numbers
+  and booleans, case-sensitive keys, null left unset) line for line.
+- `runtime.new_pager_with` took a custom next-request rule in one
+  closure, so the pagers rebuild the sorted query as Go does instead of
+  appending the marker.
+- A generic wrapper struct (`DfsPager[T]` around `runtime.Pager[T]`)
+  mapped every page error in three lines.
+- 4 pagers, 12 cases, byte-identical; 18 mutations, the 2 survivors
+  were test gaps (now Go cases).
+
+Disliked:
+- `Bool ? ! Str` (a typo, with a space before `?`) was accepted with no
+  warning. `xo fmt` would likely normalize it, but the gate does not run
+  fmt here, so a lint in `xo check` would catch it sooner.
+- A mistake of mine the tooling could not catch: Go's reflective dump
+  prints a nil `[]byte` as `""`, and I first read that as "Go fills an
+  absent hash with empty bytes" and built it into azblob (since fixed:
+  None, and the Xo dump prints `""` for None). Nothing in Xo to fix;
+  noted so the next port's harness writer knows.

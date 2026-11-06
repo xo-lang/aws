@@ -1,0 +1,86 @@
+// Smithy float members are Float32 (decision 0010), read and written as
+// aws-sdk-go-v2 reads and writes a Go float32. The expectations are a
+// local Go program's output: s3vectors v1.17.3 (restJson1) and cloudfront
+// v1.75.4 (restXml) clients against a fake HTTP client, and
+// aws/protocol/query's encoder (aws-sdk-go-v2 v1.47.7), which the
+// awsQuery and ec2Query serializers call.
+//   s3vectors put "float32":[1.1,0.1,1e-7,9.999999e-7,1e+21,16777216,3.4028235e+38,0.00024414063,2097152.2,1e-45,-2.5,0]
+//   write <float32 bits> cloudfront=<Weight text> query=<FloatValue text>
+//   read <text> <float32 bits of s3vectors distance, s3vectors data, cloudfront Weight>
+
+use std/http
+use github.com/xo-lang/aws/protocol/rest
+use github.com/xo-lang/aws/service/cloudfront
+use github.com/xo-lang/aws/service/s3vectors
+
+const WRITES: List[(Int, Str, Str)] = [
+  (1066192077, "1.1", "1.1"),
+  (1036831949, "0.1", "0.1"),
+  (869711765, "1e-7", "0.0000001"),
+  (897988540, "9.999999e-7", "0.0000009999999"),
+  (1649989415, "1e+21", "1000000000000000000000"),
+  (1266679808, "16777216", "16777216"),
+  (2139095039, "3.4028235e+38", "340282350000000000000000000000000000000"),
+  (964689920, "0.00024414063", "0.00024414063"),
+  (1241513985, "2097152.2", "2097152.2"),
+  (1, "1e-45", "0.000000000000000000000000000000000000000000001"),
+  (3223322624, "-2.5", "-2.5"),
+  (0, "0", "0"),
+]
+
+// (text, s3vectors distance, s3vectors data, cloudfront Weight): a body
+// rounds twice (to float64, then float32), so the float32 midpoint
+// 1.00000005960464477550 reads as 1 and 3.4028235677973366e38 as +Inf
+const READS: List[(Str, Int, Int, Int)] = [
+  ("1.00000005960464477550", 1065353216, 1065353216, 1065353216),
+  ("1.1", 1066192077, 1066192077, 1066192077),
+  ("16777217", 1266679808, 1266679808, 1266679808),
+  ("3.4028235677973366e38", 2139095040, 2139095040, 2139095040),
+  ("7.006492321624085e-46", 0, 0, 0),
+  ("0.1", 1036831949, 1036831949, 1036831949),
+  ("1e-7", 869711765, 869711765, 869711765),
+  ("-0", 0, 0, 2147483648),
+]
+
+fn f32(b: Int) -> Float32 {
+  Float32.from_bits(UInt32.try(b) ?? fault("bits ${b}"))
+}
+
+fn between(s: Str, open: Str, close: Str) -> Str {
+  let (_, rest) = s.cut(open) ?? return "?"
+  let (mid, _) = rest.cut(close) ?? return "?"
+  mid
+}
+
+test "Float32 members are written as aws-sdk-go-v2 writes a float32" {
+  let ep = rest.Endpoint{host: "127.0.0.1"}
+  let vs = WRITES.map(fn(w: (Int, Str, Str)) -> Float32 { f32(w.0) })
+  let put = s3vectors.serialize_put_vectors(ep, s3vectors.PutVectorsInput{index_name: Some("i"), vector_bucket_name: Some("b"), vectors: Some([s3vectors.PutInputVector{key: Some("k"), data: Some(s3vectors.VectorData.Float32(value: vs))}])})?
+  expect(between(put.body.to_str() ?? "", "\"float32\":[", "]")) == "1.1,0.1,1e-7,9.999999e-7,1e+21,16777216,3.4028235e+38,0.00024414063,2097152.2,1e-45,-2.5,0"
+  for (b, xml_text, query_text) in WRITES {
+    let req = cloudfront.serialize_create_continuous_deployment_policy(ep, cloudfront.CreateContinuousDeploymentPolicyRequest{continuous_deployment_policy_config: Some(cloudfront.ContinuousDeploymentPolicyConfig{
+      enabled: Some(true),
+      staging_distribution_dns_names: Some(cloudfront.StagingDistributionDnsNames{quantity: Some(0)}),
+      traffic_config: Some(cloudfront.TrafficConfig{type_value: Some(cloudfront.ContinuousDeploymentPolicyType.SingleWeight), single_weight_config: Some(cloudfront.ContinuousDeploymentSingleWeightConfig{weight: Some(f32(b))})}),
+    })})?
+    let got = "cloudfront=${between(req.body.to_str() ?? "", "<Weight>", "</Weight>")} query=${rest.float32_text(f32(b))}"
+    expect("${b} ${got}") == "${b} cloudfront=${xml_text} query=${query_text}"
+  }
+}
+
+test "Float32 members are read as aws-sdk-go-v2 reads a float32" {
+  for (s, distance, data, weight) in READS {
+    let q = s3vectors.deserialize_query_vectors(http.text(200, "{\"vectors\":[{\"key\":\"k\",\"distance\":${s}}],\"distanceMetric\":\"cosine\"}"))?
+    let d = ((q.vectors ?? []).first() ?? fault("no vector")).distance ?? fault("no distance")
+    let g = s3vectors.deserialize_get_vectors(http.text(200, "{\"vectors\":[{\"key\":\"k\",\"data\":{\"float32\":[${s}]}}]}"))?
+    let v = match ((g.vectors ?? []).first() ?? fault("no vector")).data {
+      Some(s3vectors.VectorData.Float32(value: xs)) => xs.first() ?? fault("no data")
+      _ => fault("no float32 data")
+    }
+    let body = "<ContinuousDeploymentPolicy><Id>x</Id><LastModifiedTime>2019-12-16T23:48:18Z</LastModifiedTime><ContinuousDeploymentPolicyConfig><StagingDistributionDnsNames><Quantity>0</Quantity></StagingDistributionDnsNames><Enabled>true</Enabled><TrafficConfig><SingleWeightConfig><Weight>${s}</Weight></SingleWeightConfig><Type>SingleWeight</Type></TrafficConfig></ContinuousDeploymentPolicyConfig></ContinuousDeploymentPolicy>"
+    let c = cloudfront.deserialize_get_continuous_deployment_policy(http.text(200, body).with_header("Content-Type", "text/xml"))?
+    let w = c.continuous_deployment_policy?.continuous_deployment_policy_config?.traffic_config?.single_weight_config?.weight ?? fault("no weight")
+    let got = "${Int(d.to_bits())} ${Int(v.to_bits())} ${Int(w.to_bits())}"
+    expect("${s} ${got}") == "${s} ${distance} ${data} ${weight}"
+  }
+}

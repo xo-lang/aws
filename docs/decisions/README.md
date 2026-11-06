@@ -14,4 +14,4 @@ deleted.
 - [0007](0007-public-repository-license-and-hygiene.md): Apache-2.0, NOTICE and attribution, trademark disclaimer, public repository hygiene (Accepted)
 - [0008](0008-continuous-integration.md): the weekly models workflow: newest Xo release, model update, every check, merge and tag on green, pull request and issue on red, no AWS in CI (Accepted)
 - [0009](0009-streamed-uploads.md): streamed request bodies: `aws.Upload` from a file (retried from its start) or a reader (sent once), S3 uploads in aws-chunked with a trailing checksum, `aws.auth#unsignedPayload` honored (Accepted)
-- [0010](0010-float32-members.md): Smithy `float` members as `Float32`, each protocol rounding as Go does (Proposed)
+- [0010](0010-float32-members.md): Smithy `float` members as `Float32`, each protocol rounding as Go does (Accepted)

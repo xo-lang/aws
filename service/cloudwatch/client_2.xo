@@ -9,6 +9,23 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_list_dashboards_error(resp: http.Response) -> ListDashboardsErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InternalServiceError" => match read_error_internal_service_fault(resp, body) {
+      Ok(x) => return ListDashboardsErr.InternalServiceFault(x)
+      Err(msg) => return ListDashboardsErr.Deserialize(msg)
+    }
+    "InvalidParameterValue" => match read_error_invalid_parameter_value_exception(resp, body) {
+      Ok(x) => return ListDashboardsErr.InvalidParameterValueException(x)
+      Err(msg) => return ListDashboardsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListDashboardsErr.Api(restxml.api_error(resp))
+}
+
 /// Returns a list of the dashboards for your account. If you include
 /// DashboardNamePrefix , only those dashboards with names starting with the
 /// prefix are listed. Otherwise, all dashboards in your account are listed.

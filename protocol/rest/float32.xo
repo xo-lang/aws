@@ -1,0 +1,106 @@
+// Smithy `float` members are Float32 (decision 0010), written as
+// aws-sdk-go-v2 writes a Go float32: the shortest decimal that reads
+// back as the same float32. Xo's own Display of a Float32 prints the
+// float64 shortest form (`1.100000023841858` for Float32(1.1)), so
+// these find the float32 shortest digits themselves (checked against
+// Go's FormatFloat(..., 32) and smithy-go's EncodeFloat in
+// float32vectors_test.xo).
+
+/// The float64 nearest the shortest decimal that reads back as `f`:
+/// Go's strconv.FormatFloat(float64(f), 'g', -1, 32) digits. That
+/// decimal has at most 9 digits, so the float64's own shortest text
+/// has the same digits, and `to_fixed(-1)` or `to_exp(-1)` writes them.
+pub fn shortest32(f: Float32) -> Float {
+  let x = Float(f)
+  if x == 0.0 || x.is_nan() || x.is_inf() {
+    return x
+  }
+  // x's exact digits (a float32 has at most 105 significant digits)
+  let (mant, exp) = x.to_exp(120).cut("e") ?? return x
+  let sign = if mant.starts_with("-") { "-" } else { "" }
+  let all = mant.replace("-", "").replace(".", "")
+  let e0 = Int.parse(exp.replace("+", "")) ?? return x
+  let b = Int(f.to_bits())
+  let half_up = b & 0x7fffff == 0 && (b >> 23) & 0xff != 0
+  for p in 1..10 {
+    // x rounded to p significant digits as Go's Dragonbox rounds an
+    // exact tie: half even, but half up at a power of two (2^-12 is
+    // 0.00024414063). Also its two neighbors: the interval
+    // around a power of two is uneven, so the nearest p digit decimal
+    // can miss while a neighbor reads back.
+    let head = Int.parse(all[0..p]) ?? return x
+    let next = all[p..p + 1]
+    let tie = next == "5" && all[p + 1..all.len()].replace("0", "") == ""
+    let up = if tie { half_up || head % 2 == 1 } else { next >= "5" }
+    let d = head + (if up { 1 } else { 0 })
+    let e = e0 - (p - 1)
+    var best: Str? = None
+    var best_dist = 0.0
+    for c in [d, d - 1, d + 1] {
+      if c <= 0 {
+        continue
+      }
+      let text = "${sign}${c}e${e}"
+      match go_parse_float(text, 32) {
+        Ok(y) => if y == x {
+          let dist = ((Float.parse(text) ?? x) - x).abs()
+          if best.is_none() || dist < best_dist {
+            best = Some(text)
+            best_dist = dist
+          }
+        }
+        Err(_) => {}
+      }
+      if best.is_some() && c == d {
+        // the nearest p digit decimal reads back: it is Go's choice
+        break
+      }
+    }
+    match best {
+      Some(t) => return Float.parse(t) ?? x
+      None => {}
+    }
+  }
+  x
+}
+
+/// Go's strconv.FormatFloat(float64(f), 'f', -1, 32) with Smithy's names
+/// for the special values: a Float32 in a label, query or header.
+pub fn float32_text(f: Float32) -> Str {
+  float_text(shortest32(f))
+}
+
+/// smithy-go's encoding.EncodeFloat(v, 64): a double in a JSON or XML
+/// body. `'e'` form below 1e-6 or from 1e21, with `e-09` written `e-9`.
+/// NaN and the infinities are Smithy's names (Go's EncodeFloat panics on
+/// them; its JSON serializers write the names first, its XML ones do not).
+pub fn encode_float(x: Float) -> Str {
+  if x.is_nan() || x.is_inf() {
+    return float_text(x)
+  }
+  let abs = x.abs()
+  e_form(x, abs != 0.0 && (abs < 1e-6 || abs >= 1e21))
+}
+
+/// smithy-go's encoding.EncodeFloat(float64(f), 32): a Float32 in a JSON
+/// or XML body; the `'e'` bounds are compared as float32s, as Go does.
+pub fn encode_float32(f: Float32) -> Str {
+  let x = Float(f)
+  if x.is_nan() || x.is_inf() {
+    return float_text(x)
+  }
+  let abs = x.abs()
+  e_form(shortest32(f), abs != 0.0 && (abs < Float(Float32(1e-6)) || abs >= Float(Float32(1e21))))
+}
+
+fn e_form(x: Float, e: Bool) -> Str {
+  if !e {
+    return x.to_fixed(-1)
+  }
+  let t = x.to_exp(-1)
+  let n = t.len()
+  if n >= 4 && t[n - 4..n - 2] == "e-" && t[n - 2..n - 1] == "0" {
+    return t[0..n - 2] + t[n - 1..n]
+  }
+  t
+}

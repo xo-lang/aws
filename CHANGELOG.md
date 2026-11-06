@@ -6,6 +6,55 @@ compatibility); a generator fix lists the service modules it touches.
 
 ## Unreleased
 
+**Breaking:** Smithy `float` members are `Float32`, as aws-sdk-go-v2's
+`float32` (decision 0010, accepted by the owner on 2026-11-06). A field,
+list item or map value of a Smithy `float` that was `Float` is now
+`Float32` in 54 service modules, each of them a minor version at its
+next tag. Code that does arithmetic on one converts it (`Float(x)`).
+Smithy `double` members stay `Float`.
+
+- Reads round as Go's: a header once (`strconv.ParseFloat(v, 32)`, with
+  Go's errors), a JSON, XML or query body twice (to float64, then
+  `float32(f64)`), so `3.4028235677973366e38` is the largest float32 in
+  a header and +Inf in a body.
+- Writes are Go's shortest float32 text: `strconv.FormatFloat(v, 'f',
+  -1, 32)` in a label, query string or header (`0.0000001`), and
+  smithy-go's `encoding.EncodeFloat(v, 32)` in a JSON or XML body
+  (`1e-7`, `1e+21`). Before, a float was written with its float64 digits
+  (`1.100000023841858` for a value read as `1.1`).
+- NaN and the infinities are Smithy's names everywhere. In an XML body
+  Go's EncodeFloat panics on them; Xo writes the names.
+- `protocol/rest`: `shortest32`, `float32_text`, `encode_float32` and
+  `encode_float`; `jsonv.float32` and `jsonv.read_float32`;
+  `xmlv.read_float32`. Checked against go1.26 on about 3,500 float32 bit
+  patterns and 2,200 float64 to float32 roundings
+  (`float32vectors_test.xo`), and end to end against s3vectors v1.17.3
+  and cloudfront v1.75.4 (`integration/float32_test.xo`).
+- The services with `Float32` members:
+  amplifyuibuilder, appconfig, arcregionswitch, arczonalshift, b2bi,
+  batch, bedrock, bedrockagent, bedrockagentcore,
+  bedrockagentcorecontrol, bedrockagentruntime, bedrockruntime,
+  chimesdkvoice, cleanrooms, cloudfront, cloudtrail, comprehend,
+  comprehendmedical, connect, datazone, deadline, ec2, emr,
+  frauddetector, gamelift, geomaps, globalaccelerator, iotsitewise,
+  iotwireless, ivsrealtime, kendra, kendraranking, lightsail,
+  location, lookoutequipment, machinelearning, mediapackagev2, mgn,
+  odb, opensearchserverless, outposts, personalizeevents, qconnect,
+  rdsdata, rekognition, rtbfabric, s3vectors, sagemaker,
+  sagemakergeospatial, securityhub, sfn, textract, timestreaminfluxdb,
+  transcribe.
+
+An XML body writes a double as smithy-go's `encoding.EncodeFloat(v, 64)`
+(behavior fix): `1e-7` and `1e+21` where Xo wrote `0.0000001` and
+`1000000000000000000000`. It changes, besides the services above:
+  autoscaling, cloudformation, cloudsearch, cloudwatch, docdb,
+  elasticache, elasticbeanstalk, elasticloadbalancingv2, neptune, rds,
+  redshift, route53, s3control, ses.
+
+`scripts/changed-modules.sh` makes a member added, removed or changed (an
+indented `pub` line) a minor bump; before, a field's new type was a
+patch.
+
 Header numbers and booleans are parsed as aws-sdk-go-v2 parses them
 (behavior fix, 54 service modules regenerated):
 
@@ -18,8 +67,7 @@ Header numbers and booleans are parsed as aws-sdk-go-v2 parses them
   `true`, `True` and the false forms). Any other text is Go's error.
   Before, anything but `true` read as false.
 - A double header is Go's `strconv.ParseFloat(v, 64)`, errors included.
-  A float header is unchanged until decision 0010 (Proposed) settles
-  how Smithy `float` members are typed.
+  A float header was left to decision 0010 (the Float32 entry above).
 - DynamoDB's `X-Amz-Crc32` is Go's `strconv.ParseUint(v, 10, 32)`: one
   that does not parse fails with Go's text (`unable to parse checksum
   header abc, strconv.ParseUint: parsing "abc": invalid syntax`). A

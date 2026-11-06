@@ -39,6 +39,12 @@ fn flattened(m: model.Member) -> Bool {
 
 /// The XML text of scalar `v`.
 fn xml_text(g: G, traits: List[(Str, json.Value)], target: Str, v: Str) -> Str {
+  // smithy-go's xml Value.Float and Double: encoding.EncodeFloat
+  match shape_of(g, target).kind {
+    Float => return "rest.encode_float32(${v})"
+    Double => return "rest.encode_float(${v})"
+    _ => {}
+  }
   text_expr(g, model.Member{name: "", target: target, traits: traits}, target, v, "date-time")
 }
 
@@ -50,7 +56,8 @@ fn xml_parse(g: G, traits: List[(Str, json.Value)], target: Str, t: Str) -> Str 
     Enum => "${type_name(g.names, target)}.from(${t})"
     IntEnum => "${type_name(g.names, target)}.from(xmlv.read_int(${t})?)"
     Byte | Short | Integer | Long => "xmlv.read_int(${t})?"
-    Float | Double => "xmlv.read_float(${t})?"
+    Float => "xmlv.read_float32(${t})?"
+    Double => "xmlv.read_float(${t})?"
     Boolean => "xmlv.read_bool(${t})?"
     Timestamp => match ts_format(g, traits, target, "date-time") {
       "epoch-seconds" => "(rest.parse_epoch_seconds(${t}.trim()) ?? return Err(\"bad timestamp\"))"

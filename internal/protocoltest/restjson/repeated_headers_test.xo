@@ -60,3 +60,24 @@ test "integer, double and boolean headers parse as Go's strconv, errors included
     }
   }
 }
+
+test "a float header is Go's ParseFloat(v, 32): one rounding, Go's errors" {
+  // a local Go program's output (strconv.ParseFloat(v, 32)): the header
+  // rounds once, where a body rounds twice (integration/float32_test.xo),
+  // so the float32 midpoint 1.00000005960464477550 reads as the float32
+  // above 1 and 3.4028235677973366e38 as the largest float32
+  for (v, want) in [
+    ("1.00000005960464477550", "1065353217"),
+    ("3.4028235677973366e38", "2139095039"),
+    ("1.1", "1066192077"),
+    ("7.006492321624085e-46", "0"),
+    ("1e39", "strconv.ParseFloat: parsing \"1e39\": value out of range"),
+    ("1.5f", "strconv.ParseFloat: parsing \"1.5f\": invalid syntax"),
+  ] {
+    let got = match deserialize_input_and_output_with_headers(http.text(200, "").with_header("X-Float", v)) {
+      Ok(out) => "${Int((out.header_float ?? fault("no float")).to_bits())}"
+      Err(e) => e
+    }
+    expect("${v} ${got}") == "${v} ${want}"
+  }
+}

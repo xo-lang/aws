@@ -12,6 +12,17 @@ pub fn float(f: Float) -> json.Value {
   json.Value.Num(f)
 }
 
+/// A Float32 (a Smithy `float`) as smithy-go writes a Go float32:
+/// encoding.EncodeFloat(v, 32), its shortest float32 text, and NaN and
+/// the infinities as Smithy's names.
+pub fn float32(f: Float32) -> json.Value {
+  let x = Float(f)
+  if x.is_nan() || x.is_inf() {
+    return json.Value.Str(rest.float_text(x))
+  }
+  json.Value.Num(rest.shortest32(f))
+}
+
 /// A timestamp in `format` (epoch-seconds, date-time or http-date).
 pub fn time(t: Time, format: Str) -> json.Value {
   match format {
@@ -56,6 +67,12 @@ pub fn read_float(v: json.Value) -> Float ! Str {
     }
     _ => Err("want a number, got ${v.encode()}")
   }
+}
+
+/// A Float32 as aws-sdk-go-v2 reads one: the number as a float64
+/// (json.Number.Float64), then rounded to float32 (`float32(f64)`).
+pub fn read_float32(v: json.Value) -> Float32 ! Str {
+  Ok(Float32(read_float(v)?))
 }
 
 pub fn read_bool(v: json.Value) -> Bool ! Str {

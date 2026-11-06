@@ -3,7 +3,9 @@
 # new files included), one per line: the module directory and the bump
 # its next tag needs. "minor" when the change adds an operation or a type
 # (a new `pub fn (c: Client)`, `pub struct` or `pub enum` line, or a new
-# module), "patch" otherwise.
+# module) or adds, removes or changes a member (an indented `pub` line:
+# a field's type changing, as Smithy floats becoming Float32 in decision
+# 0010, breaks the API), "patch" otherwise.
 # Usage: scripts/changed-modules.sh [commit]   (default HEAD)
 set -eu
 cd "$(dirname "$0")/.."
@@ -29,6 +31,8 @@ module_of() {
   if ! git cat-file -e "$base:$modfile" 2>/dev/null; then
     bump=minor
   elif git diff "$base" $paths | grep -qE '^\+pub (fn \(c: Client\)|struct |enum )'; then
+    bump=minor
+  elif git diff "$base" $paths | grep -qE '^[-+][[:space:]]+pub '; then
     bump=minor
   elif [ -n "$(git ls-files --others --exclude-standard $paths | grep '\.xo$' || true)" ]; then
     bump=minor

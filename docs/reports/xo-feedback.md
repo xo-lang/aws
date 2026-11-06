@@ -669,3 +669,29 @@ Disliked:
 - A `match` arm cannot be a bare `for` (second time; it bit again here).
 - `Bytes.repeat` is a method (`b"a".repeat(200)`), not a constructor;
   the error said so clearly.
+
+### 2026-11-06: azeventhubs Processor and AMQPAnnotatedMessage (azure 70dddbd, 2f62890)
+
+Liked:
+- Structural interfaces: `InMemoryCheckpointStore` is a `CheckpointStore`
+  by its methods, as Go's, with no declaration to keep in step.
+- `defer` runs shielded when the task is cancelled, so `Processor.run`
+  maps onto Go's `Run(ctx)` (close the clients, give the partitions up)
+  by cancelling its scope, with nothing extra.
+- The deterministic scheduler with `--seed` made a two-processor
+  end-to-end test easy to trust: six seeds, the same result.
+- std/amqp matched go-amqp byte for byte again for header, footer,
+  value and sequence bodies; aliasing `AMQPAnnotatedMessage` to
+  `amqp.Message` removed a whole conversion layer Go needs.
+
+Disliked:
+- `Ok(()) => {}` fails on the native backends with XO1201 "this tuple
+  pattern" (support planned); `Ok(_)` works. The unit pattern being a
+  tuple pattern is surprising, and the message does not suggest `_`.
+- XO0804 flagged a claim-then-undo (mark a partition taken, remove the
+  mark when making its client fails) as a stale decision; the two steps
+  are deliberately separate and only one task writes the map.
+- `List.sort_by` takes a key function, not a comparator; the first try
+  with Go's `less(a, b)` shape gave three errors before the right one.
+- `Rand.int(lo, hi)`'s half-open range is only in spec/std.md, not in
+  `xo doc Rand`.

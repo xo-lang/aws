@@ -968,3 +968,29 @@ Disliked:
   unbounded; the test run then grows memory until the heavy-job cap
   stops it, with no output. A per-test timeout in `xo test` would make
   such a hang a named failure.
+
+### 2026-11-06: azcosmos change feed (azure e127dde)
+
+Liked:
+- The composite token as a value (`CompositeToken` with `advance` and
+  `replace_head` returning new tokens) made the queue rotation easy to
+  unit-test without a fake network, and the 13 Go cases matched on the
+  first run.
+- `time.format(t, time.utc(), time.RFC1123)` ends in `UTC` exactly as
+  Go's `time.RFC1123` does on a UTC time (the HTTP date helper swaps in
+  `GMT`), so If-Modified-Since needed no special case; the spec says so
+  in one line.
+- 15 mutations; two first survived (children inheriting the etag on a
+  split, the token taking the container's resource id), which showed two
+  untested Go paths. Both are now Go-verified cases.
+
+Disliked:
+- A mutation that left `pmin` unused failed to compile ("rename to
+  `_pmin`") instead of failing a test. Right for real code, but
+  mutation runs need a second, use-preserving variant. Not a language
+  problem; noted for the method.
+- Returning partial pages together with an error (Go returns a
+  response and an error) has no direct form: `Result` carries one or
+  the other. A `Partial[T, E]`-style convention or documenting the
+  pattern (an error variant carrying the partial value) would help
+  ports of Go APIs that do this.

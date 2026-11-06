@@ -1718,3 +1718,29 @@ Disliked:
   the offset too (or a `Time` that keeps it, as Go's does) would have
   saved that.
 - `Duration` has no unary minus here; a negative offset was `0s - d`.
+
+### 2026-11-06: azappconfig, HMAC signing and Go's pagers
+
+Liked:
+- `crypto.sha256`, `crypto.hmac_sha256`, `Bytes.to_base64` and the
+  `RFC1123` layout gave HMAC-SHA256 signatures identical to Go's on the
+  first run, with the fake clock set to each date Go signed at.
+- A replay of every public call (357 lines of Go output: requests,
+  scripted responses, token scopes, results) passed on its first run
+  through `FakeNet` handlers and a `Mutex` log; changing one vector
+  line made it fail at that line, so the match was real.
+- `xo check` named the bad variant at once (`json.Patch` has no
+  `Set`; it is `Value`), and record `with` made the per-page match
+  conditions a one-line copy of the options.
+
+Disliked:
+- A `FakeNet` handler returns a response, never a transport error, so
+  the Go case whose transport fails (an `AADSTS500011` error) could not
+  be replayed with the others; it needed a hand-made failing policy in
+  its own pipeline.
+- `time.date` takes only year, month and day and returns a Result;
+  with no date and time constructor, test times were parsed from
+  RFC 3339 text.
+- `tok ?? ""` on a `Result[Str, Str]` is rejected (name the error or
+  use `.ok()`); the note said what to write, but it is one more step
+  than for an optional.

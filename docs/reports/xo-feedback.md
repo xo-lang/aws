@@ -1612,3 +1612,34 @@ Disliked:
 - `T ! E` as a parameter type is XO0160 with a clear fix
   (`Result[T, E]`); good message, though the two spellings of one type
   are a small tax.
+
+### 2026-11-06: Key Vault azadmin, and Go's resume tokens and bodies
+
+Liked:
+- Replaying a Go program's log line by line (one `check` helper that
+  reports the first differing line) found five root differences in an
+  afternoon that unit tests had hidden: resume token names, model key
+  order, HTML escaping in bodies, the next-page `Accept` header and
+  `//` in data plane paths. Each fix was one place in the runtime or
+  the generator, then a regeneration.
+- The compiler's hint for `Byte` (`the Kotlin name; Xo's is UInt8`)
+  and for `List.remove` (`did you mean remove_at`) fixed each error
+  without a trip to the spec.
+- `json.json_writer(escape_html: true)` plus `json.to_value` gave
+  Go's `json.Marshal` bytes for any `derive Json` type in five lines
+  (`runtime.marshal_json`).
+
+Disliked:
+- `json.encode` does not escape `<`, `>` and `&`, where Go's
+  `json.Marshal` does and `json.json_writer()` does by default. Every
+  generated request body with a SAS token (`sv=...&sig=...`) differed
+  from Go's by its `&`s until the bodies went through the writer.
+  Two encoders in one package with different defaults is a trap for a
+  port.
+- `if var x = f() { ... }` is XO0160: a mutable binding from an
+  optional needs `if let Some(x0) = f() { var x = x0; ... }`.
+- `os` is only in scope in a test's body, so a helper in a test file
+  that builds a pipeline has to take one as a parameter; the error
+  (`name os not found, did you mean Ok`) does not say why.
+- `Bytes` has no `all`/`any`, so a "digits only" check over a string
+  slice became an index loop with `"0123456789".contains(s[i..i + 1])`.

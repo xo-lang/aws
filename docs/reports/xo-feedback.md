@@ -894,3 +894,39 @@ Disliked:
   logs in its handler cannot see the failed attempts; the count came
   from `net.requests()`. That works, but the doc for `fail` could say
   the handler is not called and point at `requests()`.
+
+### 2026-11-06: azcosmos partition key range cache and feed ranges (azure ee0f9c0)
+
+Liked:
+- MurmurHash3 x64_128 ported cleanly onto Int as a 64-bit word:
+  `wrapping_mul`, `wrapping_add`, `wrapping_shl`, `shr_logical` and
+  `rotate_right` cover every step, and `Float.to_bits`/`from_bits`
+  gave the number encoding and exact vectors (negative zero included).
+  All 29 of Go's baseline cases matched on the first run.
+- A `Mutex[Map[Str, Mutex[T]]]` (outer lock to find or create an entry,
+  inner lock held across the network read) gave Go's per-container
+  single flight in a few lines, and the generic `entry_of[T]` served
+  both caches. The "return the outcome as the closure's value" pattern
+  from the failover slice applied unchanged.
+- The virtual test clock made the 429 backoff checkable: two throttled
+  tries advance it by 300ms to 350ms, asserted exactly, with no real
+  wait.
+- 22 tests passed on the first compile after two errors, and 10
+  mutations (parent removal, If-None-Match, 429 retry, combine, cache
+  store, etag carry, completeness, overlap start) each failed a test.
+
+Disliked:
+- A `while true { match ... { Ok(p) => return Ok(p) ... } }` loop that
+  can only leave by `return` is XO0401 ("expected `FeedPage`, found
+  `()`") at the function's end. Rewriting as a bounded `for` plus a
+  final call works, but a loop with no exit could type as never, or
+  the note could suggest that rewrite.
+- `os` is only in scope inside `test` blocks, so a test helper that
+  builds a client must take `net`, `clock` and `rand` as parameters.
+  XO0601 said "name `os` not found" and suggested `Ok` and `js`; a
+  note that `os` is a test-block binding would have pointed at the fix.
+- No sort with a comparator: Go sorts ranges with CompareEPK, here
+  `sort_by` needs an `Ord` key, so the key is the EPK with trailing
+  zeros trimmed (equivalent for hex digits, but it needed an argument
+  in a comment). A `sort_with(fn(a, b) -> Int)` would port such code
+  directly.

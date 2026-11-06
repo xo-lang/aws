@@ -1409,3 +1409,24 @@ Disliked:
   constant `from_list`") with no note. The answer was `BytesBuilder`
   (`write_byte`, then `freeze`), which I found by grepping the prelude.
   A note naming `BytesBuilder` would have saved that.
+
+### 2026-11-06: azqueue v0.2.0 constructors and URLs (azure c927559)
+
+Liked:
+- `path.clean` is Go's `path.Clean`, so azcore's `runtime.JoinPaths`
+  (path.Join of one segment) ported line for line, and the vectors
+  (including `a/../b` and trailing slashes) matched on the first run.
+- The lead reported that the XO0401 `or_err` note from the earlier
+  entry has landed (xo 41ec7737b), less than an hour after I wrote it
+  up.
+
+Disliked:
+- Building a fixed UTC instant in a test took three fallible steps:
+  `time.instant(time.date(y, m, d).ok()?, time.ClockTime{...}, time.utc()).ok()`.
+  I mixed up the fallback types (XO0401 "expected `time.Date`, found
+  `Time`", which was a clear message) and switched to
+  `Time.from_unix_millis(<computed>)`. Afterwards I saw that
+  `Time.parse_rfc3339("2026-11-06T00:00:00Z")` would have been one
+  call. It isn't missing, but an infallible
+  `Time.utc(y, m, d, h, min, s)` for literals would make test fixtures
+  read better.

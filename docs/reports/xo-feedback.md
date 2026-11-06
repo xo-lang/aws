@@ -1643,3 +1643,29 @@ Disliked:
   (`name os not found, did you mean Ok`) does not say why.
 - `Bytes` has no `all`/`any`, so a "digits only" check over a string
   slice became an index loop with `"0123456789".contains(s[i..i + 1])`.
+
+### 2026-11-06: Go vectors for pagers, pollers and decoding
+
+Liked:
+- One shared fake file (queue a reply per `method path`, log every
+  request as the Go program does, compare line by line) dropped into
+  eight generated modules unchanged, because a test file in a module
+  sees the module's private names. Each module's replay was then a
+  dozen lines, and five of eight matched Go on the first run.
+- `struct ... with {field: v}` made the poller rewrite readable: each
+  azcore constructor (async, op, loc, body) became one `base with
+  {...}` line next to the azcore code it mirrors.
+- Driving azcore's `runtime.NewPoller` directly from Go, with 31
+  cases on one fake transport, found seven poller differences
+  (first state, missing or relative polling URLs, status codes on
+  polls and final GETs, where a result comes from) that per-module
+  tests could not have reached.
+
+Disliked:
+- Xo's `Time` is an instant with no offset, so `azcore.DateTime`
+  cannot write back `+01:00` as Go's `time.Time` does. Fixing it means
+  changing a public newtype into a struct with an offset; a
+  `std/time` value that keeps its parsed offset (as `Civil` has
+  `offset`) and still compares as an instant would have avoided it.
+- `List` has no `clear`; emptying a list inside a `Mutex.with`
+  closure is `q = []`, which works but is not where one looks first.

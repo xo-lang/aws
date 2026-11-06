@@ -936,3 +936,35 @@ Disliked:
   zeros trimmed (equivalent for hex digits, but it needed an argument
   in a comment). A `sort_with(fn(a, b) -> Int)` would port such code
   directly.
+
+### 2026-11-06: azcosmos ReadMany (azure 3ac0d8c)
+
+Liked:
+- The differential caught a real divergence in an earlier slice: Go's
+  query responses re-marshal each document (compact, HTML escaped), and
+  the port's query pager had kept the service's text since d5afa3e
+  because the old fake only returned compact documents. One helper
+  (`documents`, reusing the batch slice's `compact`) fixed both the
+  pager and ReadMany.
+- `crypto.sha256(body).to_hex()` let the 1001 item query (52 KB body)
+  be compared with Go's byte for byte by hash.
+- 27 tests, and 15 mutations (prefix range, version 1, chunk size, the
+  three query shapes, IS_NULL, gone substatus, cache invalidation,
+  continuation, range id header, compaction, range bounds, identifier
+  digits, range order) each failed a test or hung. The prefix one first
+  survived, which showed the fake had no range split inside a prefix's
+  span; a unit test now has one.
+
+Disliked:
+- `List.enumerate()` does not exist; it is `indexed()`. XO0601 listed
+  the first dozen methods (`indexed` among them), which was enough, but
+  a "did you mean `indexed`" for the common name from other languages
+  would be quicker.
+- XO0804 warned that a test fake's second `f.state.with` "acts on a
+  decision about `n`" read in the first, although the first is on a
+  branch that returns before the second runs. Splitting the state into
+  two Mutexes silenced it; the check could follow the `return`.
+- A mutation that drops the continuation token makes the page loop
+  unbounded; the test run then grows memory until the heavy-job cap
+  stops it, with no output. A per-test timeout in `xo test` would make
+  such a hang a named failure.

@@ -581,3 +581,38 @@ Disliked:
   intended short of restructuring.
 - Durations have no multiply by Float except `scale`; Go's backoff math
   reads better with operators.
+
+### 2026-11-05: azservicebus/admin over the Atom API (azure e832f31)
+
+Liked:
+- std/xml's tree API (`parse`, `child`, `children_named`, `attr`,
+  `text`) read every Atom entry with local names, prefixed
+  `d2p1:ActiveMessageCount` children included, with no structs to
+  declare.
+- Resolved names keep the `xmlns` declarations as attributes, so a
+  small serializer could rebuild an unknown filter's XML with its
+  prefixes and match Go's `innerxml` output exactly.
+- The test world's FakeNet served `https://` routes for the HTTP admin
+  client and the in-process AMQP broker side by side with no `--real`.
+- `Float.to_fixed(6)` is Go's `%f`, and `Time.format_rfc3339` trims
+  fractional zeros as Go's RFC3339Nano does; both byte-matched Go's
+  bodies the first time.
+
+Disliked:
+- No `innerxml` or raw span on an element: keeping an unknown element's
+  XML as written means re-serializing it, which loses the original
+  escaping and self-closing tags.
+- `derive Xml` has no namespaced attributes, so Go's
+  `xmlns:_XMLSchema-instance` prefix had to be written by hand with
+  string building.
+- `opt ?? Err(...)` where a Result is wanted is a type error; the
+  working spelling is `Ok(opt ?? return Err(...))`, which reads twice.
+- A line cannot start with `+`, so long concatenations need the
+  operator at the end of each line (the error says so and gives the
+  fix).
+- `Response.text()` is `Str?` (UTF-8 check) while `Request.body` is
+  Bytes with `to_str_lossy()`; two spellings for the same read.
+- `T ! E` is not allowed as a parameter type; `Result[T, E]` there and
+  `T ! E` in results is one more rule to remember.
+- `cat > file` with no input in a shell snippet blocked the run until
+  the tool timeout. That one is mine, not Xo's.

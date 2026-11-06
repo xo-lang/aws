@@ -994,3 +994,27 @@ Disliked:
   the other. A `Partial[T, E]`-style convention or documenting the
   pattern (an error variant carrying the partial value) would help
   ports of Go APIs that do this.
+
+### 2026-11-06: azcosmos offers and vector/full text policies (azure ab57df0, c273c5b)
+
+Liked:
+- `t with {manual: ..., autoscale_max: ...}` made the offer replace
+  (read the offer, swap its content, PUT it) one expression, and the 7
+  throughput cases matched Go's requests on the first full run.
+- Defaulted struct fields (`List[T] = []`, `T? = None`) let the new
+  policy fields land in `ContainerProperties` and `IndexingPolicy`
+  without touching any existing constructor or test; all 34 tests kept
+  passing and the 3 new Go cases matched first time. 8 mutations, all
+  caught.
+
+Disliked:
+- A Go nil slice and an empty slice marshal differently (`null` vs
+  `[]`); a Xo `List` has one empty value, so a port that must echo
+  both needs a `List[T]?` field, which every caller then has to wrap.
+  Ports of Go JSON models would benefit from a documented convention
+  (or a std/json helper) for "omitted, null, or empty".
+- `match c.get("x") { Some(json.Value.Object(_)) => ... }` binds
+  nothing usable, so the object is fetched a second time with
+  `?? json.Value.Null`. An `as`-style binding on a nested pattern
+  (`Some(json.Value.Object(_) as a)`) or matching the object's map
+  directly would remove the repeat lookup.

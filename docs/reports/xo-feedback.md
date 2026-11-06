@@ -1306,3 +1306,17 @@ Disliked:
 - Not Xo: Go's batch transfer with `Concurrency: 1` still raced one
   chunk past a failure, so the Go vectors needed the failure on the
   last chunk to be deterministic.
+
+### 2026-11-06: azdatalake leases (azure de8501c)
+
+Liked:
+- A `var` method on a field of a `var` receiver
+  (`l.inner.change_lease(...)` inside `fn (var l: PathLeaseClient)`)
+  updated the inner client in place, so the wrapper kept Go's "new ID
+  only on success" with two lines.
+- `Result.map_err(to_dfs_error)` made each wrapped call one line.
+- The Go and Xo runs matched on the first try; 16 mutations, one gap
+  (a renew with conditions), now a Go case.
+
+Disliked:
+- Nothing new in this slice; it was a thin wrapper over azblob.

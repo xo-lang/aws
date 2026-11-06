@@ -1478,3 +1478,24 @@ Disliked:
   `go_query`. A port from Go wants Go's behavior. A form that returns
   the pairs it read along with the first error (Go's own shape) would
   let ports use std directly.
+
+### 2026-11-06: repeated response headers, AWS generator and core (aws 773e83b)
+
+Liked:
+- `http.Response.header_values(name)` returns every field in order
+  (decision 0288), and `add_header` adds one more field. That made a
+  Go port of smithy-go's list splitting, and fakes that repeat a
+  header, short to write. The 48 smithy-go vectors matched on the
+  first run.
+- Regenerating all 435 services and type checking them took a single
+  script run, so I could show that a generator change compiles
+  everywhere before I committed it.
+
+Disliked:
+- `resp.header(name)` joins the fields with `, `, but code ported from
+  Go reaches for it as if it were `Header.Get`, which takes the first
+  field. That one difference was behind 13 hand-written AWS sites and
+  the generated scalar, list and prefix readers, and about 45 more
+  sites in the Azure SDK. A std method with Go's `Get` meaning (for
+  example `first_header`) would give ports the right default. So would
+  a doc line on `header` saying it is not Go's `Get`.

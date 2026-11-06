@@ -1,3 +1,5 @@
+use std/http
+
 test "escaping and queries" {
   expect(escape(" %:/?#[]@!$&'()*+,;=😹")) == "%20%25%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D%F0%9F%98%B9"
   expect(escape("a/b c", true)) == "a/b%20c"
@@ -16,9 +18,32 @@ test "floats" {
 
 test "header lists" {
   expect(header_list(["a", "b,c", "d\"e"])) == "a, \"b,c\", \"d\\\"e\""
-  expect(split_header_list("a, \"b,c\", \"d\\\"e\"")) == ["a", "b,c", "d\"e"]
-  expect(split_header_list("1, 2,3")) == ["1", "2", "3"]
-  expect(split_http_dates("Mon, 16 Dec 2019 23:48:18 GMT, Mon, 16 Dec 2019 23:48:18 GMT").len()) == 2
+  expect(split_header_values([header_list(["a", "b,c", "d\"e"])])) == Ok(["a", "b,c", "d\"e"])
+}
+
+fn go_list(xs: List[Str]) -> Str {
+  "[${xs.map(fn(x: Str) -> Str { go_quote(x) }).join(" ")}]"
+}
+
+test "list header fields split as smithy-go's" {
+  var out: List[Str] = []
+  for (dates, vs) in HEADER_LIST_CASES {
+    out.push("== ${if dates { "dates" } else { "list" }} ${go_list(vs)}")
+    let r = if dates { split_http_date_values(vs) } else { split_header_values(vs) }
+    match r {
+      Ok(xs) => out.push("  ${go_list(xs.map(fn(x: Str) -> Str { go_trim_space(x) }))}")
+      Err(e) => out.push("  error ${e}")
+    }
+  }
+  expect(out) == HEADER_LIST_OUTPUT
+}
+
+test "a scalar header is its first field, trimmed, as Go's generated deserializers" {
+  let resp = http.text(200, "").add_header("X-A", " v1 ").add_header("X-A", "v2")
+  expect(first_header(resp, "X-A")) == Some("v1")
+  expect(first_header(resp, "x-a")) == Some("v1")
+  expect(first_header(resp, "X-B")) == None
+  expect(go_trim_space("\u{a0}\t a b \u{3000}")) == "a b"
 }
 
 test "timestamps" {

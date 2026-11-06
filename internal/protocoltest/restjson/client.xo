@@ -4891,7 +4891,7 @@ fn from_json_timestamp_list(v: json.Value) -> List[Time] ! Str {
 fn read_error_complex_error(resp: http.Response, body: json.Value) -> ComplexError ! Str {
   let _ = (resp, body)
   var out = ComplexError{}
-  if let Some(hv) = resp.header("X-Header") {
+  if let Some(hv) = rest.first_header(resp, "X-Header") {
     out.header = hv
   }
   for (k, fv) in jsonv.fields(body)? {
@@ -6503,7 +6503,7 @@ pub fn serialize_duplex_stream_with_initial_messages(ep: rest.Endpoint, input: D
 
 pub fn deserialize_duplex_stream_with_initial_messages(resp: http.Response) -> DuplexStreamWithInitialMessagesOutput ! Str {
   var out = DuplexStreamWithInitialMessagesOutput{}
-  if let Some(hv) = resp.header("initial-response-member") {
+  if let Some(hv) = rest.first_header(resp, "initial-response-member") {
     out.initial_response_member = hv
   }
   if !resp.body.is_empty() {
@@ -6879,7 +6879,7 @@ pub fn serialize_greeting_with_errors(ep: rest.Endpoint, input: (), idempotency_
 
 pub fn deserialize_greeting_with_errors(resp: http.Response) -> GreetingWithErrorsOutput ! Str {
   var out = GreetingWithErrorsOutput{}
-  if let Some(hv) = resp.header("X-Greeting") {
+  if let Some(hv) = rest.first_header(resp, "X-Greeting") {
     out.greeting = hv
   }
   Ok(out)
@@ -7131,11 +7131,11 @@ pub fn deserialize_http_empty_prefix_headers(resp: http.Response) -> HttpEmptyPr
   var prefixed_prefix_headers: Map[Str, Str] = {}
   for (k, hv) in resp.headers.entries() {
     if k.to_lower().starts_with("") {
-      prefixed_prefix_headers.put(k.bytes()[0..k.len()].to_str() ?? k, hv)
+      prefixed_prefix_headers.put((k.bytes()[0..k.len()].to_str() ?? k).to_lower(), rest.first_header(resp, k) ?? hv)
     }
   }
   out.prefix_headers = prefixed_prefix_headers
-  if let Some(hv) = resp.header("hello") {
+  if let Some(hv) = rest.first_header(resp, "hello") {
     out.specific_header = hv
   }
   Ok(out)
@@ -7282,7 +7282,7 @@ pub fn serialize_http_payload_traits(ep: rest.Endpoint, input: HttpPayloadTraits
 
 pub fn deserialize_http_payload_traits(resp: http.Response) -> HttpPayloadTraitsInputOutput ! Str {
   var out = HttpPayloadTraitsInputOutput{}
-  if let Some(hv) = resp.header("X-Foo") {
+  if let Some(hv) = rest.first_header(resp, "X-Foo") {
     out.foo = hv
   }
   if !resp.body.is_empty() {
@@ -7360,7 +7360,7 @@ pub fn serialize_http_payload_traits_with_media_type(ep: rest.Endpoint, input: H
 
 pub fn deserialize_http_payload_traits_with_media_type(resp: http.Response) -> HttpPayloadTraitsWithMediaTypeInputOutput ! Str {
   var out = HttpPayloadTraitsWithMediaTypeInputOutput{}
-  if let Some(hv) = resp.header("X-Foo") {
+  if let Some(hv) = rest.first_header(resp, "X-Foo") {
     out.foo = hv
   }
   if !resp.body.is_empty() {
@@ -7591,13 +7591,13 @@ pub fn serialize_http_prefix_headers(ep: rest.Endpoint, input: HttpPrefixHeaders
 
 pub fn deserialize_http_prefix_headers(resp: http.Response) -> HttpPrefixHeadersOutput ! Str {
   var out = HttpPrefixHeadersOutput{}
-  if let Some(hv) = resp.header("x-foo") {
+  if let Some(hv) = rest.first_header(resp, "x-foo") {
     out.foo = hv
   }
   var prefixed_foo_map: Map[Str, Str] = {}
   for (k, hv) in resp.headers.entries() {
     if k.to_lower().starts_with("x-foo-") {
-      prefixed_foo_map.put(k.bytes()[6..k.len()].to_str() ?? k, hv)
+      prefixed_foo_map.put((k.bytes()[6..k.len()].to_str() ?? k).to_lower(), rest.first_header(resp, k) ?? hv)
     }
   }
   out.foo_map = prefixed_foo_map
@@ -7669,7 +7669,7 @@ pub fn deserialize_http_prefix_headers_in_response(resp: http.Response) -> HttpP
   var prefixed_prefix_headers: Map[Str, Str] = {}
   for (k, hv) in resp.headers.entries() {
     if k.to_lower().starts_with("") {
-      prefixed_prefix_headers.put(k.bytes()[0..k.len()].to_str() ?? k, hv)
+      prefixed_prefix_headers.put((k.bytes()[0..k.len()].to_str() ?? k).to_lower(), rest.first_header(resp, k) ?? hv)
     }
   }
   out.prefix_headers = prefixed_prefix_headers
@@ -8551,84 +8551,105 @@ pub fn serialize_input_and_output_with_headers(ep: rest.Endpoint, input: InputAn
 
 pub fn deserialize_input_and_output_with_headers(resp: http.Response) -> InputAndOutputWithHeadersIO ! Str {
   var out = InputAndOutputWithHeadersIO{}
-  if let Some(hv) = resp.header("X-String") {
+  if let Some(hv) = rest.first_header(resp, "X-String") {
     out.header_string = hv
   }
-  if let Some(hv) = resp.header("X-Byte") {
+  if let Some(hv) = rest.first_header(resp, "X-Byte") {
     out.header_byte = (Int.parse(hv) ?? return Err("bad integer header ${hv}"))
   }
-  if let Some(hv) = resp.header("X-Short") {
+  if let Some(hv) = rest.first_header(resp, "X-Short") {
     out.header_short = (Int.parse(hv) ?? return Err("bad integer header ${hv}"))
   }
-  if let Some(hv) = resp.header("X-Integer") {
+  if let Some(hv) = rest.first_header(resp, "X-Integer") {
     out.header_integer = (Int.parse(hv) ?? return Err("bad integer header ${hv}"))
   }
-  if let Some(hv) = resp.header("X-Long") {
+  if let Some(hv) = rest.first_header(resp, "X-Long") {
     out.header_long = (Int.parse(hv) ?? return Err("bad integer header ${hv}"))
   }
-  if let Some(hv) = resp.header("X-Float") {
+  if let Some(hv) = rest.first_header(resp, "X-Float") {
     out.header_float = (rest.parse_float(hv) ?? return Err("bad number header ${hv}"))
   }
-  if let Some(hv) = resp.header("X-Double") {
+  if let Some(hv) = rest.first_header(resp, "X-Double") {
     out.header_double = (rest.parse_float(hv) ?? return Err("bad number header ${hv}"))
   }
-  if let Some(hv) = resp.header("X-Boolean1") {
+  if let Some(hv) = rest.first_header(resp, "X-Boolean1") {
     out.header_true_bool = (hv == "true")
   }
-  if let Some(hv) = resp.header("X-Boolean2") {
+  if let Some(hv) = rest.first_header(resp, "X-Boolean2") {
     out.header_false_bool = (hv == "true")
   }
-  if let Some(hv) = resp.header("X-StringList") {
+  let hvs_header_string_list = resp.header_values("X-StringList")
+  if !hvs_header_string_list.is_empty() {
+    let parts_header_string_list = rest.split_header_values(hvs_header_string_list) ?? e => return Err(e)
     var items: List[Str] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_header_string_list {
+      let item = rest.go_trim_space(part)
       items.push(item)
     }
     out.header_string_list = items
   }
-  if let Some(hv) = resp.header("X-StringSet") {
+  let hvs_header_string_set = resp.header_values("X-StringSet")
+  if !hvs_header_string_set.is_empty() {
+    let parts_header_string_set = rest.split_header_values(hvs_header_string_set) ?? e => return Err(e)
     var items: List[Str] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_header_string_set {
+      let item = rest.go_trim_space(part)
       items.push(item)
     }
     out.header_string_set = items
   }
-  if let Some(hv) = resp.header("X-IntegerList") {
+  let hvs_header_integer_list = resp.header_values("X-IntegerList")
+  if !hvs_header_integer_list.is_empty() {
+    let parts_header_integer_list = rest.split_header_values(hvs_header_integer_list) ?? e => return Err(e)
     var items: List[Int] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_header_integer_list {
+      let item = rest.go_trim_space(part)
       items.push((Int.parse(item) ?? return Err("bad integer header ${item}")))
     }
     out.header_integer_list = items
   }
-  if let Some(hv) = resp.header("X-BooleanList") {
+  let hvs_header_boolean_list = resp.header_values("X-BooleanList")
+  if !hvs_header_boolean_list.is_empty() {
+    let parts_header_boolean_list = rest.split_header_values(hvs_header_boolean_list) ?? e => return Err(e)
     var items: List[Bool] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_header_boolean_list {
+      let item = rest.go_trim_space(part)
       items.push((item == "true"))
     }
     out.header_boolean_list = items
   }
-  if let Some(hv) = resp.header("X-TimestampList") {
+  let hvs_header_timestamp_list = resp.header_values("X-TimestampList")
+  if !hvs_header_timestamp_list.is_empty() {
+    let parts_header_timestamp_list = rest.split_http_date_values(hvs_header_timestamp_list) ?? e => return Err(e)
     var items: List[Time] = []
-    for item in rest.split_http_dates(hv) {
+    for part in parts_header_timestamp_list {
+      let item = rest.go_trim_space(part)
       items.push((rest.parse_http_date(item) ?? return Err("bad timestamp header")))
     }
     out.header_timestamp_list = items
   }
-  if let Some(hv) = resp.header("X-Enum") {
+  if let Some(hv) = rest.first_header(resp, "X-Enum") {
     out.header_enum = FooEnum.from(hv)
   }
-  if let Some(hv) = resp.header("X-EnumList") {
+  let hvs_header_enum_list = resp.header_values("X-EnumList")
+  if !hvs_header_enum_list.is_empty() {
+    let parts_header_enum_list = rest.split_header_values(hvs_header_enum_list) ?? e => return Err(e)
     var items: List[FooEnum] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_header_enum_list {
+      let item = rest.go_trim_space(part)
       items.push(FooEnum.from(item))
     }
     out.header_enum_list = items
   }
-  if let Some(hv) = resp.header("X-IntegerEnum") {
+  if let Some(hv) = rest.first_header(resp, "X-IntegerEnum") {
     out.header_integer_enum = IntegerEnum.from(Int.parse(hv) ?? return Err("bad integer header"))
   }
-  if let Some(hv) = resp.header("X-IntegerEnumList") {
+  let hvs_header_integer_enum_list = resp.header_values("X-IntegerEnumList")
+  if !hvs_header_integer_enum_list.is_empty() {
+    let parts_header_integer_enum_list = rest.split_header_values(hvs_header_integer_enum_list) ?? e => return Err(e)
     var items: List[IntegerEnum] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_header_integer_enum_list {
+      let item = rest.go_trim_space(part)
       items.push(IntegerEnum.from(Int.parse(item) ?? return Err("bad integer header")))
     }
     out.header_integer_enum_list = items
@@ -11961,7 +11982,7 @@ pub fn serialize_media_type_header(ep: rest.Endpoint, input: MediaTypeHeaderInpu
 
 pub fn deserialize_media_type_header(resp: http.Response) -> MediaTypeHeaderOutput ! Str {
   var out = MediaTypeHeaderOutput{}
-  if let Some(hv) = resp.header("X-Json") {
+  if let Some(hv) = rest.first_header(resp, "X-Json") {
     out.json = (Bytes.from_base64(hv) ?? return Err("bad base64 header")).to_str() ?? ""
   }
   Ok(out)
@@ -12169,15 +12190,18 @@ pub fn serialize_null_and_empty_headers_client(ep: rest.Endpoint, input: NullAnd
 
 pub fn deserialize_null_and_empty_headers_client(resp: http.Response) -> NullAndEmptyHeadersIO ! Str {
   var out = NullAndEmptyHeadersIO{}
-  if let Some(hv) = resp.header("X-A") {
+  if let Some(hv) = rest.first_header(resp, "X-A") {
     out.a = hv
   }
-  if let Some(hv) = resp.header("X-B") {
+  if let Some(hv) = rest.first_header(resp, "X-B") {
     out.b = hv
   }
-  if let Some(hv) = resp.header("X-C") {
+  let hvs_c = resp.header_values("X-C")
+  if !hvs_c.is_empty() {
+    let parts_c = rest.split_header_values(hvs_c) ?? e => return Err(e)
     var items: List[Str] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_c {
+      let item = rest.go_trim_space(part)
       items.push(item)
     }
     out.c = items
@@ -12257,15 +12281,18 @@ pub fn serialize_null_and_empty_headers_server(ep: rest.Endpoint, input: NullAnd
 
 pub fn deserialize_null_and_empty_headers_server(resp: http.Response) -> NullAndEmptyHeadersIO ! Str {
   var out = NullAndEmptyHeadersIO{}
-  if let Some(hv) = resp.header("X-A") {
+  if let Some(hv) = rest.first_header(resp, "X-A") {
     out.a = hv
   }
-  if let Some(hv) = resp.header("X-B") {
+  if let Some(hv) = rest.first_header(resp, "X-B") {
     out.b = hv
   }
-  if let Some(hv) = resp.header("X-C") {
+  let hvs_c = resp.header_values("X-C")
+  if !hvs_c.is_empty() {
+    let parts_c = rest.split_header_values(hvs_c) ?? e => return Err(e)
     var items: List[Str] = []
-    for item in rest.split_header_list(hv) {
+    for part in parts_c {
+      let item = rest.go_trim_space(part)
       items.push(item)
     }
     out.c = items
@@ -12794,7 +12821,7 @@ pub fn serialize_output_stream_with_initial_response(ep: rest.Endpoint, input: (
 
 pub fn deserialize_output_stream_with_initial_response(resp: http.Response) -> OutputStreamWithInitialResponseOutput ! Str {
   var out = OutputStreamWithInitialResponseOutput{}
-  if let Some(hv) = resp.header("initial-response-member") {
+  if let Some(hv) = rest.first_header(resp, "initial-response-member") {
     out.initial_response_member = hv
   }
   if !resp.body.is_empty() {
@@ -13321,72 +13348,4 @@ pub fn (c: Client) query_precedence(input: QueryPrecedenceInput) -> () ! QueryPr
     return Err(deserialize_query_precedence_error(resp))
   }
   deserialize_query_precedence(resp) ?? e => Err(QueryPrecedenceErr.Deserialize(e))
-}
-
-/// The HTTP request of RecursiveShapes.
-pub fn serialize_recursive_shapes(ep: rest.Endpoint, input: RecursiveShapesInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.nested {
-    fs.push(("nested", json_of_recursive_shapes_input_output_nested1(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/RecursiveShapes"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_recursive_shapes(resp: http.Response) -> RecursiveShapesInputOutput ! Str {
-  var out = RecursiveShapesInputOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "nested" => out.nested = from_json_recursive_shapes_input_output_nested1(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of RecursiveShapes.
-pub enum RecursiveShapesErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: RecursiveShapesErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_recursive_shapes_error(resp: http.Response) -> RecursiveShapesErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  RecursiveShapesErr.Api(restjson.api_error(resp, body))
 }

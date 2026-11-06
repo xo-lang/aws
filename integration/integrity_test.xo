@@ -31,6 +31,16 @@ test "DynamoDB checks the body's CRC32" {
   }
 }
 
+test "DynamoDB checks the first X-Amz-Crc32 field, as Go's header.Get" {
+  let body = "{\"Item\":{\"pk\":{\"S\":\"a\"}}}"
+  let good = crc32.checksum(body.bytes())
+  os.net.handle("POST https://dynamodb.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    http.text(200, body).with_header("Content-Type", "application/x-amz-json-1.0").add_header("X-Amz-Crc32", "${good}").add_header("X-Amz-Crc32", "${good + 1}")
+  })
+  let c = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: test_creds()})?
+  c.get_item(dynamodb.GetItemInput{table_name: "t", key: {"pk": dynamodb.AttributeValue.S("a")}})?
+}
+
 test "SQS checks the MD5 of sent and received message bodies" {
   let sent_md5 = crypto.digest(crypto.Hash.Md5, b"hello").to_hex()
   os.net.handle("POST https://sqs.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {

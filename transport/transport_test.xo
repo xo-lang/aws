@@ -95,6 +95,22 @@ test "clock skew is corrected and retried" {
   expect(resp.text()) == Some("20260101T010000Z")
 }
 
+test "a repeated Date is its first field when correcting skew, as Go's Header.Get" {
+  let calls = Atomic[Int].new(0)
+  os.net.handle("POST https://sts.test/", fn(req: http.Request) -> http.Response {
+    let n = calls.add(1)
+    if n == 1 {
+      http.text(403, "<Error><Code>RequestTimeTooSkewed</Code></Error>").add_header("Date", "Thu, 01 Jan 2026 01:00:00 GMT").add_header("Date", "Thu, 01 Jan 2026 02:00:00 GMT")
+    } else {
+      http.text(200, req.header("X-Amz-Date") ?? "")
+    }
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let resp = send(c, sts_request(), SIGNING, status_failure)?
+  expect(skew(c)) == 1h
+  expect(resp.text()) == Some("20260101T010000Z")
+}
+
 test "missing credentials fail without sending" {
   let c = new_client(os.net, os.clock, os.rand, credentials.FixedResult{result: Err(aws.CredentialsErr.NotFound("none"))}, retry.standard())
   expect(send(c, sts_request(), SIGNING, status_failure) is Err(SendErr.Credentials(_))) == true

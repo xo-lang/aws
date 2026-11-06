@@ -8,6 +8,74 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// The HTTP request of RecursiveShapes.
+pub fn serialize_recursive_shapes(ep: rest.Endpoint, input: RecursiveShapesInputOutput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.nested {
+    fs.push(("nested", json_of_recursive_shapes_input_output_nested1(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PUT",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/RecursiveShapes"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_recursive_shapes(resp: http.Response) -> RecursiveShapesInputOutput ! Str {
+  var out = RecursiveShapesInputOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nested" => out.nested = from_json_recursive_shapes_input_output_nested1(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of RecursiveShapes.
+pub enum RecursiveShapesErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: RecursiveShapesErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_recursive_shapes_error(resp: http.Response) -> RecursiveShapesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  RecursiveShapesErr.Api(restjson.api_error(resp, body))
+}
+
 pub fn (c: Client) recursive_shapes(input: RecursiveShapesInputOutput) -> RecursiveShapesInputOutput ! RecursiveShapesErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route() ?? e => return Err(RecursiveShapesErr.InvalidInput(e))
   var req = serialize_recursive_shapes(ep, input, "") ?? e => return Err(RecursiveShapesErr.InvalidInput(e))
@@ -209,7 +277,7 @@ pub fn serialize_simple_scalar_properties(ep: rest.Endpoint, input: SimpleScalar
 pub fn deserialize_simple_scalar_properties(resp: http.Response) -> SimpleScalarPropertiesInputOutput ! Str {
   var out = SimpleScalarPropertiesInputOutput{}
   let body = jsonv.parse_body(resp.body)?
-  if let Some(hv) = resp.header("X-Foo") {
+  if let Some(hv) = rest.first_header(resp, "X-Foo") {
     out.foo = hv
   }
   for (k, fv) in jsonv.fields(body)? {
@@ -493,7 +561,7 @@ pub fn serialize_streaming_traits(ep: rest.Endpoint, input: StreamingTraitsInput
 
 pub fn deserialize_streaming_traits(resp: http.Response) -> StreamingTraitsInputOutput ! Str {
   var out = StreamingTraitsInputOutput{}
-  if let Some(hv) = resp.header("X-Foo") {
+  if let Some(hv) = rest.first_header(resp, "X-Foo") {
     out.foo = hv
   }
   if !resp.body.is_empty() {
@@ -666,7 +734,7 @@ pub fn serialize_streaming_traits_with_media_type(ep: rest.Endpoint, input: Stre
 
 pub fn deserialize_streaming_traits_with_media_type(resp: http.Response) -> StreamingTraitsWithMediaTypeInputOutput ! Str {
   var out = StreamingTraitsWithMediaTypeInputOutput{}
-  if let Some(hv) = resp.header("X-Foo") {
+  if let Some(hv) = rest.first_header(resp, "X-Foo") {
     out.foo = hv
   }
   if !resp.body.is_empty() {
@@ -747,7 +815,7 @@ pub fn serialize_test_body_structure(ep: rest.Endpoint, input: TestBodyStructure
 pub fn deserialize_test_body_structure(resp: http.Response) -> TestBodyStructureInputOutput ! Str {
   var out = TestBodyStructureInputOutput{}
   let body = jsonv.parse_body(resp.body)?
-  if let Some(hv) = resp.header("x-amz-test-id") {
+  if let Some(hv) = rest.first_header(resp, "x-amz-test-id") {
     out.test_id = hv
   }
   for (k, fv) in jsonv.fields(body)? {
@@ -824,7 +892,7 @@ pub fn serialize_test_get_no_input_no_payload(ep: rest.Endpoint, input: (), idem
 
 pub fn deserialize_test_get_no_input_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
   var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
+  if let Some(hv) = rest.first_header(resp, "X-Amz-Test-Id") {
     out.test_id = hv
   }
   Ok(out)
@@ -895,7 +963,7 @@ pub fn serialize_test_get_no_payload(ep: rest.Endpoint, input: TestNoPayloadInpu
 
 pub fn deserialize_test_get_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
   var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
+  if let Some(hv) = rest.first_header(resp, "X-Amz-Test-Id") {
     out.test_id = hv
   }
   Ok(out)
@@ -969,7 +1037,7 @@ pub fn serialize_test_payload_blob(ep: rest.Endpoint, input: TestPayloadBlobInpu
 
 pub fn deserialize_test_payload_blob(resp: http.Response) -> TestPayloadBlobInputOutput ! Str {
   var out = TestPayloadBlobInputOutput{}
-  if let Some(hv) = resp.header("Content-Type") {
+  if let Some(hv) = rest.first_header(resp, "Content-Type") {
     out.content_type = hv
   }
   if !resp.body.is_empty() {
@@ -1050,7 +1118,7 @@ pub fn serialize_test_payload_structure(ep: rest.Endpoint, input: TestPayloadStr
 
 pub fn deserialize_test_payload_structure(resp: http.Response) -> TestPayloadStructureInputOutput ! Str {
   var out = TestPayloadStructureInputOutput{}
-  if let Some(hv) = resp.header("x-amz-test-id") {
+  if let Some(hv) = rest.first_header(resp, "x-amz-test-id") {
     out.test_id = hv
   }
   if !resp.body.is_empty() {
@@ -1122,7 +1190,7 @@ pub fn serialize_test_post_no_input_no_payload(ep: rest.Endpoint, input: (), ide
 
 pub fn deserialize_test_post_no_input_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
   var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
+  if let Some(hv) = rest.first_header(resp, "X-Amz-Test-Id") {
     out.test_id = hv
   }
   Ok(out)
@@ -1193,7 +1261,7 @@ pub fn serialize_test_post_no_payload(ep: rest.Endpoint, input: TestNoPayloadInp
 
 pub fn deserialize_test_post_no_payload(resp: http.Response) -> TestNoPayloadInputOutput ! Str {
   var out = TestNoPayloadInputOutput{}
-  if let Some(hv) = resp.header("X-Amz-Test-Id") {
+  if let Some(hv) = rest.first_header(resp, "X-Amz-Test-Id") {
     out.test_id = hv
   }
   Ok(out)
@@ -1282,25 +1350,25 @@ pub fn serialize_timestamp_format_headers(ep: rest.Endpoint, input: TimestampFor
 
 pub fn deserialize_timestamp_format_headers(resp: http.Response) -> TimestampFormatHeadersIO ! Str {
   var out = TimestampFormatHeadersIO{}
-  if let Some(hv) = resp.header("X-memberEpochSeconds") {
+  if let Some(hv) = rest.first_header(resp, "X-memberEpochSeconds") {
     out.member_epoch_seconds = (rest.parse_epoch_seconds(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("X-memberHttpDate") {
+  if let Some(hv) = rest.first_header(resp, "X-memberHttpDate") {
     out.member_http_date = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("X-memberDateTime") {
+  if let Some(hv) = rest.first_header(resp, "X-memberDateTime") {
     out.member_date_time = (rest.parse_date_time(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("X-defaultFormat") {
+  if let Some(hv) = rest.first_header(resp, "X-defaultFormat") {
     out.default_format = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("X-targetEpochSeconds") {
+  if let Some(hv) = rest.first_header(resp, "X-targetEpochSeconds") {
     out.target_epoch_seconds = (rest.parse_epoch_seconds(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("X-targetHttpDate") {
+  if let Some(hv) = rest.first_header(resp, "X-targetHttpDate") {
     out.target_http_date = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("X-targetDateTime") {
+  if let Some(hv) = rest.first_header(resp, "X-targetDateTime") {
     out.target_date_time = (rest.parse_date_time(hv) ?? return Err("bad timestamp header"))
   }
   Ok(out)

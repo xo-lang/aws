@@ -3,6 +3,7 @@
 // encodings, and the three Smithy timestamp formats, written and read as
 // smithy-go does (decision 0003).
 
+use std/http
 use std/time
 use std/url
 
@@ -87,48 +88,248 @@ pub fn header_list(items: List[Str]) -> Str {
   }).join(", ")
 }
 
-/// Splits a header list value, honoring quoted items.
-pub fn split_header_list(v: Str) -> List[Str] {
-  var out: List[Str] = []
-  var cur = StrBuilder.new()
-  var quoted = false
-  var escaped = false
-  var was_quoted = false
-  for r in v.runes() {
-    if escaped {
-      cur.write("${r}")
-      escaped = false
-    } else if quoted && r == '\\' {
-      escaped = true
-    } else if r == '"' {
-      quoted = !quoted
-      was_quoted = true
-    } else if r == ',' && !quoted {
-      let item = cur.freeze()
-      out.push(if was_quoted { item } else { item.trim() })
-      cur = StrBuilder.new()
-      was_quoted = false
-    } else {
-      cur.write("${r}")
-    }
-  }
-  let last = cur.freeze()
-  if !last.trim().is_empty() || !out.is_empty() {
-    out.push(if was_quoted { last } else { last.trim() })
-  }
-  out.map(fn(s: Str) -> Str { s.trim() })
+/// The first field of `name`, trimmed, as aws-sdk-go-v2's generated
+/// deserializers read a scalar header (`Header.Values(name)[0]` with
+/// strings.TrimSpace): a repeated header's later fields are ignored.
+pub fn first_header(resp: http.Response, name: Str) -> Str? {
+  resp.header_values(name).first().map(fn(v: Str) -> Str { go_trim_space(v) })
 }
 
-/// HTTP dates hold a comma; a list of them splits at every second comma.
-pub fn split_http_dates(v: Str) -> List[Str] {
-  let parts = v.split(",")
-  var out: List[Str] = []
+/// Whether `r` is Go's unicode.IsSpace.
+fn is_go_space(r: Rune) -> Bool {
+  let n = Int(r)
+  (n >= 0x09 && n <= 0x0d) || n == 0x20 || n == 0x85 || n == 0xa0 || n == 0x1680 || (n >= 0x2000 && n <= 0x200a) || n == 0x2028 || n == 0x2029 || n == 0x202f || n == 0x205f || n == 0x3000
+}
+
+/// Go's strings.TrimSpace.
+pub fn go_trim_space(s: Str) -> Str {
+  let rs = s.runes()
   var i = 0
-  while i + 1 < parts.len() {
-    out.push("${parts[i].trim()}, ${parts[i + 1].trim()}")
-    i += 2
+  var j = rs.len()
+  while i < j && is_go_space(rs[i]) {
+    i += 1
   }
-  out
+  while j > i && is_go_space(rs[j - 1]) {
+    j -= 1
+  }
+  var out = StrBuilder.new()
+  for k in i..j {
+    out.write("${rs[k]}")
+  }
+  out.freeze()
+}
+
+/// Whether byte `b` is a space to Go's `unicode.IsSpace(rune(b))`, which
+/// smithy-go applies to single bytes.
+fn is_space_byte(b: UInt8) -> Bool {
+  (b >= 0x09 && b <= 0x0d) || b == 0x20 || b == 0x85 || b == 0xa0
+}
+
+fn hex_digit(b: UInt8) -> Int? {
+  if b >= 0x30 && b <= 0x39 { Some(Int(b) - 0x30) } else if b >= 0x61 && b <= 0x66 { Some(Int(b) - 0x61 + 10) } else if b >= 0x41 && b <= 0x46 { Some(Int(b) - 0x41 + 10) } else { None }
+}
+
+/// Go's strconv.Unquote of a double-quoted string (quotes included), or
+/// None where Go gives ErrSyntax.
+fn go_unquote(s: Str) -> Str? {
+  let bs = s.bytes()
+  let n = bs.len()
+  if n < 2 || bs[0] != 0x22 || bs[n - 1] != 0x22 {
+    return None
+  }
+  let body = bs[1..n - 1]
+  var out = BytesBuilder.new()
+  var i = 0
+  while i < body.len() {
+    let c = body[i]
+    if c == 0x22 || c == 0x0a {
+      return None
+    }
+    if c != 0x5c {
+      out.write_byte(c)
+      i += 1
+      continue
+    }
+    if i + 1 >= body.len() {
+      return None
+    }
+    let e = body[i + 1]
+    i += 2
+    let named = if e == 0x61 { Some(7) } else if e == 0x62 { Some(8) } else if e == 0x66 { Some(12) } else if e == 0x6e { Some(10) } else if e == 0x72 { Some(13) } else if e == 0x74 { Some(9) } else if e == 0x76 { Some(11) } else if e == 0x5c { Some(0x5c) } else if e == 0x22 { Some(0x22) } else { None }
+    if let Some(v) = named {
+      out.write_byte(UInt8(v))
+      continue
+    }
+    if e == 0x78 || e == 0x75 || e == 0x55 {
+      let width = if e == 0x78 { 2 } else if e == 0x75 { 4 } else { 8 }
+      if i + width > body.len() {
+        return None
+      }
+      var v = 0
+      for k in 0..width {
+        v = v * 16 + (hex_digit(body[i + k]) ?? return None)
+      }
+      i += width
+      if e == 0x78 {
+        out.write_byte(UInt8(v))
+      } else {
+        let r = Rune.try(v) ?? return None
+        for b in "${r}".bytes() {
+          out.write_byte(b)
+        }
+      }
+      continue
+    }
+    if e >= 0x30 && e <= 0x37 {
+      if i + 2 > body.len() {
+        return None
+      }
+      var v = Int(e) - 0x30
+      for k in 0..2 {
+        let d = body[i + k]
+        if d < 0x30 || d > 0x37 {
+          return None
+        }
+        v = v * 8 + Int(d) - 0x30
+      }
+      if v > 255 {
+        return None
+      }
+      i += 2
+      out.write_byte(UInt8(v))
+      continue
+    }
+    return None
+  }
+  Some(out.freeze().to_str_lossy())
+}
+
+/// One header field split as smithy-go's quotedCommaSplit splits it, with
+/// its error text: items at commas, a quoted item unquoted as Go's
+/// strconv.Unquote, and a trailing comma giving an empty last item.
+fn quoted_comma_split(v0: Str) -> List[Str] ! Str {
+  let v = go_trim_space(v0)
+  let bs = v.bytes()
+  var parts: List[Str] = []
+  var expect_more = true
+  var i = 0
+  while i < bs.len() {
+    if is_space_byte(bs[i]) {
+      i += 1
+      continue
+    }
+    expect_more = false
+    let remaining = bs[i..bs.len()]
+    let rem = remaining.to_str_lossy()
+    var value = ""
+    var value_len = 0
+    if remaining[0] == 0x22 {
+      var j = 1
+      var skip_quote = false
+      while j < remaining.len() {
+        if remaining[j] == 0x5c || skip_quote {
+          skip_quote = !skip_quote
+          j += 1
+          continue
+        }
+        if remaining[j] == 0x22 {
+          break
+        }
+        j += 1
+      }
+      if j == remaining.len() || j == 1 {
+        return Err("value ${rem} missing closing double quote")
+      }
+      value_len = j + 1
+      let tail = remaining[value_len..remaining.len()]
+      var k = 0
+      while k < tail.len() {
+        if !is_space_byte(tail[k]) && tail[k] != 0x2c {
+          return Err("value ${rem} has non-space trailing characters")
+        }
+        if tail[k] == 0x2c {
+          expect_more = true
+          break
+        }
+        k += 1
+      }
+      value = go_unquote(remaining[0..value_len].to_str_lossy()) ?? return Err("failed to unquote value , invalid syntax")
+      value_len += k
+    } else {
+      value_len = match rem.find(",") {
+        Some(c) => {
+          expect_more = true
+          c
+        }
+        None => remaining.len()
+      }
+      value = go_trim_space(remaining[0..value_len].to_str_lossy())
+    }
+    i += value_len
+    parts.push(value)
+    // Go's loop adds one after the item (its `i++`), stepping over the
+    // comma or the byte after a quoted item's trailing spaces.
+    i += 1
+  }
+  if expect_more {
+    parts.push("")
+  }
+  Ok(parts)
+}
+
+/// The items of a list header's fields, as smithy-go's
+/// SplitHeaderListValues gives them: each field split on its own.
+pub fn split_header_values(vs: List[Str]) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for v in vs {
+    out = out + quoted_comma_split(v)?
+  }
+  Ok(out)
+}
+
+/// The HTTP dates of a list header's fields, as smithy-go's
+/// SplitHTTPDateTimestampHeaderListValues gives them: each field split at
+/// every second comma; an even count of commas over one is Go's error.
+pub fn split_http_date_values(vs: List[Str]) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for v in vs {
+    let n = v.count(",")
+    if n <= 1 {
+      out.push(v)
+      continue
+    }
+    if n % 2 == 0 {
+      return Err("invalid timestamp HTTPDate header comma separations, ${go_quote(v)}")
+    }
+    let bs = v.bytes()
+    var j = 0
+    var do_split = false
+    for i in 0..bs.len() {
+      if bs[i] == 0x2c {
+        if do_split {
+          do_split = false
+          out.push(go_trim_space(bs[j..i].to_str_lossy()))
+          j = i + 1
+        } else {
+          do_split = true
+        }
+      }
+    }
+    if j < bs.len() {
+      out.push(go_trim_space(bs[j..bs.len()].to_str_lossy()))
+    }
+  }
+  Ok(out)
+}
+
+/// Go's strconv.Quote of ASCII text.
+fn go_quote(s: Str) -> Str {
+  var out = "\""
+  for c in s.runes() {
+    let n = Int(c)
+    out = out + (if c == '"' { "\\\"" } else if c == '\\' { "\\\\" } else if c == '\n' { "\\n" } else if c == '\t' { "\\t" } else if c == '\r' { "\\r" } else if n == 7 { "\\a" } else if n == 8 { "\\b" } else if n == 12 { "\\f" } else if n == 11 { "\\v" } else if n < 0x20 || n == 0x7f { "\\x" + n.to_str_width(2, base: 16, zero: true) } else { "${c}" })
+  }
+  out + "\""
 }
 
 fn unix_nanos(t: Time) -> Int {

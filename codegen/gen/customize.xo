@@ -108,7 +108,8 @@ pub fn endpoint_rewrite(g: G, op: Str, input: model.Shape) -> Str? {
 /// default: lines run before deserializing (over `resp`) and after (over
 /// `input` and `out`), each returning `<Op>Err.Deserialize` on a
 /// mismatch.
-/// - DynamoDB: the body's CRC32 against `X-Amz-Crc32`;
+/// - DynamoDB: the body's CRC32 against `X-Amz-Crc32` (its first field,
+///   as Go's header.Get);
 /// - SQS: each message body's MD5 against the MD5 the service computed
 ///   (SendMessage, SendMessageBatch, ReceiveMessage).
 pub fn response_checks(g: G, op: Str, en: Str) -> (List[Str], List[Str]) {
@@ -116,7 +117,7 @@ pub fn response_checks(g: G, op: Str, en: Str) -> (List[Str], List[Str]) {
   let name = model.name_of(op)
   if id == "DynamoDB" {
     return ([
-      "  if let Some(want) = resp.header(\"X-Amz-Crc32\") {",
+      "  if let Some(want) = resp.header_values(\"X-Amz-Crc32\").first() {",
       "    let got = crc32.checksum(resp.body)",
       "    if Int.parse(want) != Some(got) {",
       "      return Err(${en}.Deserialize(\"response CRC32 \${got} does not match X-Amz-Crc32 \${want}\"))",

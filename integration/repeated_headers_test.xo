@@ -1,0 +1,35 @@
+// A response that repeats header fields, read as aws-sdk-go-v2 reads it:
+// a scalar header is its first field, trimmed, and a prefix header's
+// map holds each name's first field under the rest of the name, lower
+// cased. The expectations are a local Go program's output (s3 v1.114.6
+// HeadObject against a fake server answering these same fields):
+//   etag="\"e1\"" version_id="v1" missing_meta=3 delete_marker=true
+//   last_modified=2019-12-16T23:48:18Z sse="aws:kms"
+//   meta "bar"="c" meta "foo"="a"
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+test "HeadObject reads repeated header fields as Go's s3 client" {
+  os.net.handle("HEAD https://bucket.s3.us-west-2.amazonaws.com/k1", fn(req: http.Request) -> http.Response {
+    http.text(200, "")
+      .add_header("ETag", "\"e1\"").add_header("ETag", "\"e2\"")
+      .add_header("X-Amz-Version-Id", " v1 ").add_header("X-Amz-Version-Id", "v2")
+      .add_header("X-Amz-Meta-Foo", "a").add_header("X-Amz-Meta-Foo", "b")
+      .add_header("X-Amz-Meta-Bar", " c ")
+      .add_header("X-Amz-Missing-Meta", "3").add_header("X-Amz-Missing-Meta", "4")
+      .add_header("X-Amz-Delete-Marker", "true").add_header("X-Amz-Delete-Marker", "false")
+      .add_header("Last-Modified", "Mon, 16 Dec 2019 23:48:18 GMT").add_header("Last-Modified", "Tue, 17 Dec 2019 23:48:18 GMT")
+      .add_header("X-Amz-Server-Side-Encryption", "aws:kms").add_header("X-Amz-Server-Side-Encryption", "AES256")
+  })
+  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+  let out = c.head_object(s3.HeadObjectRequest{bucket: "bucket", key: "k1"})?
+  expect(out.e_tag) == Some("\"e1\"")
+  expect(out.version_id) == Some("v1")
+  expect(out.missing_meta) == Some(3)
+  expect(out.delete_marker) == Some(true)
+  expect(out.last_modified) == Some(Time.parse_rfc3339("2019-12-16T23:48:18Z")?)
+  expect(out.server_side_encryption) == Some(s3.ServerSideEncryption.AwsKms)
+  expect(out.metadata) == Some({"bar": "c", "foo": "a"})
+}

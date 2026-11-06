@@ -732,25 +732,34 @@ fn emit_read_members(g: G, shape: model.Shape, var out: List[Str]) {
     match bind(g, m.traits, "", m.name) {
       Header(hn) => {
         let t = shape_of(g, m.target)
-        out.push("  if let Some(hv) = resp.header(${lit_str(hn)}) {")
+        // aws-sdk-go-v2's generated deserializers: a list takes every
+        // field of the header, each split on its own and each item
+        // trimmed; a scalar takes the first field, trimmed.
         if t.kind is model.Kind.List {
           let em = t.members[0]
-          let split = if shape_of(g, em.target).kind is model.Kind.Timestamp && ts_format(g, em.traits, em.target, "http-date") == "http-date" { "rest.split_http_dates(hv)" } else { "rest.split_header_list(hv)" }
+          let split = if shape_of(g, em.target).kind is model.Kind.Timestamp && ts_format(g, em.traits, em.target, "http-date") == "http-date" { "split_http_date_values" } else { "split_header_values" }
+          out.push("  let hvs_${f} = resp.header_values(${lit_str(hn)})")
+          out.push("  if !hvs_${f}.is_empty() {")
+          out.push("    let parts_${f} = rest.${split}(hvs_${f}) ?? e => return Err(e)")
           out.push("    var items: ${xo_type(g, m.target)} = []")
-          out.push("    for item in ${split} {")
+          out.push("    for part in parts_${f} {")
+          out.push("      let item = rest.go_trim_space(part)")
           out.push("      items.push(${parse_text_expr(g, em, em.target, "item")})")
           out.push("    }")
           out.push("    out.${f} = items")
         } else {
+          out.push("  if let Some(hv) = rest.first_header(resp, ${lit_str(hn)}) {")
           out.push("    out.${f} = ${parse_text_expr(g, m, m.target, "hv")}")
         }
         out.push("  }")
       }
       PrefixHeaders(p) => {
         out.push("  var prefixed_${f}: Map[Str, Str] = {}")
+        // aws-sdk-go-v2: each matching name's first field, trimmed, under
+        // the rest of the name lower-cased
         out.push("  for (k, hv) in resp.headers.entries() {")
         out.push("    if k.to_lower().starts_with(${lit_str(p.to_lower())}) {")
-        out.push("      prefixed_${f}.put(k.bytes()[${p.len()}..k.len()].to_str() ?? k, hv)")
+        out.push("      prefixed_${f}.put((k.bytes()[${p.len()}..k.len()].to_str() ?? k).to_lower(), rest.first_header(resp, k) ?? hv)")
         out.push("    }")
         out.push("  }")
         // no such headers is an empty map, as the suites expect

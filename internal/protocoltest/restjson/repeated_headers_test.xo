@@ -1,0 +1,37 @@
+// Response headers that repeat, read as aws-sdk-go-v2's generated
+// deserializers read them: a scalar takes its first field, trimmed; a
+// list takes every field, each split on its own (smithy-go's
+// SplitHeaderListValues and SplitHTTPDateTimestampHeaderListValues,
+// whose behavior protocol/rest's headervectors_test.xo checks against
+// Go) and each item trimmed. Not generated: the generator writes only
+// client, types and protocol_test files here.
+
+use std/http
+
+test "repeated scalar and list headers are read as aws-sdk-go-v2's" {
+  let resp = http.text(200, "")
+    .add_header("X-String", " first ").add_header("X-String", "second")
+    .add_header("X-Boolean1", "true").add_header("X-Boolean1", "false")
+    .add_header("X-StringList", "a, b").add_header("X-StringList", "\"c,d\"")
+    .add_header("X-IntegerList", "1,2").add_header("X-IntegerList", " 3 ")
+    .add_header("X-TimestampList", "Mon, 16 Dec 2019 23:48:18 GMT, Tue, 17 Dec 2019 23:48:18 GMT").add_header("X-TimestampList", "Wed, 18 Dec 2019 23:48:18 GMT")
+  let out = deserialize_input_and_output_with_headers(resp)?
+  expect(out.header_string) == Some("first")
+  expect(out.header_true_bool) == Some(true)
+  expect(out.header_string_list) == Some(["a", "b", "c,d"])
+  expect(out.header_integer_list) == Some([1, 2, 3])
+  expect(out.header_timestamp_list.map(fn(ts: List[Time]) -> List[Str] { ts.map(fn(t: Time) -> Str { t.format_rfc3339() }) })) == Some(["2019-12-16T23:48:18Z", "2019-12-17T23:48:18Z", "2019-12-18T23:48:18Z"])
+}
+
+test "a list header field Go cannot split fails the call with smithy-go's error" {
+  let quote = http.text(200, "").add_header("X-StringList", "a").add_header("X-StringList", "\"b")
+  match deserialize_input_and_output_with_headers(quote) {
+    Err(e) => expect(e) == "value \"b missing closing double quote"
+    Ok(_) => fault("want smithy-go's unclosed quote error")
+  }
+  let dates = http.text(200, "").add_header("X-TimestampList", "a,b,c")
+  match deserialize_input_and_output_with_headers(dates) {
+    Err(e) => expect(e) == "invalid timestamp HTTPDate header comma separations, \"a,b,c\""
+    Ok(_) => fault("want smithy-go's comma count error")
+  }
+}

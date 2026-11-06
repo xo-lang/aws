@@ -6168,22 +6168,22 @@ pub fn serialize_get_lineage_event(ep: rest.Endpoint, input: GetLineageEventInpu
 
 pub fn deserialize_get_lineage_event(resp: http.Response) -> GetLineageEventOutput ! Str {
   var out = GetLineageEventOutput{}
-  if let Some(hv) = resp.header("Domain-Id") {
+  if let Some(hv) = rest.first_header(resp, "Domain-Id") {
     out.domain_id = hv
   }
-  if let Some(hv) = resp.header("Id") {
+  if let Some(hv) = rest.first_header(resp, "Id") {
     out.id = hv
   }
-  if let Some(hv) = resp.header("Created-By") {
+  if let Some(hv) = rest.first_header(resp, "Created-By") {
     out.created_by = hv
   }
-  if let Some(hv) = resp.header("Processing-Status") {
+  if let Some(hv) = rest.first_header(resp, "Processing-Status") {
     out.processing_status = LineageEventProcessingStatus.from(hv)
   }
-  if let Some(hv) = resp.header("Event-Time") {
+  if let Some(hv) = rest.first_header(resp, "Event-Time") {
     out.event_time = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
   }
-  if let Some(hv) = resp.header("Created-At") {
+  if let Some(hv) = rest.first_header(resp, "Created-At") {
     out.created_at = (rest.parse_http_date(hv) ?? return Err("bad timestamp header"))
   }
   if !resp.body.is_empty() {
@@ -10544,38 +10544,4 @@ pub fn (c: Client) list_environment_actions(input: ListEnvironmentActionsInput) 
 pub fn endpoint_params_list_environment_blueprint_configurations(base: EndpointParameters, input: ListEnvironmentBlueprintConfigurationsInput) -> EndpointParameters {
   let _ = input
   base
-}
-
-/// The HTTP request of ListEnvironmentBlueprintConfigurations.
-pub fn serialize_list_environment_blueprint_configurations(ep: rest.Endpoint, input: ListEnvironmentBlueprintConfigurationsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_domain_identifier = match input.domain_identifier {
-    Some(v) => v
-    None => return Err("input member domainIdentifier is required")
-  }
-  if label_domain_identifier == "" {
-    return Err("input member domainIdentifier must not be empty")
-  }
-  if let Some(v) = input.max_results {
-    qs.push(("maxResults", "${v}"))
-  }
-  if let Some(v) = input.next_token {
-    qs.push(("nextToken", v))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/v2/domains/${rest.escape(label_domain_identifier, false)}/environment-blueprint-configurations"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

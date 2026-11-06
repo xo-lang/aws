@@ -1499,3 +1499,26 @@ Disliked:
   sites in the Azure SDK. A std method with Go's `Get` meaning (for
   example `first_header`) would give ports the right default. So would
   a doc line on `header` saying it is not Go's `Get`.
+
+### 2026-11-06: repeated response headers, Azure SDK (azure 0742aaa)
+
+Liked:
+- A policy is a plain struct with a `send` method, so a test-only
+  policy that repeats every response header field took 15 lines.
+  Adding it as a per-retry policy reran 22 Go vector tests with doubled
+  headers, without touching the fakes. It found one site that my
+  search had missed.
+- When `?` could not convert `CallErr` to a runner's `Str` error type,
+  the compiler note listed the conversion rules (same type, `Error`
+  with `Display`, or a `from` variant). Switching the runner to
+  `! Error` fixed every site at once.
+- A helper function with `uses (net.dial, clock, rand)` could take a
+  test's `os.net`, `os.clock` and `os.rand`, so each test body moved
+  into a runner by text substitution alone.
+
+Disliked:
+- A test cannot take parameters. Running one vector test both plainly
+  and doubled meant turning each test into a runner function plus two
+  one-line tests, 22 times (I scripted it). A table or parameterized
+  test form would make "run this suite under N fakes" a one-line
+  change.

@@ -1340,3 +1340,15 @@ Disliked:
   `headers` field would make the literal usable.
 - XO0110 again turned two mutants into compile errors (an unused
   `let`), as in the file data slice.
+
+### 2026-11-06: azdatalake datalakeerror (azure 3f52bcd)
+
+Liked:
+- XO0601 caught a Go-style `panic(...)` in a test and named Xo's
+  `fault(...)`, with the reason (broken invariant vs `Err`).
+- Plain `pub const NAME: Str` codes were simple to generate from Go's
+  source and to diff against it one to one.
+
+Disliked:
+- Nothing new in this slice; it was a list of constants and one
+  matcher.

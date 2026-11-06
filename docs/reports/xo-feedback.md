@@ -1581,3 +1581,34 @@ Disliked:
   but the note does not say so.
 - `Float32?` does not implement Display, so a probe could not print an
   optional directly.
+
+### 2026-11-06: Azure Monitor query and ingestion modules
+
+Liked:
+- `json.tokens` with `offset()` and `skip()` gives a member's raw text
+  in a few lines, which is Go's `json.RawMessage`: azlogs keeps the
+  `statistics`, `render` and error JSON exactly as sent, as Go's
+  `[]byte` fields do.
+- `json.json_writer()` escapes `<`, `>` and `&` by default, as Go's
+  json.Marshal, so hand-written bodies matched Go's bytes on the first
+  run. `derive Json` with fields declared in sorted order writes Go's
+  map-marshal key order for free.
+- `time.fixed(name, offset)` with a `{offset}` layout field writes
+  `+01:00` as Go's `t.Format(time.RFC3339)` does for a time in a fixed
+  zone.
+- `url.values().encode()` sorts and escapes as Go's `url.Values.Encode`
+  (`+` for a space, `%2C`, `%27`, `%2A`), so azmetrics' long query
+  string matched Go's on the first run.
+
+Disliked:
+- `Time` is an instant with no zone, so a parsed `+01:00` is lost:
+  `TimeInterval.values()` cannot hand back Go's time in its location.
+  The port needed `new_time_interval_in` with explicit zones.
+- `w.value(v) ?? return x` on a `Result` is XO0406; the form is
+  `?? _ => return x`. The note says the left side must be optional but
+  not that the `_ =>` form exists for a Result.
+- A `match` arm that is a `for` loop needs braces (XO0160 "expected an
+  expression"), which is easy to hit when an arm only iterates.
+- `T ! E` as a parameter type is XO0160 with a clear fix
+  (`Result[T, E]`); good message, though the two spellings of one type
+  are a small tax.

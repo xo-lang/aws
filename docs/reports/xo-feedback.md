@@ -561,3 +561,23 @@ Disliked:
   Rust habit in a day (`chars`, `insert`, `loop`).
 - No `timeout` on macOS for capping a test run, so a deadlocked test is
   bounded only by the runner's own fault.
+
+### 2026-11-05: azservicebus retries and recovery (azure c79ad22)
+
+Liked:
+- A generic `retry[T]` taking two effectful closures
+  (`fn(Int) -> T ! E uses (net.dial, clock, rand)` and
+  `fn(RecoveryKind) uses (net.dial, clock)`) compiled first time; the
+  effects of the retried work are part of its type.
+- XO0804 (an action under a lock based on a value read in an earlier
+  lock) caught a real check-then-attach race in the sender's link
+  cache; moving the attach inside one `with` fixed it.
+- Match guards on a Result arm (`Err(amqp.AmqpErr.Net(m)) if ...`) kept
+  the receive loop flat.
+
+Disliked:
+- XO0804 also fires on a deliberate reserve-then-release (mark a lock
+  token settled, settle, unmark on failure), with no way to say it is
+  intended short of restructuring.
+- Durations have no multiply by Float except `scale`; Go's backoff math
+  reads better with operators.

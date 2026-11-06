@@ -1112,3 +1112,31 @@ Disliked:
 - `break` is a keyword, so Go's `Break` became `break_lease`. Raw
   identifiers (Rust's `r#break`) or a rule that a keyword is allowed as
   a method name after `.` would let ports keep the Go name.
+
+### 2026-11-06: azfile SAS (azure 89622c7)
+
+Liked:
+- `std/netip` reproduced Go's `net.ParseIP` plus `IP.String()` in three
+  lines (`parse_addr`, refuse a zone, `unmap()` an IPv4 in IPv6 form),
+  leading zeros refused as Go refuses them.
+- `time.date` and `time.instant` validate a civil time (2027-02-29 is
+  refused), so the hand-written reader of Go's four SAS layouts only
+  scans digits and leaves the calendar to std.
+- `url.Values` keeps keys in first appearance order, which turned a
+  map-order nondeterminism in Go's NewQueryParameters (which of `st` and
+  `skt` sets the shared layout) into a defined rule.
+- XO0177 for `loop` names the fix (`while { ... }`) and the spec section.
+- 43 Go cases (account, share, file and user delegation SAS, GetSASURL,
+  ParseURL); the only first-run difference was the fraction below. 36
+  mutations: 5 survivors were test gaps (now Go cases), 1 equivalent.
+
+Disliked:
+- `{frac:7}` writes the leading dot, unlike every other field (`{second}`
+  is bare digits). The spec says "exactly three" for `{frac:3}` without
+  saying the dot comes with it; I wrote `.${frac}` and got `..1234567`.
+  One line in 13.3, or a `{frac_digits:7}` field, would prevent it.
+- No way to parse with Go's own layout semantics (a one-digit `15` hour,
+  a fraction accepted after `05`, `.0000000` needing exactly seven
+  digits), so a port of Go's time.Parse callers needs a small scanner.
+  A `time.parse_go(s, go_layout)` in a compat module would cover every
+  SDK port that reads Go layouts.

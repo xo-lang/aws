@@ -1198,3 +1198,31 @@ Go bugs met (for the lead's draft list, not filed):
   looks for `or-` after the prefix is already gone).
 - `SetTags` writes its map in map order (random body per run); GetTags
   ignores `BlobModifiedAccessConditions`.
+
+### 2026-11-06: azdatalake service and file system clients (azure 7074691)
+
+Liked:
+- `options with {audience: ""}` states Go's quirk (the blob client gets
+  the pipeline options and not the audience) in one visible line; in Go
+  it is an omission you only find by testing with a token.
+- `pub type ClientOptions = azblob.ClientOptions` and the other aliases
+  let the module reuse azblob's types with no wrappers and no second
+  blob core.
+- `.map_err(to_dfs_error)` on each call reads as Go's
+  `ConvertToDFSError` does, with no `if err != nil`.
+- 28 cases byte-identical to Go on the first full run; 10 of 10
+  mutations killed after one added Go case (a host with `.dfs.` twice).
+
+Disliked:
+- XO0402 could not infer `T` in `fn dfs[T](r: Result[T, CallErr]) -> T !
+  CallErr` from the argument `c.create(...)`, whose type is fully known
+  (`Result[ETagResponse, CallErr]`). Inferring a type argument from an
+  argument's type is the common case; the note's two fixes (explicit
+  `dfs[T]` or an expected type) both cost more than the helper saved.
+- Test helpers cannot be shared across modules, so the fake service and
+  Go dump helpers (200 lines) are copied from azblob's tests. A
+  `testdata`-style shared test package, or `pub(test)` items importable
+  by tests of other modules, would remove the copy.
+- Under `testing.FakeNet`, `req.host()` is empty while `req.url.host`
+  has the host. Either both should be set or `host()`'s doc should say
+  it is the Host header only.

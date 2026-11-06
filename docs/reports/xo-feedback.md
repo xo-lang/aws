@@ -506,3 +506,26 @@ Disliked:
 - The offload hosts' seed is xo 0.37.0, and Xo is self-hosted, so a repo
   that needs a newer Xo cannot be tested off the Mac without building
   Xo there first (reported to the lead).
+
+### 2026-11-05: explicit null in Azure PATCH bodies (azure 2e0bba5)
+
+Liked:
+- `json.Patch[T]` did the whole job: Absent omits the key under
+  `omitempty`, Null writes `null`, Value writes the value, and decoding
+  is symmetric. The generator only had to change a field's type and
+  default; the request code did not change.
+- The compiler's "did you mean" notes (`chars` is `runes`, `insert` is
+  `add`, `contains_key` is `contains`) turned five errors into five
+  one-word fixes.
+
+Disliked:
+- No struct update syntax (`Model{..m, patch: true}`): copying a struct
+  with one field changed means naming every field, which breaks
+  silently when a field is added with a default.
+- `Set[T]` has no `new()`; only the `#{}` literal makes an empty set,
+  and the error for `Set.new()` gives no hint toward it, unlike the
+  method-name notes.
+- Patch[T] is a field type, so a model shared between a PATCH body and a
+  response must pick one; Go's NullValue works at any depth because it
+  is a sentinel value of the field's own type. Nested nulls in ARM
+  updates (`properties.diagnosticsProfile: null`) still need a way in.

@@ -739,3 +739,26 @@ Disliked:
   option to set it: a proxy in front of a TLS service cannot be checked
   against the service's name (go-amqp uses the Open's hostname).
 - No `List.dedup` or `distinct`; a for loop with `contains` stood in.
+
+### 2026-11-06: storage/azqueue (azure c3d8de4)
+
+Liked:
+- `xml.escape` is Go's EscapeText, so hand-written XML bodies matched
+  encoding/xml byte for byte on the first run (`&lt;&amp;&gt;` included),
+  and every Shared Key signature of 25 requests matched Go's.
+- Default arguments and `with` kept the port small: Go's option structs
+  with format() defaults became parameters with defaults.
+- `std/json`, `std/xml`, `url.values().encode()` and `http.parse_url`
+  covered everything; no hand-rolled query encoding.
+
+Disliked:
+- `std/url` has no URL parser; it is `http.parse_url`, whose `Url` has
+  the query as a `Map` and no raw query or escaped path. Splitting a URL
+  for a SAS meant reading the raw string again.
+- `Option.or` does not exist (the error suggests `??`, which is right),
+  but `a ?? b ?? ""` reads oddly the first time; a note in the error
+  that `??` chains would help.
+- No rune-to-int method; `Int(c)` works but was a guess.
+- The check-public rule wants signature hashes in test vectors; a small
+  std helper for "hash this secret for a golden file" would save each
+  repo writing its own `hide()`.

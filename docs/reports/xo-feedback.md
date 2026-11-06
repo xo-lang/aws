@@ -862,3 +862,35 @@ Disliked:
 - Mutation testing again ran into the unused-binding error: two
   mutations needed `_e` or `has_read && false` to compile (same note
   as aztables).
+
+### 2026-11-06: azcosmos retry and failover (azure 1f45969)
+
+Liked:
+- XO0540 caught a real bug in the first draft: the endpoint manager's
+  `Mutex.with` closure recorded the failed account read's attempt time
+  and error, then returned `Err`, which undoes the closure's writes. Go
+  keeps both, so the next call would have re-read the account at once
+  instead of waiting. The note gave the exact fix: return the outcome
+  as the closure's value and apply `?` outside.
+- XO0804 flagged a check-then-act race: whether a forced refresh was
+  stale was read in one `with`, and the refresh was claimed in
+  another, so two failing calls could both force it. Checking and
+  claiming in one `with` is what Go's CompareAndSwap does.
+- XO0501 on a test closure that pushed to a captured `var` list said
+  closures capture by value and offered `Mutex`/`Atomic`, which fixed
+  it in one edit.
+- Keeping the routing state as plain values (`Locations` with
+  `update`, `mark`, `resolve` returning new values) made the location
+  cache unit-testable without a fake network, including the 5 minute
+  expiry with a computed `now`.
+
+Disliked:
+- No destructuring assignment: `(retry, st) = p.on_x(st)` is XO0502
+  ("cannot assign to this expression"). Each arm became `let (r, s2) =
+  ...; retry = r; st = s2`. A note pointing at that form, or allowing
+  tuple assignment to existing `var` bindings, would help code that
+  threads state through helpers.
+- `FakeNet.fail` stops the request before the handler, so a test that
+  logs in its handler cannot see the failed attempts; the count came
+  from `net.requests()`. That works, but the doc for `fail` could say
+  the handler is not called and point at `requests()`.

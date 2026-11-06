@@ -1018,3 +1018,31 @@ Disliked:
   `?? json.Value.Null`. An `as`-style binding on a nested pattern
   (`Some(json.Value.Object(_) as a)`) or matching the object's map
   directly would remove the repeat lookup.
+
+### 2026-11-06: azfile directory client (azure 6e4659b)
+
+Liked:
+- A `Reads{smb, nfs, last_modified, file_type, metadata, encrypted}`
+  struct with defaulted fields let one `dir_response` serve six
+  operations that each read a different subset of Go's response
+  headers; `Reads{nfs: false}` reads as the difference from the norm.
+  The 26 requests and every dumped field matched Go once the test's
+  own time constants were right (the client was right on the first run).
+- The compiler's XO0160 note on `T ! E` in a parameter (write
+  `Result[T, E]`) said exactly what to type.
+- Mutation testing found 4 survivors that were test gaps, not bugs
+  (a delete reply with an ETag, a metadata reply with SMB headers, NFS
+  with property semantics, a rename to `d3/`); each became a Go case.
+
+Disliked:
+- No struct embedding: the six per-operation Go response types share
+  most fields, so the port either flattens them into one
+  `DirectoryResponse` (fields that stay `None` for some operations) or
+  repeats them six times. I flattened them; a documented
+  embedding or "struct spread" would keep the types honest.
+- `std/url` has `path_escape` (one segment) but nothing that escapes a
+  path while keeping its slashes, so `to_url` has a hand-written
+  `escape_path` and Go's `$&+,;=:@` rules differ (noted in the README).
+- Process, not language: I once chained the pre-push checks with `;`
+  instead of `&&`, so a gitleaks finding did not stop the push. The
+  checks now gate the push with `&&`.

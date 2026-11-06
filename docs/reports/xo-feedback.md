@@ -1279,3 +1279,30 @@ Disliked:
 - XO0178 fires on every long expression wrapped with a leading `+`
   (my habit from Go's style). The fix is mechanical; `xo fmt` or a
   `xo fix` applying it would beat four rounds of edit and check.
+
+### 2026-11-06: azdatalake file data (azure d1d951a)
+
+Liked:
+- About 700 lines of Go requests and responses (append, flush, chunked
+  upload, ranged and chunked downloads, a 304, error paths) matched on
+  the first run. Reusing slice 2's request and strict-parse helpers
+  meant the new file was mostly Go's option mapping.
+- `std/base64`'s `DecodeErr` displays as Go's `CorruptInputError`
+  (`illegal base64 data at input byte 2`), so the strict header decode
+  needed no hand-written offset logic.
+- A tuple return (`(DownloadStreamResponse, http.Response)`) was a
+  one-line way to hand a raw response up from azblob, where Go needs a
+  context-carried capture.
+- 39 mutations, all killed once two status-code gaps had Go cases.
+
+Disliked:
+- A mutant that leaves a `let` unused fails to compile (XO0110 is an
+  error, not a warning), so mutation scripts need a different mutant
+  for every "drop this header" case. A `--allow-unused` flag for
+  `xo test` (or a warning level) would help mutation runs.
+- No bytes-on-a-file-handle story to port Go's `UploadFile` and
+  `DownloadFile` against yet (fs effects), so azblob, azfile and
+  azdatalake all stop at the bytes forms.
+- Not Xo: Go's batch transfer with `Concurrency: 1` still raced one
+  chunk past a failure, so the Go vectors needed the failure on the
+  last chunk to be deterministic.

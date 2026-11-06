@@ -529,3 +529,35 @@ Disliked:
   response must pick one; Go's NullValue works at any depth because it
   is a sentinel value of the field's own type. Nested nulls in ARM
   updates (`properties.diagnosticsProfile: null`) still need a way in.
+
+### 2026-11-05: azservicebus over std/amqp and std/amqptest (azure 8e5f7b2, 6269101)
+
+Liked:
+- std/amqptest is the httptest of AMQP: queues, topics, dead letters,
+  deferral, scheduling, `$management` and CBS in process, with
+  inspection (`ready`, `locked`, `dead_letters`, `tokens`). Nine client
+  tests needed no emulator and no namespace.
+- The broker runs on the test world's in-memory network, so the tests
+  are deterministic and need no `--real`.
+- Capabilities stored in a client struct (`net`, `clock`, `rand`) and
+  `uses` on each method made the effect of every call visible: a peek
+  `uses rand` for its message id, a send does not.
+- The predeclared-name error named the convention and a fix
+  (`Error` is predeclared: name it `AzservicebusErr`).
+- Generic `Pager[T]` composed with `Poller[T]` as
+  `Poller[Pager[T]]` without changes to either; only a seeded first
+  page was new.
+
+Disliked:
+- On the in-memory network, a receive with a timeout on an empty queue
+  deadlocks (XO-F001) instead of timing out; on loopback it times out.
+  Reported to Lang 3 with a repro.
+- std/amqp's send has no message format (no batches), receivers have
+  no manual credit or drain, and settlements do not wait for the peer
+  in settle mode second. Each makes the port weaker than go-amqp's.
+- `Bytes` has no `to_list`/`from_list`; reordering 16 bytes took nine
+  slices joined with `+`.
+- `loop` is spelled `while { }`; the error says so, but it is the third
+  Rust habit in a day (`chars`, `insert`, `loop`).
+- No `timeout` on macOS for capping a test run, so a deadlocked test is
+  bounded only by the runner's own fault.

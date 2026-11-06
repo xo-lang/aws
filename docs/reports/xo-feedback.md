@@ -834,3 +834,31 @@ Disliked:
   than saying closures are not allowed there.
 - Process note, not the language: a fake that returned one document
   hid an untrimmed slice bug until a two-document test was added.
+
+### 2026-11-06: azcosmos transactional batch (azure 48b3ede)
+
+Liked:
+- `json.tokens` again: a batch result's `resourceBody` is kept as the
+  service wrote it (spacing inside included) by taking `offset()`
+  before and after `skip()`, which is what Go's `json.RawMessage`
+  gives. All 9 new requests matched Go on the first run.
+- The fix lines after the first draft were each exactly right:
+  "construct it with names: `Upsert(item: ..., etag: ...)`" and
+  "write `Read(..)` to match any of them".
+- `b with {ops: b.ops + [op]}` made the batch builder a value, like
+  PatchOperations, with no `var` at the call site.
+
+Disliked:
+- A positional enum variant (`Create(Str)`, as in Rust) reports
+  "field name `Str` must be snake_case" with the fix "rename to `str`",
+  then "expected `:` after the variant field name". The real fix is a
+  named field (`Create(item: Str)`). A first error saying "variant
+  fields are named (core 2.3)" would save the detour; the fix line
+  offered now leads to `Create(str)`, which is also wrong.
+- `"${f}"` for a Float prints `1.0` where Go's `%v` prints `1`. That is
+  a fair choice, but every Go differential that prints floats needs a
+  small `go_float` helper; a `f.format_go()` or `%v`-style formatter
+  in std would cover it.
+- Mutation testing again ran into the unused-binding error: two
+  mutations needed `_e` or `has_read && false` to compile (same note
+  as aztables).

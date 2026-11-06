@@ -1365,6 +1365,7 @@ Liked:
 Disliked:
 - `Time.parse_rfc3339(x) ?? Err(...)` in a function returning
   `Time ! Str` is a type error (XO0401: the right side is a Result,
-  the left a Time); it takes `?? return Err(...)` and a separate
-  `Ok(t)`. An option-to-result helper (`.ok_or(e)?`) would make it one
-  expression.
+  the left a Time). The prelude already has the fix,
+  `Option.or_err(e)`, but XO0401's note suggested only `?` or `match`;
+  naming `or_err` there would have saved a detour. (Corrected: this
+  entry first asked for an `ok_or` helper that `or_err` already is.)

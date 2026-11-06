@@ -1096,3 +1096,19 @@ Disliked:
   but slower on real transfers. A small std helper for "run these N
   calls with at most K in flight, keep the first error" (Go's
   DoBatchTransfer shape) would make a faithful port cheap.
+
+### 2026-11-06: azfile leases (azure 8352ef5)
+
+Liked:
+- A `var` receiver (`fn (var l: ShareLeaseClient) change(...)`) ported
+  Go's "Change updates the client's lease ID on success" exactly, with
+  the mutation visible at the call site (`var sl = ...`). 23 requests
+  matched Go on the first run; 13 mutations, all caught.
+- `uuid.v4(rand)` takes the Rand capability, so the generated lease ID
+  shows in the constructor's signature (`uses rand`) and the test
+  checks its version with `uuid.parse(...)?.version()`.
+
+Disliked:
+- `break` is a keyword, so Go's `Break` became `break_lease`. Raw
+  identifiers (Rust's `r#break`) or a rule that a keyword is allowed as
+  a method name after `.` would let ports keep the Go name.

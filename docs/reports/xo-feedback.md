@@ -695,3 +695,25 @@ Disliked:
   with Go's `less(a, b)` shape gave three errors before the right one.
 - `Rand.int(lo, hi)`'s half-open range is only in spec/std.md, not in
   `xo doc Rand`.
+
+### 2026-11-06: azeventhubs Blob checkpoint store (azure 5b7d7e8)
+
+Liked:
+- FakeNet with path parameters made a stateful fake blob service (a
+  `Mutex[Fake]` behind two handlers) about 80 lines, and the request log
+  it keeps matched Go's BlobStore on an httptest server line for line,
+  escaped path (`%2F` kept inside `{name}`, `$` unescaped) included.
+- `url.path_escape` agreed with Go's `url.PathEscape` on the blob names
+  with no special casing.
+- `x ?? return fail(404, ..)` and `?? continue` keep a handler's early
+  exits flat.
+
+Disliked:
+- A second `os.net.handle` for a pattern already registered is ignored
+  without a word: the first handler keeps serving, so a test that
+  swaps a route to make it fail silently tests nothing. spec/std.md 8.1
+  does not say which wins. Either replace (and say so) or fault.
+- `req.param("name")` faults when the matched route has no such
+  parameter. One handler shared by `PUT .../c/{name}` and `GET .../c`
+  needs a method check first; an `Option` returning variant (or `param`
+  returning `Str?`) would fit the rest of std.

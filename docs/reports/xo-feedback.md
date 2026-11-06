@@ -819,9 +819,12 @@ Disliked:
   (decision 0003) and Go's `azcore.NewPipeline` does not, so every
   differential has to filter that header. A pipeline option to leave
   it out would let ports match Go without a filter.
-- There is no `Float.to_int()`. The conversion is `Int(f.trunc())`,
-  which works but was not where I looked first (`xo doc Float`
-  lists no conversion).
+- Float to Int is `Int(f)` (spec/std.md 96: truncates toward zero,
+  faults on NaN or out of range). I looked for `Float.to_int()` and
+  wrote `Int(f.trunc())` before Lang 3 pointed at it. Corrected: the
+  note is discoverability (`xo doc Float` does not mention the `Int`
+  conversion), and a non-faulting form would need a range guard
+  today, as azcosmos's `int_of` now has.
 - `BearerTokenPolicy`'s token cache is private, so a policy that
   writes the token in a different header shape (`type=aad&ver=1.0&sig=`)
   had to reimplement caching and refresh. A public

@@ -1102,7 +1102,7 @@ Disliked:
 Liked:
 - A `var` receiver (`fn (var l: ShareLeaseClient) change(...)`) ported
   Go's "Change updates the client's lease ID on success" exactly, with
-  the mutation visible at the call site (`var sl = ...`). 23 requests
+  the mutation visible at the call site (`var sl = ...`). 16 requests
   matched Go on the first run; 13 mutations, all caught.
 - `uuid.v4(rand)` takes the Rand capability, so the generated lease ID
   shows in the constructor's signature (`uses rand`) and the test

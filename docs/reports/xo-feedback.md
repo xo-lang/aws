@@ -616,3 +616,25 @@ Disliked:
   `T ! E` in results is one more rule to remember.
 - `cat > file` with no input in a shell snippet blocked the run until
   the tool timeout. That one is mine, not Xo's.
+
+### 2026-11-06: azservicebus on amqp5 (azure a21f24b)
+
+Liked:
+- Lang 3's amqp5 covered every gap the port listed (message format,
+  manual credit, drain, waited settles, modify annotations, the attach
+  reply), and the API matched go-amqp's closely enough that each
+  adoption was a small change.
+- The dead-letter echo bug in amqptest was found, reported and fixed on
+  main within the hour; the waited settle in mode Second is what made it
+  visible.
+- `Receiver.drain` let the port avoid Go's background releaser loop
+  with the same outcome (nothing stays locked between receives).
+
+Disliked:
+- A `match` arm cannot be a bare `for` loop (`Ok(ds) => for d in ds {}`
+  is "expected an expression"); it needs a block around it.
+- The reland of the cc object reuse change rode along with the amqp fix,
+  so taking a std fix means taking an unrelated compiler change too; the
+  gate passed, but there is no way to pin one without the other.
+- amqptest ignores the Modified outcome's annotations, so
+  properties_to_modify is sent but not checked against the broker.

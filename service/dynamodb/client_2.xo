@@ -9,6 +9,85 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_describe_global_table_settings(base: EndpointParameters, input: DescribeGlobalTableSettingsInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.global_table_name {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of DescribeGlobalTableSettings.
+pub fn serialize_describe_global_table_settings(ep: rest.Endpoint, input: DescribeGlobalTableSettingsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.global_table_name {
+    fs.push(("GlobalTableName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeGlobalTableSettings"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_global_table_settings(resp: http.Response) -> DescribeGlobalTableSettingsOutput ! Str {
+  var out = DescribeGlobalTableSettingsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "GlobalTableName" => out.global_table_name = jsonv.read_str(fv)?
+      "ReplicaSettings" => out.replica_settings = from_json_replica_settings_description_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeGlobalTableSettings.
+pub enum DescribeGlobalTableSettingsErr {
+  GlobalTableNotFoundException(e: GlobalTableNotFoundException)
+  InternalServerError(e: InternalServerError)
+  InvalidEndpointException(e: InvalidEndpointException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeGlobalTableSettingsErr) display() -> Str {
+  match e {
+    GlobalTableNotFoundException(x) => "GlobalTableNotFoundException: ${x:?}"
+    InternalServerError(x) => "InternalServerError: ${x:?}"
+    InvalidEndpointException(x) => "InvalidEndpointException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
 pub fn deserialize_describe_global_table_settings_error(resp: http.Response) -> DescribeGlobalTableSettingsErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
@@ -48,10 +127,13 @@ pub fn (c: Client) describe_global_table_settings(input: DescribeGlobalTableSett
   if resp.status >= 300 {
     return Err(deserialize_describe_global_table_settings_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeGlobalTableSettingsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeGlobalTableSettingsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeGlobalTableSettingsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_global_table_settings(resp) ?? e => Err(DescribeGlobalTableSettingsErr.Deserialize(e))
@@ -154,10 +236,13 @@ pub fn (c: Client) describe_import(input: DescribeImportInput) -> DescribeImport
   if resp.status >= 300 {
     return Err(deserialize_describe_import_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeImportErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeImportErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeImportErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_import(resp) ?? e => Err(DescribeImportErr.Deserialize(e))
@@ -273,10 +358,13 @@ pub fn (c: Client) describe_kinesis_streaming_destination(input: DescribeKinesis
   if resp.status >= 300 {
     return Err(deserialize_describe_kinesis_streaming_destination_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeKinesisStreamingDestinationErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeKinesisStreamingDestinationErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeKinesisStreamingDestinationErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_kinesis_streaming_destination(resp) ?? e => Err(DescribeKinesisStreamingDestinationErr.Deserialize(e))
@@ -418,10 +506,13 @@ pub fn (c: Client) describe_limits(input: DescribeLimitsInput) -> DescribeLimits
   if resp.status >= 300 {
     return Err(deserialize_describe_limits_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeLimitsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeLimitsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeLimitsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_limits(resp) ?? e => Err(DescribeLimitsErr.Deserialize(e))
@@ -542,10 +633,13 @@ pub fn (c: Client) describe_table(input: DescribeTableInput) -> DescribeTableOut
   if resp.status >= 300 {
     return Err(deserialize_describe_table_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeTableErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeTableErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeTableErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_table(resp) ?? e => Err(DescribeTableErr.Deserialize(e))
@@ -655,10 +749,13 @@ pub fn (c: Client) describe_table_replica_auto_scaling(input: DescribeTableRepli
   if resp.status >= 300 {
     return Err(deserialize_describe_table_replica_auto_scaling_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeTableReplicaAutoScalingErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeTableReplicaAutoScalingErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeTableReplicaAutoScalingErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_table_replica_auto_scaling(resp) ?? e => Err(DescribeTableReplicaAutoScalingErr.Deserialize(e))
@@ -774,10 +871,13 @@ pub fn (c: Client) describe_time_to_live(input: DescribeTimeToLiveInput) -> Desc
   if resp.status >= 300 {
     return Err(deserialize_describe_time_to_live_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeTimeToLiveErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DescribeTimeToLiveErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DescribeTimeToLiveErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_describe_time_to_live(resp) ?? e => Err(DescribeTimeToLiveErr.Deserialize(e))
@@ -914,10 +1014,13 @@ pub fn (c: Client) disable_kinesis_streaming_destination(input: KinesisStreaming
   if resp.status >= 300 {
     return Err(deserialize_disable_kinesis_streaming_destination_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DisableKinesisStreamingDestinationErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(DisableKinesisStreamingDestinationErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(DisableKinesisStreamingDestinationErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_disable_kinesis_streaming_destination(resp) ?? e => Err(DisableKinesisStreamingDestinationErr.Deserialize(e))
@@ -1056,10 +1159,13 @@ pub fn (c: Client) enable_kinesis_streaming_destination(input: KinesisStreamingD
   if resp.status >= 300 {
     return Err(deserialize_enable_kinesis_streaming_destination_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(EnableKinesisStreamingDestinationErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(EnableKinesisStreamingDestinationErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(EnableKinesisStreamingDestinationErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_enable_kinesis_streaming_destination(resp) ?? e => Err(EnableKinesisStreamingDestinationErr.Deserialize(e))
@@ -1240,10 +1346,13 @@ pub fn (c: Client) execute_statement(input: ExecuteStatementInput) -> ExecuteSta
   if resp.status >= 300 {
     return Err(deserialize_execute_statement_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ExecuteStatementErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ExecuteStatementErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ExecuteStatementErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_execute_statement(resp) ?? e => Err(ExecuteStatementErr.Deserialize(e))
@@ -1399,10 +1508,13 @@ pub fn (c: Client) execute_transaction(input: ExecuteTransactionInput) -> Execut
   if resp.status >= 300 {
     return Err(deserialize_execute_transaction_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ExecuteTransactionErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ExecuteTransactionErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ExecuteTransactionErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_execute_transaction(resp) ?? e => Err(ExecuteTransactionErr.Deserialize(e))
@@ -1572,10 +1684,13 @@ pub fn (c: Client) export_table_to_point_in_time(input: ExportTableToPointInTime
   if resp.status >= 300 {
     return Err(deserialize_export_table_to_point_in_time_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ExportTableToPointInTimeErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ExportTableToPointInTimeErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ExportTableToPointInTimeErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_export_table_to_point_in_time(resp) ?? e => Err(ExportTableToPointInTimeErr.Deserialize(e))
@@ -1733,10 +1848,13 @@ pub fn (c: Client) get_item(input: GetItemInput) -> GetItemOutput ! GetItemErr u
   if resp.status >= 300 {
     return Err(deserialize_get_item_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(GetItemErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(GetItemErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(GetItemErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_get_item(resp) ?? e => Err(GetItemErr.Deserialize(e))
@@ -1879,10 +1997,13 @@ pub fn (c: Client) get_resource_policy(input: GetResourcePolicyInput) -> GetReso
   if resp.status >= 300 {
     return Err(deserialize_get_resource_policy_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(GetResourcePolicyErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(GetResourcePolicyErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(GetResourcePolicyErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_get_resource_policy(resp) ?? e => Err(GetResourcePolicyErr.Deserialize(e))
@@ -2011,10 +2132,13 @@ pub fn (c: Client) import_table(input: ImportTableInput) -> ImportTableOutput ! 
   if resp.status >= 300 {
     return Err(deserialize_import_table_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ImportTableErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ImportTableErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ImportTableErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_import_table(resp) ?? e => Err(ImportTableErr.Deserialize(e))
@@ -2149,10 +2273,13 @@ pub fn (c: Client) list_backups(input: ListBackupsInput) -> ListBackupsOutput ! 
   if resp.status >= 300 {
     return Err(deserialize_list_backups_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListBackupsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListBackupsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListBackupsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_backups(resp) ?? e => Err(ListBackupsErr.Deserialize(e))
@@ -2269,10 +2396,13 @@ pub fn (c: Client) list_contributor_insights(input: ListContributorInsightsInput
   if resp.status >= 300 {
     return Err(deserialize_list_contributor_insights_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListContributorInsightsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListContributorInsightsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListContributorInsightsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_contributor_insights(resp) ?? e => Err(ListContributorInsightsErr.Deserialize(e))
@@ -2389,10 +2519,13 @@ pub fn (c: Client) list_exports(input: ListExportsInput) -> ListExportsOutput ! 
   if resp.status >= 300 {
     return Err(deserialize_list_exports_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListExportsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListExportsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListExportsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_exports(resp) ?? e => Err(ListExportsErr.Deserialize(e))
@@ -2513,10 +2646,13 @@ pub fn (c: Client) list_global_tables(input: ListGlobalTablesInput) -> ListGloba
   if resp.status >= 300 {
     return Err(deserialize_list_global_tables_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListGlobalTablesErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListGlobalTablesErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListGlobalTablesErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_global_tables(resp) ?? e => Err(ListGlobalTablesErr.Deserialize(e))
@@ -2626,10 +2762,13 @@ pub fn (c: Client) list_imports(input: ListImportsInput) -> ListImportsOutput ! 
   if resp.status >= 300 {
     return Err(deserialize_list_imports_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListImportsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListImportsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListImportsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_imports(resp) ?? e => Err(ListImportsErr.Deserialize(e))
@@ -2741,10 +2880,13 @@ pub fn (c: Client) list_tables(input: ListTablesInput) -> ListTablesOutput ! Lis
   if resp.status >= 300 {
     return Err(deserialize_list_tables_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListTablesErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListTablesErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListTablesErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_tables(resp) ?? e => Err(ListTablesErr.Deserialize(e))
@@ -2866,10 +3008,13 @@ pub fn (c: Client) list_tags_of_resource(input: ListTagsOfResourceInput) -> List
   if resp.status >= 300 {
     return Err(deserialize_list_tags_of_resource_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListTagsOfResourceErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ListTagsOfResourceErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ListTagsOfResourceErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_list_tags_of_resource(resp) ?? e => Err(ListTagsOfResourceErr.Deserialize(e))
@@ -3079,10 +3224,13 @@ pub fn (c: Client) put_item(input: PutItemInput) -> PutItemOutput ! PutItemErr u
   if resp.status >= 300 {
     return Err(deserialize_put_item_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(PutItemErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(PutItemErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(PutItemErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_put_item(resp) ?? e => Err(PutItemErr.Deserialize(e))
@@ -3237,10 +3385,13 @@ pub fn (c: Client) put_resource_policy(input: PutResourcePolicyInput) -> PutReso
   if resp.status >= 300 {
     return Err(deserialize_put_resource_policy_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(PutResourcePolicyErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(PutResourcePolicyErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(PutResourcePolicyErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_put_resource_policy(resp) ?? e => Err(PutResourcePolicyErr.Deserialize(e))
@@ -3465,10 +3616,13 @@ pub fn (c: Client) query(input: QueryInput) -> QueryOutput ! QueryErr uses (net.
   if resp.status >= 300 {
     return Err(deserialize_query_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(QueryErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(QueryErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(QueryErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_query(resp) ?? e => Err(QueryErr.Deserialize(e))
@@ -3636,10 +3790,13 @@ pub fn (c: Client) restore_table_from_backup(input: RestoreTableFromBackupInput)
   if resp.status >= 300 {
     return Err(deserialize_restore_table_from_backup_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(RestoreTableFromBackupErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(RestoreTableFromBackupErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(RestoreTableFromBackupErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_restore_table_from_backup(resp) ?? e => Err(RestoreTableFromBackupErr.Deserialize(e))
@@ -3832,10 +3989,13 @@ pub fn (c: Client) restore_table_to_point_in_time(input: RestoreTableToPointInTi
   if resp.status >= 300 {
     return Err(deserialize_restore_table_to_point_in_time_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(RestoreTableToPointInTimeErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(RestoreTableToPointInTimeErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(RestoreTableToPointInTimeErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_restore_table_to_point_in_time(resp) ?? e => Err(RestoreTableToPointInTimeErr.Deserialize(e))
@@ -4052,10 +4212,13 @@ pub fn (c: Client) scan(input: ScanInput) -> ScanOutput ! ScanErr uses (net.dial
   if resp.status >= 300 {
     return Err(deserialize_scan_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ScanErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(ScanErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(ScanErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_scan(resp) ?? e => Err(ScanErr.Deserialize(e))
@@ -4211,10 +4374,13 @@ pub fn (c: Client) search_vectors(input: SearchVectorsInput) -> SearchVectorsOut
   if resp.status >= 300 {
     return Err(deserialize_search_vectors_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(SearchVectorsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(SearchVectorsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(SearchVectorsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_search_vectors(resp) ?? e => Err(SearchVectorsErr.Deserialize(e))
@@ -4348,10 +4514,13 @@ pub fn (c: Client) tag_resource(input: TagResourceInput) -> () ! TagResourceErr 
   if resp.status >= 300 {
     return Err(deserialize_tag_resource_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(TagResourceErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(TagResourceErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(TagResourceErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_tag_resource(resp) ?? e => Err(TagResourceErr.Deserialize(e))
@@ -4503,10 +4672,13 @@ pub fn (c: Client) transact_get_items(input: TransactGetItemsInput) -> TransactG
   if resp.status >= 300 {
     return Err(deserialize_transact_get_items_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(TransactGetItemsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(TransactGetItemsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(TransactGetItemsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_transact_get_items(resp) ?? e => Err(TransactGetItemsErr.Deserialize(e))
@@ -4704,10 +4876,13 @@ pub fn (c: Client) transact_write_items(input: TransactWriteItemsInput) -> Trans
   if resp.status >= 300 {
     return Err(deserialize_transact_write_items_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(TransactWriteItemsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(TransactWriteItemsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(TransactWriteItemsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_transact_write_items(resp) ?? e => Err(TransactWriteItemsErr.Deserialize(e))
@@ -4839,10 +5014,13 @@ pub fn (c: Client) untag_resource(input: UntagResourceInput) -> () ! UntagResour
   if resp.status >= 300 {
     return Err(deserialize_untag_resource_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UntagResourceErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UntagResourceErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UntagResourceErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_untag_resource(resp) ?? e => Err(UntagResourceErr.Deserialize(e))
@@ -4976,10 +5154,13 @@ pub fn (c: Client) update_continuous_backups(input: UpdateContinuousBackupsInput
   if resp.status >= 300 {
     return Err(deserialize_update_continuous_backups_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateContinuousBackupsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateContinuousBackupsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateContinuousBackupsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_continuous_backups(resp) ?? e => Err(UpdateContinuousBackupsErr.Deserialize(e))
@@ -5107,10 +5288,13 @@ pub fn (c: Client) update_contributor_insights(input: UpdateContributorInsightsI
   if resp.status >= 300 {
     return Err(deserialize_update_contributor_insights_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateContributorInsightsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateContributorInsightsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateContributorInsightsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_contributor_insights(resp) ?? e => Err(UpdateContributorInsightsErr.Deserialize(e))
@@ -5267,10 +5451,13 @@ pub fn (c: Client) update_global_table(input: UpdateGlobalTableInput) -> UpdateG
   if resp.status >= 300 {
     return Err(deserialize_update_global_table_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateGlobalTableErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateGlobalTableErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateGlobalTableErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_global_table(resp) ?? e => Err(UpdateGlobalTableErr.Deserialize(e))
@@ -5433,10 +5620,13 @@ pub fn (c: Client) update_global_table_settings(input: UpdateGlobalTableSettings
   if resp.status >= 300 {
     return Err(deserialize_update_global_table_settings_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateGlobalTableSettingsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateGlobalTableSettingsErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateGlobalTableSettingsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_global_table_settings(resp) ?? e => Err(UpdateGlobalTableSettingsErr.Deserialize(e))
@@ -5637,10 +5827,13 @@ pub fn (c: Client) update_item(input: UpdateItemInput) -> UpdateItemOutput ! Upd
   if resp.status >= 300 {
     return Err(deserialize_update_item_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateItemErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateItemErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateItemErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_item(resp) ?? e => Err(UpdateItemErr.Deserialize(e))
@@ -5776,10 +5969,13 @@ pub fn (c: Client) update_kinesis_streaming_destination(input: UpdateKinesisStre
   if resp.status >= 300 {
     return Err(deserialize_update_kinesis_streaming_destination_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateKinesisStreamingDestinationErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateKinesisStreamingDestinationErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateKinesisStreamingDestinationErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_kinesis_streaming_destination(resp) ?? e => Err(UpdateKinesisStreamingDestinationErr.Deserialize(e))
@@ -5980,10 +6176,13 @@ pub fn (c: Client) update_table(input: UpdateTableInput) -> UpdateTableOutput ! 
   if resp.status >= 300 {
     return Err(deserialize_update_table_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateTableErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateTableErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateTableErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_table(resp) ?? e => Err(UpdateTableErr.Deserialize(e))
@@ -6113,10 +6312,13 @@ pub fn (c: Client) update_table_replica_auto_scaling(input: UpdateTableReplicaAu
   if resp.status >= 300 {
     return Err(deserialize_update_table_replica_auto_scaling_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateTableReplicaAutoScalingErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateTableReplicaAutoScalingErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateTableReplicaAutoScalingErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_table_replica_auto_scaling(resp) ?? e => Err(UpdateTableReplicaAutoScalingErr.Deserialize(e))
@@ -6264,10 +6466,13 @@ pub fn (c: Client) update_time_to_live(input: UpdateTimeToLiveInput) -> UpdateTi
   if resp.status >= 300 {
     return Err(deserialize_update_time_to_live_error(resp))
   }
-  if let Some(want) = resp.header_values("X-Amz-Crc32").first() {
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(UpdateTimeToLiveErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
     let got = crc32.checksum(resp.body)
-    if Int.parse(want) != Some(got) {
-      return Err(UpdateTimeToLiveErr.Deserialize("response CRC32 ${got} does not match X-Amz-Crc32 ${want}"))
+    if want != got {
+      return Err(UpdateTimeToLiveErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
     }
   }
   deserialize_update_time_to_live(resp) ?? e => Err(UpdateTimeToLiveErr.Deserialize(e))

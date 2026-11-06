@@ -92,10 +92,17 @@ fn parse_text_expr(g: G, m: model.Member, target: Str, v: Str) -> Str {
   match s.kind {
     String => if media_type(g, m).is_some() { "(Bytes.from_base64(${v}) ?? return Err(\"bad base64 header\")).to_str() ?? \"\"" } else { v }
     Enum => "${type_name(g.names, target)}.from(${v})"
-    IntEnum => "${type_name(g.names, target)}.from(Int.parse(${v}) ?? return Err(\"bad integer header\"))"
-    Byte | Short | Integer | Long => "(Int.parse(${v}) ?? return Err(\"bad integer header \${${v}}\"))"
-    Float | Double => "(rest.parse_float(${v}) ?? return Err(\"bad number header \${${v}}\"))"
-    Boolean => "(${v} == \"true\")"
+    // Go's strconv.ParseInt(v, 0, bits), ParseFloat(v, bits) and
+    // ParseBool, with their errors, as aws-sdk-go-v2's deserializers
+    IntEnum => "${type_name(g.names, target)}.from(rest.go_parse_int(${v}, 32) ?? e => return Err(e))"
+    Byte => "(rest.go_parse_int(${v}, 8) ?? e => return Err(e))"
+    Short => "(rest.go_parse_int(${v}, 16) ?? e => return Err(e))"
+    Integer => "(rest.go_parse_int(${v}, 32) ?? e => return Err(e))"
+    Long => "(rest.go_parse_int(${v}, 64) ?? e => return Err(e))"
+    // held for the lead's decision on smithy float members (Float32)
+    Float => "(rest.parse_float(${v}) ?? return Err(\"bad number header \${${v}}\"))"
+    Double => "(rest.go_parse_float(${v}, 64) ?? e => return Err(e))"
+    Boolean => "(rest.go_parse_bool(${v}) ?? e => return Err(e))"
     Timestamp => match ts_format(g, m.traits, target, "http-date") {
       "epoch-seconds" => "(rest.parse_epoch_seconds(${v}) ?? return Err(\"bad timestamp header\"))"
       "date-time" => "(rest.parse_date_time(${v}) ?? return Err(\"bad timestamp header\"))"

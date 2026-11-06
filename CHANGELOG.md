@@ -6,6 +6,31 @@ compatibility); a generator fix lists the service modules it touches.
 
 ## Unreleased
 
+Header numbers and booleans are parsed as aws-sdk-go-v2 parses them
+(behavior fix, 54 service modules regenerated):
+
+- An integer header is Go's `strconv.ParseInt(v, 0, bits)` for its
+  size (8, 16, 32 or 64 bits): base prefixes (`0x`, `0o`, `0b`, and
+  `0` for octal), underscores between digits, and Go's errors
+  (`strconv.ParseInt: parsing "128": value out of range`). Before, only
+  decimal text read, with no range check.
+- A boolean header is Go's `strconv.ParseBool` (`1`, `t`, `T`, `TRUE`,
+  `true`, `True` and the false forms). Any other text is Go's error.
+  Before, anything but `true` read as false.
+- A double header is Go's `strconv.ParseFloat(v, 64)`, errors included.
+  A float header is unchanged until decision 0010 (Proposed) settles
+  how Smithy `float` members are typed.
+- DynamoDB's `X-Amz-Crc32` is Go's `strconv.ParseUint(v, 10, 32)`: one
+  that does not parse fails with Go's text (`unable to parse checksum
+  header abc, strconv.ParseUint: parsing "abc": invalid syntax`). A
+  mismatch fails with Go's words (`response did not match expected
+  checksum, <want>, <got>`). Go itself lets that call succeed, a
+  deliberate difference (README).
+- `protocol/rest`: `go_parse_bool`, `go_parse_int`, `go_parse_uint` and
+  `go_parse_float` (32 or 64 bits, the 32-bit result rounded once to
+  the nearest float32), checked against go1.26 strconv on 407 inputs
+  (`strconvvectors_test.xo`).
+
 Response headers that repeat are read as aws-sdk-go-v2 reads them
 (behavior fix, every service module regenerated):
 

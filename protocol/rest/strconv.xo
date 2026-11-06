@@ -1,0 +1,429 @@
+// Go's strconv.ParseBool, ParseInt(s, 0, bits) and ParseFloat(s, bits),
+// errors included, as aws-sdk-go-v2's generated deserializers parse a
+// header bound to a boolean, an integer or a float member: the text of
+// Go's *strconv.NumError (`strconv.ParseInt: parsing "x": invalid
+// syntax`, `... value out of range`).
+
+use std/big
+
+fn num_error(func: Str, s: Str, err: Str) -> Str {
+  "strconv.${func}: parsing ${go_quote(s)}: ${err}"
+}
+
+/// Go's strconv.ParseBool.
+pub fn go_parse_bool(s: Str) -> Bool ! Str {
+  match s {
+    "1" | "t" | "T" | "true" | "TRUE" | "True" => Ok(true)
+    "0" | "f" | "F" | "false" | "FALSE" | "False" => Ok(false)
+    _ => Err(num_error("ParseBool", s, "invalid syntax"))
+  }
+}
+
+fn lower(c: Int) -> Int {
+  c | 0x20
+}
+
+fn is_digit(c: Int) -> Bool {
+  c >= 0x30 && c <= 0x39
+}
+
+/// Go's underscoreOK: underscores only between digits, or between a
+/// base prefix and a digit.
+fn underscore_ok(s: Str) -> Bool {
+  var b = s.bytes()
+  if b.len() >= 1 && (b[0] == 0x2d || b[0] == 0x2b) {
+    b = b[1..b.len()]
+  }
+  // '^' start, '0' a digit or prefix, '_' an underscore, '!' other
+  var saw = "^"
+  var i = 0
+  var hex = false
+  if b.len() >= 2 && b[0] == 0x30 && [0x62, 0x6f, 0x78].contains(lower(Int(b[1]))) {
+    i = 2
+    saw = "0"
+    hex = lower(Int(b[1])) == 0x78
+  }
+  while i < b.len() {
+    let c = Int(b[i])
+    if is_digit(c) || hex && lower(c) >= 0x61 && lower(c) <= 0x66 {
+      saw = "0"
+    } else if c == 0x5f {
+      if saw != "0" {
+        return false
+      }
+      saw = "_"
+    } else {
+      if saw == "_" {
+        return false
+      }
+      saw = "!"
+    }
+    i = i + 1
+  }
+  saw != "_"
+}
+
+enum UintErr {
+  Syntax
+  Range
+}
+
+/// Go's ParseUint(s, base, bits) (base 0 or 2 to 36, 1 <= bits <= 64):
+/// the value, or which error. A range error is reported where the value
+/// first passes the limit, before any later byte is looked at, as Go's.
+fn parse_uint(s: Str, base_in: Int, bits: Int) -> UInt64 ! UintErr {
+  if s == "" {
+    return Err(UintErr.Syntax)
+  }
+  let all = s.bytes()
+  var b = all
+  let base0 = base_in == 0
+  var base = if base0 { 10 } else { base_in }
+  if base0 && b[0] == 0x30 {
+    if b.len() >= 3 && lower(Int(b[1])) == 0x62 {
+      base = 2
+      b = b[2..b.len()]
+    } else if b.len() >= 3 && lower(Int(b[1])) == 0x6f {
+      base = 8
+      b = b[2..b.len()]
+    } else if b.len() >= 3 && lower(Int(b[1])) == 0x78 {
+      base = 16
+      b = b[2..b.len()]
+    } else {
+      base = 8
+      b = b[1..b.len()]
+    }
+  }
+  let max_u64 = UInt64.from_bits(-1)
+  let ubase = UInt64.from_bits(base)
+  let cutoff = max_u64 / ubase + UInt64.from_bits(1)
+  let max_val = if bits == 64 { max_u64 } else { UInt64.from_bits((1 << bits) - 1) }
+  var underscores = false
+  var n = UInt64.from_bits(0)
+  for i in 0..b.len() {
+    let c = Int(b[i])
+    var d = 0
+    if c == 0x5f && base0 {
+      underscores = true
+      continue
+    } else if is_digit(c) {
+      d = c - 0x30
+    } else if lower(c) >= 0x61 && lower(c) <= 0x7a {
+      d = lower(c) - 0x61 + 10
+    } else {
+      return Err(UintErr.Syntax)
+    }
+    if d >= base {
+      return Err(UintErr.Syntax)
+    }
+    if n >= cutoff {
+      return Err(UintErr.Range)
+    }
+    n = n * ubase
+    let ud = UInt64.from_bits(d)
+    // n1 := n + d overflows, or passes max_val
+    if n > max_u64 - ud || n + ud > max_val {
+      return Err(UintErr.Range)
+    }
+    n = n + ud
+  }
+  if underscores && !underscore_ok(s) {
+    return Err(UintErr.Syntax)
+  }
+  Ok(n)
+}
+
+/// Go's strconv.ParseInt(s, 0, bits), 1 <= bits <= 64: base prefixes
+/// (0b, 0o, 0x, and 0 for octal), underscores between digits, and Go's
+/// errors.
+pub fn go_parse_int(s: Str, bits: Int) -> Int ! Str {
+  let syntax = num_error("ParseInt", s, "invalid syntax")
+  let range = num_error("ParseInt", s, "value out of range")
+  if s == "" {
+    return Err(syntax)
+  }
+  var rest = s
+  var neg = false
+  if s.starts_with("+") {
+    rest = s[1..s.len()]
+  } else if s.starts_with("-") {
+    rest = s[1..s.len()]
+    neg = true
+  }
+  // 2^(bits-1); for 64 bits, 2^63 has the bits of Int's least value
+  let cutoff = UInt64.from_bits(if bits == 64 { -9223372036854775807 - 1 } else { 1 << (bits - 1) })
+  let un = match parse_uint(rest, 0, bits) {
+    Ok(u) => u
+    Err(UintErr.Syntax) => return Err(syntax)
+    Err(UintErr.Range) => return Err(range)
+  }
+  if !neg && un >= cutoff {
+    return Err(range)
+  }
+  if neg && un > cutoff {
+    return Err(range)
+  }
+  if neg {
+    // un <= 2^63; 2^63's bits are already -2^63
+    let v = un.to_bits()
+    return Ok(if v < 0 { v } else { -v })
+  }
+  Ok(un.to_bits())
+}
+
+/// Go's strconv.ParseUint(s, base, bits), base 0 or 2 to 36 and
+/// 1 <= bits <= 64, with Go's errors. A value of 2^63 or more (64 bits
+/// only) comes back as the Int with its bits.
+pub fn go_parse_uint(s: Str, base: Int, bits: Int) -> Int ! Str {
+  match parse_uint(s, base, bits) {
+    Ok(u) => Ok(u.to_bits())
+    Err(UintErr.Syntax) => Err(num_error("ParseUint", s, "invalid syntax"))
+    Err(UintErr.Range) => Err(num_error("ParseUint", s, "value out of range"))
+  }
+}
+
+/// The length of the longest common prefix of `s` and lower-case
+/// `prefix`, ignoring case (Go's commonPrefixLenIgnoreCase).
+fn common_prefix_len_ignore_case(s: Bytes, prefix: Str) -> Int {
+  let p = prefix.bytes()
+  var n = 0
+  while n < p.len() && n < s.len() {
+    if lower(Int(s[n])) != Int(p[n]) {
+      break
+    }
+    n = n + 1
+  }
+  n
+}
+
+/// Go's special: how many bytes of `s` an infinity or NaN takes, 0 for
+/// none. A sign is allowed before an infinity only.
+fn special_len(s: Bytes) -> Int {
+  if s.len() == 0 {
+    return 0
+  }
+  var t = s
+  var nsign = 0
+  let c = Int(s[0])
+  if c == 0x2b || c == 0x2d {
+    nsign = 1
+    t = s[1..s.len()]
+  } else if lower(c) == 0x6e {
+    return if common_prefix_len_ignore_case(s, "nan") == 3 { 3 } else { 0 }
+  } else if lower(c) != 0x69 {
+    return 0
+  }
+  var n = common_prefix_len_ignore_case(t, "infinity")
+  if 3 < n && n < 8 {
+    n = 3
+  }
+  if n == 3 || n == 8 { nsign + n } else { 0 }
+}
+
+/// Go's readFloat: how many bytes of `s` a decimal or hexadecimal number
+/// takes, or None when it is not one.
+fn read_float_len(s: Bytes) -> Int? {
+  var i = 0
+  var underscores = false
+  if s.len() == 0 {
+    return None
+  }
+  if s[0] == 0x2b || s[0] == 0x2d {
+    i = 1
+  }
+  var base = 10
+  var exp_char = 0x65
+  if i + 2 < s.len() && s[i] == 0x30 && lower(Int(s[i + 1])) == 0x78 {
+    base = 16
+    i = i + 2
+    exp_char = 0x70
+  }
+  var sawdot = false
+  var sawdigits = false
+  while i < s.len() {
+    let c = Int(s[i])
+    if c == 0x5f {
+      underscores = true
+    } else if c == 0x2e {
+      if sawdot {
+        break
+      }
+      sawdot = true
+    } else if is_digit(c) || base == 16 && lower(c) >= 0x61 && lower(c) <= 0x66 {
+      sawdigits = true
+    } else {
+      break
+    }
+    i = i + 1
+  }
+  if !sawdigits {
+    return None
+  }
+  if i < s.len() && lower(Int(s[i])) == exp_char {
+    i = i + 1
+    if i >= s.len() {
+      return None
+    }
+    if s[i] == 0x2b || s[i] == 0x2d {
+      i = i + 1
+    }
+    if i >= s.len() || !is_digit(Int(s[i])) {
+      return None
+    }
+    while i < s.len() && (is_digit(Int(s[i])) || s[i] == 0x5f) {
+      if s[i] == 0x5f {
+        underscores = true
+      }
+      i = i + 1
+    }
+  } else if base == 16 {
+    return None
+  }
+  if underscores && !underscore_ok(s[0..i].to_str_lossy()) {
+    return None
+  }
+  Some(i)
+}
+
+/// Whether Go's ParseFloat reads all of `s` (its syntax; the value may
+/// still be out of range).
+fn float_syntax_ok(s: Str) -> Bool {
+  let b = s.bytes()
+  let sp = special_len(b)
+  if sp > 0 {
+    return sp == b.len()
+  }
+  read_float_len(b) == Some(b.len())
+}
+
+/// 2^k for k in Float's normal range.
+fn pow2(k: Int) -> Float {
+  Float.from_bits((k + 1023) << 52)
+}
+
+/// The sign of |value of s| - |x|: `s` well-formed finite number text,
+/// `x` a finite nonzero Float. Exact (big integers).
+fn exact_cmp(s: Str, x: Float) -> Int {
+  let b = s.bytes()
+  var i = 0
+  if b[0] == 0x2b || b[0] == 0x2d {
+    i = 1
+  }
+  let hex = i + 2 < b.len() && b[i] == 0x30 && lower(Int(b[i + 1])) == 0x78
+  if hex {
+    i = i + 2
+  }
+  var digits = ""
+  var frac = 0
+  var sawdot = false
+  while i < b.len() {
+    let c = Int(b[i])
+    if c == 0x2e {
+      sawdot = true
+    } else if is_digit(c) || hex && lower(c) >= 0x61 && lower(c) <= 0x66 {
+      digits = digits + b[i..i + 1].to_str_lossy()
+      if sawdot {
+        frac = frac + 1
+      }
+    } else if c != 0x5f {
+      break
+    }
+    i = i + 1
+  }
+  var e = 0
+  if i < b.len() {
+    // the exponent: e or p, a sign, digits and underscores
+    i = i + 1
+    var esign = 1
+    if b[i] == 0x2b {
+      i = i + 1
+    } else if b[i] == 0x2d {
+      esign = -1
+      i = i + 1
+    }
+    while i < b.len() {
+      if b[i] != 0x5f && e < 100000 {
+        e = e * 10 + Int(b[i]) - 0x30
+      }
+      i = i + 1
+    }
+    e = e * esign
+  }
+  var a = big.parse(digits, base: if hex { 16 } else { 10 }).ok() ?? big.from_int(0)
+  // x's significand and binary exponent
+  let bits = x.to_bits()
+  let ex = (bits >> 52) & 0x7ff
+  let m = (bits & ((1 << 52) - 1)) | (1 << 52)
+  let p = ex - 1023 - 52
+  var bx = big.from_int(m)
+  if hex {
+    let k = e - 4 * frac
+    if k >= 0 { a = a.lsh(k) } else { bx = bx.lsh(-k) }
+  } else {
+    let k = e - frac
+    let ten = big.from_int(10)
+    if k >= 0 { a = a.mul(ten.exp(big.from_int(k))) } else { bx = bx.mul(ten.exp(big.from_int(-k))) }
+  }
+  if p >= 0 { bx = bx.lsh(p) } else { a = a.lsh(-p) }
+  a.cmp(bx)
+}
+
+/// `x` (finite, the nearest Float to the value of `s`) rounded to the
+/// nearest Float32, ties to even, as Go's atof32 rounds the exact value:
+/// where x is a Float32 midpoint the value of s decides. None past
+/// Float32's range.
+fn round_f32(s: Str, x: Float) -> Float? {
+  if x == 0.0 {
+    return Some(x)
+  }
+  let bits = x.to_bits()
+  let neg = bits < 0
+  let ex = (bits >> 52) & 0x7ff
+  if ex == 0 {
+    // a Float subnormal is far below Float32's least
+    return Some(if neg { -0.0 } else { 0.0 })
+  }
+  let sig = (bits & ((1 << 52) - 1)) | (1 << 52)
+  var e = ex - 1023
+  let drop = if e >= -126 { 29 } else { 29 + (-126 - e) }
+  if drop >= 54 {
+    return Some(if neg { -0.0 } else { 0.0 })
+  }
+  var kept = sig >> drop
+  let rem = sig & ((1 << drop) - 1)
+  let half = 1 << (drop - 1)
+  let up = if rem > half { true } else if rem < half { false } else {
+    let c = exact_cmp(s, x)
+    c > 0 || c == 0 && kept % 2 == 1
+  }
+  if up {
+    kept = kept + 1
+  }
+  // kept * 2^(e - 52 + drop)
+  let v = Float(kept) * pow2(e - 52 + drop)
+  if v > 3.4028234663852886e38 {
+    return None
+  }
+  Some(if neg { -v } else { v })
+}
+
+/// Go's strconv.ParseFloat(s, bits), bits 32 or 64: Go's syntax
+/// (decimal, hexadecimal, underscores, inf, infinity and nan in any
+/// case), a 32-bit result rounded once to the nearest Float32, and Go's
+/// errors (`value out of range` past the type's largest value).
+pub fn go_parse_float(s: Str, bits: Int) -> Float ! Str {
+  if !float_syntax_ok(s) {
+    return Err(num_error("ParseFloat", s, "invalid syntax"))
+  }
+  let range = num_error("ParseFloat", s, "value out of range")
+  let x = Float.parse(s) ?? return Err(range)
+  if x.is_nan() {
+    // Go's NaN bits: math.NaN() for 64 bits, and float32(NaN) widened
+    // (the payload's low bit dropped) for 32
+    return Ok(Float.from_bits(if bits == 64 { 0x7ff8000000000001 } else { 0x7ff8000000000000 }))
+  }
+  if bits == 64 || x.is_inf() {
+    return Ok(x)
+  }
+  round_f32(s, x).or_err(range)
+}

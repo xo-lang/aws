@@ -26,7 +26,8 @@ test "DynamoDB checks the body's CRC32" {
   let input = dynamodb.GetItemInput{table_name: "t", key: {"pk": dynamodb.AttributeValue.S("a")}}
   c.get_item(input)?
   match c.get_item(input) {
-    Err(dynamodb.GetItemErr.Deserialize(msg)) => expect(msg.contains("CRC32")) == true
+    // Go's words; Go itself does not fail the call (README, deliberate differences)
+    Err(dynamodb.GetItemErr.Deserialize(msg)) => expect(msg) == "response did not match expected checksum, ${good + 1}, ${good}"
     _ => return Err("a CRC32 mismatch must fail")
   }
 }
@@ -39,6 +40,45 @@ test "DynamoDB checks the first X-Amz-Crc32 field, as Go's header.Get" {
   })
   let c = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: test_creds()})?
   c.get_item(dynamodb.GetItemInput{table_name: "t", key: {"pk": dynamodb.AttributeValue.S("a")}})?
+}
+
+test "an X-Amz-Crc32 that does not parse fails as Go's ParseUint(v, 10, 32)" {
+  // a local Go program's output (dynamodb v1.73.1 ListTables, a fake
+  // answering each field; the error after "deserialization failed, "):
+  //   letters: unable to parse checksum header abc, strconv.ParseUint: parsing "abc": invalid syntax
+  //   too big: unable to parse checksum header 4294967296, strconv.ParseUint: parsing "4294967296": value out of range
+  //   signed: unable to parse checksum header +1324975443, strconv.ParseUint: parsing "+1324975443": invalid syntax
+  //   empty, and an empty first field before a good one: ok
+  let body = "{\"TableNames\":[\"t1\"]}"
+  let good = crc32.checksum(body.bytes())
+  expect(good) == 1324975443
+  let cases = [
+    (["abc"], "unable to parse checksum header abc, strconv.ParseUint: parsing \"abc\": invalid syntax"),
+    (["4294967296"], "unable to parse checksum header 4294967296, strconv.ParseUint: parsing \"4294967296\": value out of range"),
+    (["+${good}"], "unable to parse checksum header +1324975443, strconv.ParseUint: parsing \"+1324975443\": invalid syntax"),
+    ([""], "ok"),
+    (["", "${good}"], "ok"),
+    (["${good}"], "ok"),
+  ]
+  // the fake answers the cases in order, one a call
+  let n = Mutex[Int].new(0)
+  os.net.handle("POST https://dynamodb.us-west-2.amazonaws.com/", fn(req: http.Request) -> http.Response {
+    let i = n.with(fn(var x: Int) -> Int { x += 1; x - 1 })
+    var r = http.text(200, body).with_header("Content-Type", "application/x-amz-json-1.0")
+    for f in cases[i].0 {
+      r = r.add_header("X-Amz-Crc32", f)
+    }
+    r
+  })
+  let c = dynamodb.new(os.net, os.clock, os.rand, dynamodb.Options{region: "us-west-2", credentials: test_creds()})?
+  for (fields, want) in cases {
+    let got = match c.list_tables(dynamodb.ListTablesInput{}) {
+      Ok(_) => "ok"
+      Err(dynamodb.ListTablesErr.Deserialize(msg)) => msg
+      Err(e) => "other ${e:?}"
+    }
+    expect("${fields} ${got}") == "${fields} ${want}"
+  }
 }
 
 test "SQS checks the MD5 of sent and received message bodies" {

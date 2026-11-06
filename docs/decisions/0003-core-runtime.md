@@ -173,6 +173,18 @@ polynomial, 0006 item 4), the `aws-chunked` content encoding with a trailing
 checksum, and response validation, with the request and response
 settings defaulting to `when_supported` as current AWS SDKs do.
 
+DynamoDB's `X-Amz-Crc32` (amendment, Xo lead, 2026-11-06): the header
+is read as aws-sdk-go-v2 v1.73.1 reads it (`header.Get`, then
+`strconv.ParseUint(v, 10, 32)`), and a header that does not parse fails
+the call with Go's text (`unable to parse checksum header abc,
+strconv.ParseUint: parsing "abc": invalid syntax`). A body whose CRC32
+does not match also fails the call, as a Deserialize error with Go's
+words (`response did not match expected checksum, <want>, <got>`).
+That is a deliberate difference: Go reports the mismatch only from the
+body's `Close`, which its middleware does not return, so a Go call with
+a corrupt body succeeds. Accepting a corrupt body is worse than
+differing from Go.
+
 ### Paginators and waiters
 
 - Paginators from the `smithy.api#paginated` trait: a generated

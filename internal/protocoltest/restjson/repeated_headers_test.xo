@@ -35,3 +35,28 @@ test "a list header field Go cannot split fails the call with smithy-go's error"
     Ok(_) => fault("want smithy-go's comma count error")
   }
 }
+
+test "integer, double and boolean headers parse as Go's strconv, errors included" {
+  // ParseInt(v, 0, bits), ParseFloat(v, 64) and ParseBool, as
+  // aws-sdk-go-v2's deserializers (protocol/rest's strconvvectors_test.xo
+  // checks them against Go)
+  let ok = http.text(200, "").with_header("X-Byte", "0x7f").with_header("X-Long", "-0b11").with_header("X-Integer", "1_000")
+    .with_header("X-Double", "0x1p-2").with_header("X-Boolean1", "True").with_header("X-Boolean2", "f")
+  let out = deserialize_input_and_output_with_headers(ok)?
+  expect((out.header_byte, out.header_long, out.header_integer)) == (Some(127), Some(-3), Some(1000))
+  expect(out.header_double) == Some(0.25)
+  expect((out.header_true_bool, out.header_false_bool)) == (Some(true), Some(false))
+  for (name, v, want) in [
+    ("X-Byte", "128", "strconv.ParseInt: parsing \"128\": value out of range"),
+    ("X-Short", "08", "strconv.ParseInt: parsing \"08\": invalid syntax"),
+    ("X-Long", "9223372036854775808", "strconv.ParseInt: parsing \"9223372036854775808\": value out of range"),
+    ("X-Double", "1e309", "strconv.ParseFloat: parsing \"1e309\": value out of range"),
+    ("X-Double", "1.5 x", "strconv.ParseFloat: parsing \"1.5 x\": invalid syntax"),
+    ("X-Boolean1", "yes", "strconv.ParseBool: parsing \"yes\": invalid syntax"),
+  ] {
+    match deserialize_input_and_output_with_headers(http.text(200, "").with_header(name, v)) {
+      Err(e) => expect("${name} ${e}") == "${name} ${want}"
+      Ok(_) => fault("want Go's error for ${name}: ${v}")
+    }
+  }
+}

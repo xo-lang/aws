@@ -213,6 +213,17 @@ it cleans up everything it creates. See
 guards, and [docs/real-aws-policy.json](docs/real-aws-policy.json) for an
 IAM policy limited to the resources the tests create.
 
+## Deliberate differences from aws-sdk-go-v2
+
+The SDK reads and writes what aws-sdk-go-v2 does, and its tests check
+that against Go's output. Where Go's behavior would hand a caller bad
+data, it differs on purpose:
+
+- **DynamoDB response CRC32:** a body whose CRC32 does not match
+  `X-Amz-Crc32` fails the call. aws-sdk-go-v2 v1.73.1 detects the
+  mismatch only when the body is closed, and that error does not reach
+  the caller, so the Go call succeeds (decision 0003, Checksums).
+
 ## Versioning and compatibility
 
 Each module follows semantic versioning on its own:

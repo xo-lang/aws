@@ -1,0 +1,40 @@
+// Integer and boolean headers read as aws-sdk-go-v2 reads them:
+// strconv.ParseInt(v, 0, 32) and ParseBool, errors included. The
+// expectations are a local Go program's output (s3 v1.114.6 HeadObject
+// against a fake server answering these fields):
+//   "0x10" "T" missing_meta=16 delete_marker=true
+//   "1_000" "1" missing_meta=1000 delete_marker=true
+//   "-0b11" "False" missing_meta=-3 delete_marker=false
+//   "2147483648" "true" err strconv.ParseInt: parsing "2147483648": value out of range
+//   "abc" "true" err strconv.ParseInt: parsing "abc": invalid syntax
+//   "3" "yes" err strconv.ParseBool: parsing "yes": invalid syntax
+//   "017" "f" missing_meta=15 delete_marker=false
+
+use std/http
+use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/service/s3
+
+test "HeadObject parses integer and boolean headers as Go's s3 client" {
+  let cases = [
+    ("0x10", "T", "missing_meta=16 delete_marker=true"),
+    ("1_000", "1", "missing_meta=1000 delete_marker=true"),
+    ("-0b11", "False", "missing_meta=-3 delete_marker=false"),
+    ("2147483648", "true", "err strconv.ParseInt: parsing \"2147483648\": value out of range"),
+    ("abc", "true", "err strconv.ParseInt: parsing \"abc\": invalid syntax"),
+    ("3", "yes", "err strconv.ParseBool: parsing \"yes\": invalid syntax"),
+    ("017", "f", "missing_meta=15 delete_marker=false"),
+  ]
+  for (i, (mm, dm, want)) in cases.indexed() {
+    let key = "k${i}"
+    os.net.handle("HEAD https://bucket.s3.us-west-2.amazonaws.com/${key}", fn(req: http.Request) -> http.Response {
+      http.text(200, "").with_header("X-Amz-Missing-Meta", mm).with_header("X-Amz-Delete-Marker", dm)
+    })
+    let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: credentials.static_provider("AKIDTEST0000000000", "invented-secret")})?
+    let got = match c.head_object(s3.HeadObjectRequest{bucket: "bucket", key: key}) {
+      Ok(out) => "missing_meta=${out.missing_meta ?? 0} delete_marker=${out.delete_marker ?? false}"
+      Err(s3.HeadObjectErr.Deserialize(msg)) => "err ${msg}"
+      Err(e) => "other ${e:?}"
+    }
+    expect("${mm} ${dm} ${got}") == "${mm} ${dm} ${want}"
+  }
+}

@@ -117,10 +117,13 @@ pub fn response_checks(g: G, op: Str, en: Str) -> (List[Str], List[Str]) {
   let name = model.name_of(op)
   if id == "DynamoDB" {
     return ([
-      "  if let Some(want) = resp.header_values(\"X-Amz-Crc32\").first() {",
+      "  let crc_field = resp.header_values(\"X-Amz-Crc32\").first() ?? \"\"",
+      "  if crc_field != \"\" {",
+      "    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)",
+      "    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(${en}.Deserialize(\"unable to parse checksum header \${crc_field}, \${e}\"))",
       "    let got = crc32.checksum(resp.body)",
-      "    if Int.parse(want) != Some(got) {",
-      "      return Err(${en}.Deserialize(\"response CRC32 \${got} does not match X-Amz-Crc32 \${want}\"))",
+      "    if want != got {",
+      "      return Err(${en}.Deserialize(\"response did not match expected checksum, \${want}, \${got}\"))",
       "    }",
       "  }",
     ], [])

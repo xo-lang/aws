@@ -1554,3 +1554,30 @@ Disliked:
   XO0401, expected Float32?, found Float), though `let f: Float32 = 1.1`
   and a `Float32` default work. Generated tests will have to write
   `Float32(1.1)`.
+
+### 2026-11-06: Smithy float members as Float32 (decision 0010)
+
+Liked:
+- `Float32(x)` from a Float is IEEE round-to-nearest-even with +Inf on
+  overflow, exactly Go's `float32(f64)`: 2,200 Go roundings matched with
+  no special code, so every body reader is `Float32(read_float(v)?)`.
+- `Float.to_exp(prec)` gives exact digits at any precision
+  (`to_exp(120)` writes a float32's whole decimal expansion), which made
+  Go's tie rules for the shortest float32 text a string compare.
+- Xo's JSON encoder already writes a Float as smithy-go's
+  `EncodeFloat(v, 64)` (the `1e-6` and `1e21` bounds and the `e-9`
+  cleanup), so a Float32 goes out as `Num` of its shortest text.
+- A float literal does go into a `List[Float32]` and a `Float32`
+  default, so the generated defaults and the waiters needed no change;
+  only a `Float32?` field needed `Float32(lit)` in generated tests.
+
+Disliked:
+- Float32 has only `to_bits` and `from_bits`: no `is_nan`, `is_inf`,
+  `abs`, Display of its own shortest form, or `to_fixed`/`to_exp` at 32
+  bits. Each helper converts to Float first, and Go's
+  `FormatFloat(v, 'g', -1, 32)` had to be written by hand (with Go's
+  Dragonbox tie rules: half even, but half up at a power of two).
+- UInt32 has no methods on a value (`to_int` is XO0601); `Int(u)` works
+  but the note does not say so.
+- `Float32?` does not implement Display, so a probe could not print an
+  optional directly.

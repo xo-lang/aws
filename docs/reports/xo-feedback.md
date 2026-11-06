@@ -717,3 +717,25 @@ Disliked:
   parameter. One handler shared by `PUT .../c/{name}` and `GET .../c`
   needs a method check first; an `Option` returning variant (or `param`
   returning `Str?`) would fit the rest of std.
+
+### 2026-11-06: custom endpoints in azeventhubs and azservicebus (azure f1314c9)
+
+Liked:
+- XO0801 refused relay tasks that could fail with `NetErr` on a group
+  from outside the function, and named the fix; `.ignore_err("reason")`
+  then made each "the peer closed" ending explicit.
+- A TCP relay over FakeNet (listen, accept, dial, two pump tasks) was
+  enough to prove the dial goes to the proxy and the Open's bytes name
+  the namespace; a mutation (dial the namespace) failed it at once.
+- The `loop` diagnostic says to write `while { }` and cites the spec.
+
+Disliked:
+- `expected \`Conn\`, found \`Conn\``: a module's own `struct Conn` hides
+  the prelude's `Conn`, and the error prints both bare. It should
+  qualify them (`prelude.Conn` vs `azeventhubs.Conn`) or say one hides
+  the other; there seems to be no way to name the prelude's type once
+  it is hidden.
+- std/amqp's `dial` takes the TLS server name from the address, with no
+  option to set it: a proxy in front of a TLS service cannot be checked
+  against the service's name (go-amqp uses the Open's hostname).
+- No `List.dedup` or `distinct`; a for loop with `contains` stood in.

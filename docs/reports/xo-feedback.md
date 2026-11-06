@@ -1369,3 +1369,26 @@ Disliked:
   `Option.or_err(e)`, but XO0401's note suggested only `?` or `match`;
   naming `or_err` there would have saved a detour. (Corrected: this
   entry first asked for an `ok_or` helper that `or_err` already is.)
+
+### 2026-11-06: storage challenge policy (azure 337f58f)
+
+Liked:
+- An optional function-typed field with effects
+  (`Option[fn(policy.Request, Authorizer) -> policy.Request ! SendErr uses (net.dial, clock, rand)]`)
+  compiled the first time, so azcore's nil-checked AuthorizationHandler
+  hooks ported directly.
+- Two closures sharing one `Mutex[List[Str]]` gave the challenge
+  policy its persistent scopes with no extra type.
+
+Disliked:
+- `http.Response.header(name)` joins repeated fields with ", ". Its
+  signature and the std listing don't say so, while Go's `Header.Get`
+  returns the first value. A vector diff caught it in the new code,
+  and it turned out to be a latent bug in the Key Vault challenge
+  port too. A doc line, or a `header_first`, would help Go porters.
+- A helper function in a test file can't see `os`. XO0601 said "name
+  `os` not found" and suggested `Ok` and `ts`. A note that `os` exists
+  only in test bodies (pass `os.net` in) would have pointed straight
+  at the fix.
+- `xo test --run` takes a substring, not a regex: `--run="a\|b"`
+  matched nothing, and the message said only that no tests matched.

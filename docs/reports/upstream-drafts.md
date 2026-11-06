@@ -1,11 +1,13 @@
 # Upstream drafts
 
 Issues found while checking this SDK against aws-sdk-go-v2, written up
-for the upstream project. None is filed yet; the Xo lead files them.
+for the upstream project. The Xo lead files them; each says whether it
+is filed.
 
 ## 1. DynamoDB: a response CRC32 mismatch does not fail the call
 
-Status: draft, not filed (2026-11-06).
+Status: filed (2026-11-06) as
+https://github.com/aws/aws-sdk-go-v2/issues/3624.
 
 **Where:** aws-sdk-go-v2 `service/dynamodb` v1.73.1,
 `internal/customizations/checksum.go`, with smithy-go v1.28.8

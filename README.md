@@ -222,7 +222,9 @@ data, it differs on purpose:
 - **DynamoDB response CRC32:** a body whose CRC32 does not match
   `X-Amz-Crc32` fails the call. aws-sdk-go-v2 v1.73.1 detects the
   mismatch only when the body is closed, and that error does not reach
-  the caller, so the Go call succeeds (decision 0003, Checksums).
+  the caller, so the Go call succeeds (decision 0003, Checksums;
+  reported upstream as
+  [aws/aws-sdk-go-v2#3624](https://github.com/aws/aws-sdk-go-v2/issues/3624)).
 
 ## Versioning and compatibility
 

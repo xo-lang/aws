@@ -1140,3 +1140,26 @@ Disliked:
   digits), so a port of Go's time.Parse callers needs a small scanner.
   A `time.parse_go(s, go_layout)` in a compat module would cover every
   SDK port that reads Go layouts.
+- Answer (Lang 3): the dot in `{frac:N}` is by design (write
+  `{second}{frac:7}`), and the field-list doc is getting fixed. A Go layout
+  parse needs an ADR and an owner call (decision 0087), so the azure
+  modules keep their own layout scanner for now.
+
+### 2026-11-06: azblob to Go v1.8.3 (azure e3e8c1b)
+
+Liked:
+- A `List[(Str, Str)]` field (`signed_request_headers`) turned Go's
+  map-ordered srh/srq signing (random signature per run, draft 20) into a
+  caller-ordered one with no extra type; a struct-field default of `[]`
+  kept every existing literal compiling.
+- `key with {signed_delegated_user_tenant_id: ...}` built the tenant case
+  from the shared test key in one expression.
+- All 14 v1.8.3 vectors matched on the first run; 12 of 12 mutations of
+  the new signing code were killed by the Go vectors.
+
+Disliked:
+- `'${c}'` on a rune prints the character; Go's `%v` on a rune prints the
+  number, so matching Go's error text took `${Int(c)}`. Easy once known,
+  but nothing points at it; a note in the string interpolation section
+  ("a rune prints as its character; Go's `%v` prints the code point")
+  would help ports.

@@ -825,10 +825,10 @@ Disliked:
   note is discoverability (`xo doc Float` does not mention the `Int`
   conversion), and a non-faulting form would need a range guard
   today, as azcosmos's `int_of` now has.
-- `BearerTokenPolicy`'s token cache is private, so a policy that
-  writes the token in a different header shape (`type=aad&ver=1.0&sig=`)
-  had to reimplement caching and refresh. A public
-  `TokenCache` (get token, refresh before expiry) would cover it.
+- (Not Xo: my own Azure code.) `BearerTokenPolicy`'s token cache was
+  private, so the Cosmos AAD policy copied it. Fixed in azure fac0f57
+  with a public `runtime.TokenCache` (decision 0003 amendment 1,
+  Proposed).
 - A closure inside a `${...}` interpolation is rejected. That is a
   reasonable rule, but the error points at the closing brace rather
   than saying closures are not allowed there.

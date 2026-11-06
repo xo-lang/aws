@@ -1522,3 +1522,35 @@ Disliked:
   one-line tests, 22 times (I scripted it). A table or parameterized
   test form would make "run this suite under N fakes" a one-line
   change.
+
+### 2026-11-06: header numbers and booleans as Go's strconv (aws 8e6520a)
+
+Liked:
+- std/big's `BigInt` (`parse`, `lsh`, `mul`, `exp`, `cmp`) made the
+  exact decimal against binary compare at a float32 midpoint a short
+  function. Porting Go's `ParseFloat(s, 32)` single rounding needed
+  nothing outside std.
+- `UInt64` with Go's operators and comparisons let Go's `ParseUint`
+  cutoff logic port line for line.
+- `Float32(x)` from a Float gives +Inf on overflow, as Go's
+  conversion does, so the two-rounding body path is one call.
+
+Disliked:
+- `Float.parse` and `Int.parse_base` return an Option, so Go's two
+  errors (invalid syntax and value out of range) are lost. Getting
+  Go's texts meant a hand-written syntax check (a port of Go's
+  `readFloat`) in front of `Float.parse`, with None then meaning range.
+  A Result with an error kind would remove that port.
+- `1 << 63` faults on overflow, where Go's `1 << 63` on uint64 or the
+  min int64 needs no special case. The cutoff for 64 bits had to be
+  spelled as the literal min.
+- Xo's NaN is 0x7ff8000000000000 and Go's `math.NaN()` is
+  0x7ff8000000000001, so bit-exact vectors needed a `from_bits` for NaN.
+- A Float32 prints as its 64-bit shortest form (`1.100000023841858`),
+  not as the shortest text that reads back the same float32 (Go's
+  `FormatFloat(f, 'g', -1, 32)` gives `1.1`). Writers for a Float32 need
+  their own shortest formatter.
+- A float literal cannot go into a `Float32?` field (`a: 1.1` is
+  XO0401, expected Float32?, found Float), though `let f: Float32 = 1.1`
+  and a `Float32` default work. Generated tests will have to write
+  `Float32(1.1)`.

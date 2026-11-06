@@ -1803,3 +1803,22 @@ Disliked:
 - std/http has no public `status_text`, though the runtime has one
   inside (`http1w.status_text`), so azcore carries its own copy of
   net/http's table.
+
+### 2026-11-06: azeventhubs v2.0.2 (string offsets, geo-replication)
+
+Liked:
+- Changing `offset` from `Int` to `Str` on four public structs gave
+  `xo check` errors at exactly the seven test lines that used numbers
+  and nowhere else; the library code needed no follow-up edits.
+- Two std requests (the Attach's desired capabilities, then the
+  amqptest broker's `georeplication_factor` and attach log) came back
+  from Lang 1 within the session, each with its own test, so the port
+  checks every link's Attach instead of trusting the options.
+- Guarded match arms (`Err(e) if is_geo_replication_offset_error(e) =>`)
+  expressed Go's "retry from earliest on this one error" in three lines.
+
+Disliked:
+- `fail_next("attach", ...)` on the broker fails the next attach of any
+  kind, and a CBS or `$management` attach can come first, so the
+  Processor's fallback could not be driven end to end; the fallback was
+  split into a function that takes the opener and tested with a fake.

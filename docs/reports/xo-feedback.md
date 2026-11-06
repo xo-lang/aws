@@ -798,3 +798,36 @@ Disliked:
 - A mutation that drops a `let` binding's only use is a hard error
   (unused variable), so a quick "delete this use" mutation needs a
   dummy use; a `--allow-unused` test flag would help.
+
+### 2026-11-06: data/azcosmos (azure d5afa3e)
+
+Liked:
+- `json.tokens` and its `offset()` and `skip()` let a query page hand
+  back each document's raw JSON bytes, as Go's `[][]byte`, without
+  re-encoding. The slices were the service's bytes exactly.
+- The master key signature (lowercased verb, resource type and date,
+  unescaped resource address, HMAC-SHA256, then query-escaped) ported
+  in a dozen lines over `std/crypto` and `std/url`. All 24 requests,
+  signatures included, matched Go on the first full run once the
+  fake logged escaped paths.
+- Seven mutations (wrong address for a feed, no `Prefer` header, no
+  upsert header, no query header, wrong offer header, no region
+  routing, untrimmed raw slice) each failed a test.
+
+Disliked:
+- `runtime.new_pipeline` always adds `x-ms-client-request-id`
+  (decision 0003) and Go's `azcore.NewPipeline` does not, so every
+  differential has to filter that header. A pipeline option to leave
+  it out would let ports match Go without a filter.
+- There is no `Float.to_int()`. The conversion is `Int(f.trunc())`,
+  which works but was not where I looked first (`xo doc Float`
+  lists no conversion).
+- `BearerTokenPolicy`'s token cache is private, so a policy that
+  writes the token in a different header shape (`type=aad&ver=1.0&sig=`)
+  had to reimplement caching and refresh. A public
+  `TokenCache` (get token, refresh before expiry) would cover it.
+- A closure inside a `${...}` interpolation is rejected. That is a
+  reasonable rule, but the error points at the closing brace rather
+  than saying closures are not allowed there.
+- Process note, not the language: a fake that returned one document
+  hid an untrimmed slice bug until a two-document test was added.

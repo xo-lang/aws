@@ -1250,3 +1250,32 @@ Disliked:
   absent hash with empty bytes" and built it into azblob (since fixed:
   None, and the Xo dump prints `""` for None). Nothing in Xo to fix;
   noted so the next port's harness writer knows.
+
+### 2026-11-06: azdatalake paths and ACLs (azure 3e65be2)
+
+Liked:
+- A closure in a struct field (`blob_at: fn(Str) -> azblob.BlobClient`,
+  capturing the credential, `net`, `clock` and `rand`) gave Go's "a new
+  blob client with the same credential" for sub-paths without an enum of
+  credential kinds or threading capabilities through every client.
+- `?? e => return Err(...)` and `x with {...}` kept the recursive ACL
+  loop (paging, totals, the partial result on error) as short as Go's.
+- XO0177 (`loop` is Rust syntax, write `while`) and XO0178 (a line that
+  starts with `+`) named the fix exactly.
+- About 1,400 lines of Go requests and responses matched byte for byte;
+  the one difference was my test log dropping the port. 51 mutations:
+  5 survivors were test gaps (now Go cases), 2 are equivalent.
+
+Disliked:
+- `Bytes` has no `contains(byte)`, `all` or `any`; I wrote `all_bytes`
+  and `has_byte` loops for Go's URL escaping rules.
+- `type U8 not found` did not suggest `UInt8`. A "did you mean" for the
+  common short spellings (`U8`, `u8`, `byte`) would save a round trip.
+- No URL parser keeps the raw (escaped) path: `http.Url.path` is all
+  there is, so Go's `URL.EscapedPath` (raw path when it is a valid
+  escaping, else re-escaped) and `URL.String` were hand-written.
+  `std/url` with Go's `Parse`, `RawPath`, `EscapedPath` and `String`
+  would make every "rebuild this URL as Go does" port shorter.
+- XO0178 fires on every long expression wrapped with a leading `+`
+  (my habit from Go's style). The fix is mechanical; `xo fmt` or a
+  `xo fix` applying it would beat four rounds of edit and check.

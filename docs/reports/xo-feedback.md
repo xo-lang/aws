@@ -1163,3 +1163,38 @@ Disliked:
   but nothing points at it; a note in the string interpolation section
   ("a rune prints as its character; Go's `%v` prints the code point")
   would help ports.
+
+### 2026-11-06: azblob service, container, blob and lease clients (azure b08f81e)
+
+Liked:
+- `o.conditions with {if_match: Some(e)}` replaced Go's ETag lock in
+  DownloadBuffer (clone the options, clone the inner pointer struct, set
+  one field: 12 lines) with one expression, and nothing is aliased.
+- A `(var l: BlobLeaseClient)` receiver makes `change_lease`'s ID update
+  visible at the call site (`var bl = ...`); a failed change leaves the
+  ID alone, as Go's does, with no extra code.
+- XO0206 refused `let _ = held.change_lease(...)` in a test until I gave
+  a reason (`.ignore_err("the 409 is the point")`). Right call: the
+  discard is now documented where it happens.
+- Byte identity with Go v1.8.3 on the first full run: service and
+  container (30 cases), blob (19), leases (19). Downloads differed in one
+  field, which turned out to be a Go bug (below). 10 mutations of the
+  download and lease logic: 9 killed at once, the survivor showed a
+  missing Go case (a server that ignores Range), now added.
+
+Disliked:
+- No `Bytes.from_list` and no hex formatting on a byte: Go's `%q` of
+  bytes took `b[i..i + 1].to_str_lossy()` and
+  `Int(c).to_str_width(2, base: 16, zero: true)`. A `UInt8.to_hex()` (or
+  `Bytes.escape_go()` in a compat module) would cover it.
+- Still no bounded parallel helper: `download_buffer` asks for its
+  blocks one at a time where Go asks five at a time. Same gap as the
+  azfile uploads; a `parallel_map(xs, limit, f)` in std would close both.
+
+Go bugs met (for the lead's draft list, not filed):
+- `convertDownloadResponse` drops `SmartAccessTier`, which the generated
+  download response reads.
+- `deserializeORSPolicies` never fills `ObjectReplicationRules` (it
+  looks for `or-` after the prefix is already gone).
+- `SetTags` writes its map in map order (random body per run); GetTags
+  ignores `BlobModifiedAccessConditions`.

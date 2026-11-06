@@ -1320,3 +1320,23 @@ Liked:
 
 Disliked:
 - Nothing new in this slice; it was a thin wrapper over azblob.
+
+### 2026-11-06: azdatalake SAS (azure 47bf39a)
+
+Liked:
+- `pub type QueryParameters = blobsas.QueryParameters` and friends let
+  the datalake `sas` package hand out azblob's types, so the port
+  reused azblob's signer through one field map and matched Go's 178
+  vector lines on the first run.
+- `with` struct updates (`all with {file_path: ...}`) made each test
+  case read like Go's copy-and-change of a values struct.
+- XO0177 caught a Rust-style `loop {` and named the fix (`while {`).
+- 40 mutations; the survivors were equivalent, and two of them showed
+  code that could be simpler.
+
+Disliked:
+- An `http.Response{...}` literal needs every field (XO0403), so a
+  test fake has to find the `http.text` helper instead; a defaulted
+  `headers` field would make the literal usable.
+- XO0110 again turned two mutants into compile errors (an unused
+  `let`), as in the file data slice.

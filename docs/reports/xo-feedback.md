@@ -1081,7 +1081,7 @@ Liked:
 - `Bytes.quote()` is Go's `%q` of a byte slice exactly (`\a`, `\x7f`,
   `\xff` included), which replaced a hand-written escaper in the test
   dumps; `binary.u64_le` covered the CRC64 header, -1 included.
-- The data slice matched Go's 31 cases on its first run, the empty
+- The data slice matched Go's 23 cases (21 requests) on its first run, the empty
   `x-ms-range` header Go sends for a count of 0 included. 25 mutations;
   the 2 survivors were test gaps, now Go cases.
 - `while start < count` chunk loops read plainly, with no XO0401 (only

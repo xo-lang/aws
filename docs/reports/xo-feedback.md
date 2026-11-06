@@ -767,3 +767,34 @@ Disliked:
 - The check-public rule wants signature hashes in test vectors; a small
   std helper for "hash this secret for a golden file" would save each
   repo writing its own `hide()`.
+
+### 2026-11-06: data/aztables (azure 184ab06)
+
+Liked:
+- `json.parse_value` keeps an integer as an exact `Int` and `JsonWriter`
+  writes floats as Go's floatEncoder, so re-encoding an entity the way
+  Go re-encodes `map[string]any` (sorted keys, `<`, ` `,
+  `1e+21`, `-0`) took a 30 line function, and keeping Int64 digits
+  that Go rounds away was a one line choice, not a workaround.
+- `Request.escaped_path()` and `raw_query()` are Go's EscapedPath and
+  RawQuery: logging them made the fake's request lines Go's RequestURI
+  exactly, so all 28 requests (SharedKeyLite signatures and the
+  multipart batch body included) compared byte for byte on the first
+  full run.
+- `xo check` reported all 13 first-draft errors at once, each with a
+  fix line (`r.ok() ?? default`, missing fields, unused import).
+- Six mutations (no `?comp=` in the signed resource, no Cosmos MERGE
+  policy, filled batch headers, unsorted keys, no quote doubling, no
+  HTML escaping) each failed the differential test.
+
+Disliked:
+- `select` is a keyword, so Go's `Select` option cannot be a field
+  named `select`, and there is no raw identifier (`r#select`) to keep
+  the name. It became `select_fields`.
+- FakeNet's `req.path` is the decoded path, which first looked like
+  the client had sent `a''b` instead of `a%27%27b` (a signature the
+  real service would reject). The doc for `path` could say "decoded;
+  `escaped_path()` for the bytes sent".
+- A mutation that drops a `let` binding's only use is a hard error
+  (unused variable), so a quick "delete this use" mutation needs a
+  dummy use; a `--allow-unused` test flag would help.

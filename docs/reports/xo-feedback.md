@@ -454,3 +454,28 @@ Disliked:
   TokenCredential and Policy. Threading the variable through 435
   generated clients is the other cost, and the XO0701 note for an
   omitted effect argument could suggest the `[fx: Effects]` form.
+
+## 2026-11-05: the Azure ARM generator (xo-lang/azure)
+
+Liked:
+- `derive Json` with `as "wire,omitempty"` on each field made the
+  generated models short: 82 armresources models are plain structs,
+  and the emitter needs no serializer code.
+- `derive Json(via: Str, to: f, from: g)` let a newtype over `Time`
+  carry Azure's lenient date-time form (no offset means UTC), and the
+  same pattern covered RFC 1123 times, unix seconds and base64url bytes
+  in about 60 lines.
+- The generator is an Xo program that reads 6 MB of JSON specs, and it
+  regenerates byte for byte, so a drift check is a plain git status.
+
+Disliked:
+- `Time` decodes strict RFC 3339 only, and there is no field-level
+  option, so a lenient date needs a wrapper type, and callers write
+  `t.0` to reach the `Time`. A field option (`as "createdTime,via=..."`)
+  or a lenient `Time` decode mode would keep plain `Time` fields.
+- There is no way to write an explicit `null` for an `omitempty`
+  field (Azure PATCH bodies use `null` to clear a property; Go has
+  `azcore.NullValue`). `T??` or a `json.Null`-able wrapper would cover it.
+- No `fail(msg)` in tests: an unexpected match arm needs
+  `other => expect("${other:?}") == "what I wanted"` to fail with a
+  useful message.

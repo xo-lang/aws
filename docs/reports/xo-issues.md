@@ -480,7 +480,9 @@ Wanted: send a header name as given, as Go does for a name set without
 metadata, Table properties and a few AWS headers (S3 user metadata is
 lowercased by S3 anyway) are case preserving.
 Workaround: none; the SDK documents that metadata names come back
-canonicalized. Status: OPEN.
+canonicalized. Status: FIXED on Xo main 27c82faee (the client sends
+names as stored; assign `headers` directly to keep a name's case), not
+yet in a release.
 
 ## 17. testing.FakeNet cannot match a request whose path has an escaped character
 
@@ -493,4 +495,6 @@ way. Unescaped paths match.
 Workaround: unit tests use plain names and test the escaping as a pure
 function; the Azurite run checks escaped names on the wire (they work:
 `dir%2Fhello%20world%20%C3%BC.txt` uploads, signs and downloads).
-Status: OPEN.
+Status: FIXED on Xo main 27c82faee (FakeNet and Router match the
+escaped path's unescaped segments; `{name}` binds `x/y` for `x%2Fy`),
+not yet in a release.

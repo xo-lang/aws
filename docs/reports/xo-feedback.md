@@ -473,9 +473,36 @@ Disliked:
   option, so a lenient date needs a wrapper type, and callers write
   `t.0` to reach the `Time`. A field option (`as "createdTime,via=..."`)
   or a lenient `Time` decode mode would keep plain `Time` fields.
-- There is no way to write an explicit `null` for an `omitempty`
-  field (Azure PATCH bodies use `null` to clear a property; Go has
-  `azcore.NullValue`). `T??` or a `json.Null`-able wrapper would cover it.
+- (Corrected 2026-11-05: Xo has this. A `Patch[T]` field is `Absent`,
+  `Null` or `Value(v)` on the wire, which is Azure PATCH's explicit
+  `null` and Go's `azcore.NullValue`; I had missed it in spec/std.md
+  5.) The generated modules don't use it yet; it goes in when a PATCH
+  test needs to clear a property.
 - No `fail(msg)` in tests: an unexpected match arm needs
   `other => expect("${other:?}") == "what I wanted"` to fail with a
   useful message.
+
+## 2026-11-05: armnetwork, armkeyvault, armauthorization (xo-lang/azure)
+
+Liked:
+- Tagged enums and `derive Json(via: json.Value, to:, from:)` made
+  autorest's discriminators a direct fit: `<Base>Classification` is an
+  enum with one `Variant(from Struct)` per subtype plus the base for an
+  unknown value, and the decoder is a `match` on the tag. It took 30
+  generated lines per hierarchy and round-tripped on the first try.
+- A valued newtype (`type E struct(Int)`) covers autorest's integer
+  enums with no new machinery.
+- The exhaustiveness warning (XO0305) on a `_` arm over a closed enum is
+  right in library code; in tests it is noise, but harmless.
+
+Disliked:
+- `derive Json(tag: ...)` refuses an unknown tag value (a `DecodeErr`).
+  Azure services add subtypes over time and Go falls back to the base
+  type, so I could not use `tag:` and wrote the dispatch by hand through
+  `via:`. A catch-all variant for tagged enums, as valued enums have
+  (decision 0493), would remove the hand-written decoder.
+- `List` has no `flat_map` (or `flatten`); a loop with `ws = ws + ...`
+  stood in.
+- The offload hosts' seed is xo 0.37.0, and Xo is self-hosted, so a repo
+  that needs a newer Xo cannot be tested off the Mac without building
+  Xo there first (reported to the lead).

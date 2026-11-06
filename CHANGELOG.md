@@ -6,6 +6,19 @@ compatibility); a generator fix lists the service modules it touches.
 
 ## Unreleased
 
+Release fix (`scripts/tag-modules.sh`): each changed service now
+requires the root version tagged with it. Before, a service tag kept
+`require github.com/xo-lang/aws v0.1.0`, so an app with no workspace
+selected a core without the functions the service calls (a dry run in a
+scratch clone of the release after v0.1.0 tagged 435 services that
+way). The script now checks every changed service against the planned
+root (`scripts/check-core-requires.sh --typecheck`: each core name a
+service uses must exist at that version, then a type check against
+that version's tree, offline), tags the root, raises each changed
+service's require to it in one commit, and then tags the services. The
+same dry run with the fix tags root v0.2.0, the services requiring it,
+and an app with no workspace that gets s3vectors and acm type checks.
+
 **Breaking:** Smithy `float` members are `Float32`, as aws-sdk-go-v2's
 `float32` (decision 0010, accepted by the owner on 2026-11-06). A field,
 list item or map value of a Smithy `float` that was `Float` is now

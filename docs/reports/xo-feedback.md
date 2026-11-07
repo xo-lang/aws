@@ -2429,3 +2429,16 @@ Disliked:
 - There is no shared Go-compatible `url.Parse` outside azblob's
   `exported` package, so azwebpubsub depends on a storage module for
   it.
+
+### 2026-11-07: bearer policy's plain HTTP text
+
+Liked:
+- Moving the bearer and Key Vault challenge policies onto the key
+  policy's `check_https_for_auth` was a three-line change each, and
+  `?` on its `() ! policy.SendErr` result kept the call sites short.
+
+Disliked:
+- `xo fmt` on one file also rewrote an unrelated closure's `uses (a,
+  b)` to `uses a, b`, so a small fix carries a formatting change in a
+  line it did not touch. Both forms parse; one canonical form that the
+  old code already met would avoid that.

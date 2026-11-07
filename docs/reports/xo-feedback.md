@@ -2573,3 +2573,20 @@ Disliked:
   `go:generate` line in build.go (`-removeUnreferencedTypes`), and
   nothing on our side reads build.go, so the difference showed up as
   three extra types that took a comparison of Go modules to explain.
+
+### 2026-11-07: armdeployments
+
+Liked:
+- 55 calls matched Go's after one generator rule (reading the Go
+  emitter's `stutter` option from tspconfig.yaml), and the full regen
+  proved the rule touched no other module.
+- The new xo build with Lang 2's go-backend XoEq fix ran the whole gate,
+  llvm and Go backends, with no workaround.
+- A HEAD-as-boolean response's `success` is a plain Bool, so the 404
+  case is one `expect` with no option unwrapping.
+
+Disliked:
+- `xo fmt --check` flags generated and test files across the repo on
+  both the current and previous xo builds, and the gate does not run
+  it, so the formatter and the generator's output have drifted apart
+  without anything noticing.

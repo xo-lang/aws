@@ -2507,3 +2507,16 @@ Disliked:
   FakeNet requests (known, Lang 2), so azfile and azdatalake fail
   there on main. Every gate has to tell those known failures apart
   from new ones by hand.
+
+### 2026-11-07: azopenai's -0 repin
+
+Liked:
+- Lang 3's json fix made a float -0 come out as `-0` through
+  `json.Value` and the writer, matching Go. The KNOWN pin got narrower
+  with a one-line change, and the test's "a KNOWN case must still
+  differ from Go's" check flagged the pin right away.
+
+Disliked:
+- The repo's tests now need an xo built after f306a31fd. There is no
+  way to state a minimum xo version in xo.mod, so the requirement only
+  lives in the CHANGELOG.

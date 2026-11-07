@@ -2685,3 +2685,19 @@ Disliked:
   Env switches that change code generation are not in the cache key
   (the xo knowledge base notes this); only turning every cache off
   gave a real run.
+
+### 2026-11-07: constant fields
+
+Liked:
+- The same pin-then-fix shape took under an hour end to end: a Go
+  program, a generated test with a known list, then a builder change
+  of about 40 lines. A full regeneration touched exactly the 10 models
+  Go's own serializers list, which made the rule easy to trust.
+- Match guards on patterns (`Some(json.Value.Str(c)) if ...`) kept the
+  constant detection to one expression.
+
+Disliked:
+- A Go CONSTANT field is a `Str?` here, so a caller can still set it
+  to anything and only the encoder corrects it. A field that cannot be
+  set (or a default that is the constant) would say what the wire does,
+  but Xo has no read-only or computed struct field.

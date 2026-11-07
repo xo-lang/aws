@@ -2186,3 +2186,30 @@ Disliked:
   would cut both to a few characters.
 - `let before = ...` followed by `before.push(...)` failed until I made
   it `var`; the error was clear and the fix one word.
+
+### 2026-11-06: Azure policies as plain structs (xo decision 0540), armstorage v4 and armcompute v9 from TypeSpec
+
+Liked:
+- Decision 0540 let 23 phantom policy types (32 declarations in 27
+  files) become plain structs with a `send(...) uses (net.dial, clock,
+  rand)` method; `xo check ./...` passed on all 48 modules after the
+  sweep with no other edits. The `// 0540:` workaround comments came
+  out cleanly because each one was marked where it was written.
+- The deadlock fault on the Go backend lists every blocked task with
+  the line it waits at and the line each channel was made at, so the
+  AMQP fake's two failures were readable without a debugger.
+
+Disliked:
+- `List[policy.Policy]` without an argument is effect-generic, so it
+  does not unify with `ClientOptions[()]`'s list (XO0701); the
+  `Policy[()]` annotations had to stay after 0540, which I had expected
+  to remove too.
+- `panic` is not available on the native backends (XO1201), so
+  tracing a generator rule meant pushing to a report list instead.
+- There is no `Rune.to_str` and no `UInt8.to_int`; reading an
+  identifier prefix byte by byte meant comparing `UInt8` values to hex
+  literals (`0x3b`, `0x7b`).
+- A string split on `"\ninterface "` missed every interface declared
+  inside an indented namespace block; a line-based helper fixed it, but
+  a `lines()` iterator with `trim_start` would have made the first
+  version right.

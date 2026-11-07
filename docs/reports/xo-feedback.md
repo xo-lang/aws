@@ -1822,3 +1822,24 @@ Disliked:
   kind, and a CBS or `$management` attach can come first, so the
   Processor's fallback could not be driven end to end; the fallback was
   split into a function that takes the opener and tested with a fake.
+
+### 2026-11-06: azcore v1.24.0 ResourceID, azfile v1.7.2
+
+Liked:
+- `Time.rfc3339_offset` (asked for in the previous slice) replaced a
+  17-line hand parse of the offset in azcore's date-time reader with
+  one call, and every module's tests passed unchanged on it.
+- A recursive struct through `ResourceID?` (each ID's parent) and
+  `while let Some(x) = c` made the parent-chain walk and Go's
+  ValidateResourceTypeChain read like the Go code; the whole port
+  passed its 62 Go vector lines on the first run.
+- `Time` is an instant and every format names its zone, so Go
+  azfile v1.7.2's one fix (SAS times not in UTC were written as their
+  wall clock with a `Z`) was never a bug here; the new vectors with
+  times at -08:00 and +05:30 passed with no code change.
+
+Disliked:
+- `json.encode_str` is the way to get a Go-style quoted string, but I
+  first reached for a `marshal_json` helper that a different test
+  module defines locally; the error (`function not found`) did not
+  suggest the std one.

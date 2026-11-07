@@ -2300,3 +2300,32 @@ Disliked:
   a regeneration that only changed how each request's URL is built;
   `GOGC=15` brought it back under. The one-file Go output leaves no
   margin.
+
+### 2026-11-07: azcore SSE streaming (server-sent events)
+
+Liked:
+- Go's SSE reader (sse.go) ported with its edge cases (a lone CR, a CRLF
+  split across reads, a BOM on the first line only, an `id` with a NUL,
+  a `retry` that is not all digits, the 1 MiB line limit) matched all
+  272 lines of the Go program's output on the first full run. Three
+  mutations (the split CRLF, the retry precedence, the BOM) each broke
+  the vectors.
+- An effect parameter on the reader (`SSEReader[T, fx]`, a connector
+  `fn(Str) -> Body? ! SSEErr uses fx`) let the test's connector use the
+  fake network while the type stays generic.
+- `testing.FakeClock`'s `sleeps()` made the reconnect delays (the
+  server's `retry`, the clamp of a huge one) checkable without waiting.
+
+Disliked:
+- A response from `http.stream(...)` on FakeNet comes back with an empty
+  body through both `Client.open` and `Client.send`, so the streaming
+  path is tested with plain bodies read in chunks, not with a body that
+  arrives in parts.
+- A struct's fn-typed field can only carry the struct's own effect
+  parameter (XO0701), so the connector field could not say
+  `uses net.dial` directly.
+- `${}` cannot span lines (XO0156); a long message became a `let` first.
+- `let v = o ?? return f() ?? e => Err(g(e))` passes the native and LLVM
+  backends but the Go backend emits Go that does not build (the returned
+  value is not wrapped in Ok). It stopped every Go-backend dir, since it
+  was in the pipeline's transport step; a `match` was the workaround.

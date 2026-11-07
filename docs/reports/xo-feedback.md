@@ -2639,3 +2639,27 @@ Disliked:
   91,526 lines of them against 55,782 before. The tests still pass, so
   only a line count shows the regression; a size check on the generated
   Go would catch it earlier.
+
+### 2026-11-07: armcosmos
+
+Liked:
+- The largest ARM module so far (237 operations, 360 models) passed
+  239 of 239 tests on the native, llvm and Go backends, and its Go step
+  stayed under the 10 GB cap (about 10.7 GB sampled across the whole
+  tree, 3 GB for the largest process).
+- Two Go generator rules (TypeSpec `@@override` parameter order and
+  `additionalProperties`) went into the Xo generator as small, tested
+  changes, and a full regeneration showed one other diff: an armnetwork
+  pager that now takes its parameters in Go's order, which is a fix.
+- `derive Json(via: ...)` let a model with extra properties round-trip
+  through a generic JSON value without hand-written code per type.
+
+Disliked:
+- std has no JSON catch-all field: every model with
+  `additionalProperties` needs a private shadow struct plus conversion
+  functions, where Go uses one map field with a custom marshaler.
+- A subtype of a polymorphic model, encoded on its own, leaves out its
+  discriminator, while Go's always writes it. It affects every module;
+  no test caught it until a Go vector did.
+- The Go backend's output for this module is 296,442 lines, so its Go
+  step needs a separate run with a larger memory cap.

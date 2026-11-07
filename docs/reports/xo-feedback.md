@@ -2718,3 +2718,15 @@ Disliked:
   that (`ErrorModel`) and remember to reserve whole names only. A
   module-local type that shadows a predeclared one, with a warning,
   would let generated code keep the spec's names.
+
+### 2026-11-07: armeventhub
+
+Liked:
+- A second autorest module in a row matched Go on all 66 calls at the
+  first run, with no generator change, from setup to gate in about an
+  hour; the pipeline is now routine for this kind of module.
+
+Disliked:
+- Nothing new from Xo itself. A process note: a gate started as a
+  plain `&` job gives no completion signal, so it needs its own waiter
+  on the PID; the language has no part in that.

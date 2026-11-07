@@ -2796,3 +2796,22 @@ Disliked:
   signature showed them as 44 lines, two per call site (the argument
   shift); a grouped summary ("22 calls of new_alerts_client: expected
   Str, found GvCred") would read faster.
+
+### 2026-11-07: Azure differential batch 3 (25 modules against Go)
+
+Liked:
+- `time.format(t, time.utc(), time.DATE)` gave Go's 2006-01-02 form for
+  `format: date` parameters in one line; no layout string to get wrong.
+- A field inserted by a script landed inside a doc comment's backticks;
+  XO0177 pointed at the exact line instead of failing later in a
+  confusing place.
+- Every generator rule in this batch was a small pure function over a
+  TypeSpec chunk (`plain_action`, the `patch_op` regex), so each got a
+  unit test in tsp_test.xo before 25 modules were regenerated.
+
+Disliked:
+- armbilling's test (1.2 MB of generated vectors, 188 tests) peaks at
+  1.3 GB RSS under `xo test`. On a shared host under memory pressure it
+  was killed with no output at all, which looks like a pass/fail
+  question until you check the host; a test binary that size should not
+  need that much memory to compile.

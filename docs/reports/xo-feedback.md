@@ -2071,10 +2071,13 @@ Disliked:
 - A method on a bare receiver (`fn (c: Client) url_for(...) -> Str`,
   no `uses`) counts as performing the struct's implicit effects when a
   method on `Client[fx]` calls it, even though its body performs
-  nothing. Four lines reproduce it (`fn (b: Box) name() -> Str`,
-  called from `fn (b: Box[fx]) label() -> Str`, gives XO0701 "performs
-  `fx`"). The fix is to name `[fx]` on the pure method's receiver too,
-  which reads backwards.
+  nothing (`fn (b: Box) name() -> Str` called from `fn (b: Box[fx])
+  label() -> Str` gives XO0701 "performs `fx`"). Lang 1 and the lead
+  confirmed this is the intended rule: a pub signature is the contract,
+  and a left-out effect argument on a pub receiver means the method may
+  perform it. Writing `Client[fx]` on the pure method is the intended
+  spelling. What I missed was a note on XO0701 pointing there; Lang 1
+  plans one, with an `xo fix`.
 - A policy struct that calls `next` must carry a phantom `[fx: Effects]`
   until xo decision 0540 (a parameter's implicit effects inside an
   interface method) is decided; user policy lists are written

@@ -2815,3 +2815,30 @@ Disliked:
   was killed with no output at all, which looks like a pass/fail
   question until you check the host; a test binary that size should not
   need that much memory to compile.
+
+### 2026-11-07: Azure differential batches 4, 4b and 4c (172 modules against Go)
+
+Liked:
+- A throwaway debug program got four compile errors from guessed APIs
+  (`os.args`, `.slice`, `os.stdout`), and each came with the exact fix:
+  `os.env.args()` with a note on how it differs from Go's `os.Args`,
+  "Xo slices with a range, `x[a..b]`", and `stdio`. It ran on the next
+  try.
+- `json.Value.Array` was rejected at compile time with "has no
+  variant", so building a synthesized schema by hand could not
+  silently produce the wrong JSON shape.
+- Generator rules stay pure functions over TypeSpec text, so a rule
+  that worked in its unit test but not in the real module could be
+  narrowed down with a ten-line program that called the same function
+  on the real files. That showed the rule was right and the file walk
+  was wrong: a sibling directory was skipped by a string-prefix check.
+
+Disliked:
+- `Str.starts_with` on paths is an easy trap: `Discovery.Management.Shared`
+  "starts with" `Discovery.Management`. A path-aware helper
+  (`os.path.has_prefix` by segments) in std would have prevented a bug
+  that hid a whole TypeSpec directory from the generator.
+- Two hosts' test runs that crashed in the generator (`body[0]` on an
+  empty list) aborted a whole 72-module batch under `set -e`; the fault
+  message was good, but the shell script needed its own guard because
+  a generator panic is just a nonzero exit.

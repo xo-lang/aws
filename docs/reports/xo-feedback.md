@@ -2329,3 +2329,30 @@ Disliked:
   backends but the Go backend emits Go that does not build (the returned
   value is not wrapped in Ok). It stopped every Go-backend dir, since it
   was in the pipeline's transport step; a `match` was the workaround.
+
+### 2026-11-07: ai/azopenai v0.9.0 Azure types
+
+Liked:
+- `json.TokenReader` (`next`, `skip`, `value`) made Go's encoding/json
+  reading of an error envelope portable: duplicate members merged, null
+  leaving a member as it was, and names matched in any case, all on one
+  pass, where `parse_value` keeps only a duplicate's last value.
+- The generator took a models-only module with two small options
+  (`keep_definitions`, a hand written type for an `x-ms-external`
+  field); 55 models and 9 enums matched Go's names and fields at once.
+- A pinned table of known differences in the test (each with its
+  reason and the port's output, failing if the output becomes Go's)
+  keeps intentional gaps visible instead of dropping the cases.
+
+Disliked:
+- `json_writer().value(v)` writes a float -0 as `0`, while
+  `json.encode` and Go write `-0`; the two encoders of one value
+  disagree.
+- A closure cannot assign to a captured `var` (XO0502), so a helper
+  that sets one of four string fields became a function that returns
+  the new value, assigned at each of the four call sites.
+- `loop` and `enumerate` are not Xo (`while { }` and `indexed()`); both
+  errors named the replacement, but they cost a compile round each.
+- No way to read a null as a struct's zero value in `derive Json`, which
+  Go's autorest decoders do (a null array element is `{}`); the port
+  pins it as a difference.

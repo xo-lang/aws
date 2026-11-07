@@ -2013,3 +2013,29 @@ Disliked:
 - No `Bytes` from a list of numbers (`Bytes.from_list` does not exist);
   I built a two-byte header through `Bytes.from_hex` with a hand-made
   hex digit lookup.
+
+### 2026-11-06: azidentity, the IMDS probe and MSAL Go's token response
+
+Liked:
+- `json.tokens` with `skip()` and `offset()` gave each member's exact
+  bytes, so MSAL's `DurationTime` (strconv.Atoi of the raw JSON text)
+  is reproduced byte for byte: `"360"`, `1e3` and `[1]` fail with
+  Go's texts, and repeated names are decoded in order.
+- `std/timego` takes Go's layouts as written (`01/02/2006 15:04:05`,
+  RFC3339Nano), so MSAL's three `expires_on` date forms were a loop
+  over its own layout strings.
+- `FakeNet.fail_next` plus its request log made the probe (timeout,
+  transport error, retry on the next call) testable with the fake
+  clock; a Go vector run per case and the Xo replay agreed on every
+  request line.
+- Lang 1 turned XO1201 (an effect-generic struct's method through an
+  interface on the native backends) into a fix on main the same day
+  the prototype reached them.
+
+Disliked:
+- `json.parse_value` keeps one member per name, the last value in the
+  first one's place (`{"a":"x","b":1,"a":"y"}` encodes back as
+  `{"a":"y","b":1}`), and nothing says so: `Value.Object(fields: List[(Str, Value)])` reads
+  as if every member and its order were kept. I found it when a Go
+  vector with `"expires_in":"x","expires_in":"3600"` failed, and moved
+  to `json.tokens`.

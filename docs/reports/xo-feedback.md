@@ -2520,3 +2520,24 @@ Disliked:
 - The repo's tests now need an xo built after f306a31fd. There is no
   way to state a minimum xo version in xo.mod, so the requirement only
   lives in the CHANGELOG.
+
+### 2026-11-07: armsubscriptions, and measuring the Go backend
+
+Liked:
+- A new ARM module was one services.toml row and one generator rule
+  (a TypeSpec parameter moved onto its method); the reflection Go
+  program and vector generator from azbatch carried over with small
+  edits, and all 7 calls matched on the first run after one filler fix.
+- Lang 2's escaped_path fix turned the known azfile, azdatalake and
+  azblob Go-backend failures green with no change on our side.
+- `XO_BUILD_DIR` keeps the generated Go, so line counts for the
+  protocol-pruning ADR were a grep away.
+
+Disliked:
+- A list of models cannot hold a JSON null, where Go keeps a nil
+  pointer; real services rarely send one, but it is a decode failure
+  where Go succeeds.
+- The Go backend's own `go build` flags (`-gcflags=all=-dwarf=false`,
+  empty GOFLAGS) are not visible from the CLI, so a manual rebuild to
+  measure memory did not match xo's and ran over the cap. A flag to
+  print the go command xo runs would help.

@@ -1843,3 +1843,25 @@ Disliked:
   first reached for a `marshal_json` helper that a different test
   module defines locally; the error (`function not found`) did not
   suggest the std one.
+
+### 2026-11-06: azqueue v2.1.2
+
+Liked:
+- Rerunning the old Go vector programs on the new Go major and
+  regenerating the vectors found every wire change at once (API
+  version, SAS URL joining, path joining, time layouts, empty and zero
+  times, int64 counts); the Xo tests then pointed at each one by line.
+- A diff of the old and new expected lists, from the `left:`/`right:`
+  lines `expect` prints, was enough to locate each mismatch; 30 Go
+  time-parsing cases (ranges, one-digit hours, ten-digit fractions,
+  `extra text`) passed on the first run once the error forms were in.
+
+Disliked:
+- `Time` covers only 1678 to 2262 (int64 nanoseconds), so Go's zero
+  time (year 1, which Azure services send for "unset") cannot be read
+  at all; the port has to recognize the zero time by its text before
+  parsing. Go reads any year 0 to 9999.
+- `Option` has no `filter` and `Bytes` has no `all`; both came up in
+  small checks and needed a helper function or a loop.
+- `xo test` takes no test-name filter flag that I could find
+  (`--run` was read as a path), so each check reran the whole module.

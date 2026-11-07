@@ -2777,3 +2777,22 @@ Disliked:
   counts failures reads it as "0 failing" unless it also counts
   `error XO` lines; a final summary line for a build failure, as the
   test runner prints for a run, would make that unambiguous.
+
+### 2026-11-07: Azure differential batch 2 (25 modules against Go)
+
+Liked:
+- XO0406 on `regexp.compile(...) ?? return []` named the problem (a
+  Result, not an optional) and gave both fixes, `?? e =>` or
+  `.ok() ??`; the build was green on the next try.
+- An unused import is an error (XO0110), so a generated vectors file
+  that imported std/json without using it failed at once and pointed at
+  the generator, instead of passing quietly.
+- Generator tests in `xo test ./codegen/spec ./codegen/gen` run in
+  seconds, so each new TypeSpec rule got its own test before a module
+  was regenerated.
+
+Disliked:
+- A module whose 22 build errors all came from one constructor
+  signature showed them as 44 lines, two per call site (the argument
+  shift); a grouped summary ("22 calls of new_alerts_client: expected
+  Str, found GvCred") would read faster.

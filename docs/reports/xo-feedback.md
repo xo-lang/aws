@@ -1890,3 +1890,21 @@ Disliked:
   message or a doc comment I could reach from the use site; I found
   `Value` by grepping other modules' code.
 
+### 2026-11-06: one shared check for Go's zero time
+
+Noted (by design, ADR 0364), for the owner to see whether it recurs:
+- Modules that meet Go's zero time (year 1, outside `Time`'s 1677 to
+  2262), now all through `azcore.is_go_zero_time` (and its RFC 3339 and
+  RFC 1123 forms) or `azcore.GO_ZERO_TIME_RFC3339`: azqueue v2.1.2
+  (reads, both forms), azservicebus admin (reads an entity's
+  `AccessedAt`), azdatalake (writes it into a SAS string to sign).
+  azblob's sas package writes it too, from its layout pieces, and keeps
+  that. Four modules out of the 30 or so ported, all storage or
+  messaging wire formats.
+
+Liked:
+- Moving three copies into one `pub fn` in azcore was mechanical: the
+  per-module tests (azqueue's Go time vectors, servicebus admin's
+  entity XML) passed unchanged, and two mutations of the shared check
+  were caught by its own test.
+

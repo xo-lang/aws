@@ -1925,3 +1925,27 @@ Disliked:
   List[Str] = []) -> ...` is a parse error, XO0160), and the follow-on
   errors (cannot infer `T`, missing argument `#4`) hid the first one; I
   passed `[]` explicitly at each call.
+
+
+### 2026-11-06: azidentity, instance discovery and the OpenID configuration
+
+Liked:
+- `FakeNet.fail_next(pattern, http.ClientErr.Connect(...))` made MSAL's
+  "a transport error on instance discovery is ignored" path testable
+  with one line, no socket, and the mutation that flipped that rule was
+  caught.
+- One handler registered on `GET <host>/{rest...}` for each invented
+  host let one fake answer discovery, the OpenID document and the token
+  endpoint, as the Go program's single `Do` does.
+
+Disliked:
+- `trim_start_chars("https://login.example.test/")` took my prefix as a
+  character set and turned `tenant-a/...` into `-a/...`; it compiled
+  and only the vector diff showed it. `trim_prefix` was what I meant.
+  Go has the same pair (TrimLeft, TrimPrefix), so this is a familiar
+  trap rather than a new one, but a lint for a `_chars` argument that
+  looks like a URL or word would have caught it.
+- A helper outside a `test` block cannot see the predeclared `os`; the
+  error (`name os not found`, "did you mean `MS`, `Ok`?") did not say
+  so, and I read std/testing.xo to learn the type is `testing.TestOs`
+  before passing it in.

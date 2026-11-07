@@ -2605,3 +2605,20 @@ Disliked:
 - There is no formatter in std, so a generator written in Xo cannot
   format its own output; it has to emit formatted text itself or shell
   out to `xo fmt` afterwards.
+
+### 2026-11-07: xo fmt in the gate
+
+Liked:
+- `xo fmt` is idempotent and stable: builds from three points on main
+  agree on every file, so formatting 104 files was one mechanical
+  commit with nothing to review but the diff's shape.
+- The generator's drift was only two patterns (empty structs over two
+  lines, a doubled blank line), so a small text step at write time made
+  every generated file match `xo fmt` byte for byte.
+- `xo fmt --check ./...` lists the files and exits 1, which drops into a
+  shell gate as is.
+
+Disliked:
+- The formatter has no library form, so tools written in Xo (our
+  generator, the vector writer) cannot format their own output in
+  process.

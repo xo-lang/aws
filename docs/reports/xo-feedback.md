@@ -2701,3 +2701,20 @@ Disliked:
   to anything and only the encoder corrects it. A field that cannot be
   set (or a default that is the constant) would say what the wire does,
   but Xo has no read-only or computed struct field.
+
+### 2026-11-07: armservicebus
+
+Liked:
+- An autorest module went from spec to 66 of 66 calls matching Go's on
+  the first test run, with the same fake and vector writer as the
+  last four modules; the generator now covers this kind of module with
+  no per-module code.
+- A one-line name rule (`pascal_part`, without the reserved-word
+  suffix) fixed the only naming difference, and a full regeneration
+  proved it changed nothing else.
+
+Disliked:
+- Xo predeclares `Error`, so a generator must rename any type called
+  that (`ErrorModel`) and remember to reserve whole names only. A
+  module-local type that shadows a predeclared one, with a warning,
+  would let generated code keep the spec's names.

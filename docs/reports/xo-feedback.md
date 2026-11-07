@@ -2356,3 +2356,20 @@ Disliked:
 - No way to read a null as a struct's zero value in `derive Json`, which
   Go's autorest decoders do (a null array element is `{}`); the port
   pins it as a difference.
+
+### 2026-11-07: SSE read as the server flushes, and the AMQP fakes on the Go backend
+
+Liked:
+- The FakeNet fixes (an `http.stream` body flush by flush, deadlines
+  on the virtual clock) arrived about an hour after the repros, and
+  the AMQP suites that stopped with XO-F001 on the Go backend
+  (azeventhubs 25, azservicebus 23) now pass there unchanged.
+- A `Chan[Int]` between the FakeNet handler and the test makes "the
+  second event is written only after the first is read" a few lines,
+  and the deadlock detector turns the mutation (the body read whole)
+  into a clear `XO-F001: deadlock` instead of a hang.
+
+Disliked:
+- `http.stream` returns a Response with no headers, so the test sets
+  `Content-Type` with `resp with {headers: ...}`; a `stream` that took
+  headers, as `text` sets its own, would read better.

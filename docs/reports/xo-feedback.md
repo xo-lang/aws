@@ -2091,3 +2091,32 @@ Disliked:
   declared twice (fixed on xo main the same day), and
   `http.Request.escaped_path()` returns a space unescaped, which fails
   4 of azblob's 27 tests there (routed to the Go backend's owner).
+
+### 2026-11-06: azidentity, Azure Arc on TokenCredential[fs.read]
+
+Liked:
+- `match target.os` with every arm checked on every machine let Arc's
+  Linux and Windows paths live in one pure function, `arc_paths(os,
+  program_data)`, tested for all four OSes on a Mac.
+- Go's Windows `filepath` (Clean, Dir, Base, Ext, Join, about 300 lines
+  with volume names) ported on byte offsets via `s.bytes()[i]` and `Str`
+  slicing, and matched all 58 Go vectors on the first run.
+- The test world's MemFs and FakeNet made Arc testable with no real
+  paths and no network: the token directory is an option pointed at
+  `/tokens` on MemFs, the agent is a FakeNet handler, and a handler can
+  arm `fail_next` for the request after it.
+- Once 0009 was in, the credential's new `fs.read` showed up exactly
+  where it should: DefaultAzureCredential became
+  `ChainedTokenCredential[fs.read]`, and the generic chain ran on the
+  native, LLVM and Go backends unchanged.
+
+Disliked:
+- `os.fs` and MemFs resolve `..` by text, while Linux walks the
+  directory before it first, so `stat("/a/missing/../b")` succeeds on an
+  Fs where Go's `os.Stat` fails. The std spec says what a `sub`
+  capability does with `..`, but not that `os.fs` resolves it by text;
+  I learned it from a Go vector.
+- `FsErr` has no operation in it, so Go's `stat P: ...` and
+  `open P: ...` texts are rebuilt by hand around `display()`.
+- `Map.put`, not `set`, and `Option` has no `unwrap` (I reached for
+  both from habit); the errors named the type, which was enough.

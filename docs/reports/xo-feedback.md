@@ -2557,3 +2557,19 @@ Liked:
 Disliked:
 - One module's Go-backend step still needs its own memory cap and GC
   setting, so a gate is two heavy runs instead of one.
+
+### 2026-11-07: armmsi
+
+Liked:
+- The first autorest ARM module after a run of TypeSpec ones needed no
+  generator change: a services.toml row with a readme tag and a
+  one-line custom file. All 12 calls matched Go's on the first test
+  run.
+- The vectors catch real drift: renaming one JSON field failed all five
+  tests that touch it, the PATCH Update included.
+
+Disliked:
+- What Go's generator was told is split across autorest.md and a
+  `go:generate` line in build.go (`-removeUnreferencedTypes`), and
+  nothing on our side reads build.go, so the difference showed up as
+  three extra types that took a comparison of Go modules to explain.

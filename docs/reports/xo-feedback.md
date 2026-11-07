@@ -2842,3 +2842,30 @@ Disliked:
   empty list) aborted a whole 72-module batch under `set -e`; the fault
   message was good, but the shell script needed its own guard because
   a generator panic is just a nonzero exit.
+
+### 2026-11-07: Azure batch 4d fixes and GCP vector batches g3 and g4
+
+Liked:
+- Generator fixes stayed small because the generator is plain Xo over
+  parsed JSON and TypeSpec text: a subtype with its own subtypes, a
+  parameter group struct from an `@@override`, a next link's verb and
+  TypeSpec header names were each a few dozen lines plus a unit test,
+  and a test that fed a pasted `.tsp` fragment to the parser found a
+  regex gap (the qualified `@@Azure.ClientGenerator.Core.override`) in
+  one run.
+- 300 GCP modules went from "compiled" to "Go-verified" in two host
+  runs of about four minutes each. Every failure was a single line in
+  the run's summary, so the batch needed no log reading.
+
+Disliked:
+- A generated service method named `debug` (Google App Engine's
+  `Instances.Debug`) broke the module's tests with XO1510, "a stale
+  cached piece", which is misleading: it reproduces with the backend
+  cache off. Derive Debug's `xo.debug[T]` appears to call the type's own
+  `debug` method, with the wrong arity. Either the checker should
+  reject the clash or the derive should not see a user method. Reported
+  to the lead; the generator renames such methods with a trailing `_`
+  until it is fixed.
+- A test cannot read a file outside its sandbox (`os.fs.read_text` of a
+  spec path failed), so a quick check against a real spec file needed
+  the file's text pasted into the test as a literal.

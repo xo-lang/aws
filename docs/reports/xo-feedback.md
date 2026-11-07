@@ -2465,3 +2465,27 @@ Disliked:
 - `xo fmt --check` lists files on main that were never formatted, and
   the gate does not run it, so it cannot tell a new change apart from
   old drift.
+
+### 2026-11-07: Service Fabric's pinned client (Client.with_verify)
+
+Liked:
+- `with_verify(tls.Verify.None)` is refused at connect time unless a
+  `verify_conn` hook is set, so "no chain check" cannot ship without
+  the pin. The test can show that directly, and a mutation (Full in
+  place of None) fails the right-pin case as it should.
+- `tls_options()` reports `verify`, so a unit test can check the
+  pairing without a socket.
+- A test marked `uses net, env, fs, clock, rand` is skipped unless
+  `xo test --real` runs it, which keeps the loopback TLS check out of
+  the deterministic gate without a separate module.
+
+Disliked:
+- FakeNet does no TLS, so the pin and Verify.None checks need real
+  sockets on 127.0.0.1 (ADR 0544's `handle_tls` would fix this).
+- Under `--real`, `os.env.set` does not reach `only()`, so the test
+  needed a hand-written `Env` (ten methods) to hold three variables. A
+  `testing` map-backed Env usable in real tests would help.
+- `vars` as both a field and a method name is an error (XO0603); fine,
+  but the interface's method names leak into how you name fields.
+- A new required struct field (`TlsOptions.verify`) breaks every
+  literal of it in downstream tests; a default value would not.

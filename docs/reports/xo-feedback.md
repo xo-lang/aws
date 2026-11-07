@@ -2373,3 +2373,30 @@ Disliked:
 - `http.stream` returns a Response with no headers, so the test sets
   `Content-Type` with `resp with {headers: ...}`; a `stream` that took
   headers, as `text` sets its own, would read better.
+
+### 2026-11-07: azsystemevents (Event Grid system events)
+
+Liked:
+- `json.TokenReader.offset()` plus `skip()` cut an event's `data` text
+  out of the input byte for byte, as Go's `json.RawMessage` keeps it,
+  in about 30 lines: the Event Grid event matches all of Go's outputs,
+  spacing and `-999.0` included.
+- The UpperCamel error for Go's unexported `internalACS...` types
+  named the fix, and dropping `pub` gives the same "module's own"
+  meaning Go's lower case has.
+- `derive Json(via: json.Value, to:, from:)` handled an error type with
+  two wire shapes (a channel error and a nested router error folded
+  into one message) with no change to the 270 generated models.
+
+Disliked:
+- `json.encode` writes a `Map` in insertion order and Go sorts map
+  keys, so 21 of 178 spec examples write differently from Go. It is
+  by design (decision 0091), and an ADR is being drafted.
+- A `json.Value` number is written normalized (`2.0` as `2`), so the
+  `derive Json` path of an event cannot keep raw `data` text; only the
+  token reader path can.
+- `Bytes` has no `slice` method (it is `b[i..j]`), and `Error` is a
+  prelude name, so Go's `Error` became `ErrorModel` again.
+- `?` on an optional in a function that returns `Str` is an error,
+  so it doesn't work as optional chaining; each lookup became a `let ... ?? _ =>
+  return` line.

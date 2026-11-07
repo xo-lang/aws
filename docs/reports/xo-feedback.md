@@ -2730,3 +2730,25 @@ Disliked:
 - Nothing new from Xo itself. A process note: a gate started as a
   plain `&` job gives no completion signal, so it needs its own waiter
   on the PID; the language has no part in that.
+
+### 2026-11-07: Azure bulk generation (290 ARM modules)
+
+Liked:
+- `xo check` per module made the bulk triage cheap: 290 generated
+  modules sorted into 11 failure classes in one pass, each error with a
+  code (XO0603, XO0601, XO0404) that grouped cleanly by count.
+- The XO0601 note that lists a type's methods ("`Str` has len,
+  rune_count, ... (`xo doc Str` lists all 52)") turned a guessed
+  `trim_matches` into the right `trim_chars` in one step.
+- Predeclared names are refused with the spec section named (core
+  1.4), and the checker's list is one readable match, so the generator
+  could copy it whole instead of discovering names one module at a
+  time.
+
+Disliked:
+- A local of a module's name (a parameter called `policy`) silently
+  hides the module, and the error comes later, far from the cause
+  (`Policy has no field Request`). A note on XO0601 pointing at the
+  shadowing binding would have saved the search.
+- Deep recursion still ends in SIGBUS rather than a stack overflow
+  message (seen on a self-referencing `$ref`).

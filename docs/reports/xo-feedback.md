@@ -2442,3 +2442,26 @@ Disliked:
   b)` to `uses a, b`, so a small fix carries a formatting change in a
   line it did not touch. Both forms parse; one canonical form that the
   old code already met would avoid that.
+
+### 2026-11-07: azbatch (Azure Batch data plane)
+
+Liked:
+- The whole 76-operation client came out of the generator with one
+  short custom file. The new pieces (typed response headers, RFC 1123
+  header times, the TypeSpec `@client` forms) were each a small change
+  to the generator, not hand-written code in the module.
+- `Mutex[T].with` and `testing.FakeNet.handle` with `{rest...}` made a
+  fake that records every request in a dozen lines, and the same
+  fake served all 76 Go vector tests.
+- Typed time JSON (`derive Json(via: Str, to:, from:)`) let armstorage's
+  RFC 7231 fields switch from `Str` to a proper time type with no hand
+  written serde.
+
+Disliked:
+- `xo test ./codegen` fails with "has no .xo files"; the packages are
+  one level down (`./codegen/gen`, or `codegen/...`). The message says
+  how, but a module root with only subpackages is the common case.
+- Map has no `+`, so merging two TOML tables needed a helper.
+- `xo fmt --check` lists files on main that were never formatted, and
+  the gate does not run it, so it cannot tell a new change apart from
+  old drift.

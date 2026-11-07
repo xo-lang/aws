@@ -2040,3 +2040,51 @@ Disliked:
   its doc saying so, since `Value.Object(fields: List[(Str, Value)])`
   reads as if every member were kept. MSAL decodes into a struct, member
   by member, so for it I used `json.tokens`.
+
+### 2026-11-06: azcore's TokenCredential[fx] across the Azure repo (decision 0009)
+
+Liked:
+- An effect argument left out of a struct field becomes an implicit
+  parameter of the struct (core 6.2), so the 300 generated clients'
+  operations kept their `uses (net.dial, clock, rand)` clauses, and a
+  caller passing a pure credential changed nothing. A test with a pure
+  and a file-reading credential driving the same azblob client passes
+  on the native and LLVM backends.
+- The XO0701 and XO0702 notes name the left-out argument, where it was
+  left out, and the two ways to fix it (`[()]`, or name `fx` and list
+  it). Most of the sweep was applying those notes with small scripts.
+- The generic `Pager[T, fx]` and `Poller[T, fx]` in azcore's runtime
+  needed no change to their tests (45 of 45 pass).
+
+Disliked:
+- `Generic[X]` with its type argument but no effect argument counts as
+  leaving out the effect arguments, silently. The error then shows up at
+  a caller several functions away as a bare `fx`. azdatalake's
+  `DfsPager[T] { inner: runtime.Pager[T, fx] }` and azcosmos's
+  `QueryPager[T]` each took a search back to the struct.
+- Two parameters written without effect arguments (`cred:
+  TokenCredential` and `opts: ClientOptions`) are two effect variables,
+  not one, so every constructor names `[fx: Effects]` and writes it on
+  both. That was a generator template change, not the "callers and
+  generated code unchanged" the decision first claimed; the decision
+  now says so.
+- A method on a bare receiver (`fn (c: Client) url_for(...) -> Str`,
+  no `uses`) counts as performing the struct's implicit effects when a
+  method on `Client[fx]` calls it, even though its body performs
+  nothing. Four lines reproduce it (`fn (b: Box) name() -> Str`,
+  called from `fn (b: Box[fx]) label() -> Str`, gives XO0701 "performs
+  `fx`"). The fix is to name `[fx]` on the pure method's receiver too,
+  which reads backwards.
+- A policy struct that calls `next` must carry a phantom `[fx: Effects]`
+  until xo decision 0540 (a parameter's implicit effects inside an
+  interface method) is decided; user policy lists are written
+  `List[policy.Policy[()]]` meanwhile.
+- A list literal as an operand of `+` does not get the other operand's
+  element type; binding it to a typed `let` first works.
+- `xo check .` run inside a nested package reports an import cycle
+  that is not there; `xo check ./path/to/pkg` from the module root is
+  clean.
+- On `--backend=go`, a generic method's default-argument helper was
+  declared twice (fixed on xo main the same day), and
+  `http.Request.escaped_path()` returns a space unescaped, which fails
+  4 of azblob's 27 tests there (routed to the Go backend's owner).

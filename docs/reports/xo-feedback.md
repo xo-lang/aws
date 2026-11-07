@@ -2489,3 +2489,21 @@ Disliked:
   but the interface's method names leak into how you name fields.
 - A new required struct field (`TlsOptions.verify`) breaks every
   literal of it in downstream tests; a default value would not.
+
+### 2026-11-07: Go's url.Parse moved into azcore
+
+Liked:
+- Moving a file of helpers between packages was mechanical: the
+  checker named every caller (`function not found`, with a "did you
+  mean" hint) and every unused import, so nothing was missed.
+- Each package's tests ran unchanged after the move, so it was safe to
+  call it "moved unchanged".
+
+Disliked:
+- The checker reports 11 errors in a package that only fails because
+  a helper it uses (`go_quote`) was left behind; one "this file needs
+  these names from elsewhere" summary would be faster to act on.
+- The Go backend still leaves a space unescaped in `escaped_path` on
+  FakeNet requests (known, Lang 2), so azfile and azdatalake fail
+  there on main. Every gate has to tell those known failures apart
+  from new ones by hand.

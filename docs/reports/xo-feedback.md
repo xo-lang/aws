@@ -1969,3 +1969,20 @@ Disliked:
   A std change that alters a function's output could be listed in a
   "behavior changes" section of std's change log that the SDK can
   check when moving to a new xo.
+
+
+### 2026-11-06: azidentity ClientAssertionCredential
+
+Liked:
+- A struct field can hold a callback with effects (`fn() -> Str ! Str
+  uses (net.dial, clock, rand)`), and the checker made me give it the
+  same effects as `get_token`, which documents what a callback may do.
+- The unknown-method hint listed `Atomic`'s methods (`get, set, add,
+  ...`) when I wrote `.load()`, so the fix took one look.
+
+Disliked:
+- `Atomic[Int].add(1)` returns the new value (as Go's `atomic.AddInt64`),
+  which I assumed was the old one; `"assert-${calls.add(1) + 1}"`
+  compiled and only a test that checked the assertion sent showed the
+  off-by-one. std/prelude.xo declares `fn (a: Atomic[Int]) add(n: Int)
+  -> Int` with no doc comment, so nothing says which value it returns.

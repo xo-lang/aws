@@ -2120,3 +2120,69 @@ Disliked:
   `open P: ...` texts are rebuilt by hand around `display()`.
 - `Map.put`, not `set`, and `Option` has no `unwrap` (I reached for
   both from habit); the errors named the type, which was enough.
+
+
+### 2026-11-06: azidentity, DefaultAzureCredential, RetrySources, workload identity options, OnBehalfOfCredential and AzurePipelinesCredential as Go's
+
+Liked:
+- Moving WorkloadIdentityCredential's file read from the constructor to
+  `get_token` was one effect: the method gained `fs.read`, and the
+  compiler then named every place that had to change, ending with
+  DefaultAzureCredential as `ChainedTokenCredential[fs.read]`. No caller
+  had to be found by hand.
+- A closure returning `T ! E` with `?` inside it gave Go's three
+  "no X specified" checks as three lines in Go's order, with the
+  `env.get(name) ?? { ... return Err(...) }` block reading like Go's
+  `LookupEnv` branch.
+- `Env.get` returning `Str?` kept Go's "set but empty counts as set"
+  rule visible: `None` and `Some("")` are different values, so the
+  empty-variable vector matched without special cases.
+- A mutation check (ignore `retry_sources`) failed the vector test at
+  the exact line where Go asks the first source again, so the test was
+  shown to compare something real.
+- A default argument on an existing method (`grant: Str =
+  "client_credentials"` on `Confidential.request`) added the
+  on-behalf-of and refresh token grants without touching any of the
+  five other credentials that call it.
+- An enum whose variants hold a secret, a certificate credential or a
+  callback (`OboAuth`) made the three on-behalf-of constructors one
+  struct and one `match` in `get_token`.
+- XO0160 on a positional variant field said exactly what to write
+  (`name the field value`).
+
+Disliked:
+- Match arms cannot share a line with `,`, so a `match` inside a `${}`
+  interpolation is impossible; every such result needs a `let` first.
+  The error (XO0169) explains this well, but I hit it twice in one file.
+- `ManagedIdentityCredential` in a `[mi, b]` list made the chain's
+  `fx` `()` from the other element and then refused `mi`
+  (XO0701). The fix was an annotation, but the error pointed at `mi`,
+  not at the inference that chose `[()]`.
+- A closure cannot have default arguments; calls that left one out
+  failed with `missing argument(s) #6`, which names the position, not
+  the parameter.
+- `testing.FakeEnv` has `set` but no `remove`, so an unset variable is
+  only reachable through `env.only([...])` without it; I rebuilt one
+  call by hand for the "unset" case.
+- A request that `FakeNet.fail_next` fails never reaches the handler,
+  so a test that logs requests in its handler has to log that one
+  itself to line up with a Go fake that logs before failing.
+
+### 2026-11-06: armstorage, armcompute and armnetwork at Go's next majors
+
+Liked:
+- The generator check (regenerate every module, then `git status`)
+  showed in one command that the enum and naming rules changed only the
+  three modules meant to change, out of more than 30.
+- A `match` on a `Str` with a `_` arm, returning `Str?`, plus `??` at
+  the call site, made autorest's symbol naming (`*` is `ASTERISK`)
+  a four-line function used by both the constant name and its sort key.
+
+Disliked:
+- Closures over nested tuples repeat the whole type each time:
+  `keyed.sort_by(fn(k: (Str, (Str, Str, Str))) -> Str { k.0 })` and
+  then `.map(fn(k: (Str, (Str, Str, Str))) -> (Str, Str, Str) { k.1 })`
+  on the next line. A type alias or inferred closure parameter types
+  would cut both to a few characters.
+- `let before = ...` followed by `before.push(...)` failed until I made
+  it `var`; the error was clear and the fix one word.

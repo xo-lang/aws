@@ -1908,3 +1908,20 @@ Liked:
   entity XML) passed unchanged, and two mutations of the shared check
   were caught by its own test.
 
+
+### 2026-11-06: azidentity, MSAL Go's token request and error text
+
+Liked:
+- `let _ = c.get_token(...)` is refused (XO0206): discarding a Result
+  needs `.ignore_err("reason")`. In a test that only compares the
+  requests, writing the reason once per call was easy, and it would have
+  caught a silently dropped error elsewhere.
+- Adding two defaulted fields (`text`, `status`) to `azcore.AuthErr`
+  changed no other module: every struct literal elsewhere kept
+  compiling, and the full gate passed.
+
+Disliked:
+- A closure cannot have a default parameter (`fn(..., allowed:
+  List[Str] = []) -> ...` is a parse error, XO0160), and the follow-on
+  errors (cannot infer `T`, missing argument `#4`) hid the first one; I
+  passed `[]` explicitly at each call.

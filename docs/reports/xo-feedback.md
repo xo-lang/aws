@@ -2590,3 +2590,18 @@ Disliked:
   both the current and previous xo builds, and the gate does not run
   it, so the formatter and the generator's output have drifted apart
   without anything noticing.
+
+### 2026-11-07: armcontainerregistry
+
+Liked:
+- Ten clients and 58 calls with no generator change and no test
+  failures on the first run; the reflection Go program carried over
+  with only its client list edited.
+- Checking `xo fmt` before changing anything was quick: `--check`
+  lists the files, a second run changes nothing, and three xo builds
+  agree on every file.
+
+Disliked:
+- There is no formatter in std, so a generator written in Xo cannot
+  format its own output; it has to emit formatted text itself or shell
+  out to `xo fmt` afterwards.

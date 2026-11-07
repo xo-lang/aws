@@ -2752,3 +2752,28 @@ Disliked:
   shadowing binding would have saved the search.
 - Deep recursion still ends in SIGBUS rather than a stack overflow
   message (seen on a self-referencing `$ref`).
+
+### 2026-11-07: Azure differential batch 1 (six modules against Go)
+
+Liked:
+- A test file that fails to build reports XO0603 with the previous
+  declaration's file and line, so the two harness collisions (a
+  generated fake against a module's own `EP` and `opts`, then against an
+  older fake that already used the same prefix) were each found and
+  fixed from one output, without opening the files.
+- The XO0601 "did you mean `new_resource_skus_client`?" note named the
+  exact snake-case mismatch between two tools, which made the fix (use
+  the generator's own `snake`) obvious.
+- After the fixes, five modules with tens of thousands of lines of
+  vectors (armnetwork's file is 5 MB) built and passed in one run on the
+  native backend.
+
+Disliked:
+- Every `_test.xo` file of a module shares one namespace, so generated
+  test helpers and hand-written tests collide on short names; the
+  workaround is a prefix on every helper. A file-private declaration
+  (or test helpers scoped to their file) would remove the class.
+- A failed `xo test` build gives no `--- FAIL` lines, so a script that
+  counts failures reads it as "0 failing" unless it also counts
+  `error XO` lines; a final summary line for a build failure, as the
+  test runner prints for a run, would make that unambiguous.

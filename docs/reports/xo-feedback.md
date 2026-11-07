@@ -2238,3 +2238,26 @@ Disliked:
 - `json.decode` takes `Bytes` and returns a `Result`, so a test that
   builds a value from a literal reads more naturally by constructing
   `json.Value.Object` directly than by decoding text.
+
+### 2026-11-07: aznamespaces v1.0.0 (Event Grid Namespaces)
+
+Liked:
+- The port reused azcore's `CloudEvent`, `KeyCredential` and the key
+  policy as they were. After it compiled, the 88-line Go vector
+  comparison passed the first time on the native, LLVM and Go backends,
+  including a topic of `a/b c` escaped to `a%2Fb%20c`.
+- The compiler's notes were exact: XO0603 for a type named `Error`
+  suggested a module-specific name, `to_bytes` suggested `bytes`, and a
+  `,` between match arms said to use a newline. Each fix took one edit.
+- A one-character mutation of the key prefix showed up as a single
+  readable `left:` header line.
+
+Disliked:
+- `Error` is predeclared, so Go's `Error` model became `ErrorModel` (the
+  repo's existing rule). A type that is the error of one field, not an
+  `Error` implementation, could reasonably keep the name.
+- A fake handler pattern such as `POST https://host/` matches only that
+  exact path, and the message ("no fake handler") does not say that
+  `{rest...}` is needed for a prefix.
+- An inline `match` with arms on one line is not allowed, so a two-case
+  value inside a string interpolation became a six-line block.

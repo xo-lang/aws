@@ -2622,3 +2622,20 @@ Disliked:
 - The formatter has no library form, so tools written in Xo (our
   generator, the vector writer) cannot format their own output in
   process.
+
+### 2026-11-07: armprivatedns and armdns
+
+Liked:
+- Two more ARM modules, one TypeSpec and one autorest, with no
+  generator change; 31 calls matched Go's on the first run, and both
+  came out formatted, so the new fmt gate passed without a touch.
+- The fmt gate caught the first thing it could: a test file copied from
+  an older module and the vector writer's output, both fixed by running
+  `xo fmt` once.
+
+Disliked:
+- Lang 2's narrower protocol walk (7b68edb9e) kept equality and hash
+  methods on every client, options and response type of armnetwork:
+  91,526 lines of them against 55,782 before. The tests still pass, so
+  only a line count shows the regression; a size check on the generated
+  Go would catch it earlier.

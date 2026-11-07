@@ -2400,3 +2400,32 @@ Disliked:
 - `?` on an optional in a function that returns `Str` is an error,
   so it doesn't work as optional chaining; each lookup became a `let ... ?? _ =>
   return` line.
+
+### 2026-11-07: azwebpubsub (Web PubSub)
+
+Liked:
+- `crypto.hmac`, `base64` with `RawUrl` and `json.json_writer` (HTML
+  escaping on, keys written in the order given) made an HS256 JSON Web
+  Token in about 15 lines. Two fixed-claims tokens hash to the same
+  SHA-256 as golang-jwt's, and every per-request token's claims and
+  signature match Go's.
+- `testing.FakeNet` with `{rest...}` patterns per method and host
+  served all 18 operations, four endpoints and the token credential
+  path from one handler. The vectors compare line for line, with only
+  three error texts pinned.
+- `std/regexp` `replace_all` with `$1$2` let the generator take Go's
+  autorest.md `where: $` text rewrites as data (`[[replace]]`) instead
+  of new code.
+
+Disliked:
+- A helper that registers fake routes must take `testing.FakeNet`,
+  not `Net`, and a test's `os` is a `TestOs`, not an `Os`. The errors
+  explain both, but it was two rounds of fixes.
+- Xo's string escapes are `\u{XXXX}` and JSON's are `\uXXXX`, so a
+  generated test vector cannot be written with `json.dumps`; the
+  generator needed its own string quoting.
+- `List.sort_by` takes a key function, not a comparator, and `Str` has
+  no `replacen`. Both are small, but each cost a compile round.
+- There is no shared Go-compatible `url.Parse` outside azblob's
+  `exported` package, so azwebpubsub depends on a storage module for
+  it.

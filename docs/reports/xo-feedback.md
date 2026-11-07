@@ -2541,3 +2541,19 @@ Disliked:
   empty GOFLAGS) are not visible from the CLI, so a manual rebuild to
   measure memory did not match xo's and ran over the cap. A flag to
   print the go command xo runs would help.
+
+### 2026-11-07: armcontainerservice
+
+Liked:
+- A 7,000-line ARM module (69 calls, 13 clients) came out of the
+  generator with no change at all: one services.toml row, and every
+  operation and type name matched Go's.
+- The Go backend built and ran all 69 tests at a 10 GB cap with
+  GOGC=15, and the `contains`/`index_of` XoEq fault the lead warned
+  about did not show up in this module.
+- `poll_until_done` with a fake clock and Go's own "response is missing
+  polling URL" error text lined up line for line with the Go program.
+
+Disliked:
+- One module's Go-backend step still needs its own memory cap and GC
+  setting, so a gate is two heavy runs instead of one.

@@ -1949,3 +1949,23 @@ Disliked:
   error (`name os not found`, "did you mean `MS`, `Ok`?") did not say
   so, and I read std/testing.xo to learn the type is `testing.TestOs`
   before passing it in.
+
+
+### 2026-11-06: azblob DownloadFile with Fs.open_rw; azcore on std's json.indent
+
+Liked:
+- `Fs.open_rw` is Go's `os.OpenFile(p, O_RDWR)` (plus O_CREATE), so
+  the DownloadFile test now opens the existing file exactly as the Go
+  program does, and works on the test's MemFs. A new Go case (a failed
+  download over a longer file keeps its later bytes) caught the
+  truncating `create` that the old cases let through.
+- `http.status_text` replaced azcore's 70-line copy of net/http's
+  table; a throwaway test compared both for codes 0 to 999 first.
+
+Disliked:
+- std's `json.indent` fix (it now keeps trailing white space, as Go's)
+  silently doubled the white space my workaround appended: the same
+  code compiled on both xo versions and only a Go-vector test noticed.
+  A std change that alters a function's output could be listed in a
+  "behavior changes" section of std's change log that the SDK can
+  check when moving to a new xo.

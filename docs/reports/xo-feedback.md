@@ -1856,12 +1856,37 @@ Liked:
   time-parsing cases (ranges, one-digit hours, ten-digit fractions,
   `extra text`) passed on the first run once the error forms were in.
 
+Noted (by design, ADR 0364):
+- `Time` is int64 nanoseconds, years 1677 to 2262, so Go's zero time
+  (year 1, which Azure services send for "unset") is recognized by its
+  text before parsing. Go reads any year 0 to 9999. The lead's
+  direction: one shared azcore helper, used by every module that meets
+  it. Modules that hit it so far: azqueue v2.1.2 (RFC 1123 and RFC 3339
+  texts in queue properties and SAS times).
+
 Disliked:
-- `Time` covers only 1678 to 2262 (int64 nanoseconds), so Go's zero
-  time (year 1, which Azure services send for "unset") cannot be read
-  at all; the port has to recognize the zero time by its text before
-  parsing. Go reads any year 0 to 9999.
 - `Option` has no `filter` and `Bytes` has no `all`; both came up in
   small checks and needed a helper function or a loop.
 - `xo test` takes no test-name filter flag that I could find
   (`--run` was read as a path), so each check reran the whole module.
+
+### 2026-11-06: azsecrets v1.5.1 and the generator's enum order
+
+Liked:
+- Regenerating from the new spec and diffing the generated files
+  against the old ones showed the whole API change in one screen, and
+  the one wrong rename (`update_secret` for Go's
+  `UpdateSecretProperties`) stood out at once; the TypeSpec parser fix
+  was 25 lines with a test, and a one-line mutation of it was caught.
+- `sort_by` over tuples and `part` (the generator's Go casing) gave Go's
+  case-sensitive constant order directly; a script over all 13
+  generated modules then matched 566 of 570 enums against Go's
+  `Possible<Type>Values`, name for name.
+- A full regenerate of 13 modules plus their tests runs in minutes, so
+  a generator-wide change was cheap to check.
+
+Disliked:
+- `json.Patch`'s variant names (`Value`, `Absent`) are not in an error
+  message or a doc comment I could reach from the use site; I found
+  `Value` by grepping other modules' code.
+

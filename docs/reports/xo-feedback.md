@@ -1986,3 +1986,30 @@ Disliked:
   compiled and only a test that checked the assertion sent showed the
   off-by-one. std/prelude.xo declares `fn (a: Atomic[Int]) add(n: Int)
   -> Int` with no doc comment, so nothing says which value it returns.
+
+
+### 2026-11-06: azidentity PKCS #12 certificates
+
+Liked:
+- std's `x509.parse_pkcs12` matched golang.org/x/crypto/pkcs12 on every
+  real file I gave it (3DES and RC2 with and without a password, a
+  wrong password, a chain, an EC key, and AES refused with Go's exact
+  `algorithm 1.2.840.113549.1.5.13 is not supported`); only the
+  malformed-input texts differ, and Lang 3 queued those.
+- `crypto.PublicKey` supports `==`, so MSAL's "the certificate whose
+  key is the private key's" was one comparison, no DER marshalling.
+- `crypto.pem_decode`, `pem_encode`, `generate_key` and
+  `x509.create_certificate` let the test build an EC certificate and
+  odd PEM files at run time, so only the .pfx files are committed.
+- `embed(...)` into a `Bytes` const worked for the binary .pfx files.
+- The checker's note for `os.env.only([]).set(...)` said `set` is a
+  method of the test fake (`testing.FakeEnv`), not `Env`, which was
+  exactly the problem.
+
+Disliked:
+- No way to marshal a SEC 1 EC key or read a PKCS #8 key's inner key:
+  the test walks the DER by hand (`inner_key`) and splices in the curve
+  OID to build what Go's `MarshalECPrivateKey` makes in one call.
+- No `Bytes` from a list of numbers (`Bytes.from_list` does not exist);
+  I built a two-byte header through `Bytes.from_hex` with a hand-made
+  hex digit lookup.

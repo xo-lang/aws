@@ -2213,3 +2213,28 @@ Disliked:
   inside an indented namespace block; a line-based helper fixed it, but
   a `lines()` iterator with `trim_start` would have made the first
   version right.
+
+### 2026-11-07: armnetwork v12, armresources v4 and armkeyvault v2, UTC times and Go's parameter order
+
+Liked:
+- A new `azcore.DateTimeUTC` with the same fields as `DateTime` and its
+  own `derive Json(via: ...)` functions was about 40 lines; the
+  generator then picks it per service with one flag, and the native,
+  LLVM and Go backends all passed the five ARM modules unchanged.
+- The `param_order` rule (a custom TOML table read into a map and a
+  pure `reordered()` function) was easy to unit test in
+  `names_test.xo` next to the other naming rules.
+
+Disliked:
+- The Go backend writes armnetwork as one Go file of 585,001 lines
+  (23 MB). Go's compiler peaks near 11.5 GB on it; it passes only with
+  `GOGC=25` and `-gcflags=-c=1`, at about 10 GB. Per-type protocol
+  methods and JSON code are over half of it, most for types nothing
+  reaches.
+- JSON options are per type, not per field, so writing one field's time
+  in UTC needed a whole new type rather than an attribute on the field.
+- `Bytes` has no `all` (or `any`) method; checking a body in a test
+  fell back to converting it to a string and calling `contains`.
+- `json.decode` takes `Bytes` and returns a `Result`, so a test that
+  builds a value from a literal reads more naturally by constructing
+  `json.Value.Object` directly than by decoding text.

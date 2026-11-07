@@ -2663,3 +2663,25 @@ Disliked:
   no test caught it until a Go vector did.
 - The Go backend's output for this module is 296,442 lines, so its Go
   step needs a separate run with a larger memory cap.
+
+### 2026-11-07: polymorphic discriminators
+
+Liked:
+- Pinning a known gap as data first (a list of Go's line and ours)
+  made the fix a visible flip: the second commit only empties the
+  lists, and the test fails if the gap comes back or a fix is partial.
+- `derive Json(via: ..., to: ..., from: ...)` with a private twin
+  struct let each subtype set its discriminator without hand-written
+  code per type, and the same shape already served
+  AdditionalProperties, so one emitter function covers both.
+
+Disliked:
+- The twin is needed only because `to:` cannot call the plain derived
+  encoder of the same type: about 2,250 generated lines across five
+  modules to add one key. A hook such as `derive Json(after: f)`, which
+  edits the derived value, would make this a few lines per type.
+- `xo test` reused a cached test binary while `XO_GO_PROTO=why` was
+  set, so the diagnostic printed nothing and looked like an answer.
+  Env switches that change code generation are not in the cache key
+  (the xo knowledge base notes this); only turning every cache off
+  gave a real run.

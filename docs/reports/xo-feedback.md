@@ -2261,3 +2261,42 @@ Disliked:
   `{rest...}` is needed for a prefix.
 - An inline `match` with arms on one line is not allowed, so a two-case
   value inside a string interpolation became a six-line block.
+
+### 2026-11-07: azcontainerregistry v0.1.0 (Container Registry)
+
+Liked:
+- XO0540 caught a real question in the refresh token cache: a `?` inside
+  a `Mutex.with` closure would have undone the write of the attempt
+  time. The note's suggested shape (return the outcome as the closure's
+  value) made the choice explicit, and the comment now says which
+  failures keep the time.
+- `FakeClock.set` and `advance` made Go's temporal.Resource window and
+  30 second backoff testable at their exact boundaries, which Go's own
+  code (it reads `time.Now`) cannot do. The test showed that at exactly
+  30 seconds Go refetches, and the port does too.
+- The 353-line Go vector comparison reported one readable `left:` and
+  `right:` line at a time. Each mismatch (a 404 delete success, two
+  Accept fields, a second `?` in an upload URL, an Accept Go leaves out,
+  a credential error's text) was one generator or test fix.
+- The XO0401 note for an Option used where a Result is expected gave the
+  exact `.or_err(...)?` rewrite.
+
+Disliked:
+- XO0402 suggested writing `Mutex.with[T](...)` to fix an inference
+  failure, but a method call refuses type arguments (XO0407). A typed
+  `let` binding was the fix; the note should say so for methods.
+- `??` on a Result needs `?? _ => x`, while on an Option it is `?? x`.
+  Three of the first errors in the test file were this, all on
+  `url.parse_query` and `url.path_unescape`.
+- `var x: T` with no initializer is a parse error (XO0160), so a value
+  set in three `if` branches became a `let x = if ... { } else { }`
+  expression. That reads fine, but the error points at the newline, not
+  at the missing initializer.
+- `Map.map` changes only values and there is no `Map.from_entries`, so
+  lower casing a map's keys was a loop; List has `index_of(x)` and
+  `find(pred)` but no index for a predicate, so finding where to insert
+  a parameter was another loop.
+- armnetwork's Go-backend step went over the 10 GB cap (10,587 MB) after
+  a regeneration that only changed how each request's URL is built;
+  `GOGC=15` brought it back under. The one-file Go output leaves no
+  margin.

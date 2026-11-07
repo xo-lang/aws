@@ -2035,7 +2035,8 @@ Liked:
 Disliked:
 - `json.parse_value` keeps one member per name, the last value in the
   first one's place (`{"a":"x","b":1,"a":"y"}` encodes back as
-  `{"a":"y","b":1}`), and nothing says so: `Value.Object(fields: List[(Str, Value)])` reads
-  as if every member and its order were kept. I found it when a Go
-  vector with `"expires_in":"x","expires_in":"3600"` failed, and moved
-  to `json.tokens`.
+  `{"a":"y","b":1}`). The last value is what Go's `json.Unmarshal` into
+  `map[string]any` keeps, so that matches Go; what I missed is a line in
+  its doc saying so, since `Value.Object(fields: List[(Str, Value)])`
+  reads as if every member were kept. MSAL decodes into a struct, member
+  by member, so for it I used `json.tokens`.

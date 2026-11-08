@@ -2899,3 +2899,32 @@ Disliked:
   (`.and_then(fn(i: json.Value) -> json.Value? { i.get("name") })`),
   which makes a one-field lookup a long line. A short closure form or a
   `?.` path would help generator code that walks JSON.
+
+### 2026-11-07: GCP pagers, media upload and download, and 0555's `,string`
+
+Liked:
+- Pagers, downloads and both upload protocols (multipart, and resumable
+  in chunks) took one session in the generator and gensupport. Their
+  vectors matched Go's requests byte for byte on the first run that
+  compiled, including the multipart framing and the Content-Range of
+  each chunk.
+- `testing.FakeClock` let a unit test drive the resumable chunk's retry
+  after a 503: Go's backoff sleeps, and the test still finishes at once.
+- ADR 0555's `as "n,omitempty,string": Int` turned 9,666 generated
+  string-typed integers into Int with one generator switch and one tag.
+  The Go vectors matched on the first try (storage, bigquery, tasks).
+- Rebuilding xo from a new main commit took about 2 minutes, with the
+  previous xo as its seed.
+
+Disliked:
+- `a || b.map(f) ?? false` parses as `(a || b.map(f)) ?? false`. The
+  error ("`??` needs an optional value on the left, found `Bool`") was
+  clear, but the precedence surprised me: `??` binds looser than `||`.
+- `while true { ... return x }` is not treated as diverging, so a
+  function ending in that loop fails with "expected T, found ()". I
+  rewrote the loop with a condition.
+- One `xo check` over all 667 generated modules used more than 12 GB,
+  so the gate now checks them one at a time. A bounded-memory mode for
+  a many-module check would avoid that.
+- A `Response` literal has to name `headers: {}` even when a test
+  doesn't care about headers; a default would shorten test fakes.

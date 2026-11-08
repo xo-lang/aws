@@ -2986,3 +2986,23 @@ Disliked:
 - The owner approved adding the largest generated SDK modules
   (armnetwork, compute/v0.alpha, aiplatform/v1, azblob, azdatalake) as
   a stress corpus in xo's 8-hourly tier, so these surface in xo first.
+
+### 2026-11-08: Azure tracing (decision 0013 step 1)
+
+Liked:
+- Spans need shared, mutable state in many closures: a recording
+  tracer, its spans, and their ends. `Mutex[T].new(v)` with
+  `.with(fn(var x: T) -> R {...})` covered all of it with no new
+  mechanism, and Go's provider, tracer and span interfaces ported as
+  structs of optional `fn` fields.
+- `?? e => return Err(sp.fail(e))` inside a call argument let each
+  generated method end its span on every error path in one line.
+- A Go-to-Xo span comparison on armstorage was 162 lines matching on
+  the first run, apart from the expected differences. The whole azure
+  gate (319 modules regenerated) passed on xo 1e530f877.
+
+Disliked:
+- Xo has no request-scoped context, so a span's parent has to travel in
+  a `Map[Str, Str]` inside each request, and a poller has to save and
+  restore its own span values around each nested call. Spans also start
+  with no parent, unlike Go, where the caller's context carries one.

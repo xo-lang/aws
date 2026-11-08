@@ -2954,3 +2954,35 @@ Disliked:
 - std/trace's span (an id, a name, a start and a duration) can't hold
   what OpenTelemetry adapters need: attributes, kinds, events, status
   text, parent ids. tracing/azotel waits on that.
+
+### 2026-11-08: Azure goes public, and two xo changes found downstream
+
+Liked:
+- Decision 0543 (JSON writes a Map's keys sorted) made 20 of the 21
+  azsystemevents cases pinned as "differs from Go only in key order"
+  produce Go's exact output. Only a `json.Value` object, which keeps
+  insertion order, still differs. The test caught this because each pin
+  asserts the case differs from Go, not just that it matches when
+  sorted.
+- Bisecting an xo regression took minutes: kept builds of xo27 to xo31
+  in their own worktrees showed which range each change came from
+  (0543 between 48f4d7450 and 2875a1383; the 0554 fault between
+  b0c4d89bd and a195c4ebd).
+- Lang 4 measured compute/v0.alpha and aiplatform/v1 builds and found
+  the arm64/amd64 parallel-move resolver was O(n^3) in moved words
+  (wide structs passed by value); 5eedd890d took aiplatform/v1's build
+  from 11:42 to 1:17 and compute/v0.alpha's from 3:20 to 0:48.
+
+Disliked:
+- Output-changing decisions reach downstream repos silently. 0543
+  failed an azsystemevents test for about 13 hours before a full gate
+  surfaced it, inside an unrelated push.
+- Decision 0554 (small List literals on the stack, bcc8bc945) made the
+  arm64 compiler fault on storage/azblob and storage/azdatalake:
+  "stack_lists: core_with_token: v183 escape after the later passes
+  (decision 0554) at arm64/inline.xo:824". A build fault prints only as
+  `fault:` with no FAIL line, so a gate log grep for FAIL missed it the
+  first time. Fixed in 1670a356e; the lead held release 0.44.0 for it.
+- The owner approved adding the largest generated SDK modules
+  (armnetwork, compute/v0.alpha, aiplatform/v1, azblob, azdatalake) as
+  a stress corpus in xo's 8-hourly tier, so these surface in xo first.

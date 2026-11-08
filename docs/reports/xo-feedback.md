@@ -3006,3 +3006,25 @@ Disliked:
   a `Map[Str, Str]` inside each request, and a poller has to save and
   restore its own span values around each nested call. Spans also start
   with no parent, unlike Go, where the caller's context carries one.
+
+### 2026-11-08: Azure DeviceCodeCredential (decision 0003 Amendment 2)
+
+Liked:
+- The device code prompt is a caller-supplied
+  `fn(DeviceCodeMessage) -> () ! Str uses (fx)`, generic over the
+  caller's effects. Printing to a terminal stays the caller's effect, and
+  the credential needs no default prompt the way Go has one.
+- `Secret[Str]` refresh tokens in a `Mutex[Map[...]]` keyed by CAE and
+  account matched MSAL's per-account cache with no new mechanism. All 136
+  vector lines from a local Go program matched once the tests ran.
+- Polling on the injected Clock means the test fake clock runs MSAL's
+  50 ms to 5 s backoff and the 15 minute code expiry instantly.
+
+Disliked:
+- `xo check` caught a field and a method sharing a name (`record`) only
+  as a declaration clash. Renaming the field to `account` was easy, but
+  Go allows both and the rule surprised me.
+- A test's Go vectors used `user@example.test`, which check-public's
+  email rule doesn't allow (only example.com/org/net). That cost a
+  second 20 minute gate after a green one. Checking public data before
+  gating, not after, would have avoided it.

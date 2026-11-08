@@ -3028,3 +3028,30 @@ Disliked:
   check-public's email rule doesn't allow (only example.com/org/net).
   That cost a second 20 minute gate after a green one. Checking public data before
   gating, not after, would have avoided it.
+
+### 2026-11-08: Azure InteractiveBrowserCredential (decision 0003 Amendment 2)
+
+Liked:
+- Opening the browser is a required `open_url` callback, generic over
+  the caller's effects. The library declares only `net.listen` for its
+  loopback listener and never starts a process. A caller's opener in
+  the example declares `proc` itself.
+- `scope s { s.spawn(...) }` ran the loopback accept loop next to the
+  caller's `open_url` with no extra machinery. `--explore=20` ran the
+  tests under 20 schedules, which gives real confidence that the
+  listener and the browser don't race.
+- All 83 lines from a local Go program (azidentity with a scratch
+  WithOpenURL hook, so no browser) matched on the first passing run.
+
+Disliked:
+- Under the fake network, std's http client reaches only an
+  `http.server`, never a bare `Listener`: a client request to a raw
+  accept loop hangs, and the test faults with "deadlock: every task is
+  blocked". Raw `Net.dial` to the same listener works. It took five
+  probe tests to find, and the test browser now writes HTTP/1.1 by
+  hand. A FakeNet note in std.md, or routing client requests to a bare
+  listener over the fake TCP, would save the next person the hunt.
+- `xo fmt` writes a closure's `uses (a, b)` without the parentheses.
+  `xo check` accepts both forms, so only the gate's fmt step caught it,
+  which cost one extra gate run. An `xo fmt --check` before committing
+  would have caught it.

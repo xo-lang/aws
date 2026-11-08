@@ -2928,3 +2928,29 @@ Disliked:
   a many-module check would avoid that.
 - A `Response` literal has to name `headers: {}` even when a test
   doesn't care about headers; a default would shorten test fakes.
+
+### 2026-11-07: Azure drift refresh, monitor/azquery, and decision drafts
+
+Liked:
+- `xo check` on one data-plane module took 1 to 3 seconds and stayed
+  under 1 GB, so checking the 9 modules a docs-only change touched was
+  cheap enough to do before every push.
+- monitor/azquery (about 920 lines, two clients and 25 models) matched
+  a 180-line Go transcript on its first test run. `derive Json` with
+  `as "key,omitempty"` covered every metrics model, and a newtype
+  (`struct(Str)`) worked as a JSON string field without extra code.
+- The effect error on a free function generic over `fx` was exact:
+  "`send` declares `uses clock, net.dial, rand`, but performs `fx`".
+  Adding `fx` to `uses` fixed it. A method on the client needed nothing,
+  because the struct's implicit effect parameter covers it.
+- Copying a sibling module's models and renaming types with
+  word-boundary replacements was safe, because the checker caught every
+  missed rename at once.
+
+Disliked:
+- Xo has no `context.Context`, so azcore's tracing (an active span
+  carried through the call, nested spans suppressed) has no natural
+  carrier. Decision 0013 proposes `Request.values` as the carrier.
+- std/trace's span (an id, a name, a start and a duration) can't hold
+  what OpenTelemetry adapters need: attributes, kinds, events, status
+  text, parent ids. tracing/azotel waits on that.

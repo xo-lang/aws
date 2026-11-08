@@ -2869,3 +2869,33 @@ Disliked:
 - A test cannot read a file outside its sandbox (`os.fs.read_text` of a
   spec path failed), so a quick check against a real spec file needed
   the file's text pasted into the test as a literal.
+
+### 2026-11-07: Azure classes 4 to 17 and GCP batch g6
+
+Liked:
+- Each remaining Azure failure class closed with a small generator
+  change plus a unit test that fed a pasted spec fragment to the
+  parser: library alternate types, provider routes in a combined
+  TypeSpec client, PATCH bodies that keep extra keys, client parameters
+  moved onto methods, and autorest parameter groups. Fourteen classes
+  took one session, and a full regeneration of all 319 modules after
+  each step showed that nothing else changed.
+- `derive Json(via: json.Value, to: f, from: g)` let a PATCH model carry
+  unknown keys by changing about ten generator lines; Patch's
+  Absent/Null fields went through the same path unchanged.
+- The test cache (`(cached)`) made a rerun of an unchanged module
+  instant, so a check after an unrelated change cost nothing.
+- XO0177's message for a stray `/* */` named the cause and the fix,
+  which pointed straight at a vectors-tool bug (a field written
+  `name as "Alias"` was not parsed).
+
+Disliked:
+- On linux/arm64 the native backend failed four large Google modules
+  with "closure of `xo.frameargs(...)` captures too many words" (methods
+  whose options struct has many fields), and compute/v0.alpha's link
+  failed with "branch out of range". They pass on the go backend, so
+  coverage lists them apart until the two bugs (reported) are fixed.
+- An `Option` chain needs a full closure type each time
+  (`.and_then(fn(i: json.Value) -> json.Value? { i.get("name") })`),
+  which makes a one-field lookup a long line. A short closure form or a
+  `?.` path would help generator code that walks JSON.

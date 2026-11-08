@@ -3024,7 +3024,7 @@ Disliked:
 - `xo check` caught a field and a method sharing a name (`record`) only
   as a declaration clash. Renaming the field to `account` was easy, but
   Go allows both and the rule surprised me.
-- A test's Go vectors used `user@example.test`, which check-public's
-  email rule doesn't allow (only example.com/org/net). That cost a
-  second 20 minute gate after a green one. Checking public data before
+- A test's Go vectors used a user address on a `.test` domain, which
+  check-public's email rule doesn't allow (only example.com/org/net).
+  That cost a second 20 minute gate after a green one. Checking public data before
   gating, not after, would have avoided it.

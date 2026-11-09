@@ -3185,3 +3185,29 @@ Disliked:
   cache keys) and case-preserving in another (URLs). A `CaseFolded`
   newtype would have made the split visible; I did not find a
   zero-cost way to write one over Str.
+
+## 2026-11-09: an OpenAI client (openai-go v3.98.0 subset, its own repo)
+
+Liked:
+- `xo.work` made the two-module layout (the client, and an `azure`
+  module over the azure repo's azcore) cheap: `use ./azure` and
+  `use ../azure`, with no publish step between them.
+- `http.Client.open` plus `head()` let the streamed call share the
+  retry rules with the plain one: the decision is made on the head,
+  and the body stays open only on success.
+- The exhaustiveness warning (XO0305) caught three `_` arms over a
+  private enum in the accumulator; listing the variants cost a line each.
+- Interfaces are structural, so the test's counting credential is a
+  plain struct with `get_token`, no registration.
+
+Disliked:
+- Mutating a captured variable is XO0501, so building a JSON object
+  field by field inside closures needed small helpers returning lists
+  (`f = f + opt_x(...)`). Clear rule, but it reshapes ordinary code.
+- A `var` parameter rejects a temporary (XO0502) even for a struct
+  literal passed once; I moved the value into the callee instead.
+- `testing.expect_eq` does not exist (it is `expect(a) == b`); the
+  error names the module but not the spelling to use.
+- Under `env -i` the gate's `gitleaks` call failed as "found leaks"
+  when the binary was simply not on PATH; that is check-public's
+  message, not Xo's, but worth fixing in the script.

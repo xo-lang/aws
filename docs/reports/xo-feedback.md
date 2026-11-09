@@ -3051,6 +3051,10 @@ Disliked:
   probe tests to find, and the test browser now writes HTTP/1.1 by
   hand. A FakeNet note in std.md, or routing client requests to a bare
   listener over the fake TCP, would save the next person the hunt.
+  **Fixed** on xo main in e4bf9a2be: a bare Listener a task accepts on
+  now takes std's http client requests as HTTP/1.1 over the fake TCP
+  (no redirects, compression or streamed request bodies on that path).
+  The SDK's hand written test browser can go once it moves to that xo.
 - `xo fmt` writes a closure's `uses (a, b)` without the parentheses.
   `xo check` accepts both forms, so only the gate's fmt step caught it,
   which cost one extra gate run. An `xo fmt --check` before committing
@@ -3088,3 +3092,37 @@ Disliked:
   (azcosmos's request charge) can only be recorded as a known
   difference. That is harmless for OpenTelemetry, which exports a
   double either way.
+
+### 2026-11-08: Azure UsernamePasswordCredential (decision 0003 Amendment 2)
+
+Liked:
+- std/xml mirrors Go's encoding/xml closely enough to port MSAL's
+  WS-Trust code: `xml.reader` gives Go's tokens and Go's syntax error
+  texts ("XML syntax error on line 1: unexpected EOF"), `xml.escape` is
+  Go's EscapeText (`&#34;`, `&#x9;`, `&#xA;` all matched), and
+  `xmlns:` declarations stay in an element's attributes, as MSAL's
+  `xml:"sp,attr"` fields need.
+- `json.tokens` (Go's Decoder.Token) made MSAL's streaming realm decoder
+  a short loop: what follows the object is never read, as in Go.
+- All 50 sections from a local Go program over a fake token host and a
+  fake WS-Trust host matched after four small fixes; the federated
+  flow, SOAP body included, matched on its first run.
+
+Disliked:
+- Xo has no deprecation marker. Go's `// Deprecated:` paragraph is a
+  doc convention its tools read (gopls and staticcheck warn on use).
+  Here it is only text in the doc comment, so a caller gets no warning.
+  An attribute, or `xo check` reading a `Deprecated:` paragraph as Go's
+  tools do, would carry Go's intent.
+- The xml tree keeps no source offsets, so Go's `,innerxml` (the raw
+  bytes of an element's content, which MSAL base64s as the SAML
+  assertion) needed a hand written scanner over the text. An
+  `Element`'s source span, or a reader `offset()` like
+  `json.TokenReader`'s, would remove it.
+- `json.TokenReader` errors use Unmarshal's texts, and Go's Decoder has
+  its own in some states (a missing colon is "expected colon after
+  object key" from Decode, "invalid character '1' after object key"
+  from Unmarshal). One mapping covered the case seen; others may differ.
+- `List.enumerate` and `Str.split_whitespace` do not exist (`indexed`
+  and a `cut(" ")` do the job). `xo check` lists the near names, which
+  made each a one line fix.

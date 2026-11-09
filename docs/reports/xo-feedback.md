@@ -3126,3 +3126,37 @@ Disliked:
 - `List.enumerate` and `Str.split_whitespace` do not exist (`indexed`
   and a `cut(" ")` do the job). `xo check` lists the near names, which
   made each a one line fix.
+
+### 2026-11-09: Azure persistent token cache (decision 0012 step a)
+
+Liked:
+- Effect parameters made the cache's cost exact: a credential given a
+  store performs the store's effects (a file store's `fs.read` and
+  `fs.write`), and one without performs nothing new. Go has no way to
+  say this; its `Cache` option is an interface any code can do I/O in.
+- `json.Value` keeps an object's fields in order and round-trips what
+  it doesn't know, so MSAL's rule (other programs' entries, unknown
+  fields and unknown sections survive a write) was a tree edit, not a
+  schema. All 10 sections from a local Go program over a fake token
+  host matched, each stored cache's byte length included; the public
+  half matched on its first run.
+- The XO0701 notes on an omitted effect argument named both fixes
+  (`Options[()]`, or a named parameter listed in `uses`) and the
+  decision behind them; each of 17 errors was a mechanical edit.
+
+Disliked:
+- One generic field rippled through 13 types and every method whose
+  receiver they are: each receiver had to be written `T[fx]` and each
+  `uses` list given `fx`, even where the method never touches the
+  field. A default for an effect argument (`Options[fx = ()]`), so
+  existing signatures keep meaning "pure", would have made the change
+  one field and the methods that use it.
+- In a generic test helper, `o with {client: ...}` on an `Options[fx]`
+  returned by another generic helper failed with "the expected type
+  `Options[fx]` fixes these effects as pure, but performs `fx`", while
+  building the same value as a struct literal passed. Either the
+  message or the rule is off; worth a minimal repro on the xo side.
+- No regexp replace with a function (Go's `ReplaceAllStringFunc`):
+  masking times needed a `find_index` loop.
+- Match arms can't share a line (`XO0169`), so a two-arm match inside a
+  closure becomes six lines; `.map(...) ?? default` was the short form.

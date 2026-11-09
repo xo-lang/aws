@@ -3160,3 +3160,28 @@ Disliked:
   masking times needed a `find_index` loop.
 - Match arms can't share a line (`XO0169`), so a two-arm match inside a
   closure becomes six lines; `.map(...) ?? default` was the short form.
+
+### 2026-11-09: Azure cache parity and the ADFS and tenant rules (decision 0012 step a, gap 17)
+
+Liked:
+- `json.tokens(...).value()` reads one value and leaves the rest, which
+  is exactly MSAL Go's "text after the object is ignored"; no extra
+  parser state was needed to match Go there.
+- `json.Value`'s variants made Go's per-type decode errors ("cannot
+  unmarshal number into Go value of type string") a small match, one
+  arm per JSON kind.
+- `jwt.sign` took the algorithm and the header as values, so the ADFS
+  assertion (RS256 with a SHA-1 `x5t`) is one branch beside AAD's
+  (PS256 with `x5t#S256`), no second signer.
+- Default arguments let `client_assertion` gain the ADFS thumbprint
+  without touching its other callers.
+
+Disliked:
+- `??` on a `Result` is rejected (XO0406: it wants an Option), so
+  `base64.decode(...) ?? b""` needs `.ok()` first. The message names the
+  fix's direction but not `.ok()` itself; a hint would save a lookup.
+- Mixed-case tenant handling had to be found by an oracle: nothing in
+  the types says a tenant is case-insensitive in one layer (MSAL's
+  cache keys) and case-preserving in another (URLs). A `CaseFolded`
+  newtype would have made the split visible; I did not find a
+  zero-cost way to write one over Str.

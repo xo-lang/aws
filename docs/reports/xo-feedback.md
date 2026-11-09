@@ -3055,3 +3055,36 @@ Disliked:
   `xo check` accepts both forms, so only the gate's fmt step caught it,
   which cost one extra gate run. An `xo fmt --check` before committing
   would have caught it.
+
+### 2026-11-08: Azure tracing for the hand written data plane clients (decision 0013)
+
+Liked:
+- Carrying the active span in `policy.Request.values` (no context)
+  held up across seven very different modules. A hand written method
+  became one `runtime.traced(...)` call around its body. azappconfig's
+  generated layer needed no change at all: a pipeline whose first policy
+  merges the values (`Pipeline.with_values`) was enough.
+- Effect-generic closures (`uses (net.dial, clock, rand, fx)`) let one
+  helper wrap every azcosmos operation, whatever the credential's
+  effects.
+- The Go oracles over fakes found two real gaps on the way, both now
+  fixed: azcosmos's error code (Go uses the status line) and a whole
+  float's `%v` text (`0`, not `0.0`). They also found a fact about Go
+  worth knowing: Go shares azcosmos's range and container caches
+  between clients of one endpoint.
+
+Disliked:
+- In a method of a type whose effect parameter is elided (`Client`,
+  not `Client[fx]`), a closure that calls the inner client fails with
+  "performs `Client.fx`". Writing `uses (..., fx)` there works in some
+  methods and is "unknown effect `fx`" in others, depending on whether
+  the receiver names `fx`. Saying which name to write in the message
+  would have saved several rounds.
+- `http.Request.url.host` has no port (it is in `url.port`), while Go's
+  `URL.Host` keeps it. A test fake keyed by host silently answered the
+  `:8081` client with another host's reply. That looked like an SDK
+  routing bug until a probe showed the SDK was right.
+- `tracing.Value` has one float type, so Go's float32 attribute
+  (azcosmos's request charge) can only be recorded as a known
+  difference. That is harmless for OpenTelemetry, which exports a
+  double either way.

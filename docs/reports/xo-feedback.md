@@ -3236,3 +3236,28 @@ Disliked:
   The XO0701 message described the mismatch the wrong way round.
 - `Rune` has no `to_str` and no ASCII `is_alphanumeric`; `"${r}"` and a
   three-range helper worked.
+
+## 2026-11-09: Xo 0.45.0, and tracing/azotel over std/trace
+
+Liked:
+- std/trace's Recorder is OpenTelemetry's span model with the SDK's own
+  rules (last value wins at the first place, Ok drops its description,
+  Unset never undoes Error), so azotel is a 70-line table, and it matched
+  a Go program over the real OpenTelemetry SDK on the first full run.
+- `FakeProc.runs()` and `timego.go_text` landed within the day and let
+  two workarounds go; the developer-credential test now also compares the
+  default chain's arguments.
+- Exhaustive matches turned 0.45.0's new `FreeBSD` and `Riscv64` targets
+  into compile errors at every place that names an OS or arch, and that
+  found a latent `other:wasip1` vs Go's `Other:wasip1` casing bug.
+
+Disliked:
+- `xo check ./...` over 361 modules reports 1,708 impossible errors
+  ("expected `Str`, found `Str`"); the per-module gate passes. Reported
+  with evidence; not bisected yet.
+- Adding effects to callback types is a signature change for every
+  wrapper on the path (`start_span`, `ActiveSpan.end`, ...), though the
+  callers already had the effects; the compiler named each one, which
+  made it mechanical.
+- xobuild refuses to run outside heavy.sh, and `env -i` drops the
+  marker (`HEAVY_JOB`), so it has to be passed through by hand.

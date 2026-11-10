@@ -3261,3 +3261,26 @@ Disliked:
   made it mechanical.
 - xobuild refuses to run outside heavy.sh, and `env -i` drops the
   marker (`HEAVY_JOB`), so it has to be passed through by hand.
+
+## 2026-11-10: a docs builder for pkg.xolang.org over `xo doc --json`
+
+Liked:
+- `xo doc --json` gave everything a docs page needs per symbol: kind,
+  signature with effects and errors, doc comment, examples, and a file and
+  line for source links. A static site for 29 aws packages and 77 std
+  modules took about 20 seconds.
+- `xo get` with XO_PROXY and XO_SUMDB lets a builder reuse xo's own fetch
+  and log verification instead of reimplementing the Merkle proofs.
+
+Disliked:
+- `xo doc --json ./...` answers `no declaration named ./...` in 0.45.0,
+  though the help says DIR/... covers the directories below; the builder
+  runs one `xo doc` per package directory instead.
+- The JSON has no package-level doc and no schema version, so a module's
+  page has no overview paragraph.
+- github.com/xo-lang/aws/service/sts@v0.1.0 ships an xo.lock without the
+  root module's lines, so `xo get` warns of XO1305 "errors in its own
+  code" when fetching it.
+- A module in a subdirectory of its repository has no LICENSE in its tree
+  (Go copies the root's), so a "no license, no docs" site hides nearly all
+  of them; decision 0590 proposes Go's rule.

@@ -3211,3 +3211,28 @@ Disliked:
 - Under `env -i` the gate's `gitleaks` call failed as "found leaks"
   when the binary was simply not on PATH; that is check-public's
   message, not Xo's, but worth fixing in the script.
+
+## 2026-11-09: Azure developer-tool credentials (az, azd, pwsh)
+
+Liked:
+- `Proc.cmd(...).dir(...).output()` and FakeProc made a credential that
+  runs other programs testable with no program run at all; with a
+  `Proc.only` list a caller can bound what it may start.
+- `task.with_timeout` plus `task.deadline` expressed Go's "ten seconds
+  unless the context already has a deadline" directly.
+- `charset.encode(s, Utf16Le)` was exactly Go's base64EncodeUTF16LE input.
+- `std/timego` parsed Go's layouts as written, so the CLI's
+  `2006-01-02 15:04:05.999999` needed no translation.
+
+Disliked:
+- String literals cannot span lines, so a 40-line PowerShell script is a
+  list of quoted lines joined with `\n` (generated from Go's source).
+- FakeProc answers by command name and records nothing, so the test
+  cannot see the arguments; I kept Go's executor hook to log them.
+- timego's parse errors are std's text, not Go's, so error messages a
+  port must match need rebuilding by hand.
+- A boxed `TokenCredential[fs.read]` does not widen to
+  `TokenCredential[(fs.read, proc)]`; a one-field adapter struct does.
+  The XO0701 message described the mismatch the wrong way round.
+- `Rune` has no `to_str` and no ASCII `is_alphanumeric`; `"${r}"` and a
+  three-range helper worked.

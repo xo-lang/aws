@@ -1,0 +1,39 @@
+// parse_body and read_float against smithy-go v1.28.6's JSON
+// ShapeDeserializer (transport/http/protocol/internal/json): an integer
+// token is read as an int64 first, so `-0` is +0 where `-0.0` is -0, and
+// NaN and Infinity strings match without case.
+
+use std/json
+
+fn bits(v: json.Value) -> Str {
+  match read_float(v) {
+    Ok(f) => "${f.to_bits()}"
+    Err(e) => "error ${e}"
+  }
+}
+
+test "an integer -0 is Int(0); -0.0 and -0e0 stay -0" {
+  let v = parse_body("[-0, -0.0, 0, -0e0, {\"a\": -0, \"b\": [1.5, -0, -10]}, \"-0\"]".bytes())?
+  expect(v.encode()) == "[0,-0,0,-0,{\"a\":0,\"b\":[1.5,0,-10]},\"-0\"]"
+  let xs = match v {
+    json.Value.List(items) => items
+    _ => []
+  }
+  expect(xs.map(fn(x: json.Value) -> Str { bits(x) })[0..4]) == ["0", "-9223372036854775808", "0", "-9223372036854775808"]
+}
+
+test "a body without -0 is parse_value's tree" {
+  let text = "{\"x\": [1, 2.5, -3], \"y\": null, \"z\": \"s\"}"
+  expect(parse_body(text.bytes())?) == (json.parse_value(text) ?? e => fault(e.display()))
+  expect(parse_body(b"  ")?) == json.Value.Object([])
+}
+
+test "NaN and Infinity strings match without case, as strings.EqualFold" {
+  let got = ["NaN", "nan", "NAN", "Infinity", "infinity", "-INFINITY", "Inf", "nul"].map(fn(s: Str) -> Str {
+    match read_float(json.Value.Str(s)) {
+      Ok(f) => if f.is_nan() { "nan" } else { "${f}" }
+      Err(e) => e
+    }
+  })
+  expect(got) == ["nan", "nan", "nan", "+Inf", "+Inf", "-Inf", "want a number, got \"Inf\"", "want a number, got \"nul\""]
+}

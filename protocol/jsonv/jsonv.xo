@@ -61,8 +61,11 @@ pub fn read_float(v: json.Value) -> Float ! Str {
   match v {
     json.Value.Int(n) => Ok(Float(n))
     json.Value.Num(f) => Ok(f)
-    json.Value.Str(s) => match s {
-      "NaN" | "Infinity" | "-Infinity" => Ok(rest.parse_float(s) ?? 0.0)
+    // smithy-go matches these without case (strings.EqualFold)
+    json.Value.Str(s) => match s.to_lower() {
+      "nan" => Ok(rest.parse_float("NaN") ?? 0.0)
+      "infinity" => Ok(rest.parse_float("Infinity") ?? 0.0)
+      "-infinity" => Ok(rest.parse_float("-Infinity") ?? 0.0)
       _ => Err("want a number, got \"${s}\"")
     }
     _ => Err("want a number, got ${v.encode()}")
@@ -129,11 +132,61 @@ pub fn items(v: json.Value) -> List[json.Value] ! Str {
   }
 }
 
-/// The JSON of a body; an empty body is an empty object.
+/// The JSON of a body; an empty body is an empty object. A number written
+/// as the integer `-0` is `Int(0)`: smithy-go's JSON decoder reads an
+/// integer token as an int64 first (its parseInt fast path), so `-0` is
+/// +0 where `-0.0` stays -0; std/json reads both as `Num(-0.0)`.
 pub fn parse_body(b: Bytes) -> json.Value ! Str {
   let text = b.to_str() ?? return Err("body is not UTF-8")
   if text.trim() == "" {
     return Ok(json.Value.Object([]))
   }
-  Ok(json.parse_value(text) ?? e => return Err(e.display()))
+  let v = json.parse_value(text) ?? e => return Err(e.display())
+  if !text.contains("-0") {
+    return Ok(v)
+  }
+  // the number tokens in document order, the order the walk meets them
+  var nums: List[Str] = []
+  var r = json.tokens(b)
+  while let Some(t) = r.next().ok() ?? None {
+    if let json.Token.Number(n) = t {
+      nums.push(n)
+    }
+  }
+  let (out, n) = int_zeros(v, nums, 0)
+  // a walk that did not meet every number token (a member parse_value
+  // dropped) keeps the tree as parsed
+  Ok(if n == nums.len() { out } else { v })
+}
+
+/// v with each number whose token in `nums` (from `k` on) is `-0` as
+/// `Int(0)`, and the index after v's numbers.
+fn int_zeros(v: json.Value, nums: List[Str], k: Int) -> (json.Value, Int) {
+  match v {
+    json.Value.Int(_) | json.Value.Num(_) => {
+      let text = if k < nums.len() { nums[k] } else { "" }
+      (if text == "-0" { json.Value.Int(0) } else { v }, k + 1)
+    }
+    json.Value.List(xs) => {
+      var i = k
+      var out: List[json.Value] = []
+      for x in xs {
+        let (y, j) = int_zeros(x, nums, i)
+        out.push(y)
+        i = j
+      }
+      (json.Value.List(out), i)
+    }
+    json.Value.Object(fs) => {
+      var i = k
+      var out: List[(Str, json.Value)] = []
+      for (name, x) in fs {
+        let (y, j) = int_zeros(x, nums, i)
+        out.push((name, y))
+        i = j
+      }
+      (json.Value.Object(out), i)
+    }
+    _ => (v, k)
+  }
 }

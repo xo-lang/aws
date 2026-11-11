@@ -6,6 +6,18 @@ compatibility); a generator fix lists the service modules it touches.
 
 ## Unreleased
 
+JSON numbers (`protocol/jsonv`): a body's integer `-0` reads as +0 and
+`"nan"`, `"INFINITY"` and the like as NaN and the infinities, as
+smithy-go's JSON decoder reads them (its integer fast path and
+`strings.EqualFold`); `-0.0` stays -0. The float32 integration test
+expected this and failed since std/json reads `-0` as `-0.0`. Tests:
+the Route 53 InvalidChangeBatch test registered `.../rrset/` for a
+client that sends `.../rrset` (the model's URI), which only the native
+FakeNet's old slash leniency matched, and the transport wire test
+records its request in Router middleware, since the Router answers a
+`//` path with a 307 to the cleaned path (xo v0.46.0, as Go's
+ServeMux).
+
 Release fix (`scripts/tag-modules.sh`): each changed service now
 requires the root version tagged with it. Before, a service tag kept
 `require github.com/xo-lang/aws v0.1.0`, so an app with no workspace

@@ -3305,6 +3305,3 @@ Disliked:
   against FakeNet. Proposal: a stream function's `Err` (or a short
   `Content-Length`) should reach the client's `read` as
   `Protocol("unexpected EOF")`, as std.md 4.5 says for a real connection.
-- Xo has no struct-literal-in-condition shorthand
-  (`if c == Conditions{}` is XO0163). The parenthesized form works, but
-  the message could suggest it directly.

@@ -8,6 +8,97 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Permanently cancel a job. Once you have canceled a job, you can't start
+/// it again.
+pub fn (c: Client) cancel_job(input: CancelJobRequest) -> CancelJobResponse ! CancelJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_cancel_job(c.params, input)) ?? e => return Err(CancelJobErr.InvalidInput(e))
+  var req = serialize_cancel_job(ep, input, "") ?? e => return Err(CancelJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CancelJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_cancel_job_error(resp))
+  }
+  deserialize_cancel_job(resp) ?? e => Err(CancelJobErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_job(base: EndpointParameters, input: CreateJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateJob.
+pub fn serialize_create_job(ep: rest.Endpoint, input: CreateJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.acceleration_settings {
+    fs.push(("accelerationSettings", json_of_acceleration_settings(x)))
+  }
+  if let Some(x) = input.billing_tags_source {
+    fs.push(("billingTagsSource", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.client_request_token {
+    fs.push(("clientRequestToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientRequestToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
+  }
+  if let Some(x) = input.hop_destinations {
+    fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
+  }
+  if let Some(x) = input.job_engine_version {
+    fs.push(("jobEngineVersion", json.Value.Str(x)))
+  }
+  if let Some(x) = input.job_template {
+    fs.push(("jobTemplate", json.Value.Str(x)))
+  }
+  if let Some(x) = input.priority {
+    fs.push(("priority", json.Value.Int(x)))
+  }
+  if let Some(x) = input.queue {
+    fs.push(("queue", json.Value.Str(x)))
+  }
+  if let Some(x) = input.role {
+    fs.push(("role", json.Value.Str(x)))
+  }
+  if let Some(x) = input.settings {
+    fs.push(("settings", json_of_job_settings(x)))
+  }
+  if let Some(x) = input.simulate_reserved_queue {
+    fs.push(("simulateReservedQueue", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.status_update_interval {
+    fs.push(("statusUpdateInterval", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("tags", json_of_map_of_string(x)))
+  }
+  if let Some(x) = input.user_metadata {
+    fs.push(("userMetadata", json_of_map_of_string(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2017-08-29/jobs"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_create_job(resp: http.Response) -> CreateJobResponse ! Str {
   var out = CreateJobResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -130,6 +221,9 @@ pub fn serialize_create_job_template(ep: rest.Endpoint, input: CreateJobTemplate
   }
   if let Some(x) = input.description {
     fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = input.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
   }
   if let Some(x) = input.hop_destinations {
     fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
@@ -3945,6 +4039,9 @@ pub fn serialize_update_job_template(ep: rest.Endpoint, input: UpdateJobTemplate
   }
   if let Some(x) = input.description {
     fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = input.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
   }
   if let Some(x) = input.hop_destinations {
     fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))

@@ -6314,6 +6314,32 @@ fn from_json_git_lab_resource_capabilities(v: json.Value) -> GitLabResourceCapab
   Ok(out)
 }
 
+fn json_of_group_metadata(v: GroupMetadata) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.display_name {
+    fs.push(("displayName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_group_metadata(v: json.Value) -> GroupMetadata ! Str {
+  var out = GroupMetadata{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_http_verification(v: HttpVerification) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.token {
@@ -8563,6 +8589,7 @@ fn from_json_log_location(v: json.Value) -> LogLocation ! Str {
 fn json_of_member_metadata(v: MemberMetadata) -> json.Value {
   match v {
     User(x) => json.Value.Object([("user", json_of_user_metadata(x))])
+    Group(x) => json.Value.Object([("group", json_of_group_metadata(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -8574,6 +8601,7 @@ fn from_json_member_metadata(v: json.Value) -> MemberMetadata ! Str {
     }
     return match k {
       "user" => Ok(MemberMetadata.User(from_json_user_metadata(fv)?))
+      "group" => Ok(MemberMetadata.Group(from_json_group_metadata(fv)?))
       _ => Ok(MemberMetadata.Unknown(k))
     }
   }
@@ -14337,18 +14365,4 @@ pub fn deserialize_batch_disassociate_finding_issue_error(resp: http.Response) -
     _ => {}
   }
   BatchDisassociateFindingIssueErr.Api(restjson.api_error(resp, body))
-}
-
-/// Disassociates a batch of findings from their linked issues.
-pub fn (c: Client) batch_disassociate_finding_issue(input: BatchDisassociateFindingIssueInput) -> BatchDisassociateFindingIssueOutput ! BatchDisassociateFindingIssueErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_batch_disassociate_finding_issue(c.params, input)) ?? e => return Err(BatchDisassociateFindingIssueErr.InvalidInput(e))
-  var req = serialize_batch_disassociate_finding_issue(ep, input, "") ?? e => return Err(BatchDisassociateFindingIssueErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(BatchDisassociateFindingIssueErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_batch_disassociate_finding_issue_error(resp))
-  }
-  deserialize_batch_disassociate_finding_issue(resp) ?? e => Err(BatchDisassociateFindingIssueErr.Deserialize(e))
 }

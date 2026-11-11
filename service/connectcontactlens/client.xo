@@ -145,10 +145,81 @@ fn from_json_categories(v: json.Value) -> Categories ! Str {
   Ok(out)
 }
 
+fn json_of_categories_attribute_and_condition(v: CategoriesAttributeAndCondition) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tag_conditions {
+    fs.push(("TagConditions", json_of_tag_and_condition_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_categories_attribute_and_condition(v: json.Value) -> CategoriesAttributeAndCondition ! Str {
+  var out = CategoriesAttributeAndCondition{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TagConditions" => out.tag_conditions = from_json_tag_and_condition_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_categories_attribute_filter(v: CategoriesAttributeFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.or_conditions {
+    fs.push(("OrConditions", json_of_categories_attribute_or_condition_list(x)))
+  }
+  if let Some(x) = v.and_condition {
+    fs.push(("AndCondition", json_of_categories_attribute_and_condition(x)))
+  }
+  if let Some(x) = v.tag_condition {
+    fs.push(("TagCondition", json_of_tag_condition(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_categories_attribute_filter(v: json.Value) -> CategoriesAttributeFilter ! Str {
+  var out = CategoriesAttributeFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "OrConditions" => out.or_conditions = from_json_categories_attribute_or_condition_list(fv)?
+      "AndCondition" => out.and_condition = from_json_categories_attribute_and_condition(fv)?
+      "TagCondition" => out.tag_condition = from_json_tag_condition(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_categories_attribute_or_condition_list(v: List[CategoriesAttributeAndCondition]) -> json.Value {
+  json.Value.List(v.map(fn(x: CategoriesAttributeAndCondition) -> json.Value { json_of_categories_attribute_and_condition(x) }))
+}
+
+fn from_json_categories_attribute_or_condition_list(v: json.Value) -> List[CategoriesAttributeAndCondition] ! Str {
+  var out: List[CategoriesAttributeAndCondition] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_categories_attribute_and_condition(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_category_details(v: CategoryDetails) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.points_of_interest {
     fs.push(("PointsOfInterest", json_of_points_of_interest(x)))
+  }
+  if let Some(x) = v.rule_id {
+    fs.push(("RuleId", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -161,6 +232,7 @@ fn from_json_category_details(v: json.Value) -> CategoryDetails ! Str {
     }
     match k {
       "PointsOfInterest" => out.points_of_interest = from_json_points_of_interest(fv)?
+      "RuleId" => out.rule_id = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -369,6 +441,9 @@ fn json_of_list_realtime_contact_analysis_segments_request(v: ListRealtimeContac
   if let Some(x) = v.next_token {
     fs.push(("NextToken", json.Value.Str(x)))
   }
+  if let Some(x) = v.list_filter {
+    fs.push(("ListFilter", json_of_real_time_contact_analysis_segments_filter(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -383,6 +458,7 @@ fn from_json_list_realtime_contact_analysis_segments_request(v: json.Value) -> L
       "ContactId" => out.contact_id = jsonv.read_str(fv)?
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
       "NextToken" => out.next_token = jsonv.read_str(fv)?
+      "ListFilter" => out.list_filter = from_json_real_time_contact_analysis_segments_filter(fv)?
       _ => {}
     }
   }
@@ -519,6 +595,28 @@ fn from_json_post_contact_summary(v: json.Value) -> PostContactSummary ! Str {
   Ok(out)
 }
 
+fn json_of_real_time_contact_analysis_segments_filter(v: RealTimeContactAnalysisSegmentsFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.categories_attribute_filter {
+    fs.push(("CategoriesAttributeFilter", json_of_categories_attribute_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_real_time_contact_analysis_segments_filter(v: json.Value) -> RealTimeContactAnalysisSegmentsFilter ! Str {
+  var out = RealTimeContactAnalysisSegmentsFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CategoriesAttributeFilter" => out.categories_attribute_filter = from_json_categories_attribute_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_realtime_contact_analysis_segment(v: RealtimeContactAnalysisSegment) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.transcript {
@@ -585,6 +683,52 @@ fn from_json_resource_not_found_exception(v: json.Value) -> ResourceNotFoundExce
     }
     match k {
       "Message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_tag_and_condition_list(v: List[TagCondition]) -> json.Value {
+  json.Value.List(v.map(fn(x: TagCondition) -> json.Value { json_of_tag_condition(x) }))
+}
+
+fn from_json_tag_and_condition_list(v: json.Value) -> List[TagCondition] ! Str {
+  var out: List[TagCondition] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_tag_condition(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_tag_condition(v: TagCondition) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tag_key {
+    fs.push(("TagKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tag_value {
+    fs.push(("TagValue", json.Value.Str(x)))
+  }
+  if let Some(x) = v.comparison_type {
+    fs.push(("ComparisonType", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_tag_condition(v: json.Value) -> TagCondition ! Str {
+  var out = TagCondition{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TagKey" => out.tag_key = jsonv.read_str(fv)?
+      "TagValue" => out.tag_value = jsonv.read_str(fv)?
+      "ComparisonType" => out.comparison_type = TagComparisonType.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -761,6 +905,9 @@ pub fn serialize_list_realtime_contact_analysis_segments(ep: rest.Endpoint, inpu
   }
   if let Some(x) = input.next_token {
     fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.list_filter {
+    fs.push(("ListFilter", json_of_real_time_contact_analysis_segments_filter(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))

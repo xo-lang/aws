@@ -40,6 +40,7 @@ pub enum ActionType: Str {
   UpdateCase = "UPDATE_CASE"
   AssignSla = "ASSIGN_SLA"
   EndAssociatedTasks = "END_ASSOCIATED_TASKS"
+  EndAssociatedEmails = "END_ASSOCIATED_EMAILS"
   SubmitAutoEvaluation = "SUBMIT_AUTO_EVALUATION"
   ExtractInformation = "EXTRACT_INFORMATION"
   SendInAppNotification = "SEND_IN_APP_NOTIFICATION"
@@ -1507,6 +1508,15 @@ pub struct Campaign {
   pub campaign_id: Str? = None
 }
 
+/// Information about a case associated with a contact.
+pub struct CaseEntry {
+  /// Unique identifier of the case in UUID format.
+  pub case_id: Str? = None
+  /// A friendly number for the case. Reference numbers are not guaranteed to
+  /// be unique.
+  pub case_reference_number: Str? = None
+}
+
 /// The SLA configuration for Case SlaAssignmentType.
 pub struct CaseSlaConfiguration {
   /// Name of an SLA.
@@ -1959,6 +1969,9 @@ pub struct Contact {
   /// If this contact was created using a task template, this contains
   /// information about the task template.
   pub task_template_info: TaskTemplateInfoV2? = None
+  /// A list of cases associated with the contact. This field is populated
+  /// when one or more cases have been linked to the contact.
+  pub cases: List[CaseEntry]? = None
   /// A map of string key/value pairs that contain user-defined attributes
   /// which are lightly typed within the contact. This object is used only for
   /// task contacts.
@@ -1972,6 +1985,10 @@ pub struct Contact {
   /// Information about the global resiliency configuration for the contact,
   /// including traffic distribution details.
   pub global_resiliency_metadata: GlobalResiliencyMetadata? = None
+  /// Information about the conversational analytics configuration applied to
+  /// the contact. This field is present only for contacts where
+  /// conversational analytics is enabled in the contact flow.
+  pub contact_lens: ContactLens? = None
 }
 
 /// A structure that defines search criteria for contacts using analysis
@@ -1998,6 +2015,21 @@ pub struct ContactAnalysisReference {
   /// Indicates whether sensitive data has been redacted from the contact
   /// analysis.
   pub is_redacted: Bool? = None
+}
+
+/// The current processing state of conversational analytics for a contact,
+/// including the analysis status and, when applicable, the reason for that
+/// status.
+pub struct ContactAnalysisReferenceState {
+  /// The status of conversational analytics processing for the contact. Valid
+  /// values: REQUESTED – Analysis has been requested for the contact and
+  /// has not finished. COMPLETED – Analysis finished successfully. FAILED
+  /// – Analysis did not finish successfully. See StatusReason for the
+  /// cause.
+  pub status: Str? = None
+  /// The reason for the current analysis status. This value is populated only
+  /// when the status is FAILED .
+  pub status_reason: Str? = None
 }
 
 /// The contact configuration for push notification registration.
@@ -2462,6 +2494,65 @@ pub enum ContactInteractionType: Str {
   Unknown(value: Str)
 }
 
+/// Information about the conversational analytics configuration applied to
+/// the contact. This field is present only for contacts where
+/// conversational analytics is enabled in the contact flow.
+pub struct ContactLens {
+  /// The conversational analytics configuration applied to the contact.
+  pub conversational_analytics: ConversationalAnalytics? = None
+}
+
+/// The per-channel conversational analytics configuration for a contact.
+pub struct ContactLensChannelConfiguration {
+  /// The conversational analytics modes enabled for the channel. Valid
+  /// values: RealTime – Real-time analysis is enabled during the contact.
+  /// Voice channel only. PostContact – Post-contact analysis is enabled
+  /// after the contact ends. Voice channel only. ContactLens –
+  /// Conversational analytics is enabled for the contact. Chat channel only.
+  pub analytics_modes: List[Str]? = None
+}
+
+/// The redaction configuration for conversational analytics transcripts.
+pub struct ContactLensRedactionConfiguration {
+  /// Specifies whether redaction is enabled for sensitive data, such as
+  /// personal information, in the conversational analytics output. Valid
+  /// values: Enable – Redaction is applied according to the other values in
+  /// this object. Disable – Redaction is not applied, and all other values
+  /// in this object are ignored.
+  pub behavior: Str? = None
+  /// The redaction policy that determines which versions of the transcript
+  /// are stored. Valid values: None – No redaction is applied. RedactedOnly
+  /// – Only the redacted transcript is stored. RedactedAndOriginal – Both
+  /// the redacted and the original transcript are stored.
+  pub policy: Str? = None
+  /// The entity types to redact from the transcript (for example, NAME ,
+  /// EMAIL , ADDRESS ).
+  pub entities: List[Str]? = None
+  /// How sensitive information is masked in the transcript. Valid values: PII
+  /// – All redacted entities are replaced with the [PII] string. EntityType
+  /// – All redacted entities are replaced with the label of the entity. For
+  /// example, when the EMAIL entity is configured for redaction, emails in
+  /// the transcript are replaced with the [EMAIL] string.
+  pub mask_mode: Str? = None
+}
+
+/// The conversational analytics sentiment analysis configuration for a
+/// contact.
+pub struct ContactLensSentimentConfiguration {
+  /// Specifies whether sentiment analysis is enabled for the contact. The
+  /// default value is Disable . Valid values: Enable – Sentiment analysis
+  /// is performed on the contact. Disable – Sentiment analysis is not
+  /// performed on the contact.
+  pub behavior: Str? = None
+}
+
+/// The conversational analytics summary configuration for a contact.
+pub struct ContactLensSummaryConfiguration {
+  /// The conversational analytics summary modes enabled for the contact.
+  /// Valid values: PostContact | AutomatedInteraction | ContactChain .
+  pub summary_modes: List[Str]? = None
+}
+
 pub enum ContactMediaProcessingFailureMode: Str {
   DeliverUnprocessedMessage = "DELIVER_UNPROCESSED_MESSAGE"
   DoNotDeliverUnprocessedMessage = "DO_NOT_DELIVER_UNPROCESSED_MESSAGE"
@@ -2696,6 +2787,36 @@ pub struct ControlPlaneUserAttributeFilter {
   pub and_condition: AttributeAndCondition? = None
   pub tag_condition: TagCondition? = None
   pub hierarchy_group_condition: HierarchyGroupCondition? = None
+}
+
+/// Contains the conversational analytics configuration and state for a
+/// contact.
+pub struct ConversationalAnalytics {
+  /// The conversational analytics settings that apply to the contact.
+  pub configuration: ConversationalAnalyticsConfiguration? = None
+  /// The current state of conversational analytics processing for the
+  /// contact.
+  pub contact_analysis_reference_state: ContactAnalysisReferenceState? = None
+}
+
+/// The conversational analytics configuration settings for a contact.
+pub struct ConversationalAnalyticsConfiguration {
+  /// Specifies whether conversational analytics is enabled for the contact.
+  pub enabled: Bool? = None
+  /// The language locale that conversational analytics uses to analyze the
+  /// contact (for example, en-US ).
+  pub language_locale: Str? = None
+  /// The language locales that conversational analytics uses to analyze the
+  /// contact (for example, en-US and es-ES ).
+  pub language_locales: List[Str]? = None
+  /// The per-channel conversational analytics settings for the contact.
+  pub channel_configuration: ContactLensChannelConfiguration? = None
+  /// The redaction configuration for the contact transcript.
+  pub redaction_configuration: ContactLensRedactionConfiguration? = None
+  /// The summary configuration for the contact.
+  pub summary_configuration: ContactLensSummaryConfiguration? = None
+  /// The sentiment analysis configuration for the contact.
+  pub sentiment_configuration: ContactLensSentimentConfiguration? = None
 }
 
 pub struct CreateAgentStatusRequest {
@@ -6042,6 +6163,10 @@ pub struct EncryptionConfig {
 pub enum EncryptionType: Str {
   Kms = "KMS"
   Unknown(value: Str)
+}
+
+/// End associated emails related to a case.
+pub struct EndAssociatedEmailsActionDefinition {
 }
 
 /// End associated tasks related to a case.
@@ -10342,157 +10467,5 @@ pub struct ListContactReferencesResponse {
   pub reference_summary_list: List[ReferenceSummary]? = None
   /// If there are additional results, this is the token for the next set of
   /// results. This is always returned as null in the response.
-  pub next_token: Str? = None
-}
-
-pub struct ListDataTableAttributesRequest {
-  /// The unique identifier for the Amazon Connect instance.
-  pub instance_id: Str? = None
-  /// The unique identifier for the data table whose attributes should be
-  /// listed.
-  pub data_table_id: Str? = None
-  /// Optional list of specific attribute IDs to retrieve. Used for
-  /// CloudFormation to effectively describe attributes by ID. If NextToken is
-  /// provided, this parameter is ignored.
-  pub attribute_ids: List[Str]? = None
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// The maximum number of data table attributes to return in one page of
-  /// results.
-  pub max_results: Int? = None
-}
-
-pub struct ListDataTableAttributesResponse {
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// A list of data table attributes with their complete configuration and
-  /// metadata.
-  pub attributes: List[DataTableAttribute]? = None
-}
-
-pub struct ListDataTablePrimaryValuesRequest {
-  /// The unique identifier for the Amazon Connect instance.
-  pub instance_id: Str? = None
-  /// The unique identifier for the data table whose primary values should be
-  /// listed.
-  pub data_table_id: Str? = None
-  /// Optional list of specific record IDs to retrieve. Used for
-  /// CloudFormation to effectively describe records by ID. If NextToken is
-  /// provided, this parameter is ignored.
-  pub record_ids: List[Str]? = None
-  /// Optional filter to retrieve primary values matching specific criteria.
-  pub primary_attribute_values: List[PrimaryAttributeValueFilter]? = None
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// The maximum number of data table primary values to return in one page of
-  /// results.
-  pub max_results: Int? = None
-}
-
-pub struct ListDataTablePrimaryValuesResponse {
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// A list of primary value combinations with their record IDs and
-  /// modification metadata.
-  pub primary_values_list: List[RecordPrimaryValue]? = None
-}
-
-pub struct ListDataTableValuesRequest {
-  /// The unique identifier for the Amazon Connect instance.
-  pub instance_id: Str? = None
-  /// The unique identifier for the data table whose values should be listed.
-  pub data_table_id: Str? = None
-  /// Optional list of specific record IDs to retrieve values for.
-  pub record_ids: List[Str]? = None
-  /// Optional filter to retrieve values for records matching specific primary
-  /// attribute criteria.
-  pub primary_attribute_values: List[PrimaryAttributeValueFilter]? = None
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// The maximum number of data table values to return in one page of
-  /// results.
-  pub max_results: Int? = None
-}
-
-pub struct ListDataTableValuesResponse {
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// A list of data table values with their associated metadata, lock
-  /// versions, and modification details.
-  pub values: List[DataTableValueSummary]? = None
-}
-
-pub struct ListDataTablesRequest {
-  /// The unique identifier for the Amazon Connect instance whose data tables
-  /// should be listed.
-  pub instance_id: Str? = None
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// The maximum number of data tables to return in one page of results.
-  pub max_results: Int? = None
-}
-
-pub struct ListDataTablesResponse {
-  /// Specify the pagination token from a previous request to retrieve the
-  /// next page of results.
-  pub next_token: Str? = None
-  /// A list of data table summaries containing basic information about each
-  /// table including ID, ARN, name, and modification details.
-  pub data_table_summary_list: List[DataTableSummary]? = None
-}
-
-pub struct ListDefaultVocabulariesRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The language code of the vocabulary entries. For a list of languages and
-  /// their corresponding language codes, see What is Amazon Transcribe?
-  pub language_code: VocabularyLanguageCode? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListDefaultVocabulariesResponse {
-  /// A list of default vocabularies.
-  pub default_vocabulary_list: List[DefaultVocabulary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListEntitySecurityProfilesRequest {
-  /// The identifier of the Amazon Connect instance. You can find the instance
-  /// ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// Only supported type is AI_AGENT.
-  pub entity_type: EntityType? = None
-  /// ARN of a Q in Connect AI Agent.
-  pub entity_arn: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page. The default MaxResult
-  /// size is 100.
-  pub max_results: Int? = None
-}
-
-pub struct ListEntitySecurityProfilesResponse {
-  /// List of Security Profile Object.
-  pub security_profiles: List[SecurityProfileItem]? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
   pub next_token: Str? = None
 }

@@ -4357,6 +4357,48 @@ fn from_json_campaign(v: json.Value) -> Campaign ! Str {
   Ok(out)
 }
 
+fn json_of_case_entries(v: List[CaseEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: CaseEntry) -> json.Value { json_of_case_entry(x) }))
+}
+
+fn from_json_case_entries(v: json.Value) -> List[CaseEntry] ! Str {
+  var out: List[CaseEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_case_entry(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_case_entry(v: CaseEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.case_id {
+    fs.push(("CaseId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.case_reference_number {
+    fs.push(("CaseReferenceNumber", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_case_entry(v: json.Value) -> CaseEntry ! Str {
+  var out = CaseEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CaseId" => out.case_id = jsonv.read_str(fv)?
+      "CaseReferenceNumber" => out.case_reference_number = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_case_sla_configuration(v: CaseSlaConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.name {
@@ -5223,6 +5265,9 @@ fn json_of_contact(v: Contact) -> json.Value {
   if let Some(x) = v.task_template_info {
     fs.push(("TaskTemplateInfo", json_of_task_template_info_v2(x)))
   }
+  if let Some(x) = v.cases {
+    fs.push(("Cases", json_of_case_entries(x)))
+  }
   if let Some(x) = v.contact_details {
     fs.push(("ContactDetails", json_of_contact_details(x)))
   }
@@ -5237,6 +5282,9 @@ fn json_of_contact(v: Contact) -> json.Value {
   }
   if let Some(x) = v.global_resiliency_metadata {
     fs.push(("GlobalResiliencyMetadata", json_of_global_resiliency_metadata(x)))
+  }
+  if let Some(x) = v.contact_lens {
+    fs.push(("ContactLens", json_of_contact_lens(x)))
   }
   json.Value.Object(fs)
 }
@@ -5291,11 +5339,13 @@ fn from_json_contact(v: json.Value) -> Contact ! Str {
       "DisconnectReason" => out.disconnect_reason = jsonv.read_str(fv)?
       "ContactEvaluations" => out.contact_evaluations = from_json_contact_evaluations(fv)?
       "TaskTemplateInfo" => out.task_template_info = from_json_task_template_info_v2(fv)?
+      "Cases" => out.cases = from_json_case_entries(fv)?
       "ContactDetails" => out.contact_details = from_json_contact_details(fv)?
       "OutboundStrategy" => out.outbound_strategy = from_json_outbound_strategy(fv)?
       "Attributes" => out.attributes = from_json_attributes(fv)?
       "NextContacts" => out.next_contacts = from_json_next_contacts(fv)?
       "GlobalResiliencyMetadata" => out.global_resiliency_metadata = from_json_global_resiliency_metadata(fv)?
+      "ContactLens" => out.contact_lens = from_json_contact_lens(fv)?
       _ => {}
     }
   }
@@ -5360,6 +5410,32 @@ fn from_json_contact_analysis_reference(v: json.Value) -> ContactAnalysisReferen
       "Arn" => out.arn = jsonv.read_str(fv)?
       "AnalyticsMode" => out.analytics_mode = AnalyticsMode.from(jsonv.read_str(fv)?)
       "IsRedacted" => out.is_redacted = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_contact_analysis_reference_state(v: ContactAnalysisReferenceState) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.status {
+    fs.push(("Status", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status_reason {
+    fs.push(("StatusReason", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_contact_analysis_reference_state(v: json.Value) -> ContactAnalysisReferenceState ! Str {
+  var out = ContactAnalysisReferenceState{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Status" => out.status = jsonv.read_str(fv)?
+      "StatusReason" => out.status_reason = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -6628,6 +6704,176 @@ fn from_json_contact_flow_version_summary_list(v: json.Value) -> List[ContactFlo
   Ok(out)
 }
 
+fn json_of_contact_lens(v: ContactLens) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.conversational_analytics {
+    fs.push(("ConversationalAnalytics", json_of_conversational_analytics(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_contact_lens(v: json.Value) -> ContactLens ! Str {
+  var out = ContactLens{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ConversationalAnalytics" => out.conversational_analytics = from_json_conversational_analytics(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_analytics_mode_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_contact_lens_analytics_mode_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_channel_configuration(v: ContactLensChannelConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.analytics_modes {
+    fs.push(("AnalyticsModes", json_of_contact_lens_analytics_mode_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_contact_lens_channel_configuration(v: json.Value) -> ContactLensChannelConfiguration ! Str {
+  var out = ContactLensChannelConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AnalyticsModes" => out.analytics_modes = from_json_contact_lens_analytics_mode_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_redaction_configuration(v: ContactLensRedactionConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.behavior {
+    fs.push(("Behavior", json.Value.Str(x)))
+  }
+  if let Some(x) = v.policy {
+    fs.push(("Policy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.entities {
+    fs.push(("Entities", json_of_contact_lens_redaction_entities_list(x)))
+  }
+  if let Some(x) = v.mask_mode {
+    fs.push(("MaskMode", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_contact_lens_redaction_configuration(v: json.Value) -> ContactLensRedactionConfiguration ! Str {
+  var out = ContactLensRedactionConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Behavior" => out.behavior = jsonv.read_str(fv)?
+      "Policy" => out.policy = jsonv.read_str(fv)?
+      "Entities" => out.entities = from_json_contact_lens_redaction_entities_list(fv)?
+      "MaskMode" => out.mask_mode = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_redaction_entities_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_contact_lens_redaction_entities_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_sentiment_configuration(v: ContactLensSentimentConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.behavior {
+    fs.push(("Behavior", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_contact_lens_sentiment_configuration(v: json.Value) -> ContactLensSentimentConfiguration ! Str {
+  var out = ContactLensSentimentConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Behavior" => out.behavior = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_summary_configuration(v: ContactLensSummaryConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.summary_modes {
+    fs.push(("SummaryModes", json_of_contact_lens_summary_mode_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_contact_lens_summary_configuration(v: json.Value) -> ContactLensSummaryConfiguration ! Str {
+  var out = ContactLensSummaryConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SummaryModes" => out.summary_modes = from_json_contact_lens_summary_mode_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_contact_lens_summary_mode_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_contact_lens_summary_mode_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_contact_metric_info(v: ContactMetricInfo) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.name {
@@ -7188,6 +7434,78 @@ fn from_json_control_plane_user_attribute_filter(v: json.Value) -> ControlPlaneU
       "AndCondition" => out.and_condition = from_json_attribute_and_condition(fv)?
       "TagCondition" => out.tag_condition = from_json_tag_condition(fv)?
       "HierarchyGroupCondition" => out.hierarchy_group_condition = from_json_hierarchy_group_condition(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_conversational_analytics(v: ConversationalAnalytics) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.configuration {
+    fs.push(("Configuration", json_of_conversational_analytics_configuration(x)))
+  }
+  if let Some(x) = v.contact_analysis_reference_state {
+    fs.push(("ContactAnalysisReferenceState", json_of_contact_analysis_reference_state(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_conversational_analytics(v: json.Value) -> ConversationalAnalytics ! Str {
+  var out = ConversationalAnalytics{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Configuration" => out.configuration = from_json_conversational_analytics_configuration(fv)?
+      "ContactAnalysisReferenceState" => out.contact_analysis_reference_state = from_json_contact_analysis_reference_state(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_conversational_analytics_configuration(v: ConversationalAnalyticsConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.enabled {
+    fs.push(("Enabled", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.language_locale {
+    fs.push(("LanguageLocale", json.Value.Str(x)))
+  }
+  if let Some(x) = v.language_locales {
+    fs.push(("LanguageLocales", json_of_language_locales(x)))
+  }
+  if let Some(x) = v.channel_configuration {
+    fs.push(("ChannelConfiguration", json_of_contact_lens_channel_configuration(x)))
+  }
+  if let Some(x) = v.redaction_configuration {
+    fs.push(("RedactionConfiguration", json_of_contact_lens_redaction_configuration(x)))
+  }
+  if let Some(x) = v.summary_configuration {
+    fs.push(("SummaryConfiguration", json_of_contact_lens_summary_configuration(x)))
+  }
+  if let Some(x) = v.sentiment_configuration {
+    fs.push(("SentimentConfiguration", json_of_contact_lens_sentiment_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_conversational_analytics_configuration(v: json.Value) -> ConversationalAnalyticsConfiguration ! Str {
+  var out = ConversationalAnalyticsConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Enabled" => out.enabled = jsonv.read_bool(fv)?
+      "LanguageLocale" => out.language_locale = jsonv.read_str(fv)?
+      "LanguageLocales" => out.language_locales = from_json_language_locales(fv)?
+      "ChannelConfiguration" => out.channel_configuration = from_json_contact_lens_channel_configuration(fv)?
+      "RedactionConfiguration" => out.redaction_configuration = from_json_contact_lens_redaction_configuration(fv)?
+      "SummaryConfiguration" => out.summary_configuration = from_json_contact_lens_summary_configuration(fv)?
+      "SentimentConfiguration" => out.sentiment_configuration = from_json_contact_lens_sentiment_configuration(fv)?
       _ => {}
     }
   }
@@ -14174,348 +14492,4 @@ fn from_json_describe_queue_response(v: json.Value) -> DescribeQueueResponse ! S
     }
   }
   Ok(out)
-}
-
-fn json_of_describe_quick_connect_request(v: DescribeQuickConnectRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.quick_connect_id {
-    fs.push(("QuickConnectId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_quick_connect_request(v: json.Value) -> DescribeQuickConnectRequest ! Str {
-  var out = DescribeQuickConnectRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "QuickConnectId" => out.quick_connect_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_quick_connect_response(v: DescribeQuickConnectResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.quick_connect {
-    fs.push(("QuickConnect", json_of_quick_connect(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_quick_connect_response(v: json.Value) -> DescribeQuickConnectResponse ! Str {
-  var out = DescribeQuickConnectResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "QuickConnect" => out.quick_connect = from_json_quick_connect(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_routing_profile_request(v: DescribeRoutingProfileRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.routing_profile_id {
-    fs.push(("RoutingProfileId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_routing_profile_request(v: json.Value) -> DescribeRoutingProfileRequest ! Str {
-  var out = DescribeRoutingProfileRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "RoutingProfileId" => out.routing_profile_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_routing_profile_response(v: DescribeRoutingProfileResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.routing_profile {
-    fs.push(("RoutingProfile", json_of_routing_profile(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_routing_profile_response(v: json.Value) -> DescribeRoutingProfileResponse ! Str {
-  var out = DescribeRoutingProfileResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "RoutingProfile" => out.routing_profile = from_json_routing_profile(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_rule_request(v: DescribeRuleRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.rule_id {
-    fs.push(("RuleId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_rule_request(v: json.Value) -> DescribeRuleRequest ! Str {
-  var out = DescribeRuleRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "RuleId" => out.rule_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_rule_response(v: DescribeRuleResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.rule {
-    fs.push(("Rule", json_of_rule(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_rule_response(v: json.Value) -> DescribeRuleResponse ! Str {
-  var out = DescribeRuleResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Rule" => out.rule = from_json_rule(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_security_profile_request(v: DescribeSecurityProfileRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.security_profile_id {
-    fs.push(("SecurityProfileId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_security_profile_request(v: json.Value) -> DescribeSecurityProfileRequest ! Str {
-  var out = DescribeSecurityProfileRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "SecurityProfileId" => out.security_profile_id = jsonv.read_str(fv)?
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_security_profile_response(v: DescribeSecurityProfileResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.security_profile {
-    fs.push(("SecurityProfile", json_of_security_profile(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_security_profile_response(v: json.Value) -> DescribeSecurityProfileResponse ! Str {
-  var out = DescribeSecurityProfileResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "SecurityProfile" => out.security_profile = from_json_security_profile(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_test_case_request(v: DescribeTestCaseRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.test_case_id {
-    fs.push(("TestCaseId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.status {
-    fs.push(("Status", json.Value.Str(x.value())))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_test_case_request(v: json.Value) -> DescribeTestCaseRequest ! Str {
-  var out = DescribeTestCaseRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "TestCaseId" => out.test_case_id = jsonv.read_str(fv)?
-      "Status" => out.status = TestCaseStatus.from(jsonv.read_str(fv)?)
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_test_case_response(v: DescribeTestCaseResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.test_case {
-    fs.push(("TestCase", json_of_test_case(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_test_case_response(v: json.Value) -> DescribeTestCaseResponse ! Str {
-  var out = DescribeTestCaseResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "TestCase" => out.test_case = from_json_test_case(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_traffic_distribution_group_request(v: DescribeTrafficDistributionGroupRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.traffic_distribution_group_id {
-    fs.push(("TrafficDistributionGroupId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_traffic_distribution_group_request(v: json.Value) -> DescribeTrafficDistributionGroupRequest ! Str {
-  var out = DescribeTrafficDistributionGroupRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "TrafficDistributionGroupId" => out.traffic_distribution_group_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_traffic_distribution_group_response(v: DescribeTrafficDistributionGroupResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.traffic_distribution_group {
-    fs.push(("TrafficDistributionGroup", json_of_traffic_distribution_group(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_traffic_distribution_group_response(v: json.Value) -> DescribeTrafficDistributionGroupResponse ! Str {
-  var out = DescribeTrafficDistributionGroupResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "TrafficDistributionGroup" => out.traffic_distribution_group = from_json_traffic_distribution_group(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_user_hierarchy_group_request(v: DescribeUserHierarchyGroupRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.hierarchy_group_id {
-    fs.push(("HierarchyGroupId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_user_hierarchy_group_request(v: json.Value) -> DescribeUserHierarchyGroupRequest ! Str {
-  var out = DescribeUserHierarchyGroupRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "HierarchyGroupId" => out.hierarchy_group_id = jsonv.read_str(fv)?
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_user_hierarchy_group_response(v: DescribeUserHierarchyGroupResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.hierarchy_group {
-    fs.push(("HierarchyGroup", json_of_hierarchy_group(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_describe_user_hierarchy_group_response(v: json.Value) -> DescribeUserHierarchyGroupResponse ! Str {
-  var out = DescribeUserHierarchyGroupResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "HierarchyGroup" => out.hierarchy_group = from_json_hierarchy_group(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_describe_user_hierarchy_structure_request(v: DescribeUserHierarchyStructureRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
 }

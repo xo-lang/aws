@@ -8,6 +8,22 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_describe_job_log_items(resp: http.Response) -> DescribeJobLogItemsResponse ! Str {
+  var out = DescribeJobLogItemsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_job_logs(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 /// The errors of DescribeJobLogItems.
 pub enum DescribeJobLogItemsErr {
   UninitializedAccountException(e: UninitializedAccountException)
@@ -964,7 +980,7 @@ pub fn deserialize_disconnect_from_service_error(resp: http.Response) -> Disconn
 /// dataReplicationInfo.dataReplicationState will be set to DISCONNECTED;
 /// The totalStorageBytes property for each of
 /// dataReplicationInfo.replicatedDisks will be set to zero;
-/// dataReplicationInfo.lagDuration and dataReplicationInfo.lagDuration will
+/// dataReplicationInfo.lagDuration and dataReplicationInfo.etaDateTime will
 /// be nullified.
 pub fn (c: Client) disconnect_from_service(input: DisconnectFromServiceRequest) -> SourceServer ! DisconnectFromServiceErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_disconnect_from_service(c.params, input)) ?? e => return Err(DisconnectFromServiceErr.InvalidInput(e))
@@ -1105,7 +1121,7 @@ pub fn deserialize_finalize_cutover_error(resp: http.Response) -> FinalizeCutove
 /// changed to DISCONNECTED; The SourceServer.lifeCycle.state will be
 /// changed to CUTOVER; The totalStorageBytes property for each of
 /// dataReplicationInfo.replicatedDisks will be set to zero;
-/// dataReplicationInfo.lagDuration and dataReplicationInfo.lagDuration will
+/// dataReplicationInfo.lagDuration and dataReplicationInfo.etaDateTime will
 /// be nullified.
 pub fn (c: Client) finalize_cutover(input: FinalizeCutoverRequest) -> SourceServer ! FinalizeCutoverErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_finalize_cutover(c.params, input)) ?? e => return Err(FinalizeCutoverErr.InvalidInput(e))

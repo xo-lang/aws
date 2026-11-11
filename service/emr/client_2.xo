@@ -8,6 +8,33 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn (e: ListSupportedInstanceTypesErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_supported_instance_types_error(resp: http.Response) -> ListSupportedInstanceTypesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListSupportedInstanceTypesErr.InternalServerException(x)
+      Err(msg) => return ListSupportedInstanceTypesErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListSupportedInstanceTypesErr.InvalidRequestException(x)
+      Err(msg) => return ListSupportedInstanceTypesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListSupportedInstanceTypesErr.Api(restjson.api_error(resp, body))
+}
+
 /// A list of the instance types that Amazon EMR supports. You can filter
 /// the list by Amazon Web Services Region and Amazon EMR release.
 pub fn (c: Client) list_supported_instance_types(input: ListSupportedInstanceTypesInput) -> ListSupportedInstanceTypesOutput ! ListSupportedInstanceTypesErr uses (net.dial, clock, rand) {

@@ -525,6 +525,15 @@ pub struct BrowserSummary {
   pub last_updated_at: Time? = None
 }
 
+/// The lifecycle hooks that run when you create or update the AgentCore
+/// Runtime, before any sessions are created.
+pub struct BuildLifecycleHooks {
+  /// The hook that warms up your agent before any sessions are created. Use
+  /// this hook to load the resources that your sessions need, such as models,
+  /// libraries, or caches. Your hook must complete within 120 seconds.
+  pub warmup: LifecycleHook? = None
+}
+
 /// Configuration for customer-managed compute capacity for the AgentCore
 /// Runtime. A capacity provider runs the AgentCore Runtime on the Instances
 /// compute type, using Amazon Web Services managed compute in your account.
@@ -1228,6 +1237,11 @@ pub struct CreateAgentRuntimeRequest {
   pub protocol_configuration: ProtocolConfiguration? = None
   /// The life cycle configuration for the AgentCore Runtime.
   pub lifecycle_configuration: LifecycleConfiguration? = None
+  /// The lifecycle hooks configuration for the AgentCore Runtime. Use
+  /// lifecycle hooks to run actions in the agent's container at fixed points
+  /// in the runtime's lifecycle, such as warming up the agent before sessions
+  /// are created.
+  pub hooks_configuration: RuntimeHooksConfiguration? = None
   /// Environment variables to set in the AgentCore Runtime environment.
   pub environment_variables: Map[Str, Str]? = None
   /// The filesystem configurations to mount into the AgentCore Runtime. Use
@@ -1250,6 +1264,10 @@ pub struct CreateAgentRuntimeRequest {
   /// each containing either a single port or an inclusive port range. Ports
   /// must be between 8000 and 12000 , excluding the reserved port 8443 .
   pub allowed_ports: List[AllowedPort]? = None
+  /// The resource configurations for the AgentCore Runtime, such as the
+  /// minimum amount of memory to allocate to the runtime. You can specify at
+  /// most one resource configuration.
+  pub resource_configurations: List[ResourceConfiguration]? = None
 }
 
 pub struct CreateAgentRuntimeResponse {
@@ -1755,6 +1773,10 @@ pub struct CreateGatewayRequest {
   pub exception_level: ExceptionLevel? = None
   /// A map of key-value pairs to associate with the gateway as metadata tags.
   pub tags: Map[Str, Str]? = None
+  /// The public domain names that the gateway advertises in its OAuth
+  /// discovery URLs instead of the inbound Host header. Specify this when
+  /// clients reach the gateway through your own proxy or custom domain.
+  pub domain_override: DomainOverride? = None
 }
 
 pub struct CreateGatewayResponse {
@@ -1809,6 +1831,9 @@ pub struct CreateGatewayResponse {
   pub web_acl_arn: Str? = None
   /// The Amazon Web Services WAF configuration for the gateway.
   pub waf_configuration: WafConfiguration? = None
+  /// The public domain names that the gateway advertises in its OAuth
+  /// discovery URLs instead of the inbound Host header.
+  pub domain_override: DomainOverride? = None
 }
 
 pub struct CreateGatewayRuleRequest {
@@ -2033,8 +2058,8 @@ pub struct CreateMemoryInput {
   /// The Amazon Resource Name (ARN) of the IAM role that provides permissions
   /// for the memory to access Amazon Web Services services.
   pub memory_execution_role_arn: Str? = None
-  /// The duration after which memory events expire. Specified as an ISO 8601
-  /// duration.
+  /// The number of days after which memory events expire, between 7 and 3650
+  /// days.
   pub event_expiry_duration: Int? = None
   /// The memory strategies to use for this memory. Strategies define how
   /// information is extracted, processed, and consolidated.
@@ -3477,6 +3502,23 @@ pub enum DimensionRatingScale {
   Unknown(tag: Str)
 }
 
+/// The public domain names for a gateway that clients reach through your
+/// own proxy or custom domain. When you configure a domain override, the
+/// gateway advertises these domains instead of the inbound Host header in
+/// the URLs that it returns for OAuth discovery, such as the protected
+/// resource metadata and the WWW-Authenticate challenge.
+pub struct DomainOverride {
+  /// The default public domain name for the gateway. The gateway advertises
+  /// this domain when a request doesn't select a specific domain.
+  pub default_domain: Str? = None
+  /// Additional public domain names for the gateway, up to 10. Don't repeat
+  /// the default domain or list a domain more than once. A request can select
+  /// one of these domains, or the default domain, with the
+  /// x-amzn-bedrock-agentcore-gateway-domain header. The gateway rejects a
+  /// request that selects a domain that isn't configured.
+  pub alternate_domains: List[Str]? = None
+}
+
 /// Publish synchronization state of the DRAFT working copy.
 pub enum DraftStatus: Str {
   Modified = "MODIFIED"
@@ -4384,6 +4426,8 @@ pub struct GetAgentRuntimeResponse {
   pub status: AgentRuntimeStatus? = None
   /// The life cycle configuration for the AgentCore Runtime.
   pub lifecycle_configuration: LifecycleConfiguration? = None
+  /// The lifecycle hooks configuration for the AgentCore Runtime.
+  pub hooks_configuration: RuntimeHooksConfiguration? = None
   /// The reason for failure if the AgentCore Runtime is in a failed state.
   pub failure_reason: Str? = None
   /// The description of the AgentCore Runtime.
@@ -4414,6 +4458,8 @@ pub struct GetAgentRuntimeResponse {
   /// The additional ports on the AgentCore Runtime that are reachable through
   /// the runtime's session URL.
   pub allowed_ports: List[AllowedPort]? = None
+  /// The resource configurations for the AgentCore Runtime.
+  pub resource_configurations: List[ResourceConfiguration]? = None
 }
 
 pub struct GetApiKeyCredentialProviderRequest {
@@ -4863,6 +4909,9 @@ pub struct GetGatewayResponse {
   pub web_acl_arn: Str? = None
   /// The Amazon Web Services WAF configuration for the gateway.
   pub waf_configuration: WafConfiguration? = None
+  /// The public domain names that the gateway advertises in its OAuth
+  /// discovery URLs instead of the inbound Host header.
+  pub domain_override: DomainOverride? = None
 }
 
 pub struct GetGatewayRuleRequest {
@@ -6214,6 +6263,21 @@ pub struct HttpConnectorTargetConfiguration {
   pub parameters: Map[Str, Str]? = None
 }
 
+/// A lifecycle hook action that sends an HTTP POST request to the agent's
+/// container. The path and port can't conflict with a path that your agent
+/// already serves for AgentCore Runtime, such as the protocol's invocation
+/// path or the health check path.
+pub struct HttpPostLifecycleHookAction {
+  /// The path in the agent's container that AgentCore Runtime sends the POST
+  /// request to.
+  pub path: Str? = None
+  /// The port in the agent's container that AgentCore Runtime sends the POST
+  /// request to. If you don't specify a port, the default is the runtime's
+  /// server port: the port in the protocol configuration if one is set,
+  /// otherwise the protocol's default port.
+  pub port: Int? = None
+}
+
 /// The HTTP target configuration for a gateway target. Contains the
 /// configuration for HTTP-based target endpoints.
 pub enum HttpTargetConfiguration {
@@ -6591,6 +6655,22 @@ pub struct LifecycleConfiguration {
   /// will be automatically terminated and replaced. Default: 28800 seconds (8
   /// hours).
   pub max_lifetime: Int? = None
+}
+
+/// A lifecycle hook, which defines the action that AgentCore Runtime runs
+/// at a point in the runtime's lifecycle.
+pub struct LifecycleHook {
+  /// The action that AgentCore Runtime runs for the hook. Specify exactly one
+  /// action.
+  pub action: LifecycleHookAction? = None
+}
+
+/// The action that a lifecycle hook runs. Specify exactly one member.
+/// Currently, httpPost is the only supported action.
+pub enum LifecycleHookAction {
+  HttpPost(value: HttpPostLifecycleHookAction)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// A single rule entry within a rate limit that maps dimension values to
@@ -9140,6 +9220,13 @@ pub enum Resource {
   Unknown(tag: Str)
 }
 
+/// The resource configuration for an AgentCore Runtime.
+pub struct ResourceConfiguration {
+  /// The minimum amount of memory, in mebibytes, to allocate to the AgentCore
+  /// Runtime.
+  pub minimum_memory_in_mi_b: Int? = None
+}
+
 /// Exception thrown when a resource limit is exceeded.
 pub struct ResourceLimitExceededException {
   pub message: Str? = None
@@ -9270,6 +9357,14 @@ pub struct Rule {
   /// The session configuration that defines timeout settings for detecting
   /// when agent sessions are complete and ready for evaluation.
   pub session_config: SessionConfig? = None
+}
+
+/// The lifecycle hooks that AgentCore Runtime runs at fixed points in the
+/// runtime's lifecycle.
+pub struct RuntimeHooksConfiguration {
+  /// The hooks that run when you create or update the AgentCore Runtime,
+  /// before any sessions are created.
+  pub build: BuildLifecycleHooks? = None
 }
 
 /// Configuration for microVM metadata service settings.
@@ -10308,6 +10403,8 @@ pub struct UpdateAgentRuntimeRequest {
   pub protocol_configuration: ProtocolConfiguration? = None
   /// The updated life cycle configuration for the AgentCore Runtime.
   pub lifecycle_configuration: LifecycleConfiguration? = None
+  /// The updated lifecycle hooks configuration for the AgentCore Runtime.
+  pub hooks_configuration: RuntimeHooksConfiguration? = None
   /// The updated configuration for microVM Metadata Service (MMDS) settings
   /// for the AgentCore Runtime.
   pub metadata_configuration: RuntimeMetadataConfiguration? = None
@@ -10328,6 +10425,9 @@ pub struct UpdateAgentRuntimeRequest {
   /// range. Ports must be between 8000 and 12000 , excluding the reserved
   /// port 8443 .
   pub allowed_ports: List[AllowedPort]? = None
+  /// The updated resource configurations for the AgentCore Runtime. You can
+  /// specify at most one resource configuration.
+  pub resource_configurations: List[ResourceConfiguration]? = None
   /// A unique, case-sensitive identifier to ensure idempotency of the
   /// request.
   pub client_token: Str? = None
@@ -10668,6 +10768,10 @@ pub struct UpdateGatewayRequest {
   pub exception_level: ExceptionLevel? = None
   /// The updated Amazon Web Services WAF configuration for the gateway.
   pub waf_configuration: WafConfiguration? = None
+  /// The updated public domain names that the gateway advertises in its OAuth
+  /// discovery URLs instead of the inbound Host header. Specify this when
+  /// clients reach the gateway through your own proxy or custom domain.
+  pub domain_override: DomainOverride? = None
 }
 
 pub struct UpdateGatewayResponse {
@@ -10719,6 +10823,9 @@ pub struct UpdateGatewayResponse {
   pub web_acl_arn: Str? = None
   /// The Amazon Web Services WAF configuration for the gateway.
   pub waf_configuration: WafConfiguration? = None
+  /// The public domain names that the gateway advertises in its OAuth
+  /// discovery URLs instead of the inbound Host header.
+  pub domain_override: DomainOverride? = None
 }
 
 pub struct UpdateGatewayRuleRequest {
@@ -10734,114 +10841,4 @@ pub struct UpdateGatewayRuleRequest {
   pub actions: List[Action]? = None
   /// The updated description of the rule.
   pub description: Str? = None
-}
-
-/// Create response excludes updatedAt (redundant on create). Get/Update
-/// responses include it via their own output structures.
-pub struct UpdateGatewayRuleResponse {
-  /// The unique identifier of the gateway rule.
-  pub rule_id: Str? = None
-  /// The Amazon Resource Name (ARN) of the gateway that the rule belongs to.
-  pub gateway_arn: Str? = None
-  /// The priority of the rule. Rules are evaluated in order of priority, with
-  /// lower numbers evaluated first.
-  pub priority: Int? = None
-  /// The conditions that must be met for the rule to apply.
-  pub conditions: List[Condition]? = None
-  /// The actions to take when the rule conditions are met.
-  pub actions: List[Action]? = None
-  /// The description of the gateway rule.
-  pub description: Str? = None
-  /// The timestamp when the rule was created.
-  pub created_at: Time? = None
-  /// The current status of the rule.
-  pub status: GatewayRuleStatus? = None
-  /// System-managed metadata for rules created by automated processes.
-  pub system: SystemManagedBlock? = None
-  /// The timestamp when the rule was last updated.
-  pub updated_at: Time? = None
-}
-
-pub struct UpdateGatewayTargetRequest {
-  /// The unique identifier of the gateway associated with the target.
-  pub gateway_identifier: Str? = None
-  /// The unique identifier of the gateway target to update.
-  pub target_id: Str? = None
-  /// The updated name for the gateway target.
-  pub name: Str? = None
-  /// The updated description for the gateway target.
-  pub description: Str? = None
-  pub target_configuration: TargetConfiguration? = None
-  /// The updated credential provider configurations for the gateway target.
-  pub credential_provider_configurations: List[CredentialProviderConfiguration]? = None
-  /// Configuration for HTTP header and query parameter propagation to the
-  /// gateway target.
-  pub metadata_configuration: MetadataConfiguration? = None
-  /// The private endpoint configuration for the gateway target. Use this to
-  /// connect the gateway to private resources in your VPC.
-  pub private_endpoint: PrivateEndpoint? = None
-  /// The private certificate authority (CA) configurations for the gateway
-  /// target. Use this to have the gateway trust a private CA when it
-  /// establishes TLS connections to the target endpoint. Provide each
-  /// certificate by reference to an Amazon S3 object or an Amazon Web
-  /// Services Secrets Manager secret. You can specify only one certificate
-  /// authority configuration in this list. To remove a previously configured
-  /// certificate authority, omit this field on update.
-  pub certificate_configurations: List[CertificateConfiguration]? = None
-}
-
-pub struct UpdateGatewayTargetResponse {
-  /// The Amazon Resource Name (ARN) of the gateway.
-  pub gateway_arn: Str? = None
-  /// The unique identifier of the updated gateway target.
-  pub target_id: Str? = None
-  /// The timestamp when the gateway target was created.
-  pub created_at: Time? = None
-  /// The timestamp when the gateway target was last updated.
-  pub updated_at: Time? = None
-  /// The current status of the updated gateway target.
-  pub status: TargetStatus? = None
-  /// The reasons for the current status of the updated gateway target.
-  pub status_reasons: List[Str]? = None
-  /// The updated name of the gateway target.
-  pub name: Str? = None
-  /// The updated description of the gateway target.
-  pub description: Str? = None
-  pub target_configuration: TargetConfiguration? = None
-  /// The updated credential provider configurations for the gateway target.
-  pub credential_provider_configurations: List[CredentialProviderConfiguration]? = None
-  /// The date and time at which the targets were last synchronized.
-  pub last_synchronized_at: Time? = None
-  /// The metadata configuration that was applied to the gateway target.
-  pub metadata_configuration: MetadataConfiguration? = None
-  /// The private endpoint configuration for the gateway target.
-  pub private_endpoint: PrivateEndpoint? = None
-  /// The managed resources created by the gateway for private endpoint
-  /// connectivity.
-  pub private_endpoint_managed_resources: List[ManagedResourceDetails]? = None
-  /// OAuth2 authorization data for the updated gateway target. This data is
-  /// returned when a target is configured with a credential provider with
-  /// authorization code grant type and requires user federation.
-  pub authorization_data: AuthorizationData? = None
-  /// The protocol type of the updated gateway target.
-  pub protocol_type: TargetProtocolType? = None
-  /// The private certificate authority (CA) configurations for the gateway
-  /// target.
-  pub certificate_configurations: List[CertificateConfiguration]? = None
-}
-
-pub struct UpdateHarnessEndpointRequest {
-  /// The ID of the harness that the endpoint belongs to.
-  pub harness_id: Str? = None
-  /// The name of the endpoint to update.
-  pub endpoint_name: Str? = None
-  /// The harness version that the endpoint points to. If not specified, the
-  /// existing value is retained.
-  pub target_version: Str? = None
-  /// A description of the endpoint. If not specified, the existing value is
-  /// retained.
-  pub description: Str? = None
-  /// A unique, case-sensitive identifier to ensure idempotency of the
-  /// request.
-  pub client_token: Str? = None
 }

@@ -8,6 +8,356 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Returns a list of findings that match the specified criteria. If
+/// cross-Region aggregation is enabled, then when you call GetFindings from
+/// the home Region, the results include all of the matching findings from
+/// both the home Region and linked Regions.
+pub fn (c: Client) get_findings(input: GetFindingsRequest) -> GetFindingsResponse ! GetFindingsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_findings(c.params, input)) ?? e => return Err(GetFindingsErr.InvalidInput(e))
+  var req = serialize_get_findings(ep, input, "") ?? e => return Err(GetFindingsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetFindingsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_findings_error(resp))
+  }
+  deserialize_get_findings(resp) ?? e => Err(GetFindingsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_findings_trends_v2(base: EndpointParameters, input: GetFindingsTrendsV2Request) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetFindingsTrendsV2.
+pub fn serialize_get_findings_trends_v2(ep: rest.Endpoint, input: GetFindingsTrendsV2Request, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filters {
+    fs.push(("Filters", json_of_findings_trends_filters(x)))
+  }
+  if let Some(x) = input.start_time {
+    fs.push(("StartTime", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = input.end_time {
+    fs.push(("EndTime", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/findingsTrendsv2"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_findings_trends_v2(resp: http.Response) -> GetFindingsTrendsV2Response ! Str {
+  var out = GetFindingsTrendsV2Response{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Granularity" => out.granularity = GranularityField.from(jsonv.read_str(fv)?)
+      "TrendsMetrics" => out.trends_metrics = from_json_trends_metrics(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetFindingsTrendsV2.
+pub enum GetFindingsTrendsV2Err {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetFindingsTrendsV2Err) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_findings_trends_v2_error(resp: http.Response) -> GetFindingsTrendsV2Err {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetFindingsTrendsV2Err.AccessDeniedException(x)
+      Err(msg) => return GetFindingsTrendsV2Err.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetFindingsTrendsV2Err.InternalServerException(x)
+      Err(msg) => return GetFindingsTrendsV2Err.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetFindingsTrendsV2Err.ThrottlingException(x)
+      Err(msg) => return GetFindingsTrendsV2Err.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetFindingsTrendsV2Err.ValidationException(x)
+      Err(msg) => return GetFindingsTrendsV2Err.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetFindingsTrendsV2Err.Api(restjson.api_error(resp, body))
+}
+
+/// Returns findings trend data based on the specified criteria. This
+/// operation helps you analyze patterns and changes in findings over time.
+pub fn (c: Client) get_findings_trends_v2(input: GetFindingsTrendsV2Request) -> GetFindingsTrendsV2Response ! GetFindingsTrendsV2Err uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_findings_trends_v2(c.params, input)) ?? e => return Err(GetFindingsTrendsV2Err.InvalidInput(e))
+  var req = serialize_get_findings_trends_v2(ep, input, "") ?? e => return Err(GetFindingsTrendsV2Err.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetFindingsTrendsV2Err.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_findings_trends_v2_error(resp))
+  }
+  deserialize_get_findings_trends_v2(resp) ?? e => Err(GetFindingsTrendsV2Err.Deserialize(e))
+}
+
+pub fn endpoint_params_get_findings_v2(base: EndpointParameters, input: GetFindingsV2Request) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetFindingsV2.
+pub fn serialize_get_findings_v2(ep: rest.Endpoint, input: GetFindingsV2Request, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filters {
+    fs.push(("Filters", json_of_ocsf_finding_filters(x)))
+  }
+  if let Some(x) = input.scopes {
+    fs.push(("Scopes", json_of_finding_scopes(x)))
+  }
+  if let Some(x) = input.sort_criteria {
+    fs.push(("SortCriteria", json_of_sort_criteria(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/findingsv2"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_findings_v2(resp: http.Response) -> GetFindingsV2Response ! Str {
+  var out = GetFindingsV2Response{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Findings" => out.findings = from_json_ocsf_findings_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetFindingsV2.
+pub enum GetFindingsV2Err {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  OrganizationalUnitNotFoundException(e: OrganizationalUnitNotFoundException)
+  OrganizationNotFoundException(e: OrganizationNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetFindingsV2Err) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    OrganizationalUnitNotFoundException(x) => "OrganizationalUnitNotFoundException: ${x:?}"
+    OrganizationNotFoundException(x) => "OrganizationNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_findings_v2_error(resp: http.Response) -> GetFindingsV2Err {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.AccessDeniedException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.ConflictException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.InternalServerException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    "OrganizationalUnitNotFoundException" => match read_error_organizational_unit_not_found_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.OrganizationalUnitNotFoundException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    "OrganizationNotFoundException" => match read_error_organization_not_found_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.OrganizationNotFoundException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.ThrottlingException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetFindingsV2Err.ValidationException(x)
+      Err(msg) => return GetFindingsV2Err.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetFindingsV2Err.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a list of findings that match the specified criteria. You can
+/// use the Scopes parameter to define the data boundary for the query.
+/// Currently, Scopes supports AwsOrganizations , which lets you retrieve
+/// findings from your entire organization or from specific organizational
+/// units. Only the delegated administrator account can use Scopes . You can
+/// use the Filters parameter to refine results based on finding attributes.
+/// You can use Scopes and Filters independently or together. When both are
+/// provided, Scopes narrows the data set first, and then Filters refines
+/// results within that scoped data set. GetFindings and GetFindingsV2 both
+/// use securityhub:GetFindings in the Action element of an IAM policy
+/// statement. You must have permission to perform the
+/// securityhub:GetFindings action.
+pub fn (c: Client) get_findings_v2(input: GetFindingsV2Request) -> GetFindingsV2Response ! GetFindingsV2Err uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_findings_v2(c.params, input)) ?? e => return Err(GetFindingsV2Err.InvalidInput(e))
+  var req = serialize_get_findings_v2(ep, input, "") ?? e => return Err(GetFindingsV2Err.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetFindingsV2Err.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_findings_v2_error(resp))
+  }
+  deserialize_get_findings_v2(resp) ?? e => Err(GetFindingsV2Err.Deserialize(e))
+}
+
+pub fn endpoint_params_get_insight_results(base: EndpointParameters, input: GetInsightResultsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetInsightResults.
+pub fn serialize_get_insight_results(ep: rest.Endpoint, input: GetInsightResultsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_insight_arn = match input.insight_arn {
+    Some(v) => v
+    None => return Err("input member InsightArn is required")
+  }
+  if label_insight_arn == "" {
+    return Err("input member InsightArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/insights/results/${rest.escape(label_insight_arn, true)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_insight_results(resp: http.Response) -> GetInsightResultsResponse ! Str {
+  var out = GetInsightResultsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "InsightResults" => out.insight_results = from_json_insight_results(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 /// The errors of GetInsightResults.
 pub enum GetInsightResultsErr {
   InternalException(e: InternalException)
@@ -1422,6 +1772,495 @@ pub fn (c: Client) get_security_control_definition(input: GetSecurityControlDefi
     return Err(deserialize_get_security_control_definition_error(resp))
   }
   deserialize_get_security_control_definition(resp) ?? e => Err(GetSecurityControlDefinitionErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_software_resources_v2(base: EndpointParameters, input: GetSoftwareResourcesV2Request) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetSoftwareResourcesV2.
+pub fn serialize_get_software_resources_v2(ep: rest.Endpoint, input: GetSoftwareResourcesV2Request, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.package_name {
+    fs.push(("PackageName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.package_type {
+    fs.push(("PackageType", json.Value.Str(x)))
+  }
+  if let Some(x) = input.package_version {
+    fs.push(("PackageVersion", json.Value.Str(x)))
+  }
+  if let Some(x) = input.filters {
+    fs.push(("Filters", json_of_software_filters(x)))
+  }
+  if let Some(x) = input.scopes {
+    fs.push(("Scopes", json_of_software_scopes(x)))
+  }
+  if let Some(x) = input.sort_criteria {
+    fs.push(("SortCriteria", json_of_sort_criteria(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/softwarev2/resources"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_software_resources_v2(resp: http.Response) -> GetSoftwareResourcesV2Response ! Str {
+  var out = GetSoftwareResourcesV2Response{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SoftwareResources" => out.software_resources = from_json_software_resource_result_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetSoftwareResourcesV2.
+pub enum GetSoftwareResourcesV2Err {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  OrganizationalUnitNotFoundException(e: OrganizationalUnitNotFoundException)
+  OrganizationNotFoundException(e: OrganizationNotFoundException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetSoftwareResourcesV2Err) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    OrganizationalUnitNotFoundException(x) => "OrganizationalUnitNotFoundException: ${x:?}"
+    OrganizationNotFoundException(x) => "OrganizationNotFoundException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_software_resources_v2_error(resp: http.Response) -> GetSoftwareResourcesV2Err {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.AccessDeniedException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.ConflictException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.InternalServerException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "OrganizationalUnitNotFoundException" => match read_error_organizational_unit_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.OrganizationalUnitNotFoundException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "OrganizationNotFoundException" => match read_error_organization_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.OrganizationNotFoundException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.ResourceNotFoundException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.ThrottlingException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetSoftwareResourcesV2Err.ValidationException(x)
+      Err(msg) => return GetSoftwareResourcesV2Err.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetSoftwareResourcesV2Err.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a list of resources that contain a specific software package.
+/// You identify the package with PackageName and PackageType . To narrow
+/// the results to one version of the package, include PackageVersion . You
+/// can use the Scopes parameter to define the data boundary for the query.
+/// Currently, Scopes supports AwsOrganizations , which lets you retrieve
+/// resources from your entire organization or from specific organizational
+/// units. Only the delegated administrator account can use Scopes . You can
+/// use the Filters parameter to further refine results based on resource
+/// attributes, such as ResourceType or Region .
+pub fn (c: Client) get_software_resources_v2(input: GetSoftwareResourcesV2Request) -> GetSoftwareResourcesV2Response ! GetSoftwareResourcesV2Err uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_software_resources_v2(c.params, input)) ?? e => return Err(GetSoftwareResourcesV2Err.InvalidInput(e))
+  var req = serialize_get_software_resources_v2(ep, input, "") ?? e => return Err(GetSoftwareResourcesV2Err.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetSoftwareResourcesV2Err.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_software_resources_v2_error(resp))
+  }
+  deserialize_get_software_resources_v2(resp) ?? e => Err(GetSoftwareResourcesV2Err.Deserialize(e))
+}
+
+pub fn endpoint_params_get_software_statistics_v2(base: EndpointParameters, input: GetSoftwareStatisticsV2Request) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetSoftwareStatisticsV2.
+pub fn serialize_get_software_statistics_v2(ep: rest.Endpoint, input: GetSoftwareStatisticsV2Request, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.group_by_rules {
+    fs.push(("GroupByRules", json_of_software_group_by_rules(x)))
+  }
+  if let Some(x) = input.scopes {
+    fs.push(("Scopes", json_of_software_scopes(x)))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.max_statistic_results {
+    fs.push(("MaxStatisticResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/softwarev2/statistics"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_software_statistics_v2(resp: http.Response) -> GetSoftwareStatisticsV2Response ! Str {
+  var out = GetSoftwareStatisticsV2Response{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "GroupByResults" => out.group_by_results = from_json_group_by_results(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetSoftwareStatisticsV2.
+pub enum GetSoftwareStatisticsV2Err {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  OrganizationalUnitNotFoundException(e: OrganizationalUnitNotFoundException)
+  OrganizationNotFoundException(e: OrganizationNotFoundException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetSoftwareStatisticsV2Err) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    OrganizationalUnitNotFoundException(x) => "OrganizationalUnitNotFoundException: ${x:?}"
+    OrganizationNotFoundException(x) => "OrganizationNotFoundException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_software_statistics_v2_error(resp: http.Response) -> GetSoftwareStatisticsV2Err {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.AccessDeniedException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.ConflictException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.InternalServerException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "OrganizationalUnitNotFoundException" => match read_error_organizational_unit_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.OrganizationalUnitNotFoundException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "OrganizationNotFoundException" => match read_error_organization_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.OrganizationNotFoundException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.ResourceNotFoundException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.ThrottlingException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetSoftwareStatisticsV2Err.ValidationException(x)
+      Err(msg) => return GetSoftwareStatisticsV2Err.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetSoftwareStatisticsV2Err.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves aggregated counts of software packages installed on your
+/// resources, grouped by a field that you specify. For example, you can
+/// return the most common package types or the accounts with the most
+/// installed packages. Each count is the number of package-to-resource
+/// pairs that match the grouping value. A package installed on three
+/// resources contributes three to the count. You can use the Scopes
+/// parameter to define the data boundary for the query. Currently, Scopes
+/// supports AwsOrganizations , which lets you aggregate software from your
+/// entire organization or from specific organizational units. Only the
+/// delegated administrator account can use Scopes . This operation doesn't
+/// paginate. Use MaxStatisticResults to control how many grouping values
+/// are returned.
+pub fn (c: Client) get_software_statistics_v2(input: GetSoftwareStatisticsV2Request) -> GetSoftwareStatisticsV2Response ! GetSoftwareStatisticsV2Err uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_software_statistics_v2(c.params, input)) ?? e => return Err(GetSoftwareStatisticsV2Err.InvalidInput(e))
+  var req = serialize_get_software_statistics_v2(ep, input, "") ?? e => return Err(GetSoftwareStatisticsV2Err.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetSoftwareStatisticsV2Err.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_software_statistics_v2_error(resp))
+  }
+  deserialize_get_software_statistics_v2(resp) ?? e => Err(GetSoftwareStatisticsV2Err.Deserialize(e))
+}
+
+pub fn endpoint_params_get_software_v2(base: EndpointParameters, input: GetSoftwareV2Request) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetSoftwareV2.
+pub fn serialize_get_software_v2(ep: rest.Endpoint, input: GetSoftwareV2Request, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filters {
+    fs.push(("Filters", json_of_software_filters(x)))
+  }
+  if let Some(x) = input.scopes {
+    fs.push(("Scopes", json_of_software_scopes(x)))
+  }
+  if let Some(x) = input.sort_criteria {
+    fs.push(("SortCriteria", json_of_sort_criteria(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/softwarev2"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_software_v2(resp: http.Response) -> GetSoftwareV2Response ! Str {
+  var out = GetSoftwareV2Response{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Software" => out.software = from_json_software_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetSoftwareV2.
+pub enum GetSoftwareV2Err {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  OrganizationalUnitNotFoundException(e: OrganizationalUnitNotFoundException)
+  OrganizationNotFoundException(e: OrganizationNotFoundException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetSoftwareV2Err) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    OrganizationalUnitNotFoundException(x) => "OrganizationalUnitNotFoundException: ${x:?}"
+    OrganizationNotFoundException(x) => "OrganizationNotFoundException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_software_v2_error(resp: http.Response) -> GetSoftwareV2Err {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.AccessDeniedException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.ConflictException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.InternalServerException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "OrganizationalUnitNotFoundException" => match read_error_organizational_unit_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.OrganizationalUnitNotFoundException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "OrganizationNotFoundException" => match read_error_organization_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.OrganizationNotFoundException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.ResourceNotFoundException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.ThrottlingException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetSoftwareV2Err.ValidationException(x)
+      Err(msg) => return GetSoftwareV2Err.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetSoftwareV2Err.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a list of software packages installed on your resources. Each
+/// result identifies a package by name, version, and type, and includes the
+/// number of resources that contain that package. You can use the Scopes
+/// parameter to define the data boundary for the query. Currently, Scopes
+/// supports AwsOrganizations , which lets you retrieve software from your
+/// entire organization or from specific organizational units. Only the
+/// delegated administrator account can use Scopes . You can use the Filters
+/// parameter to refine results based on package and resource attributes.
+/// You can use Scopes and Filters independently or together. When both are
+/// provided, Scopes narrows the data set first, and then Filters refines
+/// results within that scoped data set. To list the resources that contain
+/// a specific package, use GetSoftwareResourcesV2 . To get counts of
+/// software grouped by a field, use GetSoftwareStatisticsV2 .
+pub fn (c: Client) get_software_v2(input: GetSoftwareV2Request) -> GetSoftwareV2Response ! GetSoftwareV2Err uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_software_v2(c.params, input)) ?? e => return Err(GetSoftwareV2Err.InvalidInput(e))
+  var req = serialize_get_software_v2(ep, input, "") ?? e => return Err(GetSoftwareV2Err.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetSoftwareV2Err.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_software_v2_error(resp))
+  }
+  deserialize_get_software_v2(resp) ?? e => Err(GetSoftwareV2Err.Deserialize(e))
 }
 
 pub fn endpoint_params_invite_members(base: EndpointParameters, input: InviteMembersRequest) -> EndpointParameters {

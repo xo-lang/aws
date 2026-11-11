@@ -49,6 +49,21 @@ pub struct AlreadyExistsException {
   pub message: Str? = None
 }
 
+/// Represents all resources of the specified type in a Data Catalog,
+/// including resources that are created after the grant.
+pub struct AnyResource {
+  /// The ID of the Data Catalog. By default, it's your account ID.
+  pub catalog_id: Str? = None
+  /// The type of resource that the grant covers. The only supported value is
+  /// TABLE .
+  pub resource_type: AnyResourceSupportedTypes? = None
+}
+
+pub enum AnyResourceSupportedTypes: Str {
+  Table = "TABLE"
+  Unknown(value: Str)
+}
+
 pub enum ApplicationStatus: Str {
   Enabled = "ENABLED"
   Disabled = "DISABLED"
@@ -399,6 +414,7 @@ pub struct DataLakePrincipal {
 }
 
 pub enum DataLakeResourceType: Str {
+  AnyResource = "ANY_RESOURCE"
   Catalog = "CATALOG"
   Database = "DATABASE"
   Table = "TABLE"
@@ -408,6 +424,7 @@ pub enum DataLakeResourceType: Str {
   LfTagPolicyDatabase = "LF_TAG_POLICY_DATABASE"
   LfTagPolicyTable = "LF_TAG_POLICY_TABLE"
   LfNamedTagExpression = "LF_NAMED_TAG_EXPRESSION"
+  UserDefinedFunction = "USER_DEFINED_FUNCTION"
   Unknown(value: Str)
 }
 
@@ -824,6 +841,23 @@ pub struct GetEffectivePermissionsForPathResponse {
   pub next_token: Str? = None
 }
 
+pub struct GetGlueFunctionSessionContextRequest {
+  /// The ARNs of one or more user-defined functions to include in the session
+  /// context, each in the format arn:aws:glue: region : account-id
+  /// :userDefinedFunction/ database-name / function-name .
+  pub user_defined_function_arns: List[Str]? = None
+  /// The number of seconds the session context is valid. The default is
+  /// 86,400 (24 hours).
+  pub duration_seconds: Int? = None
+}
+
+pub struct GetGlueFunctionSessionContextResponse {
+  /// The ID of the session context.
+  pub session_context_id: Str? = None
+  /// The date and time when the session context expires.
+  pub expiration: Time? = None
+}
+
 pub struct GetLFTagExpressionRequest {
   /// The name for the LF-Tag expression
   pub name: Str? = None
@@ -992,6 +1026,27 @@ pub struct GetTemporaryDataLocationCredentialsResponse {
   /// - Provides read-only access to the data location. READ_WRITE - Provides
   /// both read and write access to the data location.
   pub credentials_scope: CredentialsScope? = None
+}
+
+pub struct GetTemporaryGlueFunctionCredentialsRequest {
+  /// The ARN of the user-defined function whose artifacts you want to
+  /// download, in the format arn:aws:glue: region : account-id
+  /// :userDefinedFunction/ database-name / function-name .
+  pub user_defined_function_arn: Str? = None
+  /// Context for the request, such as the column names and query ID, that
+  /// Lake Formation uses for auditing.
+  pub audit_context: AuditContext? = None
+}
+
+pub struct GetTemporaryGlueFunctionCredentialsResponse {
+  /// The access key ID for the temporary credentials.
+  pub access_key_id: Str? = None
+  /// The secret key for the temporary credentials.
+  pub secret_access_key: Str? = None
+  /// The session token for the temporary credentials.
+  pub session_token: Str? = None
+  /// The date and time when the temporary credentials expire.
+  pub expiration: Time? = None
 }
 
 pub struct GetTemporaryGluePartitionCredentialsRequest {
@@ -1519,6 +1574,7 @@ pub enum Permission: Str {
   CreateLfTagExpression = "CREATE_LF_TAG_EXPRESSION"
   CreateCatalog = "CREATE_CATALOG"
   SuperUser = "SUPER_USER"
+  Execute = "EXECUTE"
   Unknown(value: Str)
 }
 
@@ -1757,6 +1813,11 @@ pub struct RemoveLFTagsFromResourceResponse {
 
 /// A structure for the resource.
 pub struct Resource {
+  /// All resources of the specified type in a Data Catalog. When you grant or
+  /// revoke permissions on this resource, the principal must be a
+  /// user-defined function whose GovernanceMode is LAKE_FORMATION , and the
+  /// Data Catalog must be in your account.
+  pub any_resource: AnyResource? = None
   /// The identifier for the Data Catalog. By default, the account ID. The
   /// Data Catalog is the persistent metadata store. It contains database
   /// definitions, table definitions, and other control information to manage
@@ -1790,6 +1851,13 @@ pub struct Resource {
   /// A row-level security policy resource. Specify this when granting or
   /// revoking permissions on a row-level security policy.
   pub rls_policy: RLSPolicyResource? = None
+  /// The user-defined function that you want to grant or revoke permissions
+  /// on. The function's GovernanceMode must be LAKE_FORMATION . You can grant
+  /// the following permissions: EXECUTE – Use the function in a job, and
+  /// get credentials to download its artifacts. DESCRIBE – View the
+  /// function's definition. ALTER – Update the function. DROP – Delete
+  /// the function. ALL – All of the preceding permissions.
+  pub user_defined_function: UserDefinedFunctionResource? = None
 }
 
 /// A structure containing information about an Lake Formation resource.
@@ -2287,6 +2355,30 @@ pub struct UpdateTableStorageOptimizerRequest {
 pub struct UpdateTableStorageOptimizerResponse {
   /// A response indicating the success of failure of the operation.
   pub result: Str? = None
+}
+
+/// Identifies a user-defined function, or all user-defined functions in a
+/// database, as a resource that you can grant permissions on. You can grant
+/// permissions only on functions whose GovernanceMode is LAKE_FORMATION .
+pub struct UserDefinedFunctionResource {
+  /// The ID of the Data Catalog. By default, it's your account ID.
+  pub catalog_id: Str? = None
+  /// The name of the database that contains the function.
+  pub database_name: Str? = None
+  /// The name of the function. Exactly one of
+  /// UserDefinedFunctionResource$Name or
+  /// UserDefinedFunctionResource$UserDefinedFunctionWildcard is required.
+  pub name: Str? = None
+  /// A wildcard object representing every user-defined function in the
+  /// database, including functions created after the grant. Exactly one of
+  /// UserDefinedFunctionResource$Name or
+  /// UserDefinedFunctionResource$UserDefinedFunctionWildcard is required.
+  pub user_defined_function_wildcard: UserDefinedFunctionWildcard? = None
+}
+
+/// A wildcard object representing every user-defined function in a
+/// database.
+pub struct UserDefinedFunctionWildcard {
 }
 
 pub enum VerificationStatus: Str {

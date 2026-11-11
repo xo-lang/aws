@@ -439,6 +439,48 @@ pub struct ChangeProgressStatusDetails {
   pub last_updated_time: Time? = None
   /// The IAM principal who initiated the configuration change.
   pub initiated_by: InitiatedBy? = None
+  /// Details about a cloned blue/green upgrade, when the change is one.
+  pub cloned_blue_green_upgrade_details: ClonedBlueGreenUpgradeDetails? = None
+}
+
+/// Options for a cloned blue/green upgrade.
+pub struct ClonedBlueGreenOptions {
+  /// How long to keep the cluster that you cut over from after cutover
+  /// completes. When you start the upgrade, only RetentionInHours is
+  /// accepted.
+  pub retention_options: RetentionOptions? = None
+}
+
+/// An action that the service takes automatically at a scheduled time
+/// during a cloned blue/green upgrade.
+pub struct ClonedBlueGreenScheduledAction {
+  /// The action that the service takes.
+  pub action: ClonedBlueGreenScheduledActionType? = None
+  /// The time at which the service takes the action.
+  pub scheduled_time: Time? = None
+}
+
+/// AutomaticCutoverToPrimaryCluster cuts the domain back over to the
+/// primary cluster if you haven't cut over by the scheduled time.
+/// DeletePrimaryCluster deletes the primary cluster when the retention
+/// period ends.
+pub enum ClonedBlueGreenScheduledActionType: Str {
+  AutomaticCutoverToPrimary = "AutomaticCutoverToPrimaryCluster"
+  DeletePrimaryCluster = "DeletePrimaryCluster"
+  Unknown(value: Str)
+}
+
+/// The state of a cloned blue/green upgrade. Members that don't apply are
+/// omitted.
+pub struct ClonedBlueGreenUpgradeDetails {
+  /// The current split of search traffic between the primary and cloned
+  /// clusters.
+  pub traffic_split: TrafficPercents? = None
+  /// The action that the service takes automatically if you don't act before
+  /// the scheduled time.
+  pub scheduled_action: ClonedBlueGreenScheduledAction? = None
+  /// The retention period, in hours, for the cluster that you cut over from.
+  pub retention_in_hours: Int? = None
 }
 
 /// Options to specify the Cognito user and identity pools for Kibana
@@ -639,6 +681,37 @@ pub struct CreateVpcEndpointResponse {
   pub vpc_endpoint: VpcEndpoint? = None
 }
 
+/// The cutover target and status for a cloned blue/green upgrade.
+pub struct CutoverOptions {
+  /// The cluster that the domain is cutting over to.
+  pub target_value: CutoverTarget? = None
+  /// The status of the cutover.
+  pub status: CutoverStatus? = None
+}
+
+/// The cutover to perform for a cloned blue/green upgrade.
+pub struct CutoverRequestOptions {
+  /// The cluster to cut over to. ClonedCluster makes the cloned cluster serve
+  /// the domain. PrimaryCluster keeps the primary cluster and ends the
+  /// upgrade.
+  pub target_value: CutoverTarget? = None
+}
+
+/// The status of a cutover.
+pub enum CutoverStatus: Str {
+  InProgress = "InProgress"
+  Completed = "Completed"
+  Failed = "Failed"
+  Unknown(value: Str)
+}
+
+/// The cluster to cut over to in a cloned blue/green upgrade.
+pub enum CutoverTarget: Str {
+  ClonedCluster = "ClonedCluster"
+  PrimaryCluster = "PrimaryCluster"
+  Unknown(value: Str)
+}
+
 /// Container for the parameters to the DeleteElasticsearchDomain operation.
 /// Specifies the name of the Elasticsearch domain that you want to delete.
 pub struct DeleteElasticsearchDomainRequest {
@@ -745,6 +818,25 @@ pub struct DeploymentStrategyOptionsStatus {
   /// Specifies the status of the deployment strategy options for the
   /// specified Elasticsearch domain.
   pub status: OptionStatus? = None
+}
+
+/// The deployment strategy override for an operation. The only valid value
+/// is ClonedBlueGreen .
+pub enum DeploymentStrategyOverride: Str {
+  ClonedBlueGreen = "ClonedBlueGreen"
+  Unknown(value: Str)
+}
+
+/// Overrides the deployment strategy for a single operation, such as a
+/// version upgrade.
+pub struct DeploymentStrategyOverrideOptions {
+  /// The deployment strategy to use for this operation. The only valid value
+  /// is ClonedBlueGreen , which creates a cloned cluster on the target
+  /// version next to the primary cluster so that you can validate it and
+  /// shift traffic to it before you cut over.
+  pub deployment_strategy: DeploymentStrategyOverride? = None
+  /// Options that apply when DeploymentStrategy is ClonedBlueGreen .
+  pub cloned_blue_green_options: ClonedBlueGreenOptions? = None
 }
 
 /// Container for the parameters to the DescribeDomainAutoTunes operation.
@@ -2238,6 +2330,25 @@ pub struct ResourceNotFoundException {
   pub message: Str? = None
 }
 
+/// The action that ends the retention period. RollbackToPrimaryCluster
+/// moves the domain back to the primary cluster. DeletePrimaryCluster
+/// deletes the primary cluster.
+pub enum RetentionAction: Str {
+  RollbackToPrimaryCluster = "RollbackToPrimaryCluster"
+  DeletePrimaryCluster = "DeletePrimaryCluster"
+  Unknown(value: Str)
+}
+
+/// Controls how long the cluster that you cut over from is kept after
+/// cutover completes. Specify exactly one of RetentionInHours or
+/// RetentionAction .
+pub enum RetentionOptions {
+  RetentionInHours(value: Int)
+  RetentionAction(value: RetentionAction)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
 /// Revokes access to an Amazon OpenSearch Service domain that was provided
 /// through an interface VPC endpoint.
 pub struct RevokeVpcEndpointAccessRequest {
@@ -2454,6 +2565,79 @@ pub enum TimeUnit: Str {
   Unknown(value: Str)
 }
 
+/// The split of search traffic between the primary and cloned clusters.
+pub struct TrafficPercents {
+  /// The percentage of search traffic sent to the primary cluster.
+  pub primary_read_traffic_percent: Int? = None
+  /// The percentage of search traffic sent to the cloned cluster.
+  pub clone_read_traffic_percent: Int? = None
+}
+
+/// The traffic split and status for a cloned blue/green upgrade.
+pub struct TrafficSplitOptions {
+  /// The traffic split currently in effect.
+  pub current: TrafficPercents? = None
+  /// The requested traffic split.
+  pub target_value: TrafficPercents? = None
+  /// The status of the traffic shift.
+  pub status: TrafficSplitStatus? = None
+}
+
+/// The traffic shift to perform for a cloned blue/green upgrade.
+pub struct TrafficSplitRequestOptions {
+  /// The traffic shifting strategy. The only valid value is
+  /// ShiftReadTrafficPercent .
+  pub strategy: TrafficStrategy? = None
+  /// The percentage of search traffic, from 0 to 100, to send to the cloned
+  /// cluster. The rest goes to the primary cluster.
+  pub clone_read_traffic_percent: Int? = None
+}
+
+/// The status of a traffic shift.
+pub enum TrafficSplitStatus: Str {
+  InProgress = "InProgress"
+  Completed = "Completed"
+  Failed = "Failed"
+  Unknown(value: Str)
+}
+
+/// The strategy used to shift traffic between the primary and cloned
+/// clusters.
+pub enum TrafficStrategy: Str {
+  ShiftReadTrafficPercent = "ShiftReadTrafficPercent"
+  Unknown(value: Str)
+}
+
+/// Container for the request parameters to the UpdateClone operation.
+pub struct UpdateCloneRequest {
+  /// The name of the domain that has a cloned blue/green upgrade in progress.
+  pub domain_name: Str? = None
+  /// Shifts a percentage of search traffic from the primary cluster to the
+  /// cloned cluster.
+  pub traffic_split_options: TrafficSplitRequestOptions? = None
+  /// Cuts the domain over to the cloned cluster or back to the primary
+  /// cluster.
+  pub cutover_options: CutoverRequestOptions? = None
+  /// Changes the retention period, or ends it after cutover completes.
+  pub retention_options: RetentionOptions? = None
+}
+
+/// Container for the response returned by the UpdateClone operation.
+pub struct UpdateCloneResponse {
+  /// The name of the domain.
+  pub domain_name: Str? = None
+  /// The unique identifier of the configuration change. Use it with
+  /// DescribeDomainChangeProgress to track the change.
+  pub change_id: Str? = None
+  /// The requested cutover target and the status of the cutover.
+  pub cutover_options: CutoverOptions? = None
+  /// The current and requested traffic split, and the status of the traffic
+  /// shift.
+  pub traffic_split_options: TrafficSplitOptions? = None
+  /// The retention settings for the upgrade.
+  pub retention_options: RetentionOptions? = None
+}
+
 /// Container for the parameters to the UpdateElasticsearchDomain operation.
 /// Specifies the type and number of instances in the domain cluster.
 pub struct UpdateElasticsearchDomainConfigRequest {
@@ -2568,6 +2752,9 @@ pub struct UpgradeElasticsearchDomainRequest {
   /// This flag, when set to True, indicates that an Upgrade Eligibility Check
   /// needs to be performed. This will not actually perform the Upgrade.
   pub perform_check_only: Bool? = None
+  /// Overrides the deployment strategy for this upgrade. To run a cloned
+  /// blue/green upgrade, set DeploymentStrategy to ClonedBlueGreen .
+  pub deployment_strategy_options: DeploymentStrategyOverrideOptions? = None
 }
 
 /// Container for response returned by UpgradeElasticsearchDomain operation.
@@ -2578,6 +2765,8 @@ pub struct UpgradeElasticsearchDomainResponse {
   /// This flag, when set to True, indicates that an Upgrade Eligibility Check
   /// needs to be performed. This will not actually perform the Upgrade.
   pub perform_check_only: Bool? = None
+  /// The deployment strategy override used for the upgrade.
+  pub deployment_strategy_options: DeploymentStrategyOverrideOptions? = None
   pub change_progress_details: ChangeProgressDetails? = None
 }
 

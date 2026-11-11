@@ -1043,6 +1043,132 @@ fn from_json_conditions(v: json.Value) -> List[Condition] ! Str {
   Ok(out)
 }
 
+fn json_of_connected_account_chain_config(v: ConnectedAccountChainConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.chain {
+    fs.push(("Chain", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.prices {
+    fs.push(("Prices", json_of_connected_account_prices(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_connected_account_chain_config(v: json.Value) -> ConnectedAccountChainConfig ! Str {
+  var out = ConnectedAccountChainConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Chain" => out.chain = ConnectedAccountChain.from(jsonv.read_str(fv)?)
+      "Prices" => out.prices = from_json_connected_account_prices(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_connected_account_config(v: ConnectedAccountConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.connected_account_arn {
+    fs.push(("ConnectedAccountArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.payment_networks {
+    fs.push(("PaymentNetworks", json_of_connected_account_payment_networks(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_connected_account_config(v: json.Value) -> ConnectedAccountConfig ! Str {
+  var out = ConnectedAccountConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ConnectedAccountArn" => out.connected_account_arn = jsonv.read_str(fv)?
+      "PaymentNetworks" => out.payment_networks = from_json_connected_account_payment_networks(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_connected_account_configs(v: List[ConnectedAccountConfig]) -> json.Value {
+  json.Value.List(v.map(fn(x: ConnectedAccountConfig) -> json.Value { json_of_connected_account_config(x) }))
+}
+
+fn from_json_connected_account_configs(v: json.Value) -> List[ConnectedAccountConfig] ! Str {
+  var out: List[ConnectedAccountConfig] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_connected_account_config(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_connected_account_payment_networks(v: List[ConnectedAccountChainConfig]) -> json.Value {
+  json.Value.List(v.map(fn(x: ConnectedAccountChainConfig) -> json.Value { json_of_connected_account_chain_config(x) }))
+}
+
+fn from_json_connected_account_payment_networks(v: json.Value) -> List[ConnectedAccountChainConfig] ! Str {
+  var out: List[ConnectedAccountChainConfig] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_connected_account_chain_config(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_connected_account_price(v: ConnectedAccountPrice) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.amount {
+    fs.push(("Amount", json.Value.Str(x)))
+  }
+  if let Some(x) = v.currency {
+    fs.push(("Currency", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_connected_account_price(v: json.Value) -> ConnectedAccountPrice ! Str {
+  var out = ConnectedAccountPrice{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Amount" => out.amount = jsonv.read_str(fv)?
+      "Currency" => out.currency = CryptoCurrency.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_connected_account_prices(v: List[ConnectedAccountPrice]) -> json.Value {
+  json.Value.List(v.map(fn(x: ConnectedAccountPrice) -> json.Value { json_of_connected_account_price(x) }))
+}
+
+fn from_json_connected_account_prices(v: json.Value) -> List[ConnectedAccountPrice] ! Str {
+  var out: List[ConnectedAccountPrice] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_connected_account_price(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_cookie_match_pattern(v: CookieMatchPattern) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.all {
@@ -5775,6 +5901,9 @@ fn json_of_monetization_config(v: MonetizationConfig) -> json.Value {
   if let Some(x) = v.crypto_config {
     fs.push(("CryptoConfig", json_of_crypto_config(x)))
   }
+  if let Some(x) = v.connected_account_configs {
+    fs.push(("ConnectedAccountConfigs", json_of_connected_account_configs(x)))
+  }
   if let Some(x) = v.currency_mode {
     fs.push(("CurrencyMode", json.Value.Str(x.value())))
   }
@@ -5789,6 +5918,7 @@ fn from_json_monetization_config(v: json.Value) -> MonetizationConfig ! Str {
     }
     match k {
       "CryptoConfig" => out.crypto_config = from_json_crypto_config(fv)?
+      "ConnectedAccountConfigs" => out.connected_account_configs = from_json_connected_account_configs(fv)?
       "CurrencyMode" => out.currency_mode = CurrencyMode.from(jsonv.read_str(fv)?)
       _ => {}
     }
@@ -13498,111 +13628,4 @@ pub fn deserialize_get_permission_policy(resp: http.Response) -> GetPermissionPo
     }
   }
   Ok(out)
-}
-
-/// The errors of GetPermissionPolicy.
-pub enum GetPermissionPolicyErr {
-  WAFInternalErrorException(e: WAFInternalErrorException)
-  WAFInvalidParameterException(e: WAFInvalidParameterException)
-  WAFNonexistentItemException(e: WAFNonexistentItemException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: GetPermissionPolicyErr) display() -> Str {
-  match e {
-    WAFInternalErrorException(x) => "WAFInternalErrorException: ${x:?}"
-    WAFInvalidParameterException(x) => "WAFInvalidParameterException: ${x:?}"
-    WAFNonexistentItemException(x) => "WAFNonexistentItemException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_get_permission_policy_error(resp: http.Response) -> GetPermissionPolicyErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "WAFInternalErrorException" => match read_error_waf_internal_error_exception(resp, body) {
-      Ok(x) => return GetPermissionPolicyErr.WAFInternalErrorException(x)
-      Err(msg) => return GetPermissionPolicyErr.Deserialize(msg)
-    }
-    "WAFInvalidParameterException" => match read_error_waf_invalid_parameter_exception(resp, body) {
-      Ok(x) => return GetPermissionPolicyErr.WAFInvalidParameterException(x)
-      Err(msg) => return GetPermissionPolicyErr.Deserialize(msg)
-    }
-    "WAFNonexistentItemException" => match read_error_waf_nonexistent_item_exception(resp, body) {
-      Ok(x) => return GetPermissionPolicyErr.WAFNonexistentItemException(x)
-      Err(msg) => return GetPermissionPolicyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  GetPermissionPolicyErr.Api(restjson.api_error(resp, body))
-}
-
-/// Returns the IAM policy that is attached to the specified rule group. You
-/// must be the owner of the rule group to perform this operation.
-pub fn (c: Client) get_permission_policy(input: GetPermissionPolicyRequest) -> GetPermissionPolicyResponse ! GetPermissionPolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_permission_policy(c.params, input)) ?? e => return Err(GetPermissionPolicyErr.InvalidInput(e))
-  var req = serialize_get_permission_policy(ep, input, "") ?? e => return Err(GetPermissionPolicyErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetPermissionPolicyErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_get_permission_policy_error(resp))
-  }
-  deserialize_get_permission_policy(resp) ?? e => Err(GetPermissionPolicyErr.Deserialize(e))
-}
-
-pub fn endpoint_params_get_rate_based_statement_managed_keys(base: EndpointParameters, input: GetRateBasedStatementManagedKeysRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of GetRateBasedStatementManagedKeys.
-pub fn serialize_get_rate_based_statement_managed_keys(ep: rest.Endpoint, input: GetRateBasedStatementManagedKeysRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.scope {
-    fs.push(("Scope", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.web_acl_name {
-    fs.push(("WebACLName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.web_acl_id {
-    fs.push(("WebACLId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.rule_group_rule_name {
-    fs.push(("RuleGroupRuleName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.rule_name {
-    fs.push(("RuleName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "AWSWAF_20190729.GetRateBasedStatementManagedKeys"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

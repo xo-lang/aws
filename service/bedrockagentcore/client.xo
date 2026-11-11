@@ -4,7 +4,6 @@ use std/http
 use std/json
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/endpoints
-use github.com/xo-lang/aws/eventstream
 use github.com/xo-lang/aws/protocol/jsonv
 use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/retry
@@ -2877,6 +2876,48 @@ fn from_json_descriptors(v: json.Value) -> Descriptors ! Str {
       "agentSkills" => out.agent_skills = from_json_agent_skills_descriptor(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_domain_filter(v: DomainFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.include {
+    fs.push(("include", json_of_domain_list(x)))
+  }
+  if let Some(x) = v.exclude {
+    fs.push(("exclude", json_of_domain_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_domain_filter(v: json.Value) -> DomainFilter ! Str {
+  var out = DomainFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "include" => out.include = from_json_domain_list(fv)?
+      "exclude" => out.exclude = from_json_domain_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_domain_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_domain_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -7917,6 +7958,62 @@ fn from_json_invoke_harness_stream_output(v: json.Value) -> InvokeHarnessStreamO
   Err("InvokeHarnessStreamOutput: no member set")
 }
 
+fn json_of_invoke_web_search_input(v: InvokeWebSearchInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.web_search_id {
+    fs.push(("webSearchId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.search_query {
+    fs.push(("searchQuery", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_web_search_filters(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_invoke_web_search_input(v: json.Value) -> InvokeWebSearchInput ! Str {
+  var out = InvokeWebSearchInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "webSearchId" => out.web_search_id = jsonv.read_str(fv)?
+      "searchQuery" => out.search_query = jsonv.read_str(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "filters" => out.filters = from_json_web_search_filters(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_invoke_web_search_output(v: InvokeWebSearchOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.results {
+    fs.push(("results", json_of_web_search_result_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_invoke_web_search_output(v: json.Value) -> InvokeWebSearchOutput ! Str {
+  var out = InvokeWebSearchOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "results" => out.results = from_json_web_search_result_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_key_list(v: List[Str]) -> json.Value {
   json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
@@ -10787,6 +10884,32 @@ fn from_json_proxy_credentials(v: json.Value) -> ProxyCredentials ! Str {
   Err("ProxyCredentials: no member set")
 }
 
+fn json_of_published_date_filter(v: PublishedDateFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.published_after {
+    fs.push(("publishedAfter", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.published_before {
+    fs.push(("publishedBefore", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_published_date_filter(v: json.Value) -> PublishedDateFilter ! Str {
+  var out = PublishedDateFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "publishedAfter" => out.published_after = jsonv.read_time(fv, "date-time")?
+      "publishedBefore" => out.published_before = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_recommendation_config(v: RecommendationConfig) -> json.Value {
   match v {
     SystemPromptRecommendationConfig(x) => json.Value.Object([("systemPromptRecommendationConfig", json_of_system_prompt_recommendation_config(x))])
@@ -11841,6 +11964,32 @@ fn from_json_service_quota_exceeded_exception(v: json.Value) -> ServiceQuotaExce
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_service_unavailable_exception(v: ServiceUnavailableException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.retry_after_seconds {
+    fs.push(("retryAfterSeconds", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_service_unavailable_exception(v: json.Value) -> ServiceUnavailableException ! Str {
+  var out = ServiceUnavailableException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "retryAfterSeconds" => out.retry_after_seconds = jsonv.read_int(fv)?
       _ => {}
     }
   }
@@ -14391,6 +14540,82 @@ fn from_json_view_port(v: json.Value) -> ViewPort ! Str {
   Ok(out)
 }
 
+fn json_of_web_search_filters(v: WebSearchFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_filter {
+    fs.push(("domainFilter", json_of_domain_filter(x)))
+  }
+  if let Some(x) = v.published_date_filter {
+    fs.push(("publishedDateFilter", json_of_published_date_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_web_search_filters(v: json.Value) -> WebSearchFilters ! Str {
+  var out = WebSearchFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainFilter" => out.domain_filter = from_json_domain_filter(fv)?
+      "publishedDateFilter" => out.published_date_filter = from_json_published_date_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_web_search_result(v: WebSearchResult) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.title {
+    fs.push(("title", json.Value.Str(x)))
+  }
+  if let Some(x) = v.url {
+    fs.push(("url", json.Value.Str(x)))
+  }
+  if let Some(x) = v.text {
+    fs.push(("text", json.Value.Str(x)))
+  }
+  if let Some(x) = v.published_at {
+    fs.push(("publishedAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_web_search_result(v: json.Value) -> WebSearchResult ! Str {
+  var out = WebSearchResult{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "title" => out.title = jsonv.read_str(fv)?
+      "url" => out.url = jsonv.read_str(fv)?
+      "text" => out.text = jsonv.read_str(fv)?
+      "publishedAt" => out.published_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_web_search_result_list(v: List[WebSearchResult]) -> json.Value {
+  json.Value.List(v.map(fn(x: WebSearchResult) -> json.Value { json_of_web_search_result(x) }))
+}
+
+fn from_json_web_search_result_list(v: json.Value) -> List[WebSearchResult] ! Str {
+  var out: List[WebSearchResult] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_web_search_result(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_www_authenticate_header_list(v: List[Str]) -> json.Value {
   json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
@@ -14510,217 +14735,4 @@ fn read_error_retryable_conflict_exception(resp: http.Response, body: json.Value
     }
   }
   Ok(out)
-}
-
-fn read_error_runtime_client_error(resp: http.Response, body: json.Value) -> RuntimeClientError ! Str {
-  let _ = (resp, body)
-  var out = RuntimeClientError{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_service_exception(resp: http.Response, body: json.Value) -> ServiceException ! Str {
-  let _ = (resp, body)
-  var out = ServiceException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_service_quota_exceeded_exception(resp: http.Response, body: json.Value) -> ServiceQuotaExceededException ! Str {
-  let _ = (resp, body)
-  var out = ServiceQuotaExceededException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_subscription_required_exception(resp: http.Response, body: json.Value) -> SubscriptionRequiredException ! Str {
-  let _ = (resp, body)
-  var out = SubscriptionRequiredException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      "subscriptionUrl" => out.subscription_url = jsonv.read_str(fv)?
-      "productName" => out.product_name = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_throttled_exception(resp: http.Response, body: json.Value) -> ThrottledException ! Str {
-  let _ = (resp, body)
-  var out = ThrottledException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_throttling_exception(resp: http.Response, body: json.Value) -> ThrottlingException ! Str {
-  let _ = (resp, body)
-  var out = ThrottlingException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_unauthorized_exception(resp: http.Response, body: json.Value) -> UnauthorizedException ! Str {
-  let _ = (resp, body)
-  var out = UnauthorizedException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn read_error_validation_exception(resp: http.Response, body: json.Value) -> ValidationException ! Str {
-  let _ = (resp, body)
-  var out = ValidationException{}
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      "reason" => out.reason = ValidationExceptionReason.from(jsonv.read_str(fv)?)
-      "fieldList" => out.field_list = from_json_validation_exception_field_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The events of InvokeAgentRuntimeCommand, read as they arrive. `output` has the
-/// response's other members; close the stream when done with it.
-pub struct InvokeAgentRuntimeCommandEvents {
-  pub output: InvokeAgentRuntimeCommandResponse
-  body: http.ClientStream
-  dec: eventstream.Decoder = eventstream.decoder()
-  done: Bool = false
-}
-
-/// The next event, None at the end of the stream.
-pub fn (var s: InvokeAgentRuntimeCommandEvents) next() -> InvokeAgentRuntimeCommandStreamOutput? ! InvokeAgentRuntimeCommandStreamOutputErr uses net.dial {
-  while !s.done {
-    match s.dec.next() {
-      Err(e) => return Err(InvokeAgentRuntimeCommandStreamOutputErr.Read(e.display()))
-      Ok(Some(m)) => {
-        match m.header_str(":message-type") {
-          "event" => {
-            let t = m.header_str(":event-type")
-            if t == "initial-response" {
-              continue
-            }
-            return match event_invoke_agent_runtime_command_stream_output(t, m) {
-              Ok(v) => Ok(Some(v))
-              Err(msg) => Err(InvokeAgentRuntimeCommandStreamOutputErr.Read(msg))
-            }
-          }
-          "exception" => return Err(exception_invoke_agent_runtime_command_stream_output(m))
-          _ => return Err(InvokeAgentRuntimeCommandStreamOutputErr.Api(aws.ApiError{code: m.header_str(":error-code"), message: m.header_str(":error-message")}))
-        }
-      }
-      Ok(None) => {
-        match s.body.read() {
-          Ok(Some(piece)) => s.dec.feed(piece)
-          Ok(None) => {
-            s.done = true
-            s.body.close()
-            if s.dec.pending() > 0 {
-              return Err(InvokeAgentRuntimeCommandStreamOutputErr.Read("the stream ended inside a message"))
-            }
-          }
-          Err(e) => {
-            s.done = true
-            s.body.close()
-            return Err(InvokeAgentRuntimeCommandStreamOutputErr.Read(e.display()))
-          }
-        }
-      }
-    }
-  }
-  Ok(None)
-}
-
-/// Stops reading the stream.
-pub fn (var s: InvokeAgentRuntimeCommandEvents) close() {
-  if !s.done {
-    s.done = true
-    s.body.close()
-  }
-}
-
-/// Why reading a InvokeAgentRuntimeCommandStreamOutput stream stopped.
-pub enum InvokeAgentRuntimeCommandStreamOutputErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  RuntimeClientError(e: RuntimeClientError)
-  /// An error message, or an exception the model does not list.
-  Api(e: aws.ApiError)
-  /// The body could not be read or is not event stream messages.
-  Read(msg: Str)
-}
-
-pub fn (e: InvokeAgentRuntimeCommandStreamOutputErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    RuntimeClientError(x) => "RuntimeClientError: ${x:?}"
-    Api(x) => x.display()
-    Read(msg) => "event stream: ${msg}"
-  }
 }

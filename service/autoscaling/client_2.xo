@@ -8,6 +8,69 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_delete_launch_configuration(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of DeleteLaunchConfiguration.
+pub enum DeleteLaunchConfigurationErr {
+  ResourceContentionFault(e: ResourceContentionFault)
+  ResourceInUseFault(e: ResourceInUseFault)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteLaunchConfigurationErr) display() -> Str {
+  match e {
+    ResourceContentionFault(x) => "ResourceContentionFault: ${x:?}"
+    ResourceInUseFault(x) => "ResourceInUseFault: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_launch_configuration_error(resp: http.Response) -> DeleteLaunchConfigurationErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ResourceContention" => match read_error_resource_contention_fault(resp, body) {
+      Ok(x) => return DeleteLaunchConfigurationErr.ResourceContentionFault(x)
+      Err(msg) => return DeleteLaunchConfigurationErr.Deserialize(msg)
+    }
+    "ResourceInUse" => match read_error_resource_in_use_fault(resp, body) {
+      Ok(x) => return DeleteLaunchConfigurationErr.ResourceInUseFault(x)
+      Err(msg) => return DeleteLaunchConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteLaunchConfigurationErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes the specified launch configuration. The launch configuration
+/// must not be attached to an Auto Scaling group. When this call completes,
+/// the launch configuration is no longer available for use.
+pub fn (c: Client) delete_launch_configuration(input: LaunchConfigurationNameType) -> () ! DeleteLaunchConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_launch_configuration(c.params, input)) ?? e => return Err(DeleteLaunchConfigurationErr.InvalidInput(e))
+  var req = serialize_delete_launch_configuration(ep, input, "") ?? e => return Err(DeleteLaunchConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteLaunchConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_launch_configuration_error(resp))
+  }
+  deserialize_delete_launch_configuration(resp) ?? e => Err(DeleteLaunchConfigurationErr.Deserialize(e))
+}
+
 pub fn endpoint_params_delete_lifecycle_hook(base: EndpointParameters, input: DeleteLifecycleHookType) -> EndpointParameters {
   let _ = input
   base
@@ -898,6 +961,9 @@ pub fn serialize_describe_auto_scaling_groups(ep: rest.Endpoint, input: AutoScal
   if let Some(x) = input.include_instances {
     query.add(f, query.key("", "IncludeInstances"), "${x}")
   }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
+  }
   if let Some(x) = input.next_token {
     query.add(f, query.key("", "NextToken"), x)
   }
@@ -1015,6 +1081,9 @@ pub fn serialize_describe_auto_scaling_instances(ep: rest.Endpoint, input: Descr
   var f = query.form("DescribeAutoScalingInstances", "2011-01-01")
   if let Some(x) = input.instance_ids {
     query_put_instance_ids(f, query.key("", "InstanceIds"), x, false)
+  }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
   }
   if let Some(x) = input.max_records {
     query.add(f, query.key("", "MaxRecords"), "${x}")
@@ -1998,6 +2067,9 @@ pub fn serialize_describe_notification_configurations(ep: rest.Endpoint, input: 
   if let Some(x) = input.auto_scaling_group_names {
     query_put_auto_scaling_group_names(f, query.key("", "AutoScalingGroupNames"), x, false)
   }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
+  }
   if let Some(x) = input.next_token {
     query.add(f, query.key("", "NextToken"), x)
   }
@@ -2111,6 +2183,9 @@ pub fn serialize_describe_policies(ep: rest.Endpoint, input: DescribePoliciesTyp
   }
   if let Some(x) = input.policy_types {
     query_put_policy_types(f, query.key("", "PolicyTypes"), x, false)
+  }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
   }
   if let Some(x) = input.next_token {
     query.add(f, query.key("", "NextToken"), x)
@@ -2230,6 +2305,9 @@ pub fn serialize_describe_scaling_activities(ep: rest.Endpoint, input: DescribeS
   }
   if let Some(x) = input.include_deleted_groups {
     query.add(f, query.key("", "IncludeDeletedGroups"), "${x}")
+  }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
   }
   if let Some(x) = input.max_records {
     query.add(f, query.key("", "MaxRecords"), "${x}")
@@ -2451,6 +2529,9 @@ pub fn serialize_describe_scheduled_actions(ep: rest.Endpoint, input: DescribeSc
   if let Some(x) = input.end_time {
     query.add(f, query.key("", "EndTime"), rest.date_time(x))
   }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
+  }
   if let Some(x) = input.next_token {
     query.add(f, query.key("", "NextToken"), x)
   }
@@ -2560,6 +2641,9 @@ pub fn serialize_describe_tags(ep: rest.Endpoint, input: DescribeTagsType, idemp
   var f = query.form("DescribeTags", "2011-01-01")
   if let Some(x) = input.filters {
     query_put_filters(f, query.key("", "Filters"), x, false)
+  }
+  if let Some(x) = input.include_managed_resources {
+    query.add(f, query.key("", "IncludeManagedResources"), "${x}")
   }
   if let Some(x) = input.next_token {
     query.add(f, query.key("", "NextToken"), x)

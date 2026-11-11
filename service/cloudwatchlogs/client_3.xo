@@ -8,6 +8,114 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_put_destination_policy(base: EndpointParameters, input: PutDestinationPolicyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of PutDestinationPolicy.
+pub fn serialize_put_destination_policy(ep: rest.Endpoint, input: PutDestinationPolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.destination_name {
+    fs.push(("destinationName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.access_policy {
+    fs.push(("accessPolicy", json.Value.Str(x)))
+  }
+  if let Some(x) = input.force_update {
+    fs.push(("forceUpdate", json.Value.Bool(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Logs_20140328.PutDestinationPolicy"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_put_destination_policy(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of PutDestinationPolicy.
+pub enum PutDestinationPolicyErr {
+  InvalidParameterException(e: InvalidParameterException)
+  OperationAbortedException(e: OperationAbortedException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: PutDestinationPolicyErr) display() -> Str {
+  match e {
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    OperationAbortedException(x) => "OperationAbortedException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_put_destination_policy_error(resp: http.Response) -> PutDestinationPolicyErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return PutDestinationPolicyErr.InvalidParameterException(x)
+      Err(msg) => return PutDestinationPolicyErr.Deserialize(msg)
+    }
+    "OperationAbortedException" => match read_error_operation_aborted_exception(resp, body) {
+      Ok(x) => return PutDestinationPolicyErr.OperationAbortedException(x)
+      Err(msg) => return PutDestinationPolicyErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return PutDestinationPolicyErr.ServiceUnavailableException(x)
+      Err(msg) => return PutDestinationPolicyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  PutDestinationPolicyErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates or updates an access policy associated with an existing
+/// destination. An access policy is an IAM policy document that is used to
+/// authorize claims to register a subscription filter against a given
+/// destination.
+pub fn (c: Client) put_destination_policy(input: PutDestinationPolicyRequest) -> () ! PutDestinationPolicyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_put_destination_policy(c.params, input)) ?? e => return Err(PutDestinationPolicyErr.InvalidInput(e))
+  var req = serialize_put_destination_policy(ep, input, "") ?? e => return Err(PutDestinationPolicyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(PutDestinationPolicyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_put_destination_policy_error(resp))
+  }
+  deserialize_put_destination_policy(resp) ?? e => Err(PutDestinationPolicyErr.Deserialize(e))
+}
+
 pub fn endpoint_params_put_index_policy(base: EndpointParameters, input: PutIndexPolicyRequest) -> EndpointParameters {
   let _ = input
   base
@@ -1131,23 +1239,33 @@ pub fn deserialize_put_retention_policy_error(resp: http.Response) -> PutRetenti
 
 /// Sets the retention of the specified log group. With a retention policy,
 /// you can configure the number of days for which to retain log events in
-/// the specified log group. CloudWatch Logs doesn't immediately delete log
-/// events when they reach their retention setting. It typically takes up to
-/// 72 hours after that before log events are deleted, but in rare
-/// situations might take longer. To illustrate, imagine that you change a
-/// log group to have a longer retention setting when it contains log events
-/// that are past the expiration date, but haven't been deleted. Those log
-/// events will take up to 72 hours to be deleted after the new retention
-/// date is reached. To make sure that log data is deleted permanently, keep
-/// a log group at its lower retention setting until 72 hours after the
-/// previous retention period ends. Alternatively, wait to change the
-/// retention setting until you confirm that the earlier log events are
-/// deleted. When log events reach their retention setting they are marked
-/// for deletion. After they are marked for deletion, they do not add to
-/// your archival storage costs anymore, even if they are not actually
-/// deleted until later. These log events marked for deletion are also not
-/// included when you use an API to retrieve the storedBytes value to see
-/// how many bytes a log group is storing.
+/// the specified log group. Account-level retention policies created with
+/// PutAccountPolicy override the retention that you set with
+/// PutRetentionPolicy . If an account-level retention policy applies to the
+/// log group, this operation succeeds and CloudWatch Logs saves the
+/// retention period that you specify, but the retention period from the
+/// account-level policy continues to determine when log events in the log
+/// group expire. DescribeLogGroups returns the retention period from the
+/// policy in retentionInDays and the name of the policy in
+/// retentionPolicyName . The retention period that you set with this
+/// operation takes effect if the account-level policy no longer applies to
+/// the log group. CloudWatch Logs doesn't immediately delete log events
+/// when they reach their retention setting. It typically takes up to 72
+/// hours after that before log events are deleted, but in rare situations
+/// might take longer. To illustrate, imagine that you change a log group to
+/// have a longer retention setting when it contains log events that are
+/// past the expiration date, but haven't been deleted. Those log events
+/// will take up to 72 hours to be deleted after the new retention date is
+/// reached. To make sure that log data is deleted permanently, keep a log
+/// group at its lower retention setting until 72 hours after the previous
+/// retention period ends. Alternatively, wait to change the retention
+/// setting until you confirm that the earlier log events are deleted. When
+/// log events reach their retention setting they are marked for deletion.
+/// After they are marked for deletion, they do not add to your archival
+/// storage costs anymore, even if they are not actually deleted until
+/// later. These log events marked for deletion are also not included when
+/// you use an API to retrieve the storedBytes value to see how many bytes a
+/// log group is storing.
 pub fn (c: Client) put_retention_policy(input: PutRetentionPolicyRequest) -> () ! PutRetentionPolicyErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_put_retention_policy(c.params, input)) ?? e => return Err(PutRetentionPolicyErr.InvalidInput(e))
   var req = serialize_put_retention_policy(ep, input, "") ?? e => return Err(PutRetentionPolicyErr.InvalidInput(e))

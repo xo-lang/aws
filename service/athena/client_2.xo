@@ -8,6 +8,760 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// The errors of ListSessions.
+pub enum ListSessionsErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListSessionsErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_sessions_error(resp: http.Response) -> ListSessionsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListSessionsErr.InternalServerException(x)
+      Err(msg) => return ListSessionsErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListSessionsErr.InvalidRequestException(x)
+      Err(msg) => return ListSessionsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListSessionsErr.ResourceNotFoundException(x)
+      Err(msg) => return ListSessionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListSessionsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the sessions in a workgroup that are in an active state like
+/// CREATING , CREATED , IDLE , or BUSY . Newer sessions are listed first;
+/// older sessions are listed later.
+pub fn (c: Client) list_sessions(input: ListSessionsRequest) -> ListSessionsResponse ! ListSessionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_sessions(c.params, input)) ?? e => return Err(ListSessionsErr.InvalidInput(e))
+  var req = serialize_list_sessions(ep, input, "") ?? e => return Err(ListSessionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListSessionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_sessions_error(resp))
+  }
+  deserialize_list_sessions(resp) ?? e => Err(ListSessionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_system_table_statuses(base: EndpointParameters, input: ListSystemTableStatusesInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListSystemTableStatuses.
+pub fn serialize_list_system_table_statuses(ep: rest.Endpoint, input: ListSystemTableStatusesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.ListSystemTableStatuses"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_system_table_statuses(resp: http.Response) -> ListSystemTableStatusesOutput ! Str {
+  var out = ListSystemTableStatusesOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Items" => out.items = from_json_system_table_status_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListSystemTableStatuses.
+pub enum ListSystemTableStatusesErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListSystemTableStatusesErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_system_table_statuses_error(resp: http.Response) -> ListSystemTableStatusesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListSystemTableStatusesErr.InternalServerException(x)
+      Err(msg) => return ListSystemTableStatusesErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListSystemTableStatusesErr.InvalidRequestException(x)
+      Err(msg) => return ListSystemTableStatusesErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return ListSystemTableStatusesErr.TooManyRequestsException(x)
+      Err(msg) => return ListSystemTableStatusesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListSystemTableStatusesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the system tables that the account-level configuration activates,
+/// along with whether each is currently enabled. Because system tables are
+/// enabled at the account level, every entry reflects the same account-wide
+/// state.
+pub fn (c: Client) list_system_table_statuses(input: ListSystemTableStatusesInput) -> ListSystemTableStatusesOutput ! ListSystemTableStatusesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_system_table_statuses(c.params, input)) ?? e => return Err(ListSystemTableStatusesErr.InvalidInput(e))
+  var req = serialize_list_system_table_statuses(ep, input, "") ?? e => return Err(ListSystemTableStatusesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListSystemTableStatusesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_system_table_statuses_error(resp))
+  }
+  deserialize_list_system_table_statuses(resp) ?? e => Err(ListSystemTableStatusesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_table_metadata(base: EndpointParameters, input: ListTableMetadataInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListTableMetadata.
+pub fn serialize_list_table_metadata(ep: rest.Endpoint, input: ListTableMetadataInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.catalog_name {
+    fs.push(("CatalogName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.database_name {
+    fs.push(("DatabaseName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.expression {
+    fs.push(("Expression", json.Value.Str(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.work_group {
+    fs.push(("WorkGroup", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.ListTableMetadata"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_table_metadata(resp: http.Response) -> ListTableMetadataOutput ! Str {
+  var out = ListTableMetadataOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TableMetadataList" => out.table_metadata_list = from_json_table_metadata_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListTableMetadata.
+pub enum ListTableMetadataErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  MetadataException(e: MetadataException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListTableMetadataErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    MetadataException(x) => "MetadataException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_table_metadata_error(resp: http.Response) -> ListTableMetadataErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListTableMetadataErr.InternalServerException(x)
+      Err(msg) => return ListTableMetadataErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListTableMetadataErr.InvalidRequestException(x)
+      Err(msg) => return ListTableMetadataErr.Deserialize(msg)
+    }
+    "MetadataException" => match read_error_metadata_exception(resp, body) {
+      Ok(x) => return ListTableMetadataErr.MetadataException(x)
+      Err(msg) => return ListTableMetadataErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListTableMetadataErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the metadata for the tables in the specified data catalog
+/// database.
+pub fn (c: Client) list_table_metadata(input: ListTableMetadataInput) -> ListTableMetadataOutput ! ListTableMetadataErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_table_metadata(c.params, input)) ?? e => return Err(ListTableMetadataErr.InvalidInput(e))
+  var req = serialize_list_table_metadata(ep, input, "") ?? e => return Err(ListTableMetadataErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListTableMetadataErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_table_metadata_error(resp))
+  }
+  deserialize_list_table_metadata(resp) ?? e => Err(ListTableMetadataErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_tags_for_resource(base: EndpointParameters, input: ListTagsForResourceInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListTagsForResource.
+pub fn serialize_list_tags_for_resource(ep: rest.Endpoint, input: ListTagsForResourceInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_arn {
+    fs.push(("ResourceARN", json.Value.Str(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.ListTagsForResource"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_tags_for_resource(resp: http.Response) -> ListTagsForResourceOutput ! Str {
+  var out = ListTagsForResourceOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Tags" => out.tags = from_json_tag_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListTagsForResource.
+pub enum ListTagsForResourceErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListTagsForResourceErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTagsForResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.InternalServerException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.InvalidRequestException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListTagsForResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the tags associated with an Athena resource.
+pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceInput) -> ListTagsForResourceOutput ! ListTagsForResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListTagsForResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_tags_for_resource_error(resp))
+  }
+  deserialize_list_tags_for_resource(resp) ?? e => Err(ListTagsForResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_work_groups(base: EndpointParameters, input: ListWorkGroupsInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListWorkGroups.
+pub fn serialize_list_work_groups(ep: rest.Endpoint, input: ListWorkGroupsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.ListWorkGroups"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_work_groups(resp: http.Response) -> ListWorkGroupsOutput ! Str {
+  var out = ListWorkGroupsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "WorkGroups" => out.work_groups = from_json_work_groups_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListWorkGroups.
+pub enum ListWorkGroupsErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListWorkGroupsErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_work_groups_error(resp: http.Response) -> ListWorkGroupsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListWorkGroupsErr.InternalServerException(x)
+      Err(msg) => return ListWorkGroupsErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListWorkGroupsErr.InvalidRequestException(x)
+      Err(msg) => return ListWorkGroupsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListWorkGroupsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists available workgroups for the account.
+pub fn (c: Client) list_work_groups(input: ListWorkGroupsInput) -> ListWorkGroupsOutput ! ListWorkGroupsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_work_groups(c.params, input)) ?? e => return Err(ListWorkGroupsErr.InvalidInput(e))
+  var req = serialize_list_work_groups(ep, input, "") ?? e => return Err(ListWorkGroupsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListWorkGroupsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_work_groups_error(resp))
+  }
+  deserialize_list_work_groups(resp) ?? e => Err(ListWorkGroupsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_put_capacity_assignment_configuration(base: EndpointParameters, input: PutCapacityAssignmentConfigurationInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of PutCapacityAssignmentConfiguration.
+pub fn serialize_put_capacity_assignment_configuration(ep: rest.Endpoint, input: PutCapacityAssignmentConfigurationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.capacity_reservation_name {
+    fs.push(("CapacityReservationName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.capacity_assignments {
+    fs.push(("CapacityAssignments", json_of_capacity_assignments_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.PutCapacityAssignmentConfiguration"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_put_capacity_assignment_configuration(resp: http.Response) -> PutCapacityAssignmentConfigurationOutput ! Str {
+  var out = PutCapacityAssignmentConfigurationOutput{}
+  Ok(out)
+}
+
+/// The errors of PutCapacityAssignmentConfiguration.
+pub enum PutCapacityAssignmentConfigurationErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: PutCapacityAssignmentConfigurationErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_put_capacity_assignment_configuration_error(resp: http.Response) -> PutCapacityAssignmentConfigurationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return PutCapacityAssignmentConfigurationErr.InternalServerException(x)
+      Err(msg) => return PutCapacityAssignmentConfigurationErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return PutCapacityAssignmentConfigurationErr.InvalidRequestException(x)
+      Err(msg) => return PutCapacityAssignmentConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  PutCapacityAssignmentConfigurationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Puts a new capacity assignment configuration for a specified capacity
+/// reservation. If a capacity assignment configuration already exists for
+/// the capacity reservation, replaces the existing capacity assignment
+/// configuration.
+pub fn (c: Client) put_capacity_assignment_configuration(input: PutCapacityAssignmentConfigurationInput) -> PutCapacityAssignmentConfigurationOutput ! PutCapacityAssignmentConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_put_capacity_assignment_configuration(c.params, input)) ?? e => return Err(PutCapacityAssignmentConfigurationErr.InvalidInput(e))
+  var req = serialize_put_capacity_assignment_configuration(ep, input, "") ?? e => return Err(PutCapacityAssignmentConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(PutCapacityAssignmentConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_put_capacity_assignment_configuration_error(resp))
+  }
+  deserialize_put_capacity_assignment_configuration(resp) ?? e => Err(PutCapacityAssignmentConfigurationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_calculation_execution(base: EndpointParameters, input: StartCalculationExecutionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartCalculationExecution.
+pub fn serialize_start_calculation_execution(ep: rest.Endpoint, input: StartCalculationExecutionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.session_id {
+    fs.push(("SessionId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.description {
+    fs.push(("Description", json.Value.Str(x)))
+  }
+  if let Some(x) = input.calculation_configuration {
+    fs.push(("CalculationConfiguration", json_of_calculation_configuration(x)))
+  }
+  if let Some(x) = input.code_block {
+    fs.push(("CodeBlock", json.Value.Str(x)))
+  }
+  if let Some(x) = input.client_request_token {
+    fs.push(("ClientRequestToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.StartCalculationExecution"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_calculation_execution(resp: http.Response) -> StartCalculationExecutionResponse ! Str {
+  var out = StartCalculationExecutionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CalculationExecutionId" => out.calculation_execution_id = jsonv.read_str(fv)?
+      "State" => out.state = CalculationExecutionState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartCalculationExecution.
+pub enum StartCalculationExecutionErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartCalculationExecutionErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_calculation_execution_error(resp: http.Response) -> StartCalculationExecutionErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return StartCalculationExecutionErr.InternalServerException(x)
+      Err(msg) => return StartCalculationExecutionErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return StartCalculationExecutionErr.InvalidRequestException(x)
+      Err(msg) => return StartCalculationExecutionErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return StartCalculationExecutionErr.ResourceNotFoundException(x)
+      Err(msg) => return StartCalculationExecutionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartCalculationExecutionErr.Api(restjson.api_error(resp, body))
+}
+
+/// Submits calculations for execution within a session. You can supply the
+/// code to run as an inline code block within the request. The request
+/// syntax requires the StartCalculationExecutionRequest$CodeBlock parameter
+/// or the CalculationConfiguration$CodeBlock parameter, but not both.
+/// Because CalculationConfiguration$CodeBlock is deprecated, use the
+/// StartCalculationExecutionRequest$CodeBlock parameter instead.
+pub fn (c: Client) start_calculation_execution(input: StartCalculationExecutionRequest) -> StartCalculationExecutionResponse ! StartCalculationExecutionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_calculation_execution(c.params, input)) ?? e => return Err(StartCalculationExecutionErr.InvalidInput(e))
+  var req = serialize_start_calculation_execution(ep, input, "") ?? e => return Err(StartCalculationExecutionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartCalculationExecutionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_calculation_execution_error(resp))
+  }
+  deserialize_start_calculation_execution(resp) ?? e => Err(StartCalculationExecutionErr.Deserialize(e))
+}
+
 pub fn endpoint_params_start_query_execution(base: EndpointParameters, input: StartQueryExecutionInput) -> EndpointParameters {
   let _ = input
   base
@@ -1457,6 +2211,129 @@ pub fn (c: Client) update_prepared_statement(input: UpdatePreparedStatementInput
     return Err(deserialize_update_prepared_statement_error(resp))
   }
   deserialize_update_prepared_statement(resp) ?? e => Err(UpdatePreparedStatementErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_system_table_configuration(base: EndpointParameters, input: UpdateSystemTableConfigurationInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateSystemTableConfiguration.
+pub fn serialize_update_system_table_configuration(ep: rest.Endpoint, input: UpdateSystemTableConfigurationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.table_name {
+    fs.push(("TableName", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.kms_key_arn {
+    fs.push(("KmsKeyArn", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.UpdateSystemTableConfiguration"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_system_table_configuration(resp: http.Response) -> UpdateSystemTableConfigurationOutput ! Str {
+  var out = UpdateSystemTableConfigurationOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TableName" => out.table_name = SystemTableName.from(jsonv.read_str(fv)?)
+      "KmsKeyArn" => out.kms_key_arn = jsonv.read_str(fv)?
+      "CreatedAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "LastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateSystemTableConfiguration.
+pub enum UpdateSystemTableConfigurationErr {
+  InternalServerException(e: InternalServerException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateSystemTableConfigurationErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_system_table_configuration_error(resp: http.Response) -> UpdateSystemTableConfigurationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateSystemTableConfigurationErr.InternalServerException(x)
+      Err(msg) => return UpdateSystemTableConfigurationErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return UpdateSystemTableConfigurationErr.InvalidRequestException(x)
+      Err(msg) => return UpdateSystemTableConfigurationErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateSystemTableConfigurationErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateSystemTableConfigurationErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return UpdateSystemTableConfigurationErr.TooManyRequestsException(x)
+      Err(msg) => return UpdateSystemTableConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateSystemTableConfigurationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates the account-level system tables configuration. If no
+/// configuration exists, use CreateSystemTableConfiguration to create one.
+/// Fields that you omit retain their current values.
+pub fn (c: Client) update_system_table_configuration(input: UpdateSystemTableConfigurationInput) -> UpdateSystemTableConfigurationOutput ! UpdateSystemTableConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_system_table_configuration(c.params, input)) ?? e => return Err(UpdateSystemTableConfigurationErr.InvalidInput(e))
+  var req = serialize_update_system_table_configuration(ep, input, "") ?? e => return Err(UpdateSystemTableConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateSystemTableConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_system_table_configuration_error(resp))
+  }
+  deserialize_update_system_table_configuration(resp) ?? e => Err(UpdateSystemTableConfigurationErr.Deserialize(e))
 }
 
 pub fn endpoint_params_update_work_group(base: EndpointParameters, input: UpdateWorkGroupInput) -> EndpointParameters {

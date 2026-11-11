@@ -3345,6 +3345,9 @@ pub fn serialize_get_data_access(ep: rest.Endpoint, input: GetDataAccessRequest,
   if let Some(v) = input.audit_context {
     qs.push(("auditContext", v))
   }
+  if let Some(v) = input.instance_scope {
+    qs.push(("instanceScope", v.value()))
+  }
   var body = b""
   if !body.is_empty() {
     headers.push(("Content-MD5", crypto.digest(crypto.Hash.Md5, body).to_base64()))
@@ -3372,6 +3375,7 @@ pub fn deserialize_get_data_access(resp: http.Response) -> GetDataAccessResult !
       "Credentials" => out.credentials = xml_read_credentials(c)?
       "MatchedGrantTarget" => out.matched_grant_target = c.text()
       "Grantee" => out.grantee = xml_read_grantee(c)?
+      "MatchedInstanceArn" => out.matched_instance_arn = c.text()
       _ => {}
     }
   }
@@ -3407,8 +3411,12 @@ pub fn deserialize_get_data_access_error(resp: http.Response) -> GetDataAccessEr
 
 /// Returns a temporary access credential from S3 Access Grants to the
 /// grantee or client application. The temporary credential is an Amazon Web
-/// Services STS token that grants them access to the S3 data. Permissions
-/// You must have the s3:GetDataAccess permission to use this operation.
+/// Services STS token that grants them access to the S3 data. By default,
+/// S3 Access Grants searches for a matching grant in the instance of the
+/// Amazon Web Services account ID in the request. To also search instances
+/// shared with the caller through Amazon Web Services Resource Access
+/// Manager (RAM), set the InstanceScope parameter to ALL . Permissions You
+/// must have the s3:GetDataAccess permission to use this operation.
 /// Additional Permissions The IAM role that S3 Access Grants assumes must
 /// have the following permissions specified in the trust policy when
 /// registering the location: sts:AssumeRole , for directory users or groups
@@ -5006,6 +5014,9 @@ pub fn serialize_list_caller_access_grants(ep: rest.Endpoint, input: ListCallerA
   if let Some(v) = input.allowed_by_application {
     qs.push(("allowedByApplication", "${v}"))
   }
+  if let Some(v) = input.instance_scope {
+    qs.push(("instanceScope", v.value()))
+  }
   var body = b""
   if !body.is_empty() {
     headers.push(("Content-MD5", crypto.digest(crypto.Hash.Md5, body).to_base64()))
@@ -5069,9 +5080,13 @@ pub fn deserialize_list_caller_access_grants_error(resp: http.Response) -> ListC
 /// Amazon S3 data through S3 Access Grants. The caller (grantee) can be an
 /// Identity and Access Management (IAM) identity or Amazon Web Services
 /// Identity Center corporate directory identity. You must pass the Amazon
-/// Web Services account of the S3 data owner (grantor) in the request. You
-/// can, optionally, narrow the results by GrantScope , using a fragment of
-/// the data's S3 path, and S3 Access Grants will return only the grants
+/// Web Services account of the S3 data owner (grantor) in the request. By
+/// default, S3 Access Grants returns grants from the instance of the Amazon
+/// Web Services account ID in the request. To return grants from all
+/// instances shared with the caller's account through Amazon Web Services
+/// Resource Access Manager (RAM), set the InstanceScope parameter to ALL .
+/// You can, optionally, narrow the results by GrantScope , using a fragment
+/// of the data's S3 path, and S3 Access Grants will return only the grants
 /// with a path that contains the path fragment. You can also pass the
 /// AllowedByApplication filter in the request, which returns only the
 /// grants authorized for applications, whether the application is the

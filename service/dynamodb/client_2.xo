@@ -9,6 +9,721 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_describe_bulk_operation(base: EndpointParameters, input: DescribeBulkOperationInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.bulk_operation_arn {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of DescribeBulkOperation.
+pub fn serialize_describe_bulk_operation(ep: rest.Endpoint, input: DescribeBulkOperationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.bulk_operation_arn {
+    fs.push(("BulkOperationArn", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeBulkOperation"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_bulk_operation(resp: http.Response) -> DescribeBulkOperationOutput ! Str {
+  var out = DescribeBulkOperationOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "BulkOperationDescription" => out.bulk_operation_description = from_json_bulk_operation_description(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeBulkOperation.
+pub enum DescribeBulkOperationErr {
+  InvalidEndpointException(e: InvalidEndpointException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeBulkOperationErr) display() -> Str {
+  match e {
+    InvalidEndpointException(x) => "InvalidEndpointException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_bulk_operation_error(resp: http.Response) -> DescribeBulkOperationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidEndpointException" => match read_error_invalid_endpoint_exception(resp, body) {
+      Ok(x) => return DescribeBulkOperationErr.InvalidEndpointException(x)
+      Err(msg) => return DescribeBulkOperationErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DescribeBulkOperationErr.ResourceNotFoundException(x)
+      Err(msg) => return DescribeBulkOperationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeBulkOperationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Describes the specified bulk operation.
+pub fn (c: Client) describe_bulk_operation(input: DescribeBulkOperationInput) -> DescribeBulkOperationOutput ! DescribeBulkOperationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_bulk_operation(c.params, input))) ?? e => return Err(DescribeBulkOperationErr.InvalidInput(e))
+  var req = serialize_describe_bulk_operation(ep, input, "") ?? e => return Err(DescribeBulkOperationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeBulkOperationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_bulk_operation_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeBulkOperationErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(DescribeBulkOperationErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_describe_bulk_operation(resp) ?? e => Err(DescribeBulkOperationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_continuous_backups(base: EndpointParameters, input: DescribeContinuousBackupsInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.table_name {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of DescribeContinuousBackups.
+pub fn serialize_describe_continuous_backups(ep: rest.Endpoint, input: DescribeContinuousBackupsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.table_name {
+    fs.push(("TableName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeContinuousBackups"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_continuous_backups(resp: http.Response) -> DescribeContinuousBackupsOutput ! Str {
+  var out = DescribeContinuousBackupsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContinuousBackupsDescription" => out.continuous_backups_description = from_json_continuous_backups_description(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeContinuousBackups.
+pub enum DescribeContinuousBackupsErr {
+  InternalServerError(e: InternalServerError)
+  InvalidEndpointException(e: InvalidEndpointException)
+  TableNotFoundException(e: TableNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeContinuousBackupsErr) display() -> Str {
+  match e {
+    InternalServerError(x) => "InternalServerError: ${x:?}"
+    InvalidEndpointException(x) => "InvalidEndpointException: ${x:?}"
+    TableNotFoundException(x) => "TableNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_continuous_backups_error(resp: http.Response) -> DescribeContinuousBackupsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerError" => match read_error_internal_server_error(resp, body) {
+      Ok(x) => return DescribeContinuousBackupsErr.InternalServerError(x)
+      Err(msg) => return DescribeContinuousBackupsErr.Deserialize(msg)
+    }
+    "InvalidEndpointException" => match read_error_invalid_endpoint_exception(resp, body) {
+      Ok(x) => return DescribeContinuousBackupsErr.InvalidEndpointException(x)
+      Err(msg) => return DescribeContinuousBackupsErr.Deserialize(msg)
+    }
+    "TableNotFoundException" => match read_error_table_not_found_exception(resp, body) {
+      Ok(x) => return DescribeContinuousBackupsErr.TableNotFoundException(x)
+      Err(msg) => return DescribeContinuousBackupsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeContinuousBackupsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Checks the status of continuous backups and point in time recovery on
+/// the specified table. Continuous backups are ENABLED on all tables at
+/// table creation. If point in time recovery is enabled,
+/// PointInTimeRecoveryStatus will be set to ENABLED. After continuous
+/// backups and point in time recovery are enabled, you can restore to any
+/// point in time within EarliestRestorableDateTime and
+/// LatestRestorableDateTime . LatestRestorableDateTime is typically 5
+/// minutes before the current time. You can restore your table to any point
+/// in time in the last 35 days. You can set the recovery period to any
+/// value between 1 and 35 days. You can call DescribeContinuousBackups at a
+/// maximum rate of 10 times per second.
+pub fn (c: Client) describe_continuous_backups(input: DescribeContinuousBackupsInput) -> DescribeContinuousBackupsOutput ! DescribeContinuousBackupsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_continuous_backups(c.params, input))) ?? e => return Err(DescribeContinuousBackupsErr.InvalidInput(e))
+  var req = serialize_describe_continuous_backups(ep, input, "") ?? e => return Err(DescribeContinuousBackupsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeContinuousBackupsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_continuous_backups_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeContinuousBackupsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(DescribeContinuousBackupsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_describe_continuous_backups(resp) ?? e => Err(DescribeContinuousBackupsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_contributor_insights(base: EndpointParameters, input: DescribeContributorInsightsInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.table_name {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of DescribeContributorInsights.
+pub fn serialize_describe_contributor_insights(ep: rest.Endpoint, input: DescribeContributorInsightsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.table_name {
+    fs.push(("TableName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.index_name {
+    fs.push(("IndexName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeContributorInsights"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_contributor_insights(resp: http.Response) -> DescribeContributorInsightsOutput ! Str {
+  var out = DescribeContributorInsightsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TableName" => out.table_name = jsonv.read_str(fv)?
+      "IndexName" => out.index_name = jsonv.read_str(fv)?
+      "ContributorInsightsRuleList" => out.contributor_insights_rule_list = from_json_contributor_insights_rule_list(fv)?
+      "ContributorInsightsStatus" => out.contributor_insights_status = ContributorInsightsStatus.from(jsonv.read_str(fv)?)
+      "LastUpdateDateTime" => out.last_update_date_time = jsonv.read_time(fv, "epoch-seconds")?
+      "FailureException" => out.failure_exception = from_json_failure_exception(fv)?
+      "ContributorInsightsMode" => out.contributor_insights_mode = ContributorInsightsMode.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeContributorInsights.
+pub enum DescribeContributorInsightsErr {
+  InternalServerError(e: InternalServerError)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeContributorInsightsErr) display() -> Str {
+  match e {
+    InternalServerError(x) => "InternalServerError: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_contributor_insights_error(resp: http.Response) -> DescribeContributorInsightsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServerError" => match read_error_internal_server_error(resp, body) {
+      Ok(x) => return DescribeContributorInsightsErr.InternalServerError(x)
+      Err(msg) => return DescribeContributorInsightsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DescribeContributorInsightsErr.ResourceNotFoundException(x)
+      Err(msg) => return DescribeContributorInsightsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeContributorInsightsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns information about contributor insights for a given table or
+/// global secondary index.
+pub fn (c: Client) describe_contributor_insights(input: DescribeContributorInsightsInput) -> DescribeContributorInsightsOutput ! DescribeContributorInsightsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_contributor_insights(c.params, input))) ?? e => return Err(DescribeContributorInsightsErr.InvalidInput(e))
+  var req = serialize_describe_contributor_insights(ep, input, "") ?? e => return Err(DescribeContributorInsightsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeContributorInsightsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_contributor_insights_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeContributorInsightsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(DescribeContributorInsightsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_describe_contributor_insights(resp) ?? e => Err(DescribeContributorInsightsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_endpoints(base: EndpointParameters, input: DescribeEndpointsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeEndpoints.
+pub fn serialize_describe_endpoints(ep: rest.Endpoint, input: DescribeEndpointsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeEndpoints"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_endpoints(resp: http.Response) -> DescribeEndpointsResponse ! Str {
+  var out = DescribeEndpointsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Endpoints" => out.endpoints = from_json_endpoints(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeEndpoints.
+pub enum DescribeEndpointsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeEndpointsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_endpoints_error(resp: http.Response) -> DescribeEndpointsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DescribeEndpointsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the regional endpoint information. For more information on
+/// policy permissions, please see Internetwork traffic privacy .
+pub fn (c: Client) describe_endpoints(input: DescribeEndpointsRequest) -> DescribeEndpointsResponse ! DescribeEndpointsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_endpoints(c.params, input))) ?? e => return Err(DescribeEndpointsErr.InvalidInput(e))
+  var req = serialize_describe_endpoints(ep, input, "") ?? e => return Err(DescribeEndpointsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeEndpointsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_endpoints_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeEndpointsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(DescribeEndpointsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_describe_endpoints(resp) ?? e => Err(DescribeEndpointsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_export(base: EndpointParameters, input: DescribeExportInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.export_arn {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of DescribeExport.
+pub fn serialize_describe_export(ep: rest.Endpoint, input: DescribeExportInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.export_arn {
+    fs.push(("ExportArn", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeExport"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_export(resp: http.Response) -> DescribeExportOutput ! Str {
+  var out = DescribeExportOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ExportDescription" => out.export_description = from_json_export_description(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeExport.
+pub enum DescribeExportErr {
+  ExportNotFoundException(e: ExportNotFoundException)
+  InternalServerError(e: InternalServerError)
+  LimitExceededException(e: LimitExceededException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeExportErr) display() -> Str {
+  match e {
+    ExportNotFoundException(x) => "ExportNotFoundException: ${x:?}"
+    InternalServerError(x) => "InternalServerError: ${x:?}"
+    LimitExceededException(x) => "LimitExceededException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_export_error(resp: http.Response) -> DescribeExportErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ExportNotFoundException" => match read_error_export_not_found_exception(resp, body) {
+      Ok(x) => return DescribeExportErr.ExportNotFoundException(x)
+      Err(msg) => return DescribeExportErr.Deserialize(msg)
+    }
+    "InternalServerError" => match read_error_internal_server_error(resp, body) {
+      Ok(x) => return DescribeExportErr.InternalServerError(x)
+      Err(msg) => return DescribeExportErr.Deserialize(msg)
+    }
+    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
+      Ok(x) => return DescribeExportErr.LimitExceededException(x)
+      Err(msg) => return DescribeExportErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeExportErr.Api(restjson.api_error(resp, body))
+}
+
+/// Describes an existing table export.
+pub fn (c: Client) describe_export(input: DescribeExportInput) -> DescribeExportOutput ! DescribeExportErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_export(c.params, input))) ?? e => return Err(DescribeExportErr.InvalidInput(e))
+  var req = serialize_describe_export(ep, input, "") ?? e => return Err(DescribeExportErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeExportErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_export_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeExportErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(DescribeExportErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_describe_export(resp) ?? e => Err(DescribeExportErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_global_table(base: EndpointParameters, input: DescribeGlobalTableInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.global_table_name {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of DescribeGlobalTable.
+pub fn serialize_describe_global_table(ep: rest.Endpoint, input: DescribeGlobalTableInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.global_table_name {
+    fs.push(("GlobalTableName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.DescribeGlobalTable"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_global_table(resp: http.Response) -> DescribeGlobalTableOutput ! Str {
+  var out = DescribeGlobalTableOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "GlobalTableDescription" => out.global_table_description = from_json_global_table_description(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeGlobalTable.
+pub enum DescribeGlobalTableErr {
+  GlobalTableNotFoundException(e: GlobalTableNotFoundException)
+  InternalServerError(e: InternalServerError)
+  InvalidEndpointException(e: InvalidEndpointException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeGlobalTableErr) display() -> Str {
+  match e {
+    GlobalTableNotFoundException(x) => "GlobalTableNotFoundException: ${x:?}"
+    InternalServerError(x) => "InternalServerError: ${x:?}"
+    InvalidEndpointException(x) => "InvalidEndpointException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_global_table_error(resp: http.Response) -> DescribeGlobalTableErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "GlobalTableNotFoundException" => match read_error_global_table_not_found_exception(resp, body) {
+      Ok(x) => return DescribeGlobalTableErr.GlobalTableNotFoundException(x)
+      Err(msg) => return DescribeGlobalTableErr.Deserialize(msg)
+    }
+    "InternalServerError" => match read_error_internal_server_error(resp, body) {
+      Ok(x) => return DescribeGlobalTableErr.InternalServerError(x)
+      Err(msg) => return DescribeGlobalTableErr.Deserialize(msg)
+    }
+    "InvalidEndpointException" => match read_error_invalid_endpoint_exception(resp, body) {
+      Ok(x) => return DescribeGlobalTableErr.InvalidEndpointException(x)
+      Err(msg) => return DescribeGlobalTableErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeGlobalTableErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns information about the specified global table. This documentation
+/// is for version 2017.11.29 (Legacy) of global tables, which should be
+/// avoided for new global tables. Customers should use Global Tables
+/// version 2019.11.21 (Current) when possible, because it provides greater
+/// flexibility, higher efficiency, and consumes less write capacity than
+/// 2017.11.29 (Legacy). To determine which version you're using, see
+/// Determining the global table version you are using . To update existing
+/// global tables from version 2017.11.29 (Legacy) to version 2019.11.21
+/// (Current), see Upgrading global tables .
+pub fn (c: Client) describe_global_table(input: DescribeGlobalTableInput) -> DescribeGlobalTableOutput ! DescribeGlobalTableErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_global_table(c.params, input))) ?? e => return Err(DescribeGlobalTableErr.InvalidInput(e))
+  var req = serialize_describe_global_table(ep, input, "") ?? e => return Err(DescribeGlobalTableErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeGlobalTableErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_global_table_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(DescribeGlobalTableErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(DescribeGlobalTableErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_describe_global_table(resp) ?? e => Err(DescribeGlobalTableErr.Deserialize(e))
+}
+
 pub fn endpoint_params_describe_global_table_settings(base: EndpointParameters, input: DescribeGlobalTableSettingsInput) -> EndpointParameters {
   var p = base
   if let Some(x) = input.global_table_name {
@@ -2285,6 +3000,119 @@ pub fn (c: Client) list_backups(input: ListBackupsInput) -> ListBackupsOutput ! 
   deserialize_list_backups(resp) ?? e => Err(ListBackupsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_bulk_operations(base: EndpointParameters, input: ListBulkOperationsInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListBulkOperations.
+pub fn serialize_list_bulk_operations(ep: rest.Endpoint, input: ListBulkOperationsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.ListBulkOperations"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_bulk_operations(resp: http.Response) -> ListBulkOperationsOutput ! Str {
+  var out = ListBulkOperationsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "BulkOperationsSummaryList" => out.bulk_operations_summary_list = from_json_bulk_operations_summary_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListBulkOperations.
+pub enum ListBulkOperationsErr {
+  InvalidEndpointException(e: InvalidEndpointException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListBulkOperationsErr) display() -> Str {
+  match e {
+    InvalidEndpointException(x) => "InvalidEndpointException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_bulk_operations_error(resp: http.Response) -> ListBulkOperationsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidEndpointException" => match read_error_invalid_endpoint_exception(resp, body) {
+      Ok(x) => return ListBulkOperationsErr.InvalidEndpointException(x)
+      Err(msg) => return ListBulkOperationsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListBulkOperationsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists bulk operations that started within the past 90 days for the
+/// current Amazon Web Services account and Amazon Web Services Region, with
+/// the most recent operations first. Results are paginated. Use the
+/// NextToken parameter to retrieve additional results.
+pub fn (c: Client) list_bulk_operations(input: ListBulkOperationsInput) -> ListBulkOperationsOutput ! ListBulkOperationsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_bulk_operations(c.params, input))) ?? e => return Err(ListBulkOperationsErr.InvalidInput(e))
+  var req = serialize_list_bulk_operations(ep, input, "") ?? e => return Err(ListBulkOperationsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListBulkOperationsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_bulk_operations_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(ListBulkOperationsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(ListBulkOperationsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_list_bulk_operations(resp) ?? e => Err(ListBulkOperationsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_contributor_insights(base: EndpointParameters, input: ListContributorInsightsInput) -> EndpointParameters {
   var p = base
   if let Some(x) = input.table_name {
@@ -4384,6 +5212,158 @@ pub fn (c: Client) search_vectors(input: SearchVectorsInput) -> SearchVectorsOut
     }
   }
   deserialize_search_vectors(resp) ?? e => Err(SearchVectorsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_bulk_put_items(base: EndpointParameters, input: StartBulkPutItemsInput) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.table_name {
+    p.resource_arn = x
+  }
+  p
+}
+
+/// The HTTP request of StartBulkPutItems.
+pub fn serialize_start_bulk_put_items(ep: rest.Endpoint, input: StartBulkPutItemsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("ClientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.input_s3_configuration {
+    fs.push(("InputS3Configuration", json_of_input_s3_configuration(x)))
+  }
+  if let Some(x) = input.output_s3_configuration {
+    fs.push(("OutputS3Configuration", json_of_output_s3_configuration(x)))
+  }
+  if let Some(x) = input.table_name {
+    fs.push(("TableName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_write_request_units {
+    fs.push(("MaxWriteRequestUnits", json.Value.Int(x)))
+  }
+  if let Some(x) = input.performance_tier {
+    fs.push(("PerformanceTier", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "DynamoDB_20120810.StartBulkPutItems"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_bulk_put_items(resp: http.Response) -> StartBulkPutItemsOutput ! Str {
+  var out = StartBulkPutItemsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "BulkOperationDescription" => out.bulk_operation_description = from_json_bulk_operation_description(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartBulkPutItems.
+pub enum StartBulkPutItemsErr {
+  IdempotentParameterMismatchException(e: IdempotentParameterMismatchException)
+  InvalidEndpointException(e: InvalidEndpointException)
+  LimitExceededException(e: LimitExceededException)
+  ResourceInUseException(e: ResourceInUseException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartBulkPutItemsErr) display() -> Str {
+  match e {
+    IdempotentParameterMismatchException(x) => "IdempotentParameterMismatchException: ${x:?}"
+    InvalidEndpointException(x) => "InvalidEndpointException: ${x:?}"
+    LimitExceededException(x) => "LimitExceededException: ${x:?}"
+    ResourceInUseException(x) => "ResourceInUseException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_bulk_put_items_error(resp: http.Response) -> StartBulkPutItemsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "IdempotentParameterMismatchException" => match read_error_idempotent_parameter_mismatch_exception(resp, body) {
+      Ok(x) => return StartBulkPutItemsErr.IdempotentParameterMismatchException(x)
+      Err(msg) => return StartBulkPutItemsErr.Deserialize(msg)
+    }
+    "InvalidEndpointException" => match read_error_invalid_endpoint_exception(resp, body) {
+      Ok(x) => return StartBulkPutItemsErr.InvalidEndpointException(x)
+      Err(msg) => return StartBulkPutItemsErr.Deserialize(msg)
+    }
+    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
+      Ok(x) => return StartBulkPutItemsErr.LimitExceededException(x)
+      Err(msg) => return StartBulkPutItemsErr.Deserialize(msg)
+    }
+    "ResourceInUseException" => match read_error_resource_in_use_exception(resp, body) {
+      Ok(x) => return StartBulkPutItemsErr.ResourceInUseException(x)
+      Err(msg) => return StartBulkPutItemsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return StartBulkPutItemsErr.ResourceNotFoundException(x)
+      Err(msg) => return StartBulkPutItemsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartBulkPutItemsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts an asynchronous bulk operation that reads items from Amazon S3
+/// and writes them to an existing DynamoDB table, so you can efficiently
+/// load or migrate large datasets.
+pub fn (c: Client) start_bulk_put_items(input: StartBulkPutItemsInput) -> StartBulkPutItemsOutput ! StartBulkPutItemsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_start_bulk_put_items(c.params, input))) ?? e => return Err(StartBulkPutItemsErr.InvalidInput(e))
+  var req = serialize_start_bulk_put_items(ep, input, rest.uuid(c.rand)) ?? e => return Err(StartBulkPutItemsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartBulkPutItemsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_bulk_put_items_error(resp))
+  }
+  let crc_field = resp.header_values("X-Amz-Crc32").first() ?? ""
+  if crc_field != "" {
+    // Go's getCRC32Checksum: strconv.ParseUint(v, 10, 32)
+    let want = rest.go_parse_uint(crc_field, 10, 32) ?? e => return Err(StartBulkPutItemsErr.Deserialize("unable to parse checksum header ${crc_field}, ${e}"))
+    let got = crc32.checksum(resp.body)
+    if want != got {
+      return Err(StartBulkPutItemsErr.Deserialize("response did not match expected checksum, ${want}, ${got}"))
+    }
+  }
+  deserialize_start_bulk_put_items(resp) ?? e => Err(StartBulkPutItemsErr.Deserialize(e))
 }
 
 pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceInput) -> EndpointParameters {

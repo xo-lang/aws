@@ -3867,6 +3867,9 @@ fn json_of_daemon_volume(v: DaemonVolume) -> json.Value {
   if let Some(x) = v.host {
     fs.push(("host", json_of_host_volume_properties(x)))
   }
+  if let Some(x) = v.log_driver_volume_configuration {
+    fs.push(("logDriverVolumeConfiguration", json_of_log_driver_volume_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3879,6 +3882,7 @@ fn from_json_daemon_volume(v: json.Value) -> DaemonVolume ! Str {
     match k {
       "name" => out.name = jsonv.read_str(fv)?
       "host" => out.host = from_json_host_volume_properties(fv)?
+      "logDriverVolumeConfiguration" => out.log_driver_volume_configuration = from_json_log_driver_volume_configuration(fv)?
       _ => {}
     }
   }
@@ -8701,6 +8705,9 @@ fn json_of_instance_launch_template(v: InstanceLaunchTemplate) -> json.Value {
   if let Some(x) = v.capacity_reservations {
     fs.push(("capacityReservations", json_of_capacity_reservation_request(x)))
   }
+  if let Some(x) = v.nitro_enclaves_enabled {
+    fs.push(("nitroEnclavesEnabled", json.Value.Bool(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -8721,6 +8728,7 @@ fn from_json_instance_launch_template(v: json.Value) -> InstanceLaunchTemplate !
       "instanceRequirements" => out.instance_requirements = from_json_instance_requirements_request(fv)?
       "fipsEnabled" => out.fips_enabled = jsonv.read_bool(fv)?
       "capacityReservations" => out.capacity_reservations = from_json_capacity_reservation_request(fv)?
+      "nitroEnclavesEnabled" => out.nitro_enclaves_enabled = jsonv.read_bool(fv)?
       _ => {}
     }
   }
@@ -10275,6 +10283,28 @@ fn from_json_log_configuration_options_map(v: json.Value) -> Map[Str, Str] ! Str
       continue
     }
     out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_log_driver_volume_configuration(v: LogDriverVolumeConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.driver {
+    fs.push(("driver", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_log_driver_volume_configuration(v: json.Value) -> LogDriverVolumeConfiguration ! Str {
+  var out = LogDriverVolumeConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "driver" => out.driver = LogDriver.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -12311,6 +12341,9 @@ fn json_of_register_task_definition_request(v: RegisterTaskDefinitionRequest) ->
   if let Some(x) = v.enable_fault_injection {
     fs.push(("enableFaultInjection", json.Value.Bool(x)))
   }
+  if let Some(x) = v.trusted_execution_configuration {
+    fs.push(("trustedExecutionConfiguration", json_of_trusted_execution_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -12339,6 +12372,7 @@ fn from_json_register_task_definition_request(v: json.Value) -> RegisterTaskDefi
       "ephemeralStorage" => out.ephemeral_storage = from_json_ephemeral_storage(fv)?
       "runtimePlatform" => out.runtime_platform = from_json_runtime_platform(fv)?
       "enableFaultInjection" => out.enable_fault_injection = jsonv.read_bool(fv)?
+      "trustedExecutionConfiguration" => out.trusted_execution_configuration = from_json_trusted_execution_configuration(fv)?
       _ => {}
     }
   }
@@ -14292,39 +14326,4 @@ fn json_of_service_volume_configuration(v: ServiceVolumeConfiguration) -> json.V
     fs.push(("managedEBSVolume", json_of_service_managed_ebs_volume_configuration(x)))
   }
   json.Value.Object(fs)
-}
-
-fn from_json_service_volume_configuration(v: json.Value) -> ServiceVolumeConfiguration ! Str {
-  var out = ServiceVolumeConfiguration{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "name" => out.name = jsonv.read_str(fv)?
-      "managedEBSVolume" => out.managed_ebs_volume = from_json_service_managed_ebs_volume_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_service_volume_configurations(v: List[ServiceVolumeConfiguration]) -> json.Value {
-  json.Value.List(v.map(fn(x: ServiceVolumeConfiguration) -> json.Value { json_of_service_volume_configuration(x) }))
-}
-
-fn from_json_service_volume_configurations(v: json.Value) -> List[ServiceVolumeConfiguration] ! Str {
-  var out: List[ServiceVolumeConfiguration] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_service_volume_configuration(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_services(v: List[Service]) -> json.Value {
-  json.Value.List(v.map(fn(x: Service) -> json.Value { json_of_service(x) }))
 }

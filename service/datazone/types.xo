@@ -661,6 +661,11 @@ pub struct AuthenticationConfigurationPatch {
   pub secret_arn: Str? = None
   /// The basic authentication credentials of a connection.
   pub basic_authentication_credentials: BasicAuthenticationCredentials? = None
+  /// The OAuth2 properties, such as the client application, grant type, and
+  /// token URL, that you want to update for a connection. Only the properties
+  /// that you specify are updated; the connection keeps its existing values
+  /// for the properties that you omit.
+  pub o_auth2_properties: OAuth2PropertiesPatch? = None
 }
 
 pub enum AuthenticationType: Str {
@@ -1062,6 +1067,8 @@ pub enum ConnectionType: Str {
   Icebergrestcatalog = "ICEBERGRESTCATALOG"
   Snowflakeicebergrestcatalog = "SNOWFLAKEICEBERGRESTCATALOG"
   Databricksicebergrestcatalog = "DATABRICKSICEBERGRESTCATALOG"
+  Workdayicebergrestcatalog = "WORKDAYICEBERGRESTCATALOG"
+  Workdayldq = "WORKDAYLDQ"
   Unknown(value: Str)
 }
 
@@ -1649,11 +1656,12 @@ pub struct CreateDesignationInput {
   pub name: Str? = None
   /// A human-readable description of the designation and its intended use.
   pub description: Str? = None
-  /// The Cedar permit policy that defines what actions holders of this
+  /// The Cedar permit policy that defines the actions holders of this
   /// designation are allowed to perform.
   pub policy: Str? = None
-  /// Whether deletion protection is enabled for this designation. Defaults to
-  /// true when omitted.
+  /// Specifies whether deletion protection is enabled for this designation.
+  /// Defaults to true when omitted. When enabled, DeleteDesignation is
+  /// rejected until protection is disabled through UpdateDesignation .
   pub deletion_protection: Bool? = None
 }
 
@@ -1670,15 +1678,16 @@ pub struct CreateDesignationOutput {
   pub name: Str? = None
   /// A human-readable description of the designation and its intended use.
   pub description: Str? = None
-  /// The classification of this designation. MANAGED designations are
-  /// system-defined and cannot be modified or deleted.
+  /// The classification of this designation. Valid values: MANAGED —
+  /// System-defined designations that cannot be modified or deleted.
+  /// USER_CREATED — Designations created through CreateDesignation .
   pub designation_type: DesignationType? = None
-  /// The Cedar permit policy that governs what actions holders of this
+  /// The Cedar permit policy that governs the actions holders of this
   /// designation are allowed to perform.
   pub policy: Str? = None
-  /// Whether deletion protection is enabled for this designation. When true,
-  /// DeleteDesignation is rejected until protection is disabled via
-  /// UpdateDesignation.
+  /// Specifies whether deletion protection is enabled for this designation.
+  /// When true , DeleteDesignation is rejected until protection is disabled
+  /// through UpdateDesignation .
   pub deletion_protection: Bool? = None
   /// The identifier of the Amazon DataZone user who created the designation.
   pub created_by: Str? = None
@@ -3479,7 +3488,9 @@ pub enum DeploymentType: Str {
   Unknown(value: Str)
 }
 
-/// Summary representation of a designation returned by list operations.
+/// The summary representation of a designation returned by ListDesignations
+/// . The summary omits the Cedar permit policy. Call GetDesignation to
+/// retrieve the full designation record including the policy.
 pub struct DesignationSummary {
   /// The identifier of the Amazon DataZone domain that contains the
   /// designation.
@@ -3490,9 +3501,12 @@ pub struct DesignationSummary {
   pub name: Str? = None
   /// A human-readable description of the designation and its intended use.
   pub description: Str? = None
-  /// The classification of this designation.
+  /// The classification of this designation. Valid values: MANAGED —
+  /// System-defined designation. USER_CREATED — User-created designation.
   pub designation_type: DesignationType? = None
-  /// Whether deletion protection is enabled for this designation.
+  /// Specifies whether deletion protection is enabled for this designation.
+  /// When true , DeleteDesignation is rejected until protection is disabled
+  /// through UpdateDesignation .
   pub deletion_protection: Bool? = None
   /// The identifier of the Amazon DataZone user who created the designation.
   pub created_by: Str? = None
@@ -4515,15 +4529,16 @@ pub struct GetDesignationOutput {
   pub name: Str? = None
   /// A human-readable description of the designation and its intended use.
   pub description: Str? = None
-  /// The classification of this designation. MANAGED designations are
-  /// system-defined and cannot be modified or deleted.
+  /// The classification of this designation. Valid values: MANAGED —
+  /// System-defined designations that cannot be modified or deleted.
+  /// USER_CREATED — Designations created through CreateDesignation .
   pub designation_type: DesignationType? = None
-  /// The Cedar permit policy that governs what actions holders of this
+  /// The Cedar permit policy that governs the actions holders of this
   /// designation are allowed to perform.
   pub policy: Str? = None
-  /// Whether deletion protection is enabled for this designation. When true,
-  /// DeleteDesignation is rejected until protection is disabled via
-  /// UpdateDesignation.
+  /// Specifies whether deletion protection is enabled for this designation.
+  /// When true , DeleteDesignation is rejected until protection is disabled
+  /// through UpdateDesignation .
   pub deletion_protection: Bool? = None
   /// The identifier of the Amazon DataZone user who created the designation.
   pub created_by: Str? = None
@@ -5887,6 +5902,8 @@ pub enum GlueConnectionType: Str {
   Icebergrestcatalog = "ICEBERGRESTCATALOG"
   Snowflakeicebergrestcatalog = "SNOWFLAKEICEBERGRESTCATALOG"
   Databricksicebergrestcatalog = "DATABRICKSICEBERGRESTCATALOG"
+  Workdayicebergrestcatalog = "WORKDAYICEBERGRESTCATALOG"
+  Workdayldq = "WORKDAYLDQ"
   Unknown(value: Str)
 }
 
@@ -8341,6 +8358,21 @@ pub struct OAuth2Properties {
   pub authorization_code_properties: AuthorizationCodeProperties? = None
   /// The OAuth2 credentials of the OAuth2 properties.
   pub o_auth2_credentials: GlueOAuth2Credentials? = None
+}
+
+/// Contains the OAuth2 properties, such as the client application, grant
+/// type, and token URL, that you want to update for a connection.
+pub struct OAuth2PropertiesPatch {
+  /// The OAuth2 grant type of the OAuth2 properties to update.
+  pub o_auth2_grant_type: OAuth2GrantType? = None
+  /// The OAuth2 client application of the OAuth2 properties to update.
+  pub o_auth2_client_application: OAuth2ClientApplication? = None
+  /// The OAuth2 token URL of the OAuth2 properties to update.
+  pub token_url: Str? = None
+  /// The OAuth2 token URL parameter map of the OAuth2 properties to update,
+  /// for example the scope. If you specify an empty map, the existing
+  /// parameters are kept.
+  pub token_url_parameters_map: Map[Str, Str]? = None
 }
 
 /// The open lineage run event summary.
@@ -11202,10 +11234,10 @@ pub struct UpdateDesignationInput {
   /// The updated human-readable description of the designation and its
   /// intended use.
   pub description: Str? = None
-  /// The updated Cedar permit policy.
+  /// The updated Cedar permit policy. Omit to keep the existing policy.
   pub policy: Str? = None
-  /// Whether deletion protection is enabled for this designation. Omit to
-  /// keep the existing value.
+  /// Specifies whether deletion protection is enabled for this designation.
+  /// Omit to keep the existing value.
   pub deletion_protection: Bool? = None
 }
 
@@ -11222,15 +11254,16 @@ pub struct UpdateDesignationOutput {
   pub name: Str? = None
   /// A human-readable description of the designation and its intended use.
   pub description: Str? = None
-  /// The classification of this designation. MANAGED designations are
-  /// system-defined and cannot be modified or deleted.
+  /// The classification of this designation. Valid values: MANAGED —
+  /// System-defined designations that cannot be modified or deleted.
+  /// USER_CREATED — Designations created through CreateDesignation .
   pub designation_type: DesignationType? = None
-  /// The Cedar permit policy that governs what actions holders of this
+  /// The Cedar permit policy that governs the actions holders of this
   /// designation are allowed to perform.
   pub policy: Str? = None
-  /// Whether deletion protection is enabled for this designation. When true,
-  /// DeleteDesignation is rejected until protection is disabled via
-  /// UpdateDesignation.
+  /// Specifies whether deletion protection is enabled for this designation.
+  /// When true , DeleteDesignation is rejected until protection is disabled
+  /// through UpdateDesignation .
   pub deletion_protection: Bool? = None
   /// The identifier of the Amazon DataZone user who created the designation.
   pub created_by: Str? = None
@@ -11621,95 +11654,4 @@ pub struct UpdateGroupProfileInput {
   pub group_identifier: Str? = None
   /// The status of the group profile that is updated.
   pub status: GroupProfileStatus? = None
-}
-
-pub struct UpdateGroupProfileOutput {
-  /// The identifier of the Amazon DataZone domain in which a group profile is
-  /// updated.
-  pub domain_id: Str? = None
-  /// The identifier of the group profile that is updated.
-  pub id: Str? = None
-  /// The status of the group profile that is updated.
-  pub status: GroupProfileStatus? = None
-  /// The name of the group profile that is updated.
-  pub group_name: Str? = None
-  /// The ARN of the IAM role principal. This role is associated with the
-  /// updated group profile.
-  pub role_principal_arn: Str? = None
-  /// The unique identifier of the IAM role principal. This principal is
-  /// associated with the updated group profile.
-  pub role_principal_id: Str? = None
-}
-
-pub struct UpdateNotebookInput {
-  /// The identifier of the Amazon SageMaker Unified Studio domain in which
-  /// the notebook exists.
-  pub domain_identifier: Str? = None
-  /// The identifier of the notebook to update.
-  pub identifier: Str? = None
-  /// The updated description of the notebook.
-  pub description: Str? = None
-  /// The updated status of the notebook.
-  pub status: NotebookStatus? = None
-  /// The updated name of the notebook.
-  pub name: Str? = None
-  /// The updated ordered list of cells in the notebook.
-  pub cell_order: List[CellInformation]? = None
-  /// The updated type of the notebook.
-  pub type_value: NotebookType? = None
-  /// The updated metadata for the notebook, specified as key-value pairs.
-  pub metadata: Map[Str, Str]? = None
-  /// The updated sensitive parameters for the notebook, specified as
-  /// key-value pairs.
-  pub parameters: Map[Str, Str]? = None
-  /// The updated environment configuration for the notebook.
-  pub environment_configuration: EnvironmentConfig? = None
-  /// A unique, case-sensitive identifier to ensure idempotency of the
-  /// request. This field is automatically populated if not provided.
-  pub client_token: Str? = None
-}
-
-pub struct UpdateNotebookOutput {
-  /// The identifier of the notebook.
-  pub id: Str? = None
-  /// The name of the notebook.
-  pub name: Str? = None
-  /// The identifier of the project that owns the notebook.
-  pub owning_project_id: Str? = None
-  /// The identifier of the Amazon SageMaker Unified Studio domain.
-  pub domain_id: Str? = None
-  /// The ordered list of cells in the notebook.
-  pub cell_order: List[CellInformation]? = None
-  /// The status of the notebook.
-  pub status: NotebookStatus? = None
-  /// The type of the notebook.
-  pub type_value: NotebookType? = None
-  /// The description of the notebook.
-  pub description: Str? = None
-  /// The timestamp of when the notebook was created.
-  pub created_at: Time? = None
-  /// The identifier of the user who created the notebook.
-  pub created_by: Str? = None
-  /// The timestamp of when the notebook was last updated.
-  pub updated_at: Time? = None
-  /// The identifier of the user who last updated the notebook.
-  pub updated_by: Str? = None
-  /// The identifier of the user who locked the notebook.
-  pub locked_by: Str? = None
-  /// The timestamp of when the notebook was locked.
-  pub locked_at: Time? = None
-  /// The timestamp of when the notebook lock expires.
-  pub lock_expires_at: Time? = None
-  /// The identifier of the compute associated with the notebook.
-  pub compute_id: Str? = None
-  /// The metadata of the notebook.
-  pub metadata: Map[Str, Str]? = None
-  /// The sensitive parameters of the notebook.
-  pub parameters: Map[Str, Str]? = None
-  /// The environment configuration of the notebook.
-  pub environment_configuration: EnvironmentConfig? = None
-  /// The error details if the notebook is in a failed state.
-  pub error: NotebookError? = None
-  /// The Git metadata associated with the notebook.
-  pub git_metadata: GitMetadata? = None
 }

@@ -3310,3 +3310,7 @@ Disliked:
   isn't possible either. Proposal: a stream function's `Err` aborts the
   connection, so the client's `read` gets `Protocol("unexpected EOF")`,
   as std.md 4.5 says for a body cut short.
+- Under FakeNet, `ClientStream.read(max)` can return more than `max`
+  bytes (`read(3)` gave all 5 bytes of "hello"), though std.md says "at
+  most max". The storage Reader now buffers the excess; a caller that
+  sizes a buffer by `max` would overrun it.

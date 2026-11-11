@@ -41,6 +41,10 @@ jobs:
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
       UPDATE_MODELS: ${{ github.event_name != 'workflow_dispatch' || inputs.update_models }}
       XO_VERSION: ${{ inputs.xo_version }}
+      # the oldest Xo the models run accepts: an empty xo_version installs the
+      # newest release, and a run that gets an older one (a release not yet
+      # marked latest) stops here instead of checking with a stale Xo
+      XO_MIN_VERSION: "0.48.2"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CI_TIMINGS: ${{ github.workspace }}/.ci/timings.md
@@ -57,7 +61,11 @@ jobs:
           bin=$(scripts/ci-step.sh "install xo" scripts/install-xo.sh "$RUNNER_TEMP/xo")
           echo "$bin" >> "$GITHUB_PATH"
           echo "XO_CLI=$bin/xo" >> "$GITHUB_ENV"
-          echo "version=$("$bin/xo" version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+          v=$("$bin/xo" version | awk '{print $2}')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "$(printf '%s\n%s\n' "$XO_MIN_VERSION" "${v#v}" | sort -V | head -1)" != "$XO_MIN_VERSION" ]; then
+            echo "::error::Xo $v is older than XO_MIN_VERSION $XO_MIN_VERSION"; exit 1
+          fi
 
       - name: Cache Xo builds
         uses: actions/cache@v4
@@ -103,31 +111,37 @@ jobs:
           git add -A service xo.work codegen/models.lock
 
       - name: Gate
+        id: gate
         # a hang fails this step instead of the whole job
         timeout-minutes: 60
         run: scripts/ci-step.sh gate scripts/gate.sh
 
       - name: A native program builds and runs
+        id: programs
         timeout-minutes: 20
         if: success() || failure()
         run: scripts/ci-step.sh programs scripts/check-programs.sh
 
       - name: Every service regenerates unchanged and type checks
+        id: services
         timeout-minutes: 90
         if: success() || failure()
         run: scripts/ci-step.sh "all services" scripts/check-all-services.sh
 
       - name: Endpoint rules tests
+        id: endpoints
         timeout-minutes: 15
         if: success() || failure()
         run: scripts/ci-step.sh "endpoint tests" scripts/check-endpoints.sh
 
       - name: LocalStack
+        id: localstack
         timeout-minutes: 30
         if: success() || failure()
         run: scripts/ci-step.sh localstack scripts/integration-localstack.sh
 
       - name: Public hygiene
+        id: hygiene
         timeout-minutes: 30
         if: success() || failure()
         run: |
@@ -141,15 +155,20 @@ jobs:
           PATH="$RUNNER_TEMP/gitleaks-bin:$PATH" scripts/ci-step.sh "check public" scripts/check-public.sh
 
       - name: Merge and tag
+        id: merge
         if: success() && env.DRY_RUN != 'true' && steps.update.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="models/${{ steps.update.outputs.commit }}"
-          git switch -c "$branch"
-          git commit -q -m "Models: api-models-aws ${{ steps.update.outputs.commit }}, every check green (run ${{ github.run_id }})"
-          git push -q origin "$branch"
-          gh pr create --base main --head "$branch" --title "Models: api-models-aws ${{ steps.update.outputs.commit }}" --body "Weekly model update. Every check passed in ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          scripts/models-branch.sh "$branch" "Models: api-models-aws ${{ steps.update.outputs.commit }}, every check green (run ${{ github.run_id }})"
+          # an earlier run's pull request for the same model commit is reused
+          pr=$(gh pr list --head "$branch" --state open --json number -q '.[0].number')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "Models: api-models-aws ${{ steps.update.outputs.commit }}" --body "Weekly model update. Every check passed in ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          else
+            gh pr create --base main --head "$branch" --title "Models: api-models-aws ${{ steps.update.outputs.commit }}" --body "Weekly model update. Every check passed in ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          fi
           gh pr merge "$branch" --squash --delete-branch
           git switch -q main
           git pull -q --ff-only origin main
@@ -157,19 +176,53 @@ jobs:
 
       - name: Report a red run
         if: failure() && env.DRY_RUN != 'true'
+        # never stops before the issue: each step's failure is noted in the
+        # issue instead. The branch may already exist (Merge and tag pushed it
+        # and then failed, as when Actions may not create pull requests), so
+        # it is reused, never force-pushed (scripts/models-branch.sh builds on
+        # it), and an open pull request is reused. The title names the steps
+        # that failed.
+        env:
+          OUTCOMES: >-
+            gate=${{ steps.gate.outcome }}
+            programs=${{ steps.programs.outcome }}
+            services=${{ steps.services.outcome }}
+            endpoints=${{ steps.endpoints.outcome }}
+            localstack=${{ steps.localstack.outcome }}
+            hygiene=${{ steps.hygiene.outcome }}
+            merge-and-tag=${{ steps.merge.outcome }}
+            install-xo=${{ steps.xo.outcome }}
+            update-models=${{ steps.update.outcome }}
         run: |
+          set +e
+          failed=$(for kv in $OUTCOMES; do [ "${kv#*=}" = failure ] && printf '%s ' "${kv%%=*}"; done)
+          failed=${failed% }
+          [ -n "$failed" ] || failed="a step"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          pr=""
+          pr="" notes=""
           if [ "${{ steps.update.outputs.changed }}" = true ]; then
             branch="models/${{ steps.update.outputs.commit }}"
-            git switch -c "$branch"
-            git commit -q -m "Models: api-models-aws ${{ steps.update.outputs.commit }} (checks failed in run ${{ github.run_id }})"
-            git push -q -f origin "$branch"
-            pr=$(gh pr create --base main --head "$branch" --title "Models: api-models-aws ${{ steps.update.outputs.commit }} (checks failed)" --body "Checks failed: $run" || true)
+            # Merge and tag may have left the branch checked out (it failed
+            # after models-branch.sh): push it again (a fast-forward, or up to
+            # date); else make it from the staged tree
+            if [ "$(git symbolic-ref --short HEAD)" = "$branch" ]; then
+              git push -q origin "$branch" 2>/dev/null || notes="$notes; push of $branch failed"
+            else
+              # what Update models staged (service, xo.work, the lock)
+              git add -A service xo.work codegen/models.lock
+              scripts/models-branch.sh "$branch" "Models: api-models-aws ${{ steps.update.outputs.commit }} (failed: $failed; run ${{ github.run_id }})" || notes="$notes; scripts/models-branch.sh $branch failed"
+            fi
+            title="Models: api-models-aws ${{ steps.update.outputs.commit }} (failed: $failed)"
+            pr=$(gh pr list --head "$branch" --state open --json url -q '.[0].url' 2>/dev/null)
+            if [ -n "$pr" ]; then
+              gh pr edit "$pr" --title "$title" --body "Failed: $failed in $run" >/dev/null 2>&1 || notes="$notes; gh pr edit failed"
+            else
+              pr=$(gh pr create --base main --head "$branch" --title "$title" --body "Failed: $failed in $run" 2>&1) || { notes="$notes; gh pr create: $(echo "$pr" | tail -1)"; pr=""; }
+            fi
           fi
-          gh issue create --title "Weekly models run failed ($(date -u +%Y-%m-%d))" --body "$(printf 'The weekly models run failed: %s\n\nXo %s.%s\n\nTimings:\n\n%s\n' "$run" "${{ steps.xo.outputs.version }}" "${pr:+ Pull request: $pr}" "$(cat "$CI_TIMINGS" 2>/dev/null)")"
+          gh issue create --title "Weekly models run failed: $failed ($(date -u +%Y-%m-%d))" --body "$(printf 'The weekly models run failed (%s): %s\n\nXo %s.%s%s\n\nTimings:\n\n%s\n' "$failed" "$run" "${{ steps.xo.outputs.version }}" "${pr:+ Pull request: $pr}" "${branch:+ Branch: $branch.}${notes:+ Report notes:${notes#;}.}" "$(cat "$CI_TIMINGS" 2>/dev/null)")"
 
       - name: Timings
         if: always()

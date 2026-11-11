@@ -3302,6 +3302,11 @@ Disliked:
   `Content-Length` larger than the body is ignored. Go's server drops the
   connection there, and the client sees `unexpected EOF`. So the storage
   Reader's reopen-after-a-dropped-connection path can't be tested
-  against FakeNet. Proposal: a stream function's `Err` (or a short
-  `Content-Length`) should reach the client's `read` as
-  `Protocol("unexpected EOF")`, as std.md 4.5 says for a real connection.
+  against FakeNet. The same holds for a real `http.server` on an
+  in-memory listener: a stream's `Err` ends a chunked body cleanly, where
+  Go's handler can abort the connection (panic(http.ErrAbortHandler)).
+  And an `http.client` cannot reach a raw `os.net.listen` listener under
+  FakeNet ("fakenet: raw listener"), so a hand-written short response
+  isn't possible either. Proposal: a stream function's `Err` aborts the
+  connection, so the client's `read` gets `Protocol("unexpected EOF")`,
+  as std.md 4.5 says for a body cut short.

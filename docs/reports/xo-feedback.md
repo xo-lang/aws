@@ -3284,3 +3284,27 @@ Disliked:
 - A module in a subdirectory of its repository has no LICENSE in its tree
   (Go copies the root's), so a "no license, no docs" site hides nearly all
   of them; decision 0590 proposes Go's rule.
+
+## 2026-11-11: the gcp Cloud Storage client, step 1 (decision 0010)
+
+Liked:
+- FakeNet plus a Go program printing every request made a line-for-line
+  oracle easy: 28 cases (headers, sorted queries, bodies, errors,
+  retries) passed on first run, and changing one expected line failed
+  4 tests, so the comparison is real.
+- `json.Value` built by hand is enough for Go's ForceSendFields and
+  NullFields PATCH bodies (empty values sent, nulls on purpose), with no
+  reflection.
+
+Disliked:
+- A FakeNet handler cannot cut a response body short: an `http.stream`
+  whose function returns `Err` after writing reads as a clean end, and a
+  `Content-Length` larger than the body is ignored. Go's server drops the
+  connection there, and the client sees `unexpected EOF`. So the storage
+  Reader's reopen-after-a-dropped-connection path can't be tested
+  against FakeNet. Proposal: a stream function's `Err` (or a short
+  `Content-Length`) should reach the client's `read` as
+  `Protocol("unexpected EOF")`, as std.md 4.5 says for a real connection.
+- Xo has no struct-literal-in-condition shorthand
+  (`if c == Conditions{}` is XO0163). The parenthesized form works, but
+  the message could suggest it directly.

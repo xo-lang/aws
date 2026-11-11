@@ -8,6 +8,66 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn json_of_template_error(v: TemplateError) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.message {
+    fs.push(("Message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.violated_entities {
+    fs.push(("ViolatedEntities", json_of_entity_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_template_error(v: json.Value) -> TemplateError ! Str {
+  var out = TemplateError{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Type" => out.type_value = TemplateErrorType.from(jsonv.read_str(fv)?)
+      "Message" => out.message = jsonv.read_str(fv)?
+      "ViolatedEntities" => out.violated_entities = from_json_entity_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_template_error_list(v: List[TemplateError]) -> json.Value {
+  json.Value.List(v.map(fn(x: TemplateError) -> json.Value { json_of_template_error(x) }))
+}
+
+fn from_json_template_error_list(v: json.Value) -> List[TemplateError] ! Str {
+  var out: List[TemplateError] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_template_error(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_template_source_analysis(v: TemplateSourceAnalysis) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.arn {
+    fs.push(("Arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.data_set_references {
+    fs.push(("DataSetReferences", json_of_data_set_reference_list(x)))
+  }
+  if let Some(x) = v.topic_references {
+    fs.push(("TopicReferences", json_of_topic_reference_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
 fn from_json_template_source_analysis(v: json.Value) -> TemplateSourceAnalysis ! Str {
   var out = TemplateSourceAnalysis{}
   for (k, fv) in jsonv.fields(v)? {
@@ -7672,6 +7732,70 @@ fn from_json_update_resource_permission_list(v: json.Value) -> List[ResourcePerm
   Ok(out)
 }
 
+fn json_of_update_resource_permissions_request(v: UpdateResourcePermissionsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.aws_account_id {
+    fs.push(("AwsAccountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.role_type {
+    fs.push(("RoleType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.customer_managed_role_arn {
+    fs.push(("CustomerManagedRoleArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_resource_permissions_request(v: json.Value) -> UpdateResourcePermissionsRequest ! Str {
+  var out = UpdateResourcePermissionsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AwsAccountId" => out.aws_account_id = jsonv.read_str(fv)?
+      "RoleType" => out.role_type = ServiceRoleType.from(jsonv.read_str(fv)?)
+      "CustomerManagedRoleArn" => out.customer_managed_role_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_resource_permissions_response(v: UpdateResourcePermissionsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.role_type {
+    fs.push(("RoleType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.customer_managed_role_arn {
+    fs.push(("CustomerManagedRoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.request_id {
+    fs.push(("RequestId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("Status", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_resource_permissions_response(v: json.Value) -> UpdateResourcePermissionsResponse ! Str {
+  var out = UpdateResourcePermissionsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "RoleType" => out.role_type = ServiceRoleType.from(jsonv.read_str(fv)?)
+      "CustomerManagedRoleArn" => out.customer_managed_role_arn = jsonv.read_str(fv)?
+      "RequestId" => out.request_id = jsonv.read_str(fv)?
+      "Status" => out.status = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_update_role_custom_permission_request(v: UpdateRoleCustomPermissionRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.custom_permissions_name {
@@ -13405,110 +13529,4 @@ pub fn serialize_create_custom_permissions(ep: rest.Endpoint, input: CreateCusto
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_create_custom_permissions(resp: http.Response) -> CreateCustomPermissionsResponse ! Str {
-  var out = CreateCustomPermissionsResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Status" => out.status = jsonv.read_int(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      "RequestId" => out.request_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateCustomPermissions.
-pub enum CreateCustomPermissionsErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalFailureException(e: InternalFailureException)
-  InvalidParameterValueException(e: InvalidParameterValueException)
-  LimitExceededException(e: LimitExceededException)
-  PreconditionNotMetException(e: PreconditionNotMetException)
-  ResourceExistsException(e: ResourceExistsException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ResourceUnavailableException(e: ResourceUnavailableException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateCustomPermissionsErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalFailureException(x) => "InternalFailureException: ${x:?}"
-    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
-    LimitExceededException(x) => "LimitExceededException: ${x:?}"
-    PreconditionNotMetException(x) => "PreconditionNotMetException: ${x:?}"
-    ResourceExistsException(x) => "ResourceExistsException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ResourceUnavailableException(x) => "ResourceUnavailableException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_custom_permissions_error(resp: http.Response) -> CreateCustomPermissionsErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.AccessDeniedException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.ConflictException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "InternalFailureException" => match read_error_internal_failure_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.InternalFailureException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.InvalidParameterValueException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.LimitExceededException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "PreconditionNotMetException" => match read_error_precondition_not_met_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.PreconditionNotMetException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "ResourceExistsException" => match read_error_resource_exists_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.ResourceExistsException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "ResourceUnavailableException" => match read_error_resource_unavailable_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.ResourceUnavailableException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateCustomPermissionsErr.ThrottlingException(x)
-      Err(msg) => return CreateCustomPermissionsErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateCustomPermissionsErr.Api(restjson.api_error(resp, body))
 }

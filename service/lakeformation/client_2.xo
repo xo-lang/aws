@@ -8,6 +8,490 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Grants permissions to the principal to access metadata in the Data
+/// Catalog and data organized in underlying data storage such as Amazon S3.
+/// For information about permissions, see Security and Access Control to
+/// Metadata and Data .
+pub fn (c: Client) grant_permissions(input: GrantPermissionsRequest) -> GrantPermissionsResponse ! GrantPermissionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_grant_permissions(c.params, input)) ?? e => return Err(GrantPermissionsErr.InvalidInput(e))
+  var req = serialize_grant_permissions(ep, input, "") ?? e => return Err(GrantPermissionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GrantPermissionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_grant_permissions_error(resp))
+  }
+  deserialize_grant_permissions(resp) ?? e => Err(GrantPermissionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_data_cells_filter(base: EndpointParameters, input: ListDataCellsFilterRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDataCellsFilter.
+pub fn serialize_list_data_cells_filter(ep: rest.Endpoint, input: ListDataCellsFilterRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.table {
+    fs.push(("Table", json_of_table_resource(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/ListDataCellsFilter"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_data_cells_filter(resp: http.Response) -> ListDataCellsFilterResponse ! Str {
+  var out = ListDataCellsFilterResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DataCellsFilters" => out.data_cells_filters = from_json_data_cells_filter_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDataCellsFilter.
+pub enum ListDataCellsFilterErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
+  OperationTimeoutException(e: OperationTimeoutException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDataCellsFilterErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    OperationTimeoutException(x) => "OperationTimeoutException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_data_cells_filter_error(resp: http.Response) -> ListDataCellsFilterErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListDataCellsFilterErr.AccessDeniedException(x)
+      Err(msg) => return ListDataCellsFilterErr.Deserialize(msg)
+    }
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ListDataCellsFilterErr.InternalServiceException(x)
+      Err(msg) => return ListDataCellsFilterErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return ListDataCellsFilterErr.InvalidInputException(x)
+      Err(msg) => return ListDataCellsFilterErr.Deserialize(msg)
+    }
+    "OperationTimeoutException" => match read_error_operation_timeout_exception(resp, body) {
+      Ok(x) => return ListDataCellsFilterErr.OperationTimeoutException(x)
+      Err(msg) => return ListDataCellsFilterErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListDataCellsFilterErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists all the data cell filters on a table.
+pub fn (c: Client) list_data_cells_filter(input: ListDataCellsFilterRequest) -> ListDataCellsFilterResponse ! ListDataCellsFilterErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_data_cells_filter(c.params, input)) ?? e => return Err(ListDataCellsFilterErr.InvalidInput(e))
+  var req = serialize_list_data_cells_filter(ep, input, "") ?? e => return Err(ListDataCellsFilterErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDataCellsFilterErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_data_cells_filter_error(resp))
+  }
+  deserialize_list_data_cells_filter(resp) ?? e => Err(ListDataCellsFilterErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_lf_tag_expressions(base: EndpointParameters, input: ListLFTagExpressionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListLFTagExpressions.
+pub fn serialize_list_lf_tag_expressions(ep: rest.Endpoint, input: ListLFTagExpressionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.catalog_id {
+    fs.push(("CatalogId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/ListLFTagExpressions"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_lf_tag_expressions(resp: http.Response) -> ListLFTagExpressionsResponse ! Str {
+  var out = ListLFTagExpressionsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "LFTagExpressions" => out.lf_tag_expressions = from_json_lf_tag_expressions_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListLFTagExpressions.
+pub enum ListLFTagExpressionsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  EntityNotFoundException(e: EntityNotFoundException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
+  OperationTimeoutException(e: OperationTimeoutException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListLFTagExpressionsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    EntityNotFoundException(x) => "EntityNotFoundException: ${x:?}"
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    OperationTimeoutException(x) => "OperationTimeoutException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_lf_tag_expressions_error(resp: http.Response) -> ListLFTagExpressionsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListLFTagExpressionsErr.AccessDeniedException(x)
+      Err(msg) => return ListLFTagExpressionsErr.Deserialize(msg)
+    }
+    "EntityNotFoundException" => match read_error_entity_not_found_exception(resp, body) {
+      Ok(x) => return ListLFTagExpressionsErr.EntityNotFoundException(x)
+      Err(msg) => return ListLFTagExpressionsErr.Deserialize(msg)
+    }
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ListLFTagExpressionsErr.InternalServiceException(x)
+      Err(msg) => return ListLFTagExpressionsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return ListLFTagExpressionsErr.InvalidInputException(x)
+      Err(msg) => return ListLFTagExpressionsErr.Deserialize(msg)
+    }
+    "OperationTimeoutException" => match read_error_operation_timeout_exception(resp, body) {
+      Ok(x) => return ListLFTagExpressionsErr.OperationTimeoutException(x)
+      Err(msg) => return ListLFTagExpressionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListLFTagExpressionsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the LF-Tag expressions in caller’s account filtered based on
+/// caller's permissions. Data Lake and read only admins implicitly can see
+/// all tag expressions in their account, else caller needs DESCRIBE
+/// permissions on tag expression.
+pub fn (c: Client) list_lf_tag_expressions(input: ListLFTagExpressionsRequest) -> ListLFTagExpressionsResponse ! ListLFTagExpressionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_lf_tag_expressions(c.params, input)) ?? e => return Err(ListLFTagExpressionsErr.InvalidInput(e))
+  var req = serialize_list_lf_tag_expressions(ep, input, "") ?? e => return Err(ListLFTagExpressionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListLFTagExpressionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_lf_tag_expressions_error(resp))
+  }
+  deserialize_list_lf_tag_expressions(resp) ?? e => Err(ListLFTagExpressionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_lf_tags(base: EndpointParameters, input: ListLFTagsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListLFTags.
+pub fn serialize_list_lf_tags(ep: rest.Endpoint, input: ListLFTagsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.catalog_id {
+    fs.push(("CatalogId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.resource_share_type {
+    fs.push(("ResourceShareType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/ListLFTags"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_lf_tags(resp: http.Response) -> ListLFTagsResponse ! Str {
+  var out = ListLFTagsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "LFTags" => out.lf_tags = from_json_lf_tags_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListLFTags.
+pub enum ListLFTagsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  EntityNotFoundException(e: EntityNotFoundException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
+  OperationTimeoutException(e: OperationTimeoutException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListLFTagsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    EntityNotFoundException(x) => "EntityNotFoundException: ${x:?}"
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    OperationTimeoutException(x) => "OperationTimeoutException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_lf_tags_error(resp: http.Response) -> ListLFTagsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListLFTagsErr.AccessDeniedException(x)
+      Err(msg) => return ListLFTagsErr.Deserialize(msg)
+    }
+    "EntityNotFoundException" => match read_error_entity_not_found_exception(resp, body) {
+      Ok(x) => return ListLFTagsErr.EntityNotFoundException(x)
+      Err(msg) => return ListLFTagsErr.Deserialize(msg)
+    }
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ListLFTagsErr.InternalServiceException(x)
+      Err(msg) => return ListLFTagsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return ListLFTagsErr.InvalidInputException(x)
+      Err(msg) => return ListLFTagsErr.Deserialize(msg)
+    }
+    "OperationTimeoutException" => match read_error_operation_timeout_exception(resp, body) {
+      Ok(x) => return ListLFTagsErr.OperationTimeoutException(x)
+      Err(msg) => return ListLFTagsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListLFTagsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists LF-tags that the requester has permission to view.
+pub fn (c: Client) list_lf_tags(input: ListLFTagsRequest) -> ListLFTagsResponse ! ListLFTagsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_lf_tags(c.params, input)) ?? e => return Err(ListLFTagsErr.InvalidInput(e))
+  var req = serialize_list_lf_tags(ep, input, "") ?? e => return Err(ListLFTagsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListLFTagsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_lf_tags_error(resp))
+  }
+  deserialize_list_lf_tags(resp) ?? e => Err(ListLFTagsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_lake_formation_opt_ins(base: EndpointParameters, input: ListLakeFormationOptInsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListLakeFormationOptIns.
+pub fn serialize_list_lake_formation_opt_ins(ep: rest.Endpoint, input: ListLakeFormationOptInsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.principal {
+    fs.push(("Principal", json_of_data_lake_principal(x)))
+  }
+  if let Some(x) = input.resource {
+    fs.push(("Resource", json_of_resource(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/ListLakeFormationOptIns"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_lake_formation_opt_ins(resp: http.Response) -> ListLakeFormationOptInsResponse ! Str {
+  var out = ListLakeFormationOptInsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "LakeFormationOptInsInfoList" => out.lake_formation_opt_ins_info_list = from_json_lake_formation_opt_ins_info_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListLakeFormationOptIns.
+pub enum ListLakeFormationOptInsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
+  OperationTimeoutException(e: OperationTimeoutException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListLakeFormationOptInsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    OperationTimeoutException(x) => "OperationTimeoutException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
 pub fn deserialize_list_lake_formation_opt_ins_error(resp: http.Response) -> ListLakeFormationOptInsErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {

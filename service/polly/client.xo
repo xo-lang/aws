@@ -531,6 +531,28 @@ fn from_json_invalid_ssml_exception(v: json.Value) -> InvalidSsmlException ! Str
   Ok(out)
 }
 
+fn json_of_invalid_tag_parameter_exception(v: InvalidTagParameterException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_invalid_tag_parameter_exception(v: json.Value) -> InvalidTagParameterException ! Str {
+  var out = InvalidTagParameterException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_invalid_task_id_exception(v: InvalidTaskIdException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -865,6 +887,50 @@ fn from_json_list_speech_synthesis_tasks_output(v: json.Value) -> ListSpeechSynt
   Ok(out)
 }
 
+fn json_of_list_tags_for_resource_input(v: ListTagsForResourceInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_arn {
+    fs.push(("ResourceArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_tags_for_resource_input(v: json.Value) -> ListTagsForResourceInput ! Str {
+  var out = ListTagsForResourceInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ResourceArn" => out.resource_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_tags_for_resource_output(v: ListTagsForResourceOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tags {
+    fs.push(("Tags", json_of_tag_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_tags_for_resource_output(v: json.Value) -> ListTagsForResourceOutput ! Str {
+  var out = ListTagsForResourceOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Tags" => out.tags = from_json_tag_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_marks_not_supported_for_format_exception(v: MarksNotSupportedForFormatException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -939,6 +1005,9 @@ fn json_of_put_lexicon_input(v: PutLexiconInput) -> json.Value {
   if let Some(x) = v.content {
     fs.push(("Content", json.Value.Str(x)))
   }
+  if let Some(x) = v.tags {
+    fs.push(("Tags", json_of_tag_map(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -951,6 +1020,7 @@ fn from_json_put_lexicon_input(v: json.Value) -> PutLexiconInput ! Str {
     match k {
       "Name" => out.name = jsonv.read_str(fv)?
       "Content" => out.content = jsonv.read_str(fv)?
+      "Tags" => out.tags = from_json_tag_map(fv)?
       _ => {}
     }
   }
@@ -965,6 +1035,36 @@ fn json_of_put_lexicon_output(v: PutLexiconOutput) -> json.Value {
 fn from_json_put_lexicon_output(v: json.Value) -> PutLexiconOutput ! Str {
   var out = PutLexiconOutput{}
   let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_resource_not_found_exception(v: ResourceNotFoundException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_id {
+    fs.push(("resourceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_type {
+    fs.push(("resourceType", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resource_not_found_exception(v: json.Value) -> ResourceNotFoundException ! Str {
+  var out = ResourceNotFoundException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = ResourceType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
   Ok(out)
 }
 
@@ -1488,6 +1588,75 @@ fn from_json_synthesize_speech_output(v: json.Value) -> SynthesizeSpeechOutput !
   Ok(out)
 }
 
+fn json_of_tag_key_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_tag_key_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_tag_map(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_tag_map(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_tag_resource_input(v: TagResourceInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_arn {
+    fs.push(("ResourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("Tags", json_of_tag_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_tag_resource_input(v: json.Value) -> TagResourceInput ! Str {
+  var out = TagResourceInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ResourceArn" => out.resource_arn = jsonv.read_str(fv)?
+      "Tags" => out.tags = from_json_tag_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_tag_resource_output(v: TagResourceOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_tag_resource_output(v: json.Value) -> TagResourceOutput ! Str {
+  var out = TagResourceOutput{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_text_event(v: TextEvent) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.text {
@@ -1608,6 +1777,28 @@ fn from_json_throttling_reason_list(v: json.Value) -> List[ThrottlingReason] ! S
   Ok(out)
 }
 
+fn json_of_too_many_tags_exception(v: TooManyTagsException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_too_many_tags_exception(v: json.Value) -> TooManyTagsException ! Str {
+  var out = TooManyTagsException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_unsupported_pls_alphabet_exception(v: UnsupportedPlsAlphabetException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -1649,6 +1840,43 @@ fn from_json_unsupported_pls_language_exception(v: json.Value) -> UnsupportedPls
       _ => {}
     }
   }
+  Ok(out)
+}
+
+fn json_of_untag_resource_input(v: UntagResourceInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_arn {
+    fs.push(("ResourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tag_keys {
+    fs.push(("TagKeys", json_of_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_untag_resource_input(v: json.Value) -> UntagResourceInput ! Str {
+  var out = UntagResourceInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ResourceArn" => out.resource_arn = jsonv.read_str(fv)?
+      "TagKeys" => out.tag_keys = from_json_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_untag_resource_output(v: UntagResourceOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_untag_resource_output(v: json.Value) -> UntagResourceOutput ! Str {
+  var out = UntagResourceOutput{}
+  let _ = jsonv.fields(v)?
   Ok(out)
 }
 
@@ -1906,6 +2134,21 @@ fn read_error_invalid_ssml_exception(resp: http.Response, body: json.Value) -> I
   Ok(out)
 }
 
+fn read_error_invalid_tag_parameter_exception(resp: http.Response, body: json.Value) -> InvalidTagParameterException ! Str {
+  let _ = (resp, body)
+  var out = InvalidTagParameterException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_invalid_task_id_exception(resp: http.Response, body: json.Value) -> InvalidTaskIdException ! Str {
   let _ = (resp, body)
   var out = InvalidTaskIdException{}
@@ -2011,6 +2254,23 @@ fn read_error_max_lexicons_number_exceeded_exception(resp: http.Response, body: 
   Ok(out)
 }
 
+fn read_error_resource_not_found_exception(resp: http.Response, body: json.Value) -> ResourceNotFoundException ! Str {
+  let _ = (resp, body)
+  var out = ResourceNotFoundException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = ResourceType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_service_failure_exception(resp: http.Response, body: json.Value) -> ServiceFailureException ! Str {
   let _ = (resp, body)
   var out = ServiceFailureException{}
@@ -2098,6 +2358,21 @@ fn read_error_throttling_exception(resp: http.Response, body: json.Value) -> Thr
     match k {
       "message" => out.message = jsonv.read_str(fv)?
       "throttlingReasons" => out.throttling_reasons = from_json_throttling_reason_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_too_many_tags_exception(resp: http.Response, body: json.Value) -> TooManyTagsException ! Str {
+  let _ = (resp, body)
+  var out = TooManyTagsException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -2989,6 +3264,123 @@ pub fn (c: Client) list_speech_synthesis_tasks(input: ListSpeechSynthesisTasksIn
   deserialize_list_speech_synthesis_tasks(resp) ?? e => Err(ListSpeechSynthesisTasksErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_tags_for_resource(base: EndpointParameters, input: ListTagsForResourceInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListTagsForResource.
+pub fn serialize_list_tags_for_resource(ep: rest.Endpoint, input: ListTagsForResourceInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.resource_arn {
+    qs.push(("arn", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/listTagsForResource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_tags_for_resource(resp: http.Response) -> ListTagsForResourceOutput ! Str {
+  var out = ListTagsForResourceOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Tags" => out.tags = from_json_tag_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListTagsForResource.
+pub enum ListTagsForResourceErr {
+  InvalidTagParameterException(e: InvalidTagParameterException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceFailureException(e: ServiceFailureException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListTagsForResourceErr) display() -> Str {
+  match e {
+    InvalidTagParameterException(x) => "InvalidTagParameterException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTagsForResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidTagParameterException" => match read_error_invalid_tag_parameter_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.InvalidTagParameterException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ServiceFailureException" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ServiceFailureException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ThrottlingException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ValidationException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListTagsForResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the tags for an Amazon Polly resource.
+pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceInput) -> ListTagsForResourceOutput ! ListTagsForResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListTagsForResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_tags_for_resource_error(resp))
+  }
+  deserialize_list_tags_for_resource(resp) ?? e => Err(ListTagsForResourceErr.Deserialize(e))
+}
+
 pub fn endpoint_params_put_lexicon(base: EndpointParameters, input: PutLexiconInput) -> EndpointParameters {
   let _ = input
   base
@@ -3010,6 +3402,9 @@ pub fn serialize_put_lexicon(ep: rest.Endpoint, input: PutLexiconInput, idempote
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = input.content {
     fs.push(("Content", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_map(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -3036,12 +3431,15 @@ pub fn deserialize_put_lexicon(resp: http.Response) -> PutLexiconOutput ! Str {
 /// The errors of PutLexicon.
 pub enum PutLexiconErr {
   InvalidLexiconException(e: InvalidLexiconException)
+  InvalidTagParameterException(e: InvalidTagParameterException)
   LexiconSizeExceededException(e: LexiconSizeExceededException)
   MaxLexemeLengthExceededException(e: MaxLexemeLengthExceededException)
   MaxLexiconsNumberExceededException(e: MaxLexiconsNumberExceededException)
   ServiceFailureException(e: ServiceFailureException)
+  TooManyTagsException(e: TooManyTagsException)
   UnsupportedPlsAlphabetException(e: UnsupportedPlsAlphabetException)
   UnsupportedPlsLanguageException(e: UnsupportedPlsLanguageException)
+  ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
   /// The request was not sent or no response came (after retries).
@@ -3055,12 +3453,15 @@ pub enum PutLexiconErr {
 pub fn (e: PutLexiconErr) display() -> Str {
   match e {
     InvalidLexiconException(x) => "InvalidLexiconException: ${x:?}"
+    InvalidTagParameterException(x) => "InvalidTagParameterException: ${x:?}"
     LexiconSizeExceededException(x) => "LexiconSizeExceededException: ${x:?}"
     MaxLexemeLengthExceededException(x) => "MaxLexemeLengthExceededException: ${x:?}"
     MaxLexiconsNumberExceededException(x) => "MaxLexiconsNumberExceededException: ${x:?}"
     ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    TooManyTagsException(x) => "TooManyTagsException: ${x:?}"
     UnsupportedPlsAlphabetException(x) => "UnsupportedPlsAlphabetException: ${x:?}"
     UnsupportedPlsLanguageException(x) => "UnsupportedPlsLanguageException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
     InvalidInput(msg) => "invalid input: ${msg}"
@@ -3073,6 +3474,10 @@ pub fn deserialize_put_lexicon_error(resp: http.Response) -> PutLexiconErr {
   match restjson.error_code(resp, body) {
     "InvalidLexiconException" => match read_error_invalid_lexicon_exception(resp, body) {
       Ok(x) => return PutLexiconErr.InvalidLexiconException(x)
+      Err(msg) => return PutLexiconErr.Deserialize(msg)
+    }
+    "InvalidTagParameterException" => match read_error_invalid_tag_parameter_exception(resp, body) {
+      Ok(x) => return PutLexiconErr.InvalidTagParameterException(x)
       Err(msg) => return PutLexiconErr.Deserialize(msg)
     }
     "LexiconSizeExceededException" => match read_error_lexicon_size_exceeded_exception(resp, body) {
@@ -3091,12 +3496,20 @@ pub fn deserialize_put_lexicon_error(resp: http.Response) -> PutLexiconErr {
       Ok(x) => return PutLexiconErr.ServiceFailureException(x)
       Err(msg) => return PutLexiconErr.Deserialize(msg)
     }
+    "TooManyTagsException" => match read_error_too_many_tags_exception(resp, body) {
+      Ok(x) => return PutLexiconErr.TooManyTagsException(x)
+      Err(msg) => return PutLexiconErr.Deserialize(msg)
+    }
     "UnsupportedPlsAlphabetException" => match read_error_unsupported_pls_alphabet_exception(resp, body) {
       Ok(x) => return PutLexiconErr.UnsupportedPlsAlphabetException(x)
       Err(msg) => return PutLexiconErr.Deserialize(msg)
     }
     "UnsupportedPlsLanguageException" => match read_error_unsupported_pls_language_exception(resp, body) {
       Ok(x) => return PutLexiconErr.UnsupportedPlsLanguageException(x)
+      Err(msg) => return PutLexiconErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return PutLexiconErr.ValidationException(x)
       Err(msg) => return PutLexiconErr.Deserialize(msg)
     }
     _ => {}
@@ -3108,8 +3521,12 @@ pub fn deserialize_put_lexicon_error(resp: http.Response) -> PutLexiconErr {
 /// lexicon with the same name already exists in the region, it is
 /// overwritten by the new lexicon. Lexicon operations have eventual
 /// consistency, therefore, it might take some time before the lexicon is
-/// available to the SynthesizeSpeech operation. For more information, see
-/// Managing Lexicons .
+/// available to the SynthesizeSpeech operation. Overwriting a lexicon keeps
+/// its existing tags. You can specify tags only when you create a lexicon.
+/// If you specify tags for a lexicon that already exists, the request fails
+/// with a ValidationException . To change the tags of an existing lexicon,
+/// use TagResource and UntagResource . For more information, see Managing
+/// Lexicons .
 pub fn (c: Client) put_lexicon(input: PutLexiconInput) -> PutLexiconOutput ! PutLexiconErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_put_lexicon(c.params, input)) ?? e => return Err(PutLexiconErr.InvalidInput(e))
   var req = serialize_put_lexicon(ep, input, "") ?? e => return Err(PutLexiconErr.InvalidInput(e))
@@ -3674,4 +4091,239 @@ pub fn (c: Client) presign_synthesize_speech(input: SynthesizeSpeechInput, expir
     headers: req.headers.filter(fn(h: (Str, Str)) -> Bool { h.0.to_lower() != "content-type" }),
   }
   transport.presign(c.transport, req, signing, expires) ?? e => Err(SynthesizeSpeechErr.Send(e))
+}
+
+pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of TagResource.
+pub fn serialize_tag_resource(ep: rest.Endpoint, input: TagResourceInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_arn {
+    fs.push(("ResourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_map(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/tagResource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_tag_resource(resp: http.Response) -> TagResourceOutput ! Str {
+  var out = TagResourceOutput{}
+  Ok(out)
+}
+
+/// The errors of TagResource.
+pub enum TagResourceErr {
+  InvalidTagParameterException(e: InvalidTagParameterException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceFailureException(e: ServiceFailureException)
+  ThrottlingException(e: ThrottlingException)
+  TooManyTagsException(e: TooManyTagsException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: TagResourceErr) display() -> Str {
+  match e {
+    InvalidTagParameterException(x) => "InvalidTagParameterException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    TooManyTagsException(x) => "TooManyTagsException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidTagParameterException" => match read_error_invalid_tag_parameter_exception(resp, body) {
+      Ok(x) => return TagResourceErr.InvalidTagParameterException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ServiceFailureException" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ServiceFailureException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ThrottlingException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "TooManyTagsException" => match read_error_too_many_tags_exception(resp, body) {
+      Ok(x) => return TagResourceErr.TooManyTagsException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ValidationException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  TagResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Adds specified tags to a resource with the specified ARN. Existing tags
+/// on a resource are not changed if they are not specified in the request
+/// parameters. If you specify a tag key that already exists on the
+/// resource, the value in the request replaces the existing value.
+pub fn (c: Client) tag_resource(input: TagResourceInput) -> TagResourceOutput ! TagResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TagResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_tag_resource_error(resp))
+  }
+  deserialize_tag_resource(resp) ?? e => Err(TagResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_untag_resource(base: EndpointParameters, input: UntagResourceInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UntagResource.
+pub fn serialize_untag_resource(ep: rest.Endpoint, input: UntagResourceInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_arn {
+    fs.push(("ResourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tag_keys {
+    fs.push(("TagKeys", json_of_tag_key_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/untagResource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_untag_resource(resp: http.Response) -> UntagResourceOutput ! Str {
+  var out = UntagResourceOutput{}
+  Ok(out)
+}
+
+/// The errors of UntagResource.
+pub enum UntagResourceErr {
+  InvalidTagParameterException(e: InvalidTagParameterException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceFailureException(e: ServiceFailureException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UntagResourceErr) display() -> Str {
+  match e {
+    InvalidTagParameterException(x) => "InvalidTagParameterException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidTagParameterException" => match read_error_invalid_tag_parameter_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.InvalidTagParameterException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ServiceFailureException" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ServiceFailureException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ThrottlingException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ValidationException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UntagResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes specified tags from a resource.
+pub fn (c: Client) untag_resource(input: UntagResourceInput) -> UntagResourceOutput ! UntagResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UntagResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_untag_resource_error(resp))
+  }
+  deserialize_untag_resource(resp) ?? e => Err(UntagResourceErr.Deserialize(e))
 }

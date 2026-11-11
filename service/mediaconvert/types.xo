@@ -2364,6 +2364,12 @@ pub struct CancelJobResponse {
 /// For each output that has captions, include one instance of
 /// CaptionDescriptions.
 pub struct CaptionDescription {
+  /// Specifies the audio selector or audio selector group that MediaConvert
+  /// uses to generate Smart subtitles. The audio selector you choose must
+  /// exist in all inputs for the job. If MediaConvert can't detect speech in
+  /// the audio, it can't generate subtitles. Required when source is
+  /// SMART_SUBTITLE; not allowed otherwise.
+  pub audio_source_names: List[Str]? = None
   /// Specifies which "Caption Selector":#inputs-caption_selector to use from
   /// each input when generating captions. The name should be of the format
   /// "Caption Selector ", which denotes that the Nth Caption Selector will be
@@ -2397,6 +2403,12 @@ pub struct CaptionDescription {
   /// end-viewer's player device. For outputs in other output groups, the
   /// service ignores this setting.
   pub language_description: Str? = None
+  /// Specify the source of the captions for this caption description. Choose
+  /// Captions input source (INPUT_CAPTION_SELECTOR) to use a caption selector
+  /// from your input. Choose Smart subtitling (SMART_SUBTITLE) to have
+  /// MediaConvert and Elemental Inference generate subtitles automatically
+  /// from an audio source that you specify.
+  pub source: CaptionSource? = None
 }
 
 /// Caption Description for preset
@@ -2547,6 +2559,17 @@ pub struct CaptionSelector {
   /// captions are IMSC in an IMF package, use TrackSourceSettings instead of
   /// FileSoureSettings.
   pub source_settings: CaptionSourceSettings? = None
+}
+
+/// Specify the source of the captions for this caption description. Choose
+/// Captions input source (INPUT_CAPTION_SELECTOR) to use a caption selector
+/// from your input. Choose Smart subtitling (SMART_SUBTITLE) to have
+/// MediaConvert and Elemental Inference generate subtitles automatically
+/// from an audio source that you specify.
+pub enum CaptionSource: Str {
+  InputCaptionSelector = "INPUT_CAPTION_SELECTOR"
+  SmartSubtitle = "SMART_SUBTITLE"
+  Unknown(value: Str)
 }
 
 /// Choose whether to limit the byte rate at which your SCC input captions
@@ -4087,6 +4110,8 @@ pub struct CreateJobRequest {
   /// original request instead. For more information see
   /// https://docs.aws.amazon.com/mediaconvert/latest/apireference/idempotency.html.
   pub client_request_token: Str? = None
+  /// The Elemental Inference settings used in this job.
+  pub elemental_inference_settings: ElementalInferenceSettings? = None
   /// Optional. Use queue hopping to avoid overly long waits in the backlog of
   /// the queue that you submit your job to. Specify an alternate queue and
   /// the maximum time that your job will wait in the initial queue before
@@ -4161,6 +4186,8 @@ pub struct CreateJobTemplateRequest {
   pub category: Str? = None
   /// Optional. A description of the job template you are creating.
   pub description: Str? = None
+  /// The Elemental Inference settings used in this job.
+  pub elemental_inference_settings: ElementalInferenceSettings? = None
   /// Optional. Use queue hopping to avoid overly long waits in the backlog of
   /// the queue that you submit your job to. Specify an alternate queue and
   /// the maximum time that your job will wait in the initial queue before
@@ -6048,22 +6075,29 @@ pub enum Eac3SurroundMode: Str {
 pub struct ElementalInferenceConfiguration {
   /// A list of Elemental Inference features used in this job.
   pub features: List[ElementalInferenceFeature]? = None
-  /// A list of Elemental Inference feeds used by this job.
+  /// A list of Elemental Inference feeds created during this job.
   pub feeds: List[ElementalInferenceFeed]? = None
 }
 
 /// Elemental Inference feature.
 pub enum ElementalInferenceFeature: Str {
   SmartCrop = "SMART_CROP"
+  SmartSubtitle = "SMART_SUBTITLE"
   Unknown(value: Str)
 }
 
-/// Elemental Inference Feed.
+/// An AWS Elemental Inference Feed.
 pub struct ElementalInferenceFeed {
-  /// Feed ARN.
+  /// The ARN of an AWS Elemental Inference Feed.
   pub arn: Str? = None
   /// Elemental Inference Feed management state.
   pub feed_management_state: ElementalInferenceFeedManagementState? = None
+}
+
+/// The source of your Elemental Inference Feed configuration.
+pub struct ElementalInferenceFeedConfigurationSource {
+  /// The ARN of an Elemental Inference Feed.
+  pub feed_arn: Str? = None
 }
 
 /// Elemental Inference Feed management state.
@@ -6073,6 +6107,14 @@ pub enum ElementalInferenceFeedManagementState: Str {
   PendingDeletion = "PENDING_DELETION"
   Deleted = "DELETED"
   Unknown(value: Str)
+}
+
+/// The Elemental Inference settings used in this job.
+pub struct ElementalInferenceSettings {
+  /// Optional. The source of your Elemental Inference Feed configuration.
+  /// MediaConvert will reference this configuration source when you specify
+  /// job settings which use Elemental Inference.
+  pub feed_configuration_source: ElementalInferenceFeedConfigurationSource? = None
 }
 
 /// Specify whether this set of input captions appears in your outputs in
@@ -8564,49 +8606,5 @@ pub enum HlsCaptionLanguageSetting: Str {
   Insert = "INSERT"
   Omit = "OMIT"
   None = "NONE"
-  Unknown(value: Str)
-}
-
-/// Set Caption segment length control to Match video to create caption
-/// segments that align with the video segments from the first video output
-/// in this output group. For example, if the video segments are 2 seconds
-/// long, your WebVTT segments will also be 2 seconds long. Keep the default
-/// setting, Large segments to create caption segments that are 300 seconds
-/// long.
-pub enum HlsCaptionSegmentLengthControl: Str {
-  LargeSegments = "LARGE_SEGMENTS"
-  MatchVideo = "MATCH_VIDEO"
-  Unknown(value: Str)
-}
-
-/// Disable this setting only when your workflow requires the
-/// #EXT-X-ALLOW-CACHE:no tag. Otherwise, keep the default value Enabled and
-/// control caching in your video distribution set up. For example, use the
-/// Cache-Control http header.
-pub enum HlsClientCache: Str {
-  Disabled = "DISABLED"
-  Enabled = "ENABLED"
-  Unknown(value: Str)
-}
-
-/// Specification to use (RFC-6381 or the default RFC-4281) during m3u8
-/// playlist generation.
-pub enum HlsCodecSpecification: Str {
-  Rfc6381 = "RFC_6381"
-  Rfc4281 = "RFC_4281"
-  Unknown(value: Str)
-}
-
-/// Specify whether to flag this audio track as descriptive video service
-/// (DVS) in your HLS parent manifest. When you choose Flag, MediaConvert
-/// includes the parameter
-/// CHARACTERISTICS="public.accessibility.describes-video" in the
-/// EXT-X-MEDIA entry for this track. When you keep the default choice,
-/// Don't flag, MediaConvert leaves this parameter out. The DVS flag can
-/// help with accessibility on Apple devices. For more information, see the
-/// Apple documentation.
-pub enum HlsDescriptiveVideoServiceFlag: Str {
-  DontFlag = "DONT_FLAG"
-  Flag = "FLAG"
   Unknown(value: Str)
 }

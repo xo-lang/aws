@@ -185,6 +185,58 @@ fn from_json_azure_blob_sas_configuration(v: json.Value) -> AzureBlobSasConfigur
   Ok(out)
 }
 
+fn json_of_azure_federated_identity_config(v: AzureFederatedIdentityConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.aws_iam_role {
+    fs.push(("AwsIamRole", json.Value.Str(x)))
+  }
+  if let Some(x) = v.azure_oidc {
+    fs.push(("AzureOidc", json_of_azure_oidc_config(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_azure_federated_identity_config(v: json.Value) -> AzureFederatedIdentityConfig ! Str {
+  var out = AzureFederatedIdentityConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AwsIamRole" => out.aws_iam_role = jsonv.read_str(fv)?
+      "AzureOidc" => out.azure_oidc = from_json_azure_oidc_config(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_azure_oidc_config(v: AzureOidcConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tenant_id {
+    fs.push(("TenantId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.client_id {
+    fs.push(("ClientId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_azure_oidc_config(v: json.Value) -> AzureOidcConfig ! Str {
+  var out = AzureOidcConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TenantId" => out.tenant_id = jsonv.read_str(fv)?
+      "ClientId" => out.client_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_cancel_task_execution_request(v: CancelTaskExecutionRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.task_execution_arn {
@@ -319,6 +371,9 @@ fn json_of_create_location_azure_blob_request(v: CreateLocationAzureBlobRequest)
   if let Some(x) = v.sas_configuration {
     fs.push(("SasConfiguration", json_of_azure_blob_sas_configuration(x)))
   }
+  if let Some(x) = v.federated_identity {
+    fs.push(("FederatedIdentity", json_of_azure_federated_identity_config(x)))
+  }
   if let Some(x) = v.blob_type {
     fs.push(("BlobType", json.Value.Str(x.value())))
   }
@@ -353,6 +408,7 @@ fn from_json_create_location_azure_blob_request(v: json.Value) -> CreateLocation
       "ContainerUrl" => out.container_url = jsonv.read_str(fv)?
       "AuthenticationType" => out.authentication_type = AzureBlobAuthenticationType.from(jsonv.read_str(fv)?)
       "SasConfiguration" => out.sas_configuration = from_json_azure_blob_sas_configuration(fv)?
+      "FederatedIdentity" => out.federated_identity = from_json_azure_federated_identity_config(fv)?
       "BlobType" => out.blob_type = AzureBlobType.from(jsonv.read_str(fv)?)
       "AccessTier" => out.access_tier = AzureAccessTier.from(jsonv.read_str(fv)?)
       "Subdirectory" => out.subdirectory = jsonv.read_str(fv)?
@@ -891,6 +947,9 @@ fn json_of_create_location_object_storage_request(v: CreateLocationObjectStorage
   if let Some(x) = v.secret_key {
     fs.push(("SecretKey", json.Value.Str(x)))
   }
+  if let Some(x) = v.federated_identity {
+    fs.push(("FederatedIdentity", json_of_object_storage_federated_identity_config(x)))
+  }
   if let Some(x) = v.agent_arns {
     fs.push(("AgentArns", json_of_agent_arn_list(x)))
   }
@@ -923,6 +982,7 @@ fn from_json_create_location_object_storage_request(v: json.Value) -> CreateLoca
       "BucketName" => out.bucket_name = jsonv.read_str(fv)?
       "AccessKey" => out.access_key = jsonv.read_str(fv)?
       "SecretKey" => out.secret_key = jsonv.read_str(fv)?
+      "FederatedIdentity" => out.federated_identity = from_json_object_storage_federated_identity_config(fv)?
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
       "Tags" => out.tags = from_json_input_tag_list(fv)?
       "ServerCertificate" => out.server_certificate = jsonv.read_blob(fv)?
@@ -1438,6 +1498,9 @@ fn json_of_describe_location_azure_blob_response(v: DescribeLocationAzureBlobRes
   if let Some(x) = v.authentication_type {
     fs.push(("AuthenticationType", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.federated_identity {
+    fs.push(("FederatedIdentity", json_of_azure_federated_identity_config(x)))
+  }
   if let Some(x) = v.blob_type {
     fs.push(("BlobType", json.Value.Str(x.value())))
   }
@@ -1472,6 +1535,7 @@ fn from_json_describe_location_azure_blob_response(v: json.Value) -> DescribeLoc
       "LocationArn" => out.location_arn = jsonv.read_str(fv)?
       "LocationUri" => out.location_uri = jsonv.read_str(fv)?
       "AuthenticationType" => out.authentication_type = AzureBlobAuthenticationType.from(jsonv.read_str(fv)?)
+      "FederatedIdentity" => out.federated_identity = from_json_azure_federated_identity_config(fv)?
       "BlobType" => out.blob_type = AzureBlobType.from(jsonv.read_str(fv)?)
       "AccessTier" => out.access_tier = AzureAccessTier.from(jsonv.read_str(fv)?)
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
@@ -2006,6 +2070,9 @@ fn json_of_describe_location_object_storage_response(v: DescribeLocationObjectSt
   if let Some(x) = v.access_key {
     fs.push(("AccessKey", json.Value.Str(x)))
   }
+  if let Some(x) = v.federated_identity {
+    fs.push(("FederatedIdentity", json_of_object_storage_federated_identity_config(x)))
+  }
   if let Some(x) = v.server_port {
     fs.push(("ServerPort", json.Value.Int(x)))
   }
@@ -2043,6 +2110,7 @@ fn from_json_describe_location_object_storage_response(v: json.Value) -> Describ
       "LocationArn" => out.location_arn = jsonv.read_str(fv)?
       "LocationUri" => out.location_uri = jsonv.read_str(fv)?
       "AccessKey" => out.access_key = jsonv.read_str(fv)?
+      "FederatedIdentity" => out.federated_identity = from_json_object_storage_federated_identity_config(fv)?
       "ServerPort" => out.server_port = jsonv.read_int(fv)?
       "ServerProtocol" => out.server_protocol = ObjectStorageServerProtocol.from(jsonv.read_str(fv)?)
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
@@ -2807,6 +2875,40 @@ fn from_json_fsx_update_protocol_smb(v: json.Value) -> FsxUpdateProtocolSmb ! St
   Ok(out)
 }
 
+fn json_of_google_oidc_config(v: GoogleOidcConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.project_name {
+    fs.push(("ProjectName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.project_number {
+    fs.push(("ProjectNumber", json.Value.Str(x)))
+  }
+  if let Some(x) = v.identity_pool_name {
+    fs.push(("IdentityPoolName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.identity_provider_name {
+    fs.push(("IdentityProviderName", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_google_oidc_config(v: json.Value) -> GoogleOidcConfig ! Str {
+  var out = GoogleOidcConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ProjectName" => out.project_name = jsonv.read_str(fv)?
+      "ProjectNumber" => out.project_number = jsonv.read_str(fv)?
+      "IdentityPoolName" => out.identity_pool_name = jsonv.read_str(fv)?
+      "IdentityProviderName" => out.identity_provider_name = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_hdfs_name_node(v: HdfsNameNode) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.hostname {
@@ -3353,6 +3455,54 @@ fn from_json_nfs_mount_options(v: json.Value) -> NfsMountOptions ! Str {
     }
     match k {
       "Version" => out.version = NfsVersion.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_object_storage_external_identity_config(v: ObjectStorageExternalIdentityConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.google_oidc {
+    fs.push(("GoogleOidc", json_of_google_oidc_config(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_object_storage_external_identity_config(v: json.Value) -> ObjectStorageExternalIdentityConfig ! Str {
+  var out = ObjectStorageExternalIdentityConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "GoogleOidc" => out.google_oidc = from_json_google_oidc_config(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_object_storage_federated_identity_config(v: ObjectStorageFederatedIdentityConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.aws_iam_role {
+    fs.push(("AwsIamRole", json.Value.Str(x)))
+  }
+  if let Some(x) = v.external_identity {
+    fs.push(("ExternalIdentity", json_of_object_storage_external_identity_config(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_object_storage_federated_identity_config(v: json.Value) -> ObjectStorageFederatedIdentityConfig ! Str {
+  var out = ObjectStorageFederatedIdentityConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AwsIamRole" => out.aws_iam_role = jsonv.read_str(fv)?
+      "ExternalIdentity" => out.external_identity = from_json_object_storage_external_identity_config(fv)?
       _ => {}
     }
   }
@@ -4496,6 +4646,9 @@ fn json_of_update_location_azure_blob_request(v: UpdateLocationAzureBlobRequest)
   if let Some(x) = v.sas_configuration {
     fs.push(("SasConfiguration", json_of_azure_blob_sas_configuration(x)))
   }
+  if let Some(x) = v.federated_identity {
+    fs.push(("FederatedIdentity", json_of_azure_federated_identity_config(x)))
+  }
   if let Some(x) = v.blob_type {
     fs.push(("BlobType", json.Value.Str(x.value())))
   }
@@ -4525,6 +4678,7 @@ fn from_json_update_location_azure_blob_request(v: json.Value) -> UpdateLocation
       "Subdirectory" => out.subdirectory = jsonv.read_str(fv)?
       "AuthenticationType" => out.authentication_type = AzureBlobAuthenticationType.from(jsonv.read_str(fv)?)
       "SasConfiguration" => out.sas_configuration = from_json_azure_blob_sas_configuration(fv)?
+      "FederatedIdentity" => out.federated_identity = from_json_azure_federated_identity_config(fv)?
       "BlobType" => out.blob_type = AzureBlobType.from(jsonv.read_str(fv)?)
       "AccessTier" => out.access_tier = AzureAccessTier.from(jsonv.read_str(fv)?)
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
@@ -4933,6 +5087,9 @@ fn json_of_update_location_object_storage_request(v: UpdateLocationObjectStorage
   if let Some(x) = v.secret_key {
     fs.push(("SecretKey", json.Value.Str(x)))
   }
+  if let Some(x) = v.federated_identity {
+    fs.push(("FederatedIdentity", json_of_object_storage_federated_identity_config(x)))
+  }
   if let Some(x) = v.agent_arns {
     fs.push(("AgentArns", json_of_agent_arn_list(x)))
   }
@@ -4962,6 +5119,7 @@ fn from_json_update_location_object_storage_request(v: json.Value) -> UpdateLoca
       "ServerHostname" => out.server_hostname = jsonv.read_str(fv)?
       "AccessKey" => out.access_key = jsonv.read_str(fv)?
       "SecretKey" => out.secret_key = jsonv.read_str(fv)?
+      "FederatedIdentity" => out.federated_identity = from_json_object_storage_federated_identity_config(fv)?
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
       "ServerCertificate" => out.server_certificate = jsonv.read_blob(fv)?
       "CmkSecretConfig" => out.cmk_secret_config = from_json_cmk_secret_config(fv)?
@@ -5493,6 +5651,9 @@ pub fn serialize_create_location_azure_blob(ep: rest.Endpoint, input: CreateLoca
   }
   if let Some(x) = input.sas_configuration {
     fs.push(("SasConfiguration", json_of_azure_blob_sas_configuration(x)))
+  }
+  if let Some(x) = input.federated_identity {
+    fs.push(("FederatedIdentity", json_of_azure_federated_identity_config(x)))
   }
   if let Some(x) = input.blob_type {
     fs.push(("BlobType", json.Value.Str(x.value())))
@@ -6514,6 +6675,9 @@ pub fn serialize_create_location_object_storage(ep: rest.Endpoint, input: Create
   if let Some(x) = input.secret_key {
     fs.push(("SecretKey", json.Value.Str(x)))
   }
+  if let Some(x) = input.federated_identity {
+    fs.push(("FederatedIdentity", json_of_object_storage_federated_identity_config(x)))
+  }
   if let Some(x) = input.agent_arns {
     fs.push(("AgentArns", json_of_agent_arn_list(x)))
   }
@@ -7473,6 +7637,7 @@ pub fn deserialize_describe_location_azure_blob(resp: http.Response) -> Describe
       "LocationArn" => out.location_arn = jsonv.read_str(fv)?
       "LocationUri" => out.location_uri = jsonv.read_str(fv)?
       "AuthenticationType" => out.authentication_type = AzureBlobAuthenticationType.from(jsonv.read_str(fv)?)
+      "FederatedIdentity" => out.federated_identity = from_json_azure_federated_identity_config(fv)?
       "BlobType" => out.blob_type = AzureBlobType.from(jsonv.read_str(fv)?)
       "AccessTier" => out.access_tier = AzureAccessTier.from(jsonv.read_str(fv)?)
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
@@ -8362,6 +8527,7 @@ pub fn deserialize_describe_location_object_storage(resp: http.Response) -> Desc
       "LocationArn" => out.location_arn = jsonv.read_str(fv)?
       "LocationUri" => out.location_uri = jsonv.read_str(fv)?
       "AccessKey" => out.access_key = jsonv.read_str(fv)?
+      "FederatedIdentity" => out.federated_identity = from_json_object_storage_federated_identity_config(fv)?
       "ServerPort" => out.server_port = jsonv.read_int(fv)?
       "ServerProtocol" => out.server_protocol = ObjectStorageServerProtocol.from(jsonv.read_str(fv)?)
       "AgentArns" => out.agent_arns = from_json_agent_arn_list(fv)?
@@ -9020,13 +9186,7 @@ pub fn deserialize_list_agents_error(resp: http.Response) -> ListAgentsErr {
 /// pagination, you can reduce the number of agents returned in a response.
 /// If you get a truncated list of agents in a response, the response
 /// contains a marker that you can specify in your next request to fetch the
-/// next page of agents. ListAgents is eventually consistent. This means the
-/// result of running the operation might not reflect that you just created
-/// or deleted an agent. For example, if you create an agent with
-/// CreateAgent and then immediately run ListAgents , that agent might not
-/// show up in the list right away. In situations like this, you can always
-/// confirm whether an agent has been created (or deleted) by using
-/// DescribeAgent .
+/// next page of agents.
 pub fn (c: Client) list_agents(input: ListAgentsRequest) -> ListAgentsResponse ! ListAgentsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_agents(c.params, input)) ?? e => return Err(ListAgentsErr.InvalidInput(e))
   var req = serialize_list_agents(ep, input, "") ?? e => return Err(ListAgentsErr.InvalidInput(e))
@@ -9925,6 +10085,9 @@ pub fn serialize_update_location_azure_blob(ep: rest.Endpoint, input: UpdateLoca
   if let Some(x) = input.sas_configuration {
     fs.push(("SasConfiguration", json_of_azure_blob_sas_configuration(x)))
   }
+  if let Some(x) = input.federated_identity {
+    fs.push(("FederatedIdentity", json_of_azure_federated_identity_config(x)))
+  }
   if let Some(x) = input.blob_type {
     fs.push(("BlobType", json.Value.Str(x.value())))
   }
@@ -10821,6 +10984,9 @@ pub fn serialize_update_location_object_storage(ep: rest.Endpoint, input: Update
   }
   if let Some(x) = input.secret_key {
     fs.push(("SecretKey", json.Value.Str(x)))
+  }
+  if let Some(x) = input.federated_identity {
+    fs.push(("FederatedIdentity", json_of_object_storage_federated_identity_config(x)))
   }
   if let Some(x) = input.agent_arns {
     fs.push(("AgentArns", json_of_agent_arn_list(x)))

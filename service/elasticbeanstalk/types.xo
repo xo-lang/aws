@@ -31,6 +31,12 @@ pub enum ActionType: Str {
   UnknownValue(value: Str)
 }
 
+pub enum AmiArchitecture: Str {
+  X8664 = "x86_64"
+  Arm64 = "arm64"
+  Unknown(value: Str)
+}
+
 /// Describes the properties of an application.
 pub struct ApplicationDescription {
   /// The Amazon Resource Name (ARN) of the application.
@@ -550,8 +556,13 @@ pub struct CreateApplicationVersionMessage {
   /// to deploying the application version to an environment. You must turn
   /// processing on for application versions that you create using CodeBuild
   /// or CodeCommit. For application versions built from a source bundle in
-  /// Amazon S3, processing is optional. The Process option validates Elastic
-  /// Beanstalk configuration files. It doesn't validate your application's
+  /// Amazon S3, processing is optional. For application versions with
+  /// ImageConfiguration.Build , Process determines when Elastic Beanstalk
+  /// builds the container image. Set it to true to build the image when you
+  /// create the application version. If you don't, Elastic Beanstalk builds
+  /// the image when you first deploy the application version to an
+  /// environment. The Process option validates Elastic Beanstalk
+  /// configuration files. It doesn't validate your application's
   /// configuration files, like proxy server or Docker configuration.
   pub process: Bool? = None
   /// Specifies the tags applied to the application version. Elastic Beanstalk
@@ -723,6 +734,15 @@ pub struct CustomAmi {
   /// The type of virtualization used to create the custom AMI.
   pub virtualization_type: Str? = None
   /// THe ID of the image used to create the custom AMI.
+  pub image_id: Str? = None
+}
+
+/// An AMI that Elastic Beanstalk uses by default for a platform version and
+/// processor architecture.
+pub struct DefaultAmi {
+  /// The processor architecture of the AMI.
+  pub architecture: AmiArchitecture? = None
+  /// The ID of the AMI.
   pub image_id: Str? = None
 }
 
@@ -1405,6 +1425,8 @@ pub struct ImageConfiguration {
   /// Settings that Elastic Beanstalk uses to build a container image from the
   /// source bundle of the application version. If you specify Build , also
   /// specify the request's SourceBundle parameter, and don't specify Source .
+  /// To build the image when you create the application version instead of on
+  /// first deployment, also set Process to true .
   pub build: ImageBuildConfiguration? = None
 }
 
@@ -1758,8 +1780,18 @@ pub struct PlatformDescription {
   pub programming_languages: List[PlatformProgrammingLanguage]? = None
   /// The frameworks supported by the platform version.
   pub frameworks: List[PlatformFramework]? = None
-  /// The custom AMIs supported by the platform version.
+  /// The AMIs of the platform version, by virtualization type. For Elastic
+  /// Beanstalk managed platforms, these are the default x86_64 AMIs; for
+  /// custom platforms, the hvm entry is the AMI built for the platform
+  /// version. To find a managed platform's default AMIs for every supported
+  /// processor architecture, including arm64 , use DefaultAmiList .
   pub custom_ami_list: List[CustomAmi]? = None
+  /// The AMIs that Elastic Beanstalk uses by default for the platform
+  /// version, one for each supported processor architecture. When an
+  /// environment doesn't specify a custom AMI, Elastic Beanstalk chooses the
+  /// default AMI that matches the environment's architecture. This list isn't
+  /// returned for custom platforms.
+  pub default_ami_list: List[DefaultAmi]? = None
   /// The tiers supported by the platform version.
   pub supported_tier_list: List[Str]? = None
   /// The additions supported by the platform version.

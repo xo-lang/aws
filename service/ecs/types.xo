@@ -36,6 +36,8 @@ pub enum AcceleratorName: Str {
   A10G = "a10g"
   H100 = "h100"
   T4G = "t4g"
+  L40S = "l40s"
+  L4 = "l4"
   Unknown(value: Str)
 }
 
@@ -162,6 +164,13 @@ pub struct AttachmentStateChange {
   pub attachment_arn: Str? = None
   /// The status of the attachment.
   pub status: Str? = None
+}
+
+/// The status of the attestation policy for a task that uses the
+/// CONFIDENTIAL_SANDBOX isolation mode.
+pub enum AttestationPolicyStatus: Str {
+  Configured = "CONFIGURED"
+  Unknown(value: Str)
 }
 
 /// An attribute is a name-value pair that's associated with an Amazon ECS
@@ -2905,6 +2914,14 @@ pub struct DaemonVolume {
   /// host volume persists on the host container instance and where it's
   /// stored.
   pub host: HostVolumeProperties? = None
+  /// The log driver volume configuration. With a log driver volume, the
+  /// containers in a daemon task can read the log files that a log driver
+  /// writes for the other tasks on the container instance. To read the log
+  /// files, mount the volume into a container in the daemon task with
+  /// mountPoints . Use host to bind mount a path on the container instance.
+  /// Use logDriverVolumeConfiguration to read the log output of other tasks.
+  /// You can't specify both for the same volume.
+  pub log_driver_volume_configuration: LogDriverVolumeConfiguration? = None
 }
 
 pub struct DeleteAccountSettingRequest {
@@ -4295,11 +4312,10 @@ pub struct ElbGatewayResources {
 /// Elastic Container Service Developer Guide . Environment variable files
 /// are objects in Amazon S3 and all Amazon S3 security considerations
 /// apply. You must use the following platforms for the Fargate launch type:
-/// Linux platform version 1.4.0 or later. Windows platform version 1.0.0 or
-/// later. Consider the following when using the Fargate launch type: The
-/// file is handled like a native Docker env-file. There is no support for
-/// shell escape handling. The container entry point interperts the VARIABLE
-/// values.
+/// Linux platform version 1.4.0 or later. Consider the following when using
+/// the Fargate launch type: The file is handled like a native Docker
+/// env-file. There is no support for shell escape handling. The container
+/// entry point interperts the VARIABLE values.
 pub struct EnvironmentFile {
   /// The Amazon Resource Name (ARN) of the Amazon S3 object containing the
   /// environment variable file.
@@ -4319,8 +4335,7 @@ pub enum EnvironmentFileType: Str {
 /// beyond the default amount, for tasks hosted on Fargate. For more
 /// information, see Using data volumes in tasks in the Amazon ECS Developer
 /// Guide; . For tasks using the Fargate launch type, the task requires the
-/// following platforms: Linux platform version 1.4.0 or later. Windows
-/// platform version 1.0.0 or later.
+/// following platforms: Linux platform version 1.4.0 or later.
 pub struct EphemeralStorage {
   /// The total amount, in GiB, of ephemeral storage to set for the task. The
   /// minimum supported value is 21 GiB and the maximum supported value is 200
@@ -5477,6 +5492,16 @@ pub struct InstanceLaunchTemplate {
   /// targeted capacity reservations Amazon ECS will launch instances
   /// according to the specified criteria.
   pub capacity_reservations: CapacityReservationRequest? = None
+  /// Specifies whether instances that this capacity provider launches have
+  /// Nitro Sandbox enabled. Enable this setting to run tasks that use the
+  /// ISOLATED_SANDBOX or CONFIDENTIAL_SANDBOX isolation mode. When you enable
+  /// this setting, the capacity provider must include at least one instance
+  /// type that supports Nitro Sandbox. You can't enable this setting together
+  /// with local storage (the useLocalStorage setting in
+  /// localStorageConfiguration ). The default value is false . For more
+  /// information, see Isolated and confidential tasks in Amazon Elastic
+  /// Container Service Developer Guide .
+  pub nitro_enclaves_enabled: Bool? = None
 }
 
 /// The updated launch template configuration for Amazon ECS Managed
@@ -5650,6 +5675,15 @@ pub enum IpcMode: Str {
   Host = "host"
   Task = "task"
   None = "none"
+  Unknown(value: Str)
+}
+
+/// The isolation mode determines how a task is isolated from other tasks on
+/// the same Amazon EC2 instance.
+pub enum IsolationMode: Str {
+  Shared = "SHARED"
+  IsolatedSandbox = "ISOLATED_SANDBOX"
+  ConfidentialSandbox = "CONFIDENTIAL_SANDBOX"
   Unknown(value: Str)
 }
 
@@ -6538,33 +6572,37 @@ pub enum LocalStorageType: Str {
 /// supported log drivers are awslogs , splunk , and awsfirelens . For tasks
 /// hosted on Amazon EC2 instances, the supported log drivers are awslogs ,
 /// fluentd , gelf , json-file , journald , syslog , splunk , and
-/// awsfirelens . This parameter requires version 1.18 of the Docker Remote
-/// API or greater on your container instance. For tasks that are hosted on
-/// Amazon EC2 instances, the Amazon ECS container agent must register the
-/// available logging drivers with the ECS_AVAILABLE_LOGGING_DRIVERS
-/// environment variable before containers placed on that instance can use
-/// these log configuration options. For more information, see Amazon ECS
-/// container agent configuration in the Amazon Elastic Container Service
-/// Developer Guide . For tasks that are on Fargate, because you don't have
-/// access to the underlying infrastructure your tasks are hosted on, any
-/// additional software needed must be installed outside of the task. For
-/// example, the Fluentd output aggregators or a remote host running
-/// Logstash to send Gelf logs to.
+/// awsfirelens . For tasks on Amazon ECS Managed Instances, the supported
+/// log drivers are awslogs , splunk , awsfirelens , and json-file . This
+/// parameter requires version 1.18 of the Docker Remote API or greater on
+/// your container instance. For tasks that are hosted on Amazon EC2
+/// instances, the Amazon ECS container agent must register the available
+/// logging drivers with the ECS_AVAILABLE_LOGGING_DRIVERS environment
+/// variable before containers placed on that instance can use these log
+/// configuration options. For more information, see Amazon ECS container
+/// agent configuration in the Amazon Elastic Container Service Developer
+/// Guide . For tasks that are on Fargate, because you don't have access to
+/// the underlying infrastructure your tasks are hosted on, any additional
+/// software needed must be installed outside of the task. For example, the
+/// Fluentd output aggregators or a remote host running Logstash to send
+/// Gelf logs to.
 pub struct LogConfiguration {
   /// The log driver to use for the container. For tasks on Fargate, the
   /// supported log drivers are awslogs , splunk , and awsfirelens . For tasks
   /// hosted on Amazon EC2 instances, the supported log drivers are awslogs ,
   /// fluentd , gelf , json-file , journald , syslog , splunk , and
-  /// awsfirelens . For more information about using the awslogs log driver,
-  /// see Send Amazon ECS logs to CloudWatch in the Amazon Elastic Container
-  /// Service Developer Guide . For more information about using the
-  /// awsfirelens log driver, see Send Amazon ECS logs to an Amazon Web
-  /// Services service or Amazon Web Services Partner . If you have a custom
-  /// driver that isn't listed, you can fork the Amazon ECS container agent
-  /// project that's available on GitHub and customize it to work with that
-  /// driver. We encourage you to submit pull requests for changes that you
-  /// would like to have included. However, we don't currently provide support
-  /// for running modified copies of this software.
+  /// awsfirelens . For tasks on Amazon ECS Managed Instances, the supported
+  /// log drivers are awslogs , splunk , awsfirelens , and json-file . For
+  /// more information about using the awslogs log driver, see Send Amazon ECS
+  /// logs to CloudWatch in the Amazon Elastic Container Service Developer
+  /// Guide . For more information about using the awsfirelens log driver, see
+  /// Send Amazon ECS logs to an Amazon Web Services service or Amazon Web
+  /// Services Partner . If you have a custom driver that isn't listed, you
+  /// can fork the Amazon ECS container agent project that's available on
+  /// GitHub and customize it to work with that driver. We encourage you to
+  /// submit pull requests for changes that you would like to have included.
+  /// However, we don't currently provide support for running modified copies
+  /// of this software.
   pub log_driver: LogDriver? = None
   /// The configuration options to send to the log driver. The options you can
   /// specify depend on the log driver. Some of the options you can specify
@@ -6693,6 +6731,22 @@ pub enum LogDriver: Str {
   Splunk = "splunk"
   Awsfirelens = "awsfirelens"
   Unknown(value: Str)
+}
+
+/// The configuration for a log driver volume in a daemon task definition.
+/// The volume contains the log files for each container on the container
+/// instance that uses the specified log driver in its logConfiguration .
+/// Containers that use a different log driver don't write log files to the
+/// volume. For the json-file log driver, the volume has one directory for
+/// each container, named with the container ID. Each directory contains the
+/// container's log file, &lt;container-id&gt;-json.log , and any rotated
+/// log files. After a container stops and Amazon ECS removes it, Amazon ECS
+/// deletes the container's directory. Read the log files before the
+/// container is removed.
+pub struct LogDriverVolumeConfiguration {
+  /// The log driver whose log files the volume contains. The only supported
+  /// value is json-file .
+  pub driver: LogDriver? = None
 }
 
 /// Details about the managed agent status for the container.
@@ -8142,8 +8196,7 @@ pub struct RegisterTaskDefinitionRequest {
   /// beyond the default amount, for tasks hosted on Fargate. For more
   /// information, see Using data volumes in tasks in the Amazon ECS Developer
   /// Guide . For tasks using the Fargate launch type, the task requires the
-  /// following platforms: Linux platform version 1.4.0 or later. Windows
-  /// platform version 1.0.0 or later.
+  /// following platforms: Linux platform version 1.4.0 or later.
   pub ephemeral_storage: EphemeralStorage? = None
   /// The operating system that your tasks definitions run on.
   pub runtime_platform: RuntimePlatform? = None
@@ -8151,6 +8204,11 @@ pub struct RegisterTaskDefinitionRequest {
   /// allows for fault injection requests to be accepted from the task's
   /// containers. The default value is false .
   pub enable_fault_injection: Bool? = None
+  /// The trusted execution configuration for tasks that use this task
+  /// definition, including the isolation mode and, if configured, an
+  /// attestation policy. Trusted execution is supported only for Amazon ECS
+  /// Managed Instances.
+  pub trusted_execution_configuration: TrustedExecutionConfiguration? = None
 }
 
 pub struct RegisterTaskDefinitionResponse {

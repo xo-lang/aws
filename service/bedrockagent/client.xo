@@ -7171,6 +7171,9 @@ fn json_of_knowledge_base(v: KnowledgeBase) -> json.Value {
   if let Some(x) = v.failure_reasons {
     fs.push(("failureReasons", json_of_failure_reasons(x)))
   }
+  if let Some(x) = v.metadata_configurations {
+    fs.push(("metadataConfigurations", json_of_metadata_configurations(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -7192,6 +7195,7 @@ fn from_json_knowledge_base(v: json.Value) -> KnowledgeBase ! Str {
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
       "failureReasons" => out.failure_reasons = from_json_failure_reasons(fv)?
+      "metadataConfigurations" => out.metadata_configurations = from_json_metadata_configurations(fv)?
       _ => {}
     }
   }
@@ -8974,6 +8978,36 @@ fn from_json_metadata_attributes(v: json.Value) -> List[MetadataAttribute] ! Str
   Ok(out)
 }
 
+fn json_of_metadata_configuration(v: MetadataConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.searchability {
+    fs.push(("searchability", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metadata_configuration(v: json.Value) -> MetadataConfiguration ! Str {
+  var out = MetadataConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "type" => out.type_value = FieldType.from(jsonv.read_str(fv)?)
+      "searchability" => out.searchability = SearchableStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_metadata_configuration_for_reranking(v: MetadataConfigurationForReranking) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.selection_mode {
@@ -8996,6 +9030,22 @@ fn from_json_metadata_configuration_for_reranking(v: json.Value) -> MetadataConf
       "selectiveModeConfiguration" => out.selective_mode_configuration = from_json_reranking_metadata_selective_mode_configuration(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_metadata_configurations(v: List[MetadataConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: MetadataConfiguration) -> json.Value { json_of_metadata_configuration(x) }))
+}
+
+fn from_json_metadata_configurations(v: json.Value) -> List[MetadataConfiguration] ! Str {
+  var out: List[MetadataConfiguration] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_metadata_configuration(fv)?)
   }
   Ok(out)
 }
@@ -13642,6 +13692,9 @@ fn json_of_update_knowledge_base_request(v: UpdateKnowledgeBaseRequest) -> json.
   if let Some(x) = v.storage_configuration {
     fs.push(("storageConfiguration", json_of_storage_configuration(x)))
   }
+  if let Some(x) = v.metadata_configurations {
+    fs.push(("metadataConfigurations", json_of_metadata_configurations(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -13658,6 +13711,7 @@ fn from_json_update_knowledge_base_request(v: json.Value) -> UpdateKnowledgeBase
       "roleArn" => out.role_arn = jsonv.read_str(fv)?
       "knowledgeBaseConfiguration" => out.knowledge_base_configuration = from_json_knowledge_base_configuration(fv)?
       "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
+      "metadataConfigurations" => out.metadata_configurations = from_json_metadata_configurations(fv)?
       _ => {}
     }
   }
@@ -14042,50 +14096,4 @@ fn json_of_vector_knowledge_base_configuration(v: VectorKnowledgeBaseConfigurati
     fs.push(("supplementalDataStorageConfiguration", json_of_supplemental_data_storage_configuration(x)))
   }
   json.Value.Object(fs)
-}
-
-fn from_json_vector_knowledge_base_configuration(v: json.Value) -> VectorKnowledgeBaseConfiguration ! Str {
-  var out = VectorKnowledgeBaseConfiguration{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "embeddingModelArn" => out.embedding_model_arn = jsonv.read_str(fv)?
-      "embeddingModelConfiguration" => out.embedding_model_configuration = from_json_embedding_model_configuration(fv)?
-      "supplementalDataStorageConfiguration" => out.supplemental_data_storage_configuration = from_json_supplemental_data_storage_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_vector_search_bedrock_reranking_configuration(v: VectorSearchBedrockRerankingConfiguration) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.model_configuration {
-    fs.push(("modelConfiguration", json_of_vector_search_bedrock_reranking_model_configuration(x)))
-  }
-  if let Some(x) = v.number_of_reranked_results {
-    fs.push(("numberOfRerankedResults", json.Value.Int(x)))
-  }
-  if let Some(x) = v.metadata_configuration {
-    fs.push(("metadataConfiguration", json_of_metadata_configuration_for_reranking(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_vector_search_bedrock_reranking_configuration(v: json.Value) -> VectorSearchBedrockRerankingConfiguration ! Str {
-  var out = VectorSearchBedrockRerankingConfiguration{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "modelConfiguration" => out.model_configuration = from_json_vector_search_bedrock_reranking_model_configuration(fv)?
-      "numberOfRerankedResults" => out.number_of_reranked_results = jsonv.read_int(fv)?
-      "metadataConfiguration" => out.metadata_configuration = from_json_metadata_configuration_for_reranking(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

@@ -3,6 +3,252 @@
 use std/json
 use github.com/xo-lang/aws/protocol/jsonv
 
+fn from_json_metric_definition(v: json.Value) -> MetricDefinition ! Str {
+  var out = MetricDefinition{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Arn" => out.arn = jsonv.read_str(fv)?
+      "Id" => out.id = jsonv.read_str(fv)?
+      "Name" => out.name = jsonv.read_str(fv)?
+      "Description" => out.description = jsonv.read_str(fv)?
+      "MetricCalculation" => out.metric_calculation = from_json_metric_calculation(fv)?
+      "CreationMethod" => out.creation_method = MetricCreationMethod.from(jsonv.read_str(fv)?)
+      "Status" => out.status = MetricStatus.from(jsonv.read_str(fv)?)
+      "Type" => out.type_value = MetricType.from(jsonv.read_str(fv)?)
+      "Unit" => out.unit = MetricUnit.from(jsonv.read_str(fv)?)
+      "PositiveTrendIndicator" => out.positive_trend_indicator = TrendIndicator.from(jsonv.read_str(fv)?)
+      "Groupings" => out.groupings = from_json_metric_grouping_list(fv)?
+      "Filters" => out.filters = from_json_available_filter_list(fv)?
+      "EffectiveTime" => out.effective_time = jsonv.read_time(fv, "epoch-seconds")?
+      "RefreshRate" => out.refresh_rate = jsonv.read_int(fv)?
+      "Category" => out.category = jsonv.read_str(fv)?
+      "SupportedStats" => out.supported_stats = from_json_supported_stats_list(fv)?
+      "DefaultStat" => out.default_stat = jsonv.read_str(fv)?
+      "SupportsPreaggregateCalculation" => out.supports_preaggregate_calculation = jsonv.read_bool(fv)?
+      "SupportsCustomCalculation" => out.supports_custom_calculation = jsonv.read_bool(fv)?
+      "PrimaryEventSource" => out.primary_event_source = jsonv.read_str(fv)?
+      "PrimaryEventSourceEffectiveTimestampType" => out.primary_event_source_effective_timestamp_type = jsonv.read_str(fv)?
+      "CreatedTime" => out.created_time = jsonv.read_time(fv, "epoch-seconds")?
+      "CreatedUser" => out.created_user = from_json_created_by_info(fv)?
+      "LastModifiedRegion" => out.last_modified_region = jsonv.read_str(fv)?
+      "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
+      "LastModifiedUser" => out.last_modified_user = from_json_created_by_info(fv)?
+      "Tags" => out.tags = from_json_tag_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter(v: MetricFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metric_filter_key {
+    fs.push(("MetricFilterKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.negate {
+    fs.push(("Negate", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.number_condition {
+    fs.push(("NumberCondition", json_of_metric_filter_number_condition(x)))
+  }
+  if let Some(x) = v.string_condition {
+    fs.push(("StringCondition", json_of_metric_filter_string_condition(x)))
+  }
+  if let Some(x) = v.boolean_condition {
+    fs.push(("BooleanCondition", json_of_metric_filter_boolean_condition(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metric_filter(v: json.Value) -> MetricFilter ! Str {
+  var out = MetricFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "MetricFilterKey" => out.metric_filter_key = jsonv.read_str(fv)?
+      "Negate" => out.negate = jsonv.read_bool(fv)?
+      "NumberCondition" => out.number_condition = from_json_metric_filter_number_condition(fv)?
+      "StringCondition" => out.string_condition = from_json_metric_filter_string_condition(fv)?
+      "BooleanCondition" => out.boolean_condition = from_json_metric_filter_boolean_condition(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter_boolean_condition(v: MetricFilterBooleanCondition) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.comparison {
+    fs.push(("Comparison", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metric_filter_boolean_condition(v: json.Value) -> MetricFilterBooleanCondition ! Str {
+  var out = MetricFilterBooleanCondition{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Comparison" => out.comparison = MetricFilterBooleanConditionComparison.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter_list(v: List[MetricFilter]) -> json.Value {
+  json.Value.List(v.map(fn(x: MetricFilter) -> json.Value { json_of_metric_filter(x) }))
+}
+
+fn from_json_metric_filter_list(v: json.Value) -> List[MetricFilter] ! Str {
+  var out: List[MetricFilter] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_metric_filter(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter_number_condition(v: MetricFilterNumberCondition) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.comparison {
+    fs.push(("Comparison", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.values {
+    fs.push(("Values", json_of_number_value_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metric_filter_number_condition(v: json.Value) -> MetricFilterNumberCondition ! Str {
+  var out = MetricFilterNumberCondition{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Comparison" => out.comparison = MetricFilterNumberConditionComparison.from(jsonv.read_str(fv)?)
+      "Values" => out.values = from_json_number_value_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter_string_condition(v: MetricFilterStringCondition) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.comparison {
+    fs.push(("Comparison", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.values {
+    fs.push(("Values", json_of_string_value_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metric_filter_string_condition(v: json.Value) -> MetricFilterStringCondition ! Str {
+  var out = MetricFilterStringCondition{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Comparison" => out.comparison = MetricFilterStringConditionComparison.from(jsonv.read_str(fv)?)
+      "Values" => out.values = from_json_string_value_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter_v2(v: MetricFilterV2) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metric_filter_key {
+    fs.push(("MetricFilterKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.metric_filter_values {
+    fs.push(("MetricFilterValues", json_of_metric_filter_value_list(x)))
+  }
+  if let Some(x) = v.negate {
+    fs.push(("Negate", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metric_filter_v2(v: json.Value) -> MetricFilterV2 ! Str {
+  var out = MetricFilterV2{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "MetricFilterKey" => out.metric_filter_key = jsonv.read_str(fv)?
+      "MetricFilterValues" => out.metric_filter_values = from_json_metric_filter_value_list(fv)?
+      "Negate" => out.negate = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filter_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_metric_filter_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_metric_filters_v2_list(v: List[MetricFilterV2]) -> json.Value {
+  json.Value.List(v.map(fn(x: MetricFilterV2) -> json.Value { json_of_metric_filter_v2(x) }))
+}
+
+fn from_json_metric_filters_v2_list(v: json.Value) -> List[MetricFilterV2] ! Str {
+  var out: List[MetricFilterV2] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_metric_filter_v2(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_metric_grouping_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_metric_grouping_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_metric_interval(v: MetricInterval) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.interval {
@@ -6204,6 +6450,9 @@ fn json_of_rule_action(v: RuleAction) -> json.Value {
   if let Some(x) = v.end_associated_tasks_action {
     fs.push(("EndAssociatedTasksAction", json_of_end_associated_tasks_action_definition(x)))
   }
+  if let Some(x) = v.end_associated_emails_action {
+    fs.push(("EndAssociatedEmailsAction", json_of_end_associated_emails_action_definition(x)))
+  }
   if let Some(x) = v.submit_auto_evaluation_action {
     fs.push(("SubmitAutoEvaluationAction", json_of_submit_auto_evaluation_action_definition(x)))
   }
@@ -6232,6 +6481,7 @@ fn from_json_rule_action(v: json.Value) -> RuleAction ! Str {
       "UpdateCaseAction" => out.update_case_action = from_json_update_case_action_definition(fv)?
       "AssignSlaAction" => out.assign_sla_action = from_json_assign_sla_action_definition(fv)?
       "EndAssociatedTasksAction" => out.end_associated_tasks_action = from_json_end_associated_tasks_action_definition(fv)?
+      "EndAssociatedEmailsAction" => out.end_associated_emails_action = from_json_end_associated_emails_action_definition(fv)?
       "SubmitAutoEvaluationAction" => out.submit_auto_evaluation_action = from_json_submit_auto_evaluation_action_definition(fv)?
       "ExtractInformationAction" => out.extract_information_action = from_json_extract_information_action_definition(fv)?
       "SendInAppNotificationAction" => out.send_in_app_notification_action = from_json_send_in_app_notification_action_definition(fv)?
@@ -14051,285 +14301,4 @@ fn from_json_update_contact_flow_name_request(v: json.Value) -> UpdateContactFlo
     }
   }
   Ok(out)
-}
-
-fn json_of_update_contact_flow_name_response(v: UpdateContactFlowNameResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_flow_name_response(v: json.Value) -> UpdateContactFlowNameResponse ! Str {
-  var out = UpdateContactFlowNameResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_update_contact_request(v: UpdateContactRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.contact_id {
-    fs.push(("ContactId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = v.references {
-    fs.push(("References", json_of_contact_references(x)))
-  }
-  if let Some(x) = v.segment_attributes {
-    fs.push(("SegmentAttributes", json_of_segment_attributes(x)))
-  }
-  if let Some(x) = v.queue_info {
-    fs.push(("QueueInfo", json_of_queue_info_input(x)))
-  }
-  if let Some(x) = v.user_info {
-    fs.push(("UserInfo", json_of_user_info(x)))
-  }
-  if let Some(x) = v.customer_endpoint {
-    fs.push(("CustomerEndpoint", json_of_endpoint(x)))
-  }
-  if let Some(x) = v.system_endpoint {
-    fs.push(("SystemEndpoint", json_of_endpoint(x)))
-  }
-  if let Some(x) = v.additional_recipients {
-    fs.push(("AdditionalRecipients", json_of_nullable_additional_recipients(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_request(v: json.Value) -> UpdateContactRequest ! Str {
-  var out = UpdateContactRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "ContactId" => out.contact_id = jsonv.read_str(fv)?
-      "Name" => out.name = jsonv.read_str(fv)?
-      "Description" => out.description = jsonv.read_str(fv)?
-      "References" => out.references = from_json_contact_references(fv)?
-      "SegmentAttributes" => out.segment_attributes = from_json_segment_attributes(fv)?
-      "QueueInfo" => out.queue_info = from_json_queue_info_input(fv)?
-      "UserInfo" => out.user_info = from_json_user_info(fv)?
-      "CustomerEndpoint" => out.customer_endpoint = from_json_endpoint(fv)?
-      "SystemEndpoint" => out.system_endpoint = from_json_endpoint(fv)?
-      "AdditionalRecipients" => out.additional_recipients = from_json_nullable_additional_recipients(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_contact_response(v: UpdateContactResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_response(v: json.Value) -> UpdateContactResponse ! Str {
-  var out = UpdateContactResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_update_contact_routing_data_request(v: UpdateContactRoutingDataRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.contact_id {
-    fs.push(("ContactId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.queue_time_adjustment_seconds {
-    fs.push(("QueueTimeAdjustmentSeconds", json.Value.Int(x)))
-  }
-  if let Some(x) = v.queue_priority {
-    fs.push(("QueuePriority", json.Value.Int(x)))
-  }
-  if let Some(x) = v.routing_criteria {
-    fs.push(("RoutingCriteria", json_of_routing_criteria_input(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_routing_data_request(v: json.Value) -> UpdateContactRoutingDataRequest ! Str {
-  var out = UpdateContactRoutingDataRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "ContactId" => out.contact_id = jsonv.read_str(fv)?
-      "QueueTimeAdjustmentSeconds" => out.queue_time_adjustment_seconds = jsonv.read_int(fv)?
-      "QueuePriority" => out.queue_priority = jsonv.read_int(fv)?
-      "RoutingCriteria" => out.routing_criteria = from_json_routing_criteria_input(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_contact_routing_data_response(v: UpdateContactRoutingDataResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_routing_data_response(v: json.Value) -> UpdateContactRoutingDataResponse ! Str {
-  var out = UpdateContactRoutingDataResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_update_contact_schedule_request(v: UpdateContactScheduleRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.contact_id {
-    fs.push(("ContactId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.scheduled_time {
-    fs.push(("ScheduledTime", jsonv.time(x, "epoch-seconds")))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_schedule_request(v: json.Value) -> UpdateContactScheduleRequest ! Str {
-  var out = UpdateContactScheduleRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "ContactId" => out.contact_id = jsonv.read_str(fv)?
-      "ScheduledTime" => out.scheduled_time = jsonv.read_time(fv, "epoch-seconds")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_contact_schedule_response(v: UpdateContactScheduleResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_schedule_response(v: json.Value) -> UpdateContactScheduleResponse ! Str {
-  var out = UpdateContactScheduleResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_update_contact_task_template_request(v: UpdateContactTaskTemplateRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.task_template_id {
-    fs.push(("TaskTemplateId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.contact_id {
-    fs.push(("ContactId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_task_template_request(v: json.Value) -> UpdateContactTaskTemplateRequest ! Str {
-  var out = UpdateContactTaskTemplateRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "TaskTemplateId" => out.task_template_id = jsonv.read_str(fv)?
-      "ContactId" => out.contact_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_contact_task_template_response(v: UpdateContactTaskTemplateResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_update_contact_task_template_response(v: json.Value) -> UpdateContactTaskTemplateResponse ! Str {
-  var out = UpdateContactTaskTemplateResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_update_cross_region_routing_request(v: UpdateCrossRegionRoutingRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.isolated_all {
-    fs.push(("IsolatedAll", json.Value.Bool(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_cross_region_routing_request(v: json.Value) -> UpdateCrossRegionRoutingRequest ! Str {
-  var out = UpdateCrossRegionRoutingRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
-      "IsolatedAll" => out.isolated_all = jsonv.read_bool(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_cross_region_routing_response(v: UpdateCrossRegionRoutingResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_update_cross_region_routing_response(v: json.Value) -> UpdateCrossRegionRoutingResponse ! Str {
-  var out = UpdateCrossRegionRoutingResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_update_data_table_attribute_request(v: UpdateDataTableAttributeRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.data_table_id {
-    fs.push(("DataTableId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.attribute_name {
-    fs.push(("AttributeName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.value_type {
-    fs.push(("ValueType", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = v.primary {
-    fs.push(("Primary", json.Value.Bool(x)))
-  }
-  if let Some(x) = v.validation {
-    fs.push(("Validation", json_of_validation(x)))
-  }
-  json.Value.Object(fs)
 }

@@ -979,6 +979,9 @@ fn from_json_create_launch_configuration_template_request(v: json.Value) -> Crea
 
 fn json_of_create_network_migration_definition_request(v: CreateNetworkMigrationDefinitionRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
   if let Some(x) = v.name {
     fs.push(("name", json.Value.Str(x)))
   }
@@ -1019,6 +1022,7 @@ fn from_json_create_network_migration_definition_request(v: json.Value) -> Creat
       continue
     }
     match k {
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
       "name" => out.name = jsonv.read_str(fv)?
       "description" => out.description = jsonv.read_str(fv)?
       "sourceConfigurations" => out.source_configurations = from_json_source_configuration_list(fv)?
@@ -12067,6 +12071,11 @@ pub fn serialize_create_network_migration_definition(ep: rest.Endpoint, input: C
   var qs: List[(Str, Str)] = []
   var body = b""
   var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
   if let Some(x) = input.name {
     fs.push(("name", json.Value.Str(x)))
   }
@@ -12187,7 +12196,7 @@ pub fn deserialize_create_network_migration_definition_error(resp: http.Response
 /// target network configuration for a migration.
 pub fn (c: Client) create_network_migration_definition(input: CreateNetworkMigrationDefinitionRequest) -> NetworkMigrationDefinition ! CreateNetworkMigrationDefinitionErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_create_network_migration_definition(c.params, input)) ?? e => return Err(CreateNetworkMigrationDefinitionErr.InvalidInput(e))
-  var req = serialize_create_network_migration_definition(ep, input, "") ?? e => return Err(CreateNetworkMigrationDefinitionErr.InvalidInput(e))
+  var req = serialize_create_network_migration_definition(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateNetworkMigrationDefinitionErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
   }
@@ -13431,20 +13440,4 @@ pub fn serialize_describe_job_log_items(ep: rest.Endpoint, input: DescribeJobLog
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_describe_job_log_items(resp: http.Response) -> DescribeJobLogItemsResponse ! Str {
-  var out = DescribeJobLogItemsResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "items" => out.items = from_json_job_logs(fv)?
-      "nextToken" => out.next_token = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

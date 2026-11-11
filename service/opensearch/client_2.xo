@@ -8,6 +8,261 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_authorize_vpc_endpoint_access(base: EndpointParameters, input: AuthorizeVpcEndpointAccessRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of AuthorizeVpcEndpointAccess.
+pub fn serialize_authorize_vpc_endpoint_access(ep: rest.Endpoint, input: AuthorizeVpcEndpointAccessRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_name = match input.domain_name {
+    Some(v) => v
+    None => return Err("input member DomainName is required")
+  }
+  if label_domain_name == "" {
+    return Err("input member DomainName must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.account {
+    fs.push(("Account", json.Value.Str(x)))
+  }
+  if let Some(x) = input.service {
+    fs.push(("Service", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.service_options {
+    fs.push(("ServiceOptions", json_of_service_options(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2021-01-01/opensearch/domain/${rest.escape(label_domain_name, false)}/authorizeVpcEndpointAccess"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_authorize_vpc_endpoint_access(resp: http.Response) -> AuthorizeVpcEndpointAccessResponse ! Str {
+  var out = AuthorizeVpcEndpointAccessResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AuthorizedPrincipal" => out.authorized_principal = from_json_authorized_principal(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of AuthorizeVpcEndpointAccess.
+pub enum AuthorizeVpcEndpointAccessErr {
+  BaseException(e: BaseException)
+  DisabledOperationException(e: DisabledOperationException)
+  InternalException(e: InternalException)
+  LimitExceededException(e: LimitExceededException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: AuthorizeVpcEndpointAccessErr) display() -> Str {
+  match e {
+    BaseException(x) => "BaseException: ${x:?}"
+    DisabledOperationException(x) => "DisabledOperationException: ${x:?}"
+    InternalException(x) => "InternalException: ${x:?}"
+    LimitExceededException(x) => "LimitExceededException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_authorize_vpc_endpoint_access_error(resp: http.Response) -> AuthorizeVpcEndpointAccessErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BaseException" => match read_error_base_exception(resp, body) {
+      Ok(x) => return AuthorizeVpcEndpointAccessErr.BaseException(x)
+      Err(msg) => return AuthorizeVpcEndpointAccessErr.Deserialize(msg)
+    }
+    "DisabledOperationException" => match read_error_disabled_operation_exception(resp, body) {
+      Ok(x) => return AuthorizeVpcEndpointAccessErr.DisabledOperationException(x)
+      Err(msg) => return AuthorizeVpcEndpointAccessErr.Deserialize(msg)
+    }
+    "InternalException" => match read_error_internal_exception(resp, body) {
+      Ok(x) => return AuthorizeVpcEndpointAccessErr.InternalException(x)
+      Err(msg) => return AuthorizeVpcEndpointAccessErr.Deserialize(msg)
+    }
+    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
+      Ok(x) => return AuthorizeVpcEndpointAccessErr.LimitExceededException(x)
+      Err(msg) => return AuthorizeVpcEndpointAccessErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return AuthorizeVpcEndpointAccessErr.ResourceNotFoundException(x)
+      Err(msg) => return AuthorizeVpcEndpointAccessErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return AuthorizeVpcEndpointAccessErr.ValidationException(x)
+      Err(msg) => return AuthorizeVpcEndpointAccessErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  AuthorizeVpcEndpointAccessErr.Api(restjson.api_error(resp, body))
+}
+
+/// Provides access to an Amazon OpenSearch Service domain through the use
+/// of an interface VPC endpoint.
+pub fn (c: Client) authorize_vpc_endpoint_access(input: AuthorizeVpcEndpointAccessRequest) -> AuthorizeVpcEndpointAccessResponse ! AuthorizeVpcEndpointAccessErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_authorize_vpc_endpoint_access(c.params, input)) ?? e => return Err(AuthorizeVpcEndpointAccessErr.InvalidInput(e))
+  var req = serialize_authorize_vpc_endpoint_access(ep, input, "") ?? e => return Err(AuthorizeVpcEndpointAccessErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(AuthorizeVpcEndpointAccessErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_authorize_vpc_endpoint_access_error(resp))
+  }
+  deserialize_authorize_vpc_endpoint_access(resp) ?? e => Err(AuthorizeVpcEndpointAccessErr.Deserialize(e))
+}
+
+pub fn endpoint_params_cancel_domain_config_change(base: EndpointParameters, input: CancelDomainConfigChangeRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CancelDomainConfigChange.
+pub fn serialize_cancel_domain_config_change(ep: rest.Endpoint, input: CancelDomainConfigChangeRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_name = match input.domain_name {
+    Some(v) => v
+    None => return Err("input member DomainName is required")
+  }
+  if label_domain_name == "" {
+    return Err("input member DomainName must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.dry_run {
+    fs.push(("DryRun", json.Value.Bool(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2021-01-01/opensearch/domain/${rest.escape(label_domain_name, false)}/config/cancel"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_cancel_domain_config_change(resp: http.Response) -> CancelDomainConfigChangeResponse ! Str {
+  var out = CancelDomainConfigChangeResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CancelledChangeIds" => out.cancelled_change_ids = from_json_guid_list(fv)?
+      "CancelledChangeProperties" => out.cancelled_change_properties = from_json_cancelled_change_property_list(fv)?
+      "DryRun" => out.dry_run = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CancelDomainConfigChange.
+pub enum CancelDomainConfigChangeErr {
+  BaseException(e: BaseException)
+  DisabledOperationException(e: DisabledOperationException)
+  InternalException(e: InternalException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CancelDomainConfigChangeErr) display() -> Str {
+  match e {
+    BaseException(x) => "BaseException: ${x:?}"
+    DisabledOperationException(x) => "DisabledOperationException: ${x:?}"
+    InternalException(x) => "InternalException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_cancel_domain_config_change_error(resp: http.Response) -> CancelDomainConfigChangeErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BaseException" => match read_error_base_exception(resp, body) {
+      Ok(x) => return CancelDomainConfigChangeErr.BaseException(x)
+      Err(msg) => return CancelDomainConfigChangeErr.Deserialize(msg)
+    }
+    "DisabledOperationException" => match read_error_disabled_operation_exception(resp, body) {
+      Ok(x) => return CancelDomainConfigChangeErr.DisabledOperationException(x)
+      Err(msg) => return CancelDomainConfigChangeErr.Deserialize(msg)
+    }
+    "InternalException" => match read_error_internal_exception(resp, body) {
+      Ok(x) => return CancelDomainConfigChangeErr.InternalException(x)
+      Err(msg) => return CancelDomainConfigChangeErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CancelDomainConfigChangeErr.ResourceNotFoundException(x)
+      Err(msg) => return CancelDomainConfigChangeErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CancelDomainConfigChangeErr.ValidationException(x)
+      Err(msg) => return CancelDomainConfigChangeErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CancelDomainConfigChangeErr.Api(restjson.api_error(resp, body))
+}
+
 /// Cancels a pending configuration change on an Amazon OpenSearch Service
 /// domain.
 pub fn (c: Client) cancel_domain_config_change(input: CancelDomainConfigChangeRequest) -> CancelDomainConfigChangeResponse ! CancelDomainConfigChangeErr uses (net.dial, clock, rand) {
@@ -10618,303 +10873,13 @@ pub fn (c: Client) update_application(input: UpdateApplicationRequest) -> Update
   deserialize_update_application(resp) ?? e => Err(UpdateApplicationErr.Deserialize(e))
 }
 
-pub fn endpoint_params_update_data_source(base: EndpointParameters, input: UpdateDataSourceRequest) -> EndpointParameters {
+pub fn endpoint_params_update_clone(base: EndpointParameters, input: UpdateCloneRequest) -> EndpointParameters {
   let _ = input
   base
 }
 
-/// The HTTP request of UpdateDataSource.
-pub fn serialize_update_data_source(ep: rest.Endpoint, input: UpdateDataSourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_domain_name = match input.domain_name {
-    Some(v) => v
-    None => return Err("input member DomainName is required")
-  }
-  if label_domain_name == "" {
-    return Err("input member DomainName must not be empty")
-  }
-  let label_name = match input.name {
-    Some(v) => v
-    None => return Err("input member Name is required")
-  }
-  if label_name == "" {
-    return Err("input member Name must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.data_source_type {
-    fs.push(("DataSourceType", json_of_data_source_type(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.status {
-    fs.push(("Status", json.Value.Str(x.value())))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2021-01-01/opensearch/domain/${rest.escape(label_domain_name, false)}/dataSource/${rest.escape(label_name, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_data_source(resp: http.Response) -> UpdateDataSourceResponse ! Str {
-  var out = UpdateDataSourceResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateDataSource.
-pub enum UpdateDataSourceErr {
-  BaseException(e: BaseException)
-  DependencyFailureException(e: DependencyFailureException)
-  DisabledOperationException(e: DisabledOperationException)
-  InternalException(e: InternalException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateDataSourceErr) display() -> Str {
-  match e {
-    BaseException(x) => "BaseException: ${x:?}"
-    DependencyFailureException(x) => "DependencyFailureException: ${x:?}"
-    DisabledOperationException(x) => "DisabledOperationException: ${x:?}"
-    InternalException(x) => "InternalException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_data_source_error(resp: http.Response) -> UpdateDataSourceErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "BaseException" => match read_error_base_exception(resp, body) {
-      Ok(x) => return UpdateDataSourceErr.BaseException(x)
-      Err(msg) => return UpdateDataSourceErr.Deserialize(msg)
-    }
-    "DependencyFailureException" => match read_error_dependency_failure_exception(resp, body) {
-      Ok(x) => return UpdateDataSourceErr.DependencyFailureException(x)
-      Err(msg) => return UpdateDataSourceErr.Deserialize(msg)
-    }
-    "DisabledOperationException" => match read_error_disabled_operation_exception(resp, body) {
-      Ok(x) => return UpdateDataSourceErr.DisabledOperationException(x)
-      Err(msg) => return UpdateDataSourceErr.Deserialize(msg)
-    }
-    "InternalException" => match read_error_internal_exception(resp, body) {
-      Ok(x) => return UpdateDataSourceErr.InternalException(x)
-      Err(msg) => return UpdateDataSourceErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateDataSourceErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateDataSourceErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateDataSourceErr.ValidationException(x)
-      Err(msg) => return UpdateDataSourceErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateDataSourceErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates a direct-query data source. For more information, see Working
-/// with Amazon OpenSearch Service data source integrations with Amazon S3 .
-pub fn (c: Client) update_data_source(input: UpdateDataSourceRequest) -> UpdateDataSourceResponse ! UpdateDataSourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_data_source(c.params, input)) ?? e => return Err(UpdateDataSourceErr.InvalidInput(e))
-  var req = serialize_update_data_source(ep, input, "") ?? e => return Err(UpdateDataSourceErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateDataSourceErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_data_source_error(resp))
-  }
-  deserialize_update_data_source(resp) ?? e => Err(UpdateDataSourceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_direct_query_data_source(base: EndpointParameters, input: UpdateDirectQueryDataSourceRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateDirectQueryDataSource.
-pub fn serialize_update_direct_query_data_source(ep: rest.Endpoint, input: UpdateDirectQueryDataSourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_data_source_name = match input.data_source_name {
-    Some(v) => v
-    None => return Err("input member DataSourceName is required")
-  }
-  if label_data_source_name == "" {
-    return Err("input member DataSourceName must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.data_source_type {
-    fs.push(("DataSourceType", json_of_direct_query_data_source_type(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.open_search_arns {
-    fs.push(("OpenSearchArns", json_of_direct_query_open_search_arn_list(x)))
-  }
-  if let Some(x) = input.data_source_access_policy {
-    fs.push(("DataSourceAccessPolicy", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2021-01-01/opensearch/directQueryDataSource/${rest.escape(label_data_source_name, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_direct_query_data_source(resp: http.Response) -> UpdateDirectQueryDataSourceResponse ! Str {
-  var out = UpdateDirectQueryDataSourceResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "DataSourceArn" => out.data_source_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateDirectQueryDataSource.
-pub enum UpdateDirectQueryDataSourceErr {
-  BaseException(e: BaseException)
-  DisabledOperationException(e: DisabledOperationException)
-  InternalException(e: InternalException)
-  LimitExceededException(e: LimitExceededException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateDirectQueryDataSourceErr) display() -> Str {
-  match e {
-    BaseException(x) => "BaseException: ${x:?}"
-    DisabledOperationException(x) => "DisabledOperationException: ${x:?}"
-    InternalException(x) => "InternalException: ${x:?}"
-    LimitExceededException(x) => "LimitExceededException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_direct_query_data_source_error(resp: http.Response) -> UpdateDirectQueryDataSourceErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "BaseException" => match read_error_base_exception(resp, body) {
-      Ok(x) => return UpdateDirectQueryDataSourceErr.BaseException(x)
-      Err(msg) => return UpdateDirectQueryDataSourceErr.Deserialize(msg)
-    }
-    "DisabledOperationException" => match read_error_disabled_operation_exception(resp, body) {
-      Ok(x) => return UpdateDirectQueryDataSourceErr.DisabledOperationException(x)
-      Err(msg) => return UpdateDirectQueryDataSourceErr.Deserialize(msg)
-    }
-    "InternalException" => match read_error_internal_exception(resp, body) {
-      Ok(x) => return UpdateDirectQueryDataSourceErr.InternalException(x)
-      Err(msg) => return UpdateDirectQueryDataSourceErr.Deserialize(msg)
-    }
-    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateDirectQueryDataSourceErr.LimitExceededException(x)
-      Err(msg) => return UpdateDirectQueryDataSourceErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateDirectQueryDataSourceErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateDirectQueryDataSourceErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateDirectQueryDataSourceErr.ValidationException(x)
-      Err(msg) => return UpdateDirectQueryDataSourceErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateDirectQueryDataSourceErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the configuration or properties of an existing direct query data
-/// source in Amazon OpenSearch Service.
-pub fn (c: Client) update_direct_query_data_source(input: UpdateDirectQueryDataSourceRequest) -> UpdateDirectQueryDataSourceResponse ! UpdateDirectQueryDataSourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_direct_query_data_source(c.params, input)) ?? e => return Err(UpdateDirectQueryDataSourceErr.InvalidInput(e))
-  var req = serialize_update_direct_query_data_source(ep, input, "") ?? e => return Err(UpdateDirectQueryDataSourceErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateDirectQueryDataSourceErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_direct_query_data_source_error(resp))
-  }
-  deserialize_update_direct_query_data_source(resp) ?? e => Err(UpdateDirectQueryDataSourceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_domain_config(base: EndpointParameters, input: UpdateDomainConfigRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateDomainConfig.
-pub fn serialize_update_domain_config(ep: rest.Endpoint, input: UpdateDomainConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+/// The HTTP request of UpdateClone.
+pub fn serialize_update_clone(ep: rest.Endpoint, input: UpdateCloneRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
   let _ = (idempotency_token, min_compress)
   var headers: List[(Str, Str)] = []
   var qs: List[(Str, Str)] = []
@@ -10927,80 +10892,14 @@ pub fn serialize_update_domain_config(ep: rest.Endpoint, input: UpdateDomainConf
   }
   var body = b""
   var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cluster_config {
-    fs.push(("ClusterConfig", json_of_cluster_config(x)))
+  if let Some(x) = input.traffic_split_options {
+    fs.push(("TrafficSplitOptions", json_of_traffic_split_request_options(x)))
   }
-  if let Some(x) = input.ebs_options {
-    fs.push(("EBSOptions", json_of_ebs_options(x)))
+  if let Some(x) = input.cutover_options {
+    fs.push(("CutoverOptions", json_of_cutover_request_options(x)))
   }
-  if let Some(x) = input.snapshot_options {
-    fs.push(("SnapshotOptions", json_of_snapshot_options(x)))
-  }
-  if let Some(x) = input.vpc_options {
-    fs.push(("VPCOptions", json_of_vpc_options(x)))
-  }
-  if let Some(x) = input.cognito_options {
-    fs.push(("CognitoOptions", json_of_cognito_options(x)))
-  }
-  if let Some(x) = input.advanced_options {
-    fs.push(("AdvancedOptions", json_of_advanced_options(x)))
-  }
-  if let Some(x) = input.access_policies {
-    fs.push(("AccessPolicies", json.Value.Str(x)))
-  }
-  if let Some(x) = input.ip_address_type {
-    fs.push(("IPAddressType", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.log_publishing_options {
-    fs.push(("LogPublishingOptions", json_of_log_publishing_options(x)))
-  }
-  if let Some(x) = input.encryption_at_rest_options {
-    fs.push(("EncryptionAtRestOptions", json_of_encryption_at_rest_options(x)))
-  }
-  if let Some(x) = input.domain_endpoint_options {
-    fs.push(("DomainEndpointOptions", json_of_domain_endpoint_options(x)))
-  }
-  if let Some(x) = input.node_to_node_encryption_options {
-    fs.push(("NodeToNodeEncryptionOptions", json_of_node_to_node_encryption_options(x)))
-  }
-  if let Some(x) = input.advanced_security_options {
-    fs.push(("AdvancedSecurityOptions", json_of_advanced_security_options_input(x)))
-  }
-  if let Some(x) = input.identity_center_options {
-    fs.push(("IdentityCenterOptions", json_of_identity_center_options_input(x)))
-  }
-  if let Some(x) = input.auto_tune_options {
-    fs.push(("AutoTuneOptions", json_of_auto_tune_options(x)))
-  }
-  if let Some(x) = input.dry_run {
-    fs.push(("DryRun", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.dry_run_mode {
-    fs.push(("DryRunMode", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.off_peak_window_options {
-    fs.push(("OffPeakWindowOptions", json_of_off_peak_window_options(x)))
-  }
-  if let Some(x) = input.software_update_options {
-    fs.push(("SoftwareUpdateOptions", json_of_software_update_options(x)))
-  }
-  if let Some(x) = input.aiml_options {
-    fs.push(("AIMLOptions", json_of_aiml_options_input(x)))
-  }
-  if let Some(x) = input.deployment_strategy_options {
-    fs.push(("DeploymentStrategyOptions", json_of_deployment_strategy_options(x)))
-  }
-  if let Some(x) = input.automated_snapshot_pause_options {
-    fs.push(("AutomatedSnapshotPauseOptions", json_of_automated_snapshot_pause_request_options(x)))
-  }
-  if let Some(x) = input.use_case {
-    fs.push(("UseCase", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.engine_mode {
-    fs.push(("EngineMode", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.accepted_warnings {
-    fs.push(("AcceptedWarnings", json_of_accepted_warnings_list(x)))
+  if let Some(x) = input.retention_options {
+    fs.push(("RetentionOptions", json_of_retention_options(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -11012,9 +10911,87 @@ pub fn serialize_update_domain_config(ep: rest.Endpoint, input: UpdateDomainConf
     scheme: ep.scheme,
     host: ep.host,
     port: ep.port,
-    path: rest.join_path(ep.path, "/2021-01-01/opensearch/domain/${rest.escape(label_domain_name, false)}/config"),
+    path: rest.join_path(ep.path, "/2021-01-01/opensearch/domain/${rest.escape(label_domain_name, false)}/clone"),
     query: rest.query(qs),
     headers: headers,
     body: body,
   })
+}
+
+pub fn deserialize_update_clone(resp: http.Response) -> UpdateCloneResponse ! Str {
+  var out = UpdateCloneResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DomainName" => out.domain_name = jsonv.read_str(fv)?
+      "ChangeId" => out.change_id = jsonv.read_str(fv)?
+      "CutoverOptions" => out.cutover_options = from_json_cutover_options(fv)?
+      "TrafficSplitOptions" => out.traffic_split_options = from_json_traffic_split_options(fv)?
+      "RetentionOptions" => out.retention_options = from_json_retention_options(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateClone.
+pub enum UpdateCloneErr {
+  BaseException(e: BaseException)
+  DisabledOperationException(e: DisabledOperationException)
+  InternalException(e: InternalException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateCloneErr) display() -> Str {
+  match e {
+    BaseException(x) => "BaseException: ${x:?}"
+    DisabledOperationException(x) => "DisabledOperationException: ${x:?}"
+    InternalException(x) => "InternalException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_clone_error(resp: http.Response) -> UpdateCloneErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BaseException" => match read_error_base_exception(resp, body) {
+      Ok(x) => return UpdateCloneErr.BaseException(x)
+      Err(msg) => return UpdateCloneErr.Deserialize(msg)
+    }
+    "DisabledOperationException" => match read_error_disabled_operation_exception(resp, body) {
+      Ok(x) => return UpdateCloneErr.DisabledOperationException(x)
+      Err(msg) => return UpdateCloneErr.Deserialize(msg)
+    }
+    "InternalException" => match read_error_internal_exception(resp, body) {
+      Ok(x) => return UpdateCloneErr.InternalException(x)
+      Err(msg) => return UpdateCloneErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateCloneErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateCloneErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateCloneErr.ValidationException(x)
+      Err(msg) => return UpdateCloneErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateCloneErr.Api(restjson.api_error(resp, body))
 }

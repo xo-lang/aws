@@ -1503,6 +1503,47 @@ fn xml_read_custom_ami_list(e: xml.Element) -> List[CustomAmi] ! Str {
   Ok(out)
 }
 
+fn xml_write_default_ami(var w: xmlv.Writer, v: DefaultAmi, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.architecture {
+    xmlv.elem(w, "Architecture", x.value(), [])
+  }
+  if let Some(x) = v.image_id {
+    xmlv.elem(w, "ImageId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_default_ami(e: xml.Element) -> DefaultAmi ! Str {
+  var out = DefaultAmi{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Architecture" => out.architecture = AmiArchitecture.from(c.text())
+      "ImageId" => out.image_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_default_ami_list(var w: xmlv.Writer, v: List[DefaultAmi], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_default_ami(w, item, "member", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_default_ami_list(e: xml.Element) -> List[DefaultAmi] ! Str {
+  var out: List[DefaultAmi] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_default_ami(c)?)
+  }
+  Ok(out)
+}
+
 fn xml_write_delete_application_message(var w: xmlv.Writer, v: DeleteApplicationMessage, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -3793,6 +3834,9 @@ fn xml_write_platform_description(var w: xmlv.Writer, v: PlatformDescription, na
   if let Some(x) = v.custom_ami_list {
     xml_write_custom_ami_list(w, x, "CustomAmiList", [])
   }
+  if let Some(x) = v.default_ami_list {
+    xml_write_default_ami_list(w, x, "DefaultAmiList", [])
+  }
   if let Some(x) = v.supported_tier_list {
     xml_write_supported_tier_list(w, x, "SupportedTierList", [])
   }
@@ -3831,6 +3875,7 @@ fn xml_read_platform_description(e: xml.Element) -> PlatformDescription ! Str {
       "ProgrammingLanguages" => out.programming_languages = xml_read_platform_programming_languages(c)?
       "Frameworks" => out.frameworks = xml_read_platform_frameworks(c)?
       "CustomAmiList" => out.custom_ami_list = xml_read_custom_ami_list(c)?
+      "DefaultAmiList" => out.default_ami_list = xml_read_default_ami_list(c)?
       "SupportedTierList" => out.supported_tier_list = xml_read_supported_tier_list(c)?
       "SupportedAddonList" => out.supported_addon_list = xml_read_supported_addon_list(c)?
       "PlatformLifecycleState" => out.platform_lifecycle_state = c.text()
@@ -6090,6 +6135,26 @@ fn query_put_custom_ami_list(var f: query.Form, prefix: Str, v: List[CustomAmi],
   }
 }
 
+fn query_put_default_ami(var f: query.Form, prefix: Str, v: DefaultAmi) {
+  if let Some(x) = v.architecture {
+    query.add(f, query.key(prefix, "Architecture"), x.value())
+  }
+  if let Some(x) = v.image_id {
+    query.add(f, query.key(prefix, "ImageId"), x)
+  }
+}
+
+fn query_put_default_ami_list(var f: query.Form, prefix: Str, v: List[DefaultAmi], flat: Bool) {
+  if v.is_empty() {
+    query.add(f, prefix, "")
+    return
+  }
+  for (i, x) in v.indexed() {
+    let k = if flat { "${prefix}.${i + 1}" } else { "${prefix}.member.${i + 1}" }
+    query_put_default_ami(f, k, x)
+  }
+}
+
 fn query_put_delete_application_message(var f: query.Form, prefix: Str, v: DeleteApplicationMessage) {
   if let Some(x) = v.application_name {
     query.add(f, query.key(prefix, "ApplicationName"), x)
@@ -7199,6 +7264,9 @@ fn query_put_platform_description(var f: query.Form, prefix: Str, v: PlatformDes
   }
   if let Some(x) = v.custom_ami_list {
     query_put_custom_ami_list(f, query.key(prefix, "CustomAmiList"), x, false)
+  }
+  if let Some(x) = v.default_ami_list {
+    query_put_default_ami_list(f, query.key(prefix, "DefaultAmiList"), x, false)
   }
   if let Some(x) = v.supported_tier_list {
     query_put_supported_tier_list(f, query.key(prefix, "SupportedTierList"), x, false)
@@ -12775,37 +12843,4 @@ pub fn serialize_update_application_version(ep: rest.Endpoint, input: UpdateAppl
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_update_application_version(resp: http.Response) -> ApplicationVersionDescriptionMessage ! Str {
-  var out = ApplicationVersionDescriptionMessage{}
-  let body = query.result_of(resp.body, "UpdateApplicationVersion")?
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "ApplicationVersion" => out.application_version = xml_read_application_version_description(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateApplicationVersion.
-pub enum UpdateApplicationVersionErr {
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateApplicationVersionErr) display() -> Str {
-  match e {
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
 }

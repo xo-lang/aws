@@ -1330,6 +1330,11 @@ pub struct Task {
   pub ephemeral_storage: EphemeralStorage? = None
   /// The Fargate ephemeral storage settings for the task.
   pub fargate_ephemeral_storage: TaskEphemeralStorage? = None
+  /// A summary of the trusted execution configuration for the task, including
+  /// the isolation mode. This is a read-only view of the configuration that
+  /// was set on the task definition. Trusted execution is supported only for
+  /// Amazon ECS Managed Instances.
+  pub trusted_execution_summary: TrustedExecutionSummary? = None
 }
 
 /// The details of a task definition which describes the container and
@@ -1527,6 +1532,11 @@ pub struct TaskDefinition {
   /// Enables fault injection and allows for fault injection requests to be
   /// accepted from the task's containers. The default value is false .
   pub enable_fault_injection: Bool? = None
+  /// The trusted execution configuration for tasks that use this task
+  /// definition, including the isolation mode and, if configured, an
+  /// attestation policy. Trusted execution is supported only for Amazon ECS
+  /// Managed Instances.
+  pub trusted_execution_configuration: TrustedExecutionConfiguration? = None
 }
 
 pub enum TaskDefinitionFamilyStatus: Str {
@@ -1716,8 +1726,7 @@ pub struct TaskOverride {
   pub task_role_arn: Str? = None
   /// The ephemeral storage setting override for the task. This parameter is
   /// only supported for tasks hosted on Fargate that use the following
-  /// platform versions: Linux platform version 1.4.0 or later. Windows
-  /// platform version 1.0.0 or later.
+  /// platform versions: Linux platform version 1.4.0 or later.
   pub ephemeral_storage: EphemeralStorage? = None
 }
 
@@ -1951,6 +1960,67 @@ pub enum TransportProtocol: Str {
   Tcp = "tcp"
   Udp = "udp"
   Unknown(value: Str)
+}
+
+/// The trusted execution configuration for a task. This configuration
+/// controls the isolation mode and attestation policy. You set this
+/// configuration when you register a task definition. Trusted execution is
+/// supported only for Amazon ECS Managed Instances.
+pub struct TrustedExecutionConfiguration {
+  /// The isolation mode for tasks that use this task definition. The
+  /// isolation mode determines how a task is isolated from other tasks on the
+  /// same Amazon EC2 instance. SHARED : The task shares the underlying Amazon
+  /// EC2 instance with other tasks. This is the default isolation mode.
+  /// ISOLATED_SANDBOX : The task runs in its own Nitro Sandbox , which is a
+  /// lightweight virtual machine that is isolated by the Amazon Web Services
+  /// Nitro System. Each task's sandbox is isolated from every other task's
+  /// sandbox on the same Amazon EC2 instance, so one task can't access
+  /// another task's memory or storage. For more information, see Isolated and
+  /// confidential tasks in Amazon Elastic Container Service Developer Guide .
+  /// CONFIDENTIAL_SANDBOX : The task runs in its own Nitro Sandbox , which is
+  /// a lightweight virtual machine that is isolated by the Amazon Web
+  /// Services Nitro System, with cryptographic attestation. The host can't
+  /// access the sandbox's memory or storage, and only the approved workload
+  /// can decrypt data that you encrypt with your Key Management Service key.
+  /// For more information, see Isolated and confidential tasks in Amazon
+  /// Elastic Container Service Developer Guide .
+  pub isolation_mode: IsolationMode? = None
+  /// The base64-encoded attestation policy envelope for the task. The policy
+  /// specifies which containers are allowed to run and the runtime
+  /// configuration that is cryptographically attested. This parameter is
+  /// required when isolationMode is CONFIDENTIAL_SANDBOX .
+  pub attestation_policy: Str? = None
+}
+
+/// A summary of the trusted execution configuration for a task. This is a
+/// read-only view of the isolation configuration that was set on the task
+/// definition. Use it to see a task's isolation configuration in the
+/// response to DescribeTasks , RunTask , or StopTask without calling
+/// DescribeTaskDefinition . This summary never includes the attestation
+/// policy itself. Trusted execution is supported only for Amazon ECS
+/// Managed Instances.
+pub struct TrustedExecutionSummary {
+  /// The isolation mode that the task runs in. This value mirrors the
+  /// isolationMode that was set in the task definition's
+  /// TrustedExecutionConfiguration . SHARED : The task shares the underlying
+  /// Amazon EC2 instance with other tasks. This is the default isolation
+  /// mode. ISOLATED_SANDBOX : The task runs in its own Nitro Sandbox , which
+  /// is a lightweight virtual machine that is isolated by the Amazon Web
+  /// Services Nitro System. Each task's sandbox is isolated from every other
+  /// task's sandbox on the same Amazon EC2 instance, so one task can't access
+  /// another task's memory or storage. For more information, see Isolated and
+  /// confidential tasks in Amazon Elastic Container Service Developer Guide .
+  /// CONFIDENTIAL_SANDBOX : The task runs in its own Nitro Sandbox , which is
+  /// a lightweight virtual machine that is isolated by the Amazon Web
+  /// Services Nitro System, with cryptographic attestation. The host can't
+  /// access the sandbox's memory or storage, and only the approved workload
+  /// can decrypt data that you encrypt with your Key Management Service key.
+  /// For more information, see Isolated and confidential tasks in Amazon
+  /// Elastic Container Service Developer Guide .
+  pub isolation_mode: IsolationMode? = None
+  /// The status of the attestation policy for the task. This value is present
+  /// only for tasks that use the CONFIDENTIAL_SANDBOX isolation mode.
+  pub attestation_policy_status: AttestationPolicyStatus? = None
 }
 
 /// The ulimit settings to pass to the container. Amazon ECS tasks hosted on

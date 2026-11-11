@@ -13,6 +13,20 @@ pub struct BadRequestException {
   pub message: Str? = None
 }
 
+pub struct CompleteTableMigrationRequest {
+  /// The Amazon Resource Name (ARN) of the migrated table to complete the
+  /// migration of.
+  pub table_arn: Str? = None
+}
+
+pub enum CompressionCodec: Str {
+  Zstd = "zstd"
+  Snappy = "snappy"
+  Gzip = "gzip"
+  Uncompressed = "uncompressed"
+  Unknown(value: Str)
+}
+
 /// The request failed because there is a conflict with a previous write.
 /// You can retry the request.
 pub struct ConflictException {
@@ -105,6 +119,41 @@ pub struct CreateTableResponse {
   pub version_token: Str? = None
 }
 
+pub enum DataFileFormat: Str {
+  Parquet = "parquet"
+  Unknown(value: Str)
+}
+
+/// The maintenance settings and migration policies for the destination
+/// table.
+pub struct DataMigrationOverview {
+  /// The maintenance settings for the destination table. The migration
+  /// applies them when it creates the table: snapshot management starts then,
+  /// and compaction starts after you complete the migration. If you don't
+  /// specify a setting, the migration uses its default: a target file size of
+  /// 512 MB, the binpack compaction strategy, at least 3 snapshots, and a
+  /// maximum snapshot age of 120 hours. Unreferenced file removal follows the
+  /// table bucket's configuration after you complete the migration.
+  pub maintenance_settings: MaintenanceSettings? = None
+  /// The policies for source data that doesn't fit the destination schema.
+  pub migration_policies: MigrationPolicies? = None
+}
+
+/// The maintenance settings and migration policies for the destination
+/// table.
+pub struct DataMigrationSettings {
+  /// The maintenance settings for the destination table. The migration
+  /// applies them when it creates the table: snapshot management starts then,
+  /// and compaction starts after you complete the migration. If you don't
+  /// specify a setting, the migration uses its default: a target file size of
+  /// 512 MB, the binpack compaction strategy, at least 3 snapshots, and a
+  /// maximum snapshot age of 120 hours. Unreferenced file removal follows the
+  /// table bucket's configuration after you complete the migration.
+  pub maintenance_settings: MaintenanceSettings? = None
+  /// The policies for source data that doesn't fit the destination schema.
+  pub migration_policies: MigrationPolicies? = None
+}
+
 pub struct DeleteNamespaceRequest {
   /// The Amazon Resource Name (ARN) of the table bucket associated with the
   /// namespace.
@@ -172,6 +221,58 @@ pub struct DeleteTableRequest {
   pub version_token: Str? = None
 }
 
+/// The table that a migration creates in a table bucket and migrates the
+/// source into.
+pub struct DestinationTable {
+  /// The Amazon Resource Name (ARN) of the table bucket to create the table
+  /// in.
+  pub table_bucket_arn: Str? = None
+  /// The namespace to create the table in.
+  pub namespace: Str? = None
+  /// The name of the table to create.
+  pub name: Str? = None
+  /// The encryption configuration for the table. If you don't specify one,
+  /// the table uses the default encryption configuration of its table bucket.
+  /// If you specify an encryption configuration, the migration role must have
+  /// the s3tables:PutTableEncryption permission. If you choose SSE-KMS, the
+  /// migration role must have the kms:DescribeKey , kms:GenerateDataKey and
+  /// kms:Decrypt permissions on the KMS key, and the S3 Tables maintenance
+  /// principal must have access to it. For more information, see Permissions
+  /// requirements for S3 Tables SSE-KMS encryption .
+  pub encryption_configuration: EncryptionConfiguration? = None
+  /// The storage class configuration for the table. If you don't specify one,
+  /// the table inherits the storage class configuration of its table bucket.
+  /// If you specify a storage class configuration, the migration role must
+  /// have the s3tables:PutTableStorageClass permission.
+  pub storage_class_configuration: StorageClassConfiguration? = None
+  /// The tags to add to the table. A tag is a key-value pair that you apply
+  /// to your resources. For more information, see Tagging for cost allocation
+  /// or attribute-based access control (ABAC) . If you specify tags, the
+  /// migration role must have the s3tables:TagResource permission.
+  pub tags: Map[Str, Str]? = None
+  /// The properties of the destination table, such as its Iceberg format
+  /// version and the format of its data files.
+  pub properties: MigrationTableProperties? = None
+  /// The schema of the table to create. If you don't specify a schema, the
+  /// migration infers it from the source table, with every column optional. A
+  /// schema that you specify must include every partition column of the
+  /// source table. It can leave out other columns only if
+  /// unmatchedSourceFieldsPolicy is drop . A struct column must have the same
+  /// fields as the source column. Column default values aren't supported. If
+  /// you mark a column as required, every source object must have a value for
+  /// it: an object with a null value in a required column fails to migrate.
+  /// The destination table is partitioned in the same way as the source
+  /// table. To specify fields in icebergSortOrder , you must specify a
+  /// schema.
+  pub schema: IcebergSchemaV2? = None
+  /// The sort order of the rows within each data file that the migration
+  /// writes. A sort order can have up to five fields, each naming a column of
+  /// the schema that you specify by its field ID, so to use a sort order you
+  /// must specify a schema. StartTableMigration rejects a field that names no
+  /// column of the schema, or whose transform doesn't fit the column's type.
+  pub iceberg_sort_order: IcebergSortOrder? = None
+}
+
 /// Configuration specifying how data should be encrypted. This structure
 /// defines the encryption algorithm and optional KMS key to be used for
 /// server-side encryption.
@@ -186,6 +287,23 @@ pub struct EncryptionConfiguration {
   /// The Amazon Resource Name (ARN) of the KMS key to use for encryption.
   /// This field is required only when sseAlgorithm is set to aws:kms .
   pub kms_key_arn: Str? = None
+}
+
+/// The category of a compatibility report finding, by what you change to
+/// fix it. Valid values: access - A permission or a request setting. You
+/// don't need to change the source. metadata - The Amazon Web Services Glue
+/// table definition, or properties of a source object, such as its size,
+/// storage class, encryption or Parquet types. data - The contents of a
+/// source object, such as a partition value that can't be read, an object
+/// overwritten after an earlier migration, or a corrupt file. internal - An
+/// internal error in S3 Tables. Retry the migration, and contact Amazon Web
+/// Services Support if the error persists.
+pub enum FindingCategory: Str {
+  Access = "access"
+  Metadata = "metadata"
+  Data = "data"
+  Internal = "internal"
+  Unknown(value: Str)
 }
 
 /// The caller isn't authorized to make the request.
@@ -223,6 +341,17 @@ pub struct GetTableBucketEncryptionRequest {
 pub struct GetTableBucketEncryptionResponse {
   /// The encryption configuration for the table bucket.
   pub encryption_configuration: EncryptionConfiguration? = None
+}
+
+pub struct GetTableBucketLoggingRequest {
+  /// The Amazon Resource Name (ARN) of the table bucket.
+  pub table_bucket_arn: Str? = None
+}
+
+pub struct GetTableBucketLoggingResponse {
+  /// The logging status of the table bucket. If logging is disabled,
+  /// loggingEnabled is absent.
+  pub table_bucket_logging_status: TableBucketLoggingStatus? = None
 }
 
 pub struct GetTableBucketMaintenanceConfigurationRequest {
@@ -371,6 +500,85 @@ pub struct GetTableMetadataLocationResponse {
   pub warehouse_location: Str? = None
 }
 
+pub struct GetTableMigrationRequest {
+  /// The ID of the migration to get. Specify either migrationId or tableARN ,
+  /// not both.
+  pub migration_id: Str? = None
+  /// The Amazon Resource Name (ARN) of the destination table. Gets the
+  /// table's most recent migration. Specify either tableARN or migrationId ,
+  /// not both.
+  pub table_arn: Str? = None
+}
+
+pub struct GetTableMigrationResponse {
+  /// The ID of the migration.
+  pub migration_id: Str? = None
+  /// The Amazon Resource Name (ARN) of the table bucket that contains the
+  /// destination table.
+  pub table_bucket_arn: Str? = None
+  /// The namespace of the destination table.
+  pub namespace: Str? = None
+  /// The Amazon Resource Name (ARN) of the destination table, once the
+  /// migration creates it.
+  pub table_arn: Str? = None
+  /// The name of the destination table.
+  pub name: Str? = None
+  /// The type of the migration. Valid values: start - A migration that
+  /// StartTableMigration started. sync - A migration that SyncTableMigration
+  /// started.
+  pub type_value: MigrationType? = None
+  /// The state of the migration. Valid values: new - S3 Tables accepted the
+  /// request. planning - The migration is checking the source table, its
+  /// objects and the destination for compatibility, and writing the
+  /// compatibility reports. pendingReview - Planning finished, and the
+  /// migration waits for you to continue or cancel it with
+  /// UpdateTableMigration . queued - The migration is waiting to start
+  /// migrating data. migrating - The migration is running the plan from the
+  /// planning state: it copies data and commits it to the destination table.
+  /// A migration reaches this state only if hasValidPlan is true . succeeded
+  /// - Every planned object migrated. failed - The migration failed. Check
+  /// failureReason for the cause. cancelling - You cancelled the migration,
+  /// and it is finishing the work in progress. cancelled - The migration is
+  /// cancelled. A migration ends in the succeeded , failed or cancelled
+  /// state. You can cancel it until it ends.
+  pub state: MigrationState? = None
+  /// The Amazon Resource Name (ARN) of the IAM role that the migration uses.
+  pub role_arn: Str? = None
+  /// A Boolean value that specifies whether the migration waits in the
+  /// pendingReview state, so that you can review the compatibility reports
+  /// before it migrates any data.
+  pub review_migration_plan: Bool? = None
+  /// A Boolean value that specifies whether planning produced a plan that the
+  /// migration can run. If planning hasn't finished, this value isn't
+  /// returned.
+  pub has_valid_plan: Bool? = None
+  /// The date and time that the migration was created.
+  pub created_at: Time? = None
+  /// The date and time that the migration's state last changed.
+  pub state_updated_at: Time? = None
+  /// The reason that the migration failed. The code names the cause, such as
+  /// a migration role that S3 Tables can't assume or an Amazon Web Services
+  /// Glue table that doesn't exist, or the report that lists the findings.
+  /// This value is returned only when the migration is in the failed state.
+  pub failure_reason: MigrationFailureReason? = None
+  /// Statistics about the source and the partitions in the migration. This
+  /// value is returned after planning finishes.
+  pub planning_stats: PlanningStats? = None
+  /// The number of objects that migrated, failed or are pending. These counts
+  /// are set when planning finishes and updated when the migration ends.
+  pub migration_stats: MigrationStats? = None
+  /// The type of the migration's source.
+  pub source_type: MigrationSourceType? = None
+  /// The source table of the migration.
+  pub source: SourceConfiguration? = None
+  /// The maintenance settings and migration policies for the destination
+  /// table.
+  pub data_migration: DataMigrationOverview? = None
+  /// The bucket and prefixes for the migration's reports, and the location of
+  /// each report once it is written.
+  pub migration_output: MigrationOutputOverview? = None
+}
+
 pub struct GetTablePolicyRequest {
   /// The Amazon Resource Name (ARN) of the table bucket that contains the
   /// table.
@@ -507,6 +715,24 @@ pub struct GetTableStorageClassRequest {
 pub struct GetTableStorageClassResponse {
   /// The storage class configuration for the table.
   pub storage_class_configuration: StorageClassConfiguration? = None
+}
+
+/// An Amazon Web Services Glue Data Catalog table to migrate. The table
+/// must be an external Apache Hive table whose data is stored as Parquet in
+/// a general purpose bucket in the same account and Region as the table
+/// bucket. Views, transactional (ACID) tables, tables in an open table
+/// format such as Apache Iceberg, and tables registered with Amazon Web
+/// Services Lake Formation can't be migrated. If the table can't be
+/// migrated, the migration fails, and the table compatibility report lists
+/// the reason.
+pub struct GlueTableSource {
+  /// The ID of the Data Catalog that contains the table. It must be your
+  /// account ID.
+  pub catalog_id: Str? = None
+  /// The name of the database that contains the table.
+  pub database_name: Str? = None
+  /// The name of the table.
+  pub table_name: Str? = None
 }
 
 /// Contains details about the compaction settings for an Iceberg table.
@@ -672,6 +898,12 @@ pub struct IcebergUnreferencedFileRemovalSettings {
   pub non_current_days: Int? = None
 }
 
+pub enum IncompatibleValuesPolicy: Str {
+  Fail = "fail"
+  SetNull = "setNull"
+  Unknown(value: Str)
+}
+
 /// The request failed due to an internal server error.
 pub struct InternalServerErrorException {
   pub message: Str? = None
@@ -736,6 +968,42 @@ pub struct ListTableBucketsResponse {
   pub continuation_token: Str? = None
 }
 
+pub struct ListTableMigrationsRequest {
+  /// The Amazon Resource Name (ARN) of the table bucket to list migrations
+  /// for.
+  pub table_bucket_arn: Str? = None
+  /// The namespace to list migrations for. Requires tableBucketARN .
+  pub namespace: Str? = None
+  /// The name of the table to list migrations for. Requires tableBucketARN
+  /// and namespace .
+  pub name: Str? = None
+  /// The Amazon Resource Name (ARN) of the table to list migrations for. The
+  /// list includes the migrations into this table. To also list migrations
+  /// into an earlier table of the same name, specify tableBucketARN ,
+  /// namespace and name instead. Specify either tableARN or tableBucketARN ,
+  /// not both.
+  pub table_arn: Str? = None
+  /// The state to filter the list by. For the valid values, see the state
+  /// member of GetTableMigration .
+  pub state: MigrationState? = None
+  /// The hasValidPlan value to filter the list by. Migrations that are still
+  /// planning aren't listed, whichever value you specify.
+  pub has_valid_plan: Bool? = None
+  /// The maximum number of migrations to return, from 1 to 1,000. If you
+  /// don't specify a value, the default is 100.
+  pub max_results: Int? = None
+  /// The nextToken from a previous response, to get the next page of results.
+  pub next_token: Str? = None
+}
+
+pub struct ListTableMigrationsResponse {
+  /// The migrations, newest first.
+  pub migrations: List[MigrationSummary]? = None
+  /// A token to pass as nextToken to get the next page of results. If there
+  /// are no more results, this value isn't returned.
+  pub next_token: Str? = None
+}
+
 pub struct ListTablesRequest {
   /// The Amazon resource Name (ARN) of the table bucket.
   pub table_bucket_arn: Str? = None
@@ -774,6 +1042,40 @@ pub struct ListTagsForResourceResponse {
   pub tags: Map[Str, Str]? = None
 }
 
+/// Describes where logs are stored and the prefix that Amazon S3 assigns to
+/// all log object keys for a table bucket.
+pub struct LoggingEnabled {
+  /// The name of the general purpose bucket that logs are delivered to. The
+  /// bucket must be in the same Amazon Web Services Region and owned by the
+  /// same Amazon Web Services account as the table bucket. The bucket can't
+  /// use SSE-KMS or DSSE-KMS default encryption, can't have S3 Object Lock
+  /// enabled, and can't have Requester Pays enabled. You can deliver logs
+  /// from multiple table buckets to the same target bucket. In this case,
+  /// choose a different targetPrefix for each table bucket so that you can
+  /// tell their log objects apart.
+  pub target_bucket: Str? = None
+  /// The prefix for the keys of the log objects that are delivered to the
+  /// target bucket.
+  pub target_prefix: Str? = None
+  /// The key format of the log objects. Log object keys are always
+  /// partitioned by date.
+  pub target_object_key_format: TargetObjectKeyFormat? = None
+}
+
+/// The maintenance settings for the destination table. The migration
+/// applies them when it creates the table: snapshot management starts then,
+/// and compaction starts after you complete the migration. If you don't
+/// specify a setting, the migration uses its default: a target file size of
+/// 512 MB, the binpack compaction strategy, at least 3 snapshots, and a
+/// maximum snapshot age of 120 hours. Unreferenced file removal follows the
+/// table bucket's configuration after you complete the migration.
+pub struct MaintenanceSettings {
+  /// The compaction settings.
+  pub iceberg_compaction: MigrationCompactionSettings? = None
+  /// The snapshot management settings.
+  pub iceberg_snapshot_management: MigrationSnapshotManagementSettings? = None
+}
+
 pub enum MaintenanceStatus: Str {
   Enabled = "enabled"
   Disabled = "disabled"
@@ -793,6 +1095,264 @@ pub struct ManagedTableInformation {
 /// restrictions that prevent the operation.
 pub struct MethodNotAllowedException {
   pub message: Str? = None
+}
+
+/// The compaction settings that a migration applies to the destination
+/// table.
+pub struct MigrationCompactionSettings {
+  /// The target size, from 64 to 512 MB, of the data files that the migration
+  /// writes, and of the files that compaction writes after you complete the
+  /// migration. The default is 512.
+  pub target_file_size_mb: Int? = None
+  /// The compaction strategy. The only valid value is binpack , which is the
+  /// default.
+  pub strategy: IcebergCompactionStrategy? = None
+}
+
+/// The reason a migration failed. Each code names the cause, or the report
+/// that lists the findings.
+pub enum MigrationFailureCode: Str {
+  RolePermissions = "rolePermissions"
+  SourcePermissions = "sourcePermissions"
+  DestinationPermissions = "destinationPermissions"
+  ResourceNotFound = "resourceNotFound"
+  SourceNotSupported = "sourceNotSupported"
+  ObjectMigrationReport = "objectMigrationReport"
+  ObjectCompatibilityReport = "objectCompatibilityReport"
+  TableCompatibilityReport = "tableCompatibilityReport"
+  InternalError = "internalError"
+  ReportBucketNotSupported = "reportBucketNotSupported"
+  Unknown(value: Str)
+}
+
+/// The reason that a migration failed: a code and, when there is one, the
+/// resource or reason it applies to. This value is returned only when the
+/// migration is in the failed state.
+pub struct MigrationFailureReason {
+  /// The failure code. It names the cause or the report that lists the
+  /// findings. Valid values: rolePermissions - S3 Tables couldn't assume the
+  /// migration role, or the role doesn't have a permission that the migration
+  /// needs. detail is the role ARN. sourcePermissions - The migration role
+  /// couldn't read the Amazon Web Services Glue table or the source objects.
+  /// detail names the table ( database.table ) or the source bucket.
+  /// destinationPermissions - The migration role couldn't write to the table
+  /// bucket or the report bucket. detail names the bucket. resourceNotFound -
+  /// A resource that you specified doesn't exist, such as the Amazon Web
+  /// Services Glue table or the source bucket. detail names it.
+  /// sourceNotSupported - The source table can't be migrated, for example
+  /// because it is empty, has too many objects, or has columns or partitions
+  /// that can't be migrated. The table compatibility report lists the
+  /// findings. tableCompatibilityReport - The migration couldn't create the
+  /// destination table, for example because a table with that name already
+  /// exists or the KMS key can't be used. For a sync, the destination table
+  /// changed after the previous migration. The table compatibility report
+  /// lists the finding. objectCompatibilityReport - Some source objects can't
+  /// be migrated, for example because they are archived, or because they were
+  /// overwritten after an earlier migration migrated them. The object
+  /// compatibility report lists them. objectMigrationReport - Some source
+  /// objects failed to migrate. The object migration report lists them and
+  /// the cause for each. reportBucketNotSupported - The report bucket can't
+  /// receive the migration's reports, for example because it is in a
+  /// different Region than the table bucket. internalError - S3 Tables
+  /// encountered an internal error. Retry the migration, and contact Amazon
+  /// Web Services Support if the error persists.
+  pub code: MigrationFailureCode? = None
+  /// The resource that the failure applies to, such as the role ARN, the
+  /// Amazon Web Services Glue table ( database.table ) or a bucket. For
+  /// sourceNotSupported , the reason that the source isn't supported, such as
+  /// EMPTY_TABLE . This value isn't returned for the report codes or for
+  /// internalError .
+  pub detail: Str? = None
+}
+
+/// The bucket and prefixes that a migration writes its reports to. Every
+/// report goes to one bucket, each under its own prefix.
+pub struct MigrationOutputConfiguration {
+  /// The general purpose bucket that the migration writes every report to.
+  pub bucket: Str? = None
+  /// The key prefix for each report.
+  pub prefixes: MigrationReportPrefixes? = None
+}
+
+/// Where a migration writes its reports, and the location of each report
+/// once it is written.
+pub struct MigrationOutputOverview {
+  /// The general purpose bucket that the migration writes every report to.
+  pub bucket: Str? = None
+  /// The table compatibility report: the sample object that the schema is
+  /// inferred from, the table-level findings, and one row for each
+  /// destination column with its type change and how the migration policies
+  /// apply to it. The migration writes it when planning finishes, before any
+  /// data migrates. If planning fails, the report might not be written.
+  pub table_compatibility_report: ReportOverview? = None
+  /// The object compatibility report: one row for each source object under
+  /// the source table's location, with whether the migration includes the
+  /// object and its most severe finding. The migration writes it when
+  /// planning finishes. If planning fails, the report might not be written.
+  pub object_compatibility_report: ReportOverview? = None
+  /// The object migration report: one row for each source object that the
+  /// migration tried to migrate, with whether it migrated, how it was
+  /// transformed, and why it failed. The migration writes it once, when the
+  /// migration ends. It isn't written if planning fails or if a sync has
+  /// nothing to migrate.
+  pub object_migration_report: ReportOverview? = None
+}
+
+/// The policies for source data that doesn't fit the destination schema.
+pub struct MigrationPolicies {
+  /// The migration policy for a source field that has no matching column in
+  /// the destination schema. Valid values: fail - Fails the migration. This
+  /// is the default. drop - Leaves source columns that the destination schema
+  /// doesn't have out of the destination table, and doesn't migrate source
+  /// objects outside the Amazon Web Services Glue table's partition
+  /// locations. A destination schema that leaves out a partition column or a
+  /// field of a struct column fails the migration under either value.
+  pub unmatched_source_fields_policy: UnmatchedSourceFieldsPolicy? = None
+  /// The migration policy for a source value that the destination column's
+  /// type can't hold. Valid values: fail - Fails the migration. This is the
+  /// default. setNull - Writes null for a value that the destination column's
+  /// type can't hold. If a column's type in a source object is incompatible
+  /// with the destination column's type, the column is null for that whole
+  /// object. A required column, or a type that migration doesn't support,
+  /// fails the migration under either value.
+  pub incompatible_values_policy: IncompatibleValuesPolicy? = None
+}
+
+/// The key prefix for each report. If you don't specify a prefix for a
+/// report, its keys start at the root of the bucket.
+pub struct MigrationReportPrefixes {
+  /// The key prefix for the table compatibility report, up to 512 bytes. If
+  /// not specified, the report's keys start at the root of the bucket.
+  pub table_compatibility_report: Str? = None
+  /// The key prefix for the object compatibility report, up to 512 bytes. If
+  /// not specified, the report's keys start at the root of the bucket.
+  pub object_compatibility_report: Str? = None
+  /// The key prefix for the object migration report, up to 512 bytes. If not
+  /// specified, the report's keys start at the root of the bucket.
+  pub object_migration_report: Str? = None
+}
+
+pub enum MigrationRequestedState: Str {
+  Queued = "queued"
+  Cancelled = "cancelled"
+  Unknown(value: Str)
+}
+
+/// The snapshot management settings that a migration applies to the
+/// destination table.
+pub struct MigrationSnapshotManagementSettings {
+  /// The minimum number of snapshots to keep. The value must be 3 or more.
+  /// The default is 3.
+  pub min_snapshots_to_keep: Int? = None
+  /// The maximum age, in hours, of a snapshot before it can be expired. The
+  /// default is 120.
+  pub max_snapshot_age_hours: Int? = None
+}
+
+/// The type of source that a migration reads from. It names the member that
+/// is set in SourceConfiguration .
+pub enum MigrationSourceType: Str {
+  GlueTable = "glueTable"
+  Unknown(value: Str)
+}
+
+pub enum MigrationState: Str {
+  New = "new"
+  Planning = "planning"
+  PendingReview = "pendingReview"
+  Queued = "queued"
+  Migrating = "migrating"
+  Succeeded = "succeeded"
+  Failed = "failed"
+  Cancelling = "cancelling"
+  Cancelled = "cancelled"
+  Unknown(value: Str)
+}
+
+/// The number of source objects that migrated, failed or are pending. For a
+/// sync, the counts cover every object of the table after the sync,
+/// including objects that earlier migrations migrated. The counts are set
+/// when planning finishes and updated when the migration ends.
+pub struct MigrationStats {
+  /// The number of source objects whose data the migration wrote to the
+  /// destination table. Migrated data can be queried after the migration
+  /// commits it. If the migration fails or is cancelled, some migrated
+  /// objects might not be committed.
+  pub objects_migrated: Int? = None
+  /// The number of source objects that didn't migrate, because they failed or
+  /// because another object, such as an object in the same partition, failed.
+  /// The object migration report lists the cause for each object.
+  pub objects_failed_migration: Int? = None
+  /// The number of source objects that haven't migrated or failed yet. When a
+  /// migration fails or is cancelled, these are the objects that it didn't
+  /// migrate.
+  pub objects_pending_migration: Int? = None
+}
+
+/// A summary of a migration.
+pub struct MigrationSummary {
+  /// The ID of the migration.
+  pub migration_id: Str? = None
+  /// The Amazon Resource Name (ARN) of the table bucket that contains the
+  /// destination table.
+  pub table_bucket_arn: Str? = None
+  /// The namespace of the destination table.
+  pub namespace: Str? = None
+  /// The Amazon Resource Name (ARN) of the destination table, once the
+  /// migration creates it.
+  pub table_arn: Str? = None
+  /// The name of the destination table.
+  pub name: Str? = None
+  /// The type of the migration. Valid values: start - A migration that
+  /// StartTableMigration started. sync - A migration that SyncTableMigration
+  /// started.
+  pub type_value: MigrationType? = None
+  /// The state of the migration. Valid values: new - S3 Tables accepted the
+  /// request. planning - The migration is checking the source table, its
+  /// objects and the destination for compatibility, and writing the
+  /// compatibility reports. pendingReview - Planning finished, and the
+  /// migration waits for you to continue or cancel it with
+  /// UpdateTableMigration . queued - The migration is waiting to start
+  /// migrating data. migrating - The migration is running the plan from the
+  /// planning state: it copies data and commits it to the destination table.
+  /// A migration reaches this state only if hasValidPlan is true . succeeded
+  /// - Every planned object migrated. failed - The migration failed. Check
+  /// failureReason for the cause. cancelling - You cancelled the migration,
+  /// and it is finishing the work in progress. cancelled - The migration is
+  /// cancelled.
+  pub state: MigrationState? = None
+  /// A Boolean value that specifies whether planning produced a plan that the
+  /// migration can run. If planning hasn't finished, this value isn't
+  /// returned.
+  pub has_valid_plan: Bool? = None
+  /// The date and time that the migration was created.
+  pub created_at: Time? = None
+  /// The date and time that the migration's state last changed.
+  pub state_updated_at: Time? = None
+}
+
+/// The properties of the data files that a migration writes. The migration
+/// also sets the compression codec and dictionary encoding as the
+/// destination table's write properties, so they remain the table's
+/// defaults after you complete the migration.
+pub struct MigrationTableProperties {
+  /// The file format of the data files. The only supported format is parquet
+  /// , the default.
+  pub write_format: DataFileFormat? = None
+  /// The Iceberg format version of the destination table. Valid values are 2
+  /// and 3 . The default is 2 .
+  pub iceberg_format_version: Int? = None
+  /// The compression codec of the data files. The default is zstd .
+  pub compression_codec: CompressionCodec? = None
+  /// Specifies whether the data files use dictionary encoding. The default is
+  /// true .
+  pub dictionary_encoding: Bool? = None
+}
+
+pub enum MigrationType: Str {
+  Start = "start"
+  Sync = "sync"
+  Unknown(value: Str)
 }
 
 /// Contains details about a namespace.
@@ -823,11 +1383,52 @@ pub enum OpenTableFormat: Str {
   Unknown(value: Str)
 }
 
+pub enum PartitionDateSource: Str {
+  EventTime = "EventTime"
+  DeliveryTime = "DeliveryTime"
+  Unknown(value: Str)
+}
+
+/// Amazon S3 keys for log objects are partitioned in the following format:
+/// [targetPrefix][SourceAccountId]/[SourceRegion]/[SourceTableBucket]/[YYYY]/[MM]/[DD]/[YYYY]-[MM]-[DD]-[hh]-[mm]-[ss]-[UniqueString]
+pub struct PartitionedPrefix {
+  /// The date to use for the log object key partitions. Valid values are
+  /// EventTime , the time that the requests in the log were made, and
+  /// DeliveryTime , the time that the log was delivered.
+  pub partition_date_source: PartitionDateSource? = None
+}
+
+/// Statistics about the source and the partitions in a migration.
+pub struct PlanningStats {
+  /// The number of source objects that the migration found under the source
+  /// table's location, whether or not it migrates them. The object
+  /// compatibility report has one row for each.
+  pub objects_scanned: Int? = None
+  /// The number of source objects in the migration. For a start, these are
+  /// the data files in the Amazon Web Services Glue table's partitions, or
+  /// under the table's location if the table isn't partitioned. For a sync,
+  /// these are all the data files of the table after the sync, including
+  /// files that earlier migrations migrated.
+  pub objects_planned: Int? = None
+  /// The number of partitions in the destination table after this migration,
+  /// or 0 if the source table isn't partitioned. This value is returned when
+  /// planning produces a valid plan.
+  pub partition_count: Int? = None
+}
+
 pub struct PutTableBucketEncryptionRequest {
   /// The Amazon Resource Name (ARN) of the table bucket.
   pub table_bucket_arn: Str? = None
   /// The encryption configuration to apply to the table bucket.
   pub encryption_configuration: EncryptionConfiguration? = None
+}
+
+pub struct PutTableBucketLoggingRequest {
+  /// The Amazon Resource Name (ARN) of the table bucket.
+  pub table_bucket_arn: Str? = None
+  /// The logging status to apply to the table bucket. To disable logging,
+  /// specify an empty tableBucketLoggingStatus .
+  pub table_bucket_logging_status: TableBucketLoggingStatus? = None
 }
 
 pub struct PutTableBucketMaintenanceConfigurationRequest {
@@ -987,6 +1588,31 @@ pub enum ReplicationStatus: Str {
   Unknown(value: Str)
 }
 
+/// A report of a migration: the prefix it is written under and, once it is
+/// written, its key, its checksum and, for the compatibility reports, the
+/// number of blocking findings in each category.
+pub struct ReportOverview {
+  /// The key prefix that the report is written under.
+  pub prefix: Str? = None
+  /// The key of the report object in the bucket. For the object compatibility
+  /// and object migration reports, this is the report's manifest; for the
+  /// table compatibility report, it is the report itself. This value is
+  /// returned after the migration writes the report. A migration doesn't
+  /// always write every report. For example, a migration that fails during
+  /// planning doesn't write the object migration report.
+  pub key: Str? = None
+  /// The Base64-encoded CRC64NVME checksum of the object that key names. For
+  /// a report that has a manifest, the manifest lists the checksum of each
+  /// report file. This value is returned after the migration writes the
+  /// report.
+  pub checksum_crc64_nvme: Str? = None
+  /// For the compatibility reports, the number of blocking findings in each
+  /// category. The object compatibility report counts each blocked object
+  /// once, under its most severe finding. Categories with no blocking
+  /// findings are left out.
+  pub invalid_findings: Map[Str, Int]? = None
+}
+
 pub enum SSEAlgorithm: Str {
   Aes256 = "AES256"
   AwsKms = "aws:kms"
@@ -1040,6 +1666,55 @@ pub enum SchemaV2FieldType: Str {
   Unknown(value: Str)
 }
 
+/// The source to migrate from. Set exactly one member, and set sourceType
+/// to match it.
+pub enum SourceConfiguration {
+  GlueTable(value: GlueTableSource)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+pub struct StartTableMigrationRequest {
+  /// The Amazon Resource Name (ARN) of the IAM role that the migration uses
+  /// to read the source table and its data and to write the destination table
+  /// and the reports. The role must be in your account, and its trust policy
+  /// must allow migration.s3tables.amazonaws.com to assume it. You can limit
+  /// the trust policy to the destination table bucket with the aws:SourceArn
+  /// and aws:SourceAccount condition keys.
+  pub role_arn: Str? = None
+  /// The table to create and migrate the source into.
+  pub destination_table: DestinationTable? = None
+  /// The type of the source. It must match the member that you set in source
+  /// .
+  pub source_type: MigrationSourceType? = None
+  /// The source table to migrate.
+  pub source: SourceConfiguration? = None
+  /// The maintenance settings and migration policies for the destination
+  /// table.
+  pub data_migration: DataMigrationSettings? = None
+  /// Specifies whether the migration waits in the pendingReview state, so
+  /// that you can review the compatibility reports before it migrates any
+  /// data. If true , the migration continues when you call
+  /// UpdateTableMigration with requestedState set to queued . If you don't
+  /// continue or cancel the migration within 30 days, the migration fails.
+  /// The default is false .
+  pub review_migration_plan: Bool? = None
+  /// The bucket and prefixes that the migration writes its reports to. The
+  /// bucket must be a general purpose bucket in your account and in the same
+  /// Region as the table bucket, and the migration role must be able to write
+  /// objects to it. Otherwise, the migration fails when it writes its first
+  /// report.
+  pub migration_output: MigrationOutputConfiguration? = None
+}
+
+pub struct StartTableMigrationResponse {
+  /// The ID of the migration.
+  pub migration_id: Str? = None
+  /// The state of the migration when the request is accepted, such as
+  /// planning .
+  pub state: MigrationState? = None
+}
+
 pub enum StorageClass: Str {
   Standard = "STANDARD"
   IntelligentTiering = "INTELLIGENT_TIERING"
@@ -1055,6 +1730,49 @@ pub struct StorageClassConfiguration {
   /// storage classes optimized for different access patterns and cost
   /// profiles.
   pub storage_class: StorageClass? = None
+}
+
+pub struct SyncTableMigrationRequest {
+  /// The Amazon Resource Name (ARN) of the IAM role that the sync uses to
+  /// read the source table and its data and to write the destination table
+  /// and the reports. The role must be in your account, and its trust policy
+  /// must allow migration.s3tables.amazonaws.com to assume it. You can limit
+  /// the trust policy to the destination table bucket with the aws:SourceArn
+  /// and aws:SourceAccount condition keys.
+  pub role_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the destination table to sync. The
+  /// table must have a migration, and you must not have called
+  /// CompleteTableMigration for it.
+  pub table_arn: Str? = None
+  /// Specifies whether the sync waits in the pendingReview state, so that you
+  /// can review the compatibility reports before it migrates any data. If
+  /// true , the migration continues when you call UpdateTableMigration with
+  /// requestedState set to queued . If you don't continue or cancel the
+  /// migration within 30 days, the migration fails. The default is false .
+  pub review_migration_plan: Bool? = None
+  /// The bucket and prefixes that the sync writes its reports to. The bucket
+  /// must be a general purpose bucket in your account and in the same Region
+  /// as the table bucket, and the migration role must be able to write
+  /// objects to it. Otherwise, the migration fails when it writes its first
+  /// report.
+  pub migration_output: MigrationOutputConfiguration? = None
+}
+
+pub struct SyncTableMigrationResponse {
+  /// The migration ID of the sync.
+  pub migration_id: Str? = None
+  /// The state of the migration when the request is accepted, such as
+  /// planning .
+  pub state: MigrationState? = None
+}
+
+/// The server access logging status of a table bucket. To enable logging,
+/// specify loggingEnabled . To disable logging, specify an empty
+/// TableBucketLoggingStatus .
+pub struct TableBucketLoggingStatus {
+  /// Where logs for the table bucket are delivered and how the log objects
+  /// are named. Must be populated to enable logging.
+  pub logging_enabled: LoggingEnabled? = None
 }
 
 /// Details about the values that define the maintenance configuration for a
@@ -1276,9 +1994,21 @@ pub struct TagResourceRequest {
 pub struct TagResourceResponse {
 }
 
+/// The key format of the log objects. Only partitionedPrefix is supported.
+pub struct TargetObjectKeyFormat {
+  /// Partitions log object keys by date.
+  pub partitioned_prefix: PartitionedPrefix? = None
+}
+
 /// The limit on the number of requests per second was exceeded.
 pub struct TooManyRequestsException {
   pub message: Str? = None
+}
+
+pub enum UnmatchedSourceFieldsPolicy: Str {
+  Fail = "fail"
+  Drop = "drop"
+  Unknown(value: Str)
 }
 
 pub struct UntagResourceRequest {
@@ -1320,4 +2050,32 @@ pub struct UpdateTableMetadataLocationResponse {
   pub version_token: Str? = None
   /// The metadata location of the table.
   pub metadata_location: Str? = None
+}
+
+pub struct UpdateTableMigrationRequest {
+  /// The Amazon Resource Name (ARN) of the destination table. Updates the
+  /// table's most recent migration. Until the migration creates the
+  /// destination table, specify migrationId . Specify either tableARN or
+  /// migrationId , not both.
+  pub table_arn: Str? = None
+  /// The ID of the migration to update. Specify either migrationId or
+  /// tableARN , not both.
+  pub migration_id: Str? = None
+  /// The state to move the migration to: queued to continue a migration in
+  /// the pendingReview state, or cancelled to cancel a migration in the new ,
+  /// planning , pendingReview , queued or migrating state.
+  pub requested_state: MigrationRequestedState? = None
+  /// A description of the update, up to 1,024 characters, with no control
+  /// characters. GetTableMigration doesn't return it.
+  pub update_description: Str? = None
+}
+
+pub struct UpdateTableMigrationResponse {
+  /// The ID of the migration.
+  pub migration_id: Str? = None
+  /// The state of the migration after the update, such as queued , migrating
+  /// or cancelling .
+  pub state: MigrationState? = None
+  /// The Amazon Resource Name (ARN) of the destination table.
+  pub table_arn: Str? = None
 }

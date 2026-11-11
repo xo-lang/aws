@@ -8,6 +8,571 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_search_message_templates_error(resp: http.Response) -> SearchMessageTemplatesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return SearchMessageTemplatesErr.AccessDeniedException(x)
+      Err(msg) => return SearchMessageTemplatesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return SearchMessageTemplatesErr.ResourceNotFoundException(x)
+      Err(msg) => return SearchMessageTemplatesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return SearchMessageTemplatesErr.ThrottlingException(x)
+      Err(msg) => return SearchMessageTemplatesErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return SearchMessageTemplatesErr.UnauthorizedException(x)
+      Err(msg) => return SearchMessageTemplatesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return SearchMessageTemplatesErr.ValidationException(x)
+      Err(msg) => return SearchMessageTemplatesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  SearchMessageTemplatesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Searches for Amazon Q in Connect message templates in the specified
+/// knowledge base.
+pub fn (c: Client) search_message_templates(input: SearchMessageTemplatesRequest) -> SearchMessageTemplatesResponse ! SearchMessageTemplatesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_search_message_templates(c.params, input)) ?? e => return Err(SearchMessageTemplatesErr.InvalidInput(e))
+  var req = serialize_search_message_templates(ep, input, "") ?? e => return Err(SearchMessageTemplatesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SearchMessageTemplatesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_search_message_templates_error(resp))
+  }
+  deserialize_search_message_templates(resp) ?? e => Err(SearchMessageTemplatesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_search_quick_responses(base: EndpointParameters, input: SearchQuickResponsesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of SearchQuickResponses.
+pub fn serialize_search_quick_responses(ep: rest.Endpoint, input: SearchQuickResponsesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_knowledge_base_id = match input.knowledge_base_id {
+    Some(v) => v
+    None => return Err("input member knowledgeBaseId is required")
+  }
+  if label_knowledge_base_id == "" {
+    return Err("input member knowledgeBaseId must not be empty")
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.search_expression {
+    fs.push(("searchExpression", json_of_quick_response_search_expression(x)))
+  }
+  if let Some(x) = input.attributes {
+    fs.push(("attributes", json_of_contact_attributes(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/knowledgeBases/${rest.escape(label_knowledge_base_id, false)}/search/quickResponses"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_search_quick_responses(resp: http.Response) -> SearchQuickResponsesResponse ! Str {
+  var out = SearchQuickResponsesResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "results" => out.results = from_json_quick_response_search_results_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of SearchQuickResponses.
+pub enum SearchQuickResponsesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  RequestTimeoutException(e: RequestTimeoutException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  UnauthorizedException(e: UnauthorizedException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: SearchQuickResponsesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    RequestTimeoutException(x) => "RequestTimeoutException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_search_quick_responses_error(resp: http.Response) -> SearchQuickResponsesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return SearchQuickResponsesErr.AccessDeniedException(x)
+      Err(msg) => return SearchQuickResponsesErr.Deserialize(msg)
+    }
+    "RequestTimeoutException" => match read_error_request_timeout_exception(resp, body) {
+      Ok(x) => return SearchQuickResponsesErr.RequestTimeoutException(x)
+      Err(msg) => return SearchQuickResponsesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return SearchQuickResponsesErr.ResourceNotFoundException(x)
+      Err(msg) => return SearchQuickResponsesErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return SearchQuickResponsesErr.UnauthorizedException(x)
+      Err(msg) => return SearchQuickResponsesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return SearchQuickResponsesErr.ValidationException(x)
+      Err(msg) => return SearchQuickResponsesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  SearchQuickResponsesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Searches existing Amazon Q in Connect quick responses in an Amazon Q in
+/// Connect knowledge base.
+pub fn (c: Client) search_quick_responses(input: SearchQuickResponsesRequest) -> SearchQuickResponsesResponse ! SearchQuickResponsesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_search_quick_responses(c.params, input)) ?? e => return Err(SearchQuickResponsesErr.InvalidInput(e))
+  var req = serialize_search_quick_responses(ep, input, "") ?? e => return Err(SearchQuickResponsesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SearchQuickResponsesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_search_quick_responses_error(resp))
+  }
+  deserialize_search_quick_responses(resp) ?? e => Err(SearchQuickResponsesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_search_sessions(base: EndpointParameters, input: SearchSessionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of SearchSessions.
+pub fn serialize_search_sessions(ep: rest.Endpoint, input: SearchSessionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_assistant_id = match input.assistant_id {
+    Some(v) => v
+    None => return Err("input member assistantId is required")
+  }
+  if label_assistant_id == "" {
+    return Err("input member assistantId must not be empty")
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.search_expression {
+    fs.push(("searchExpression", json_of_search_expression(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/assistants/${rest.escape(label_assistant_id, false)}/searchSessions"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_search_sessions(resp: http.Response) -> SearchSessionsResponse ! Str {
+  var out = SearchSessionsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sessionSummaries" => out.session_summaries = from_json_session_summaries(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of SearchSessions.
+pub enum SearchSessionsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  UnauthorizedException(e: UnauthorizedException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: SearchSessionsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_search_sessions_error(resp: http.Response) -> SearchSessionsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return SearchSessionsErr.AccessDeniedException(x)
+      Err(msg) => return SearchSessionsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return SearchSessionsErr.ResourceNotFoundException(x)
+      Err(msg) => return SearchSessionsErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return SearchSessionsErr.UnauthorizedException(x)
+      Err(msg) => return SearchSessionsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return SearchSessionsErr.ValidationException(x)
+      Err(msg) => return SearchSessionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  SearchSessionsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Searches for sessions.
+pub fn (c: Client) search_sessions(input: SearchSessionsRequest) -> SearchSessionsResponse ! SearchSessionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_search_sessions(c.params, input)) ?? e => return Err(SearchSessionsErr.InvalidInput(e))
+  var req = serialize_search_sessions(ep, input, "") ?? e => return Err(SearchSessionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SearchSessionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_search_sessions_error(resp))
+  }
+  deserialize_search_sessions(resp) ?? e => Err(SearchSessionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_send_message(base: EndpointParameters, input: SendMessageRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of SendMessage.
+pub fn serialize_send_message(ep: rest.Endpoint, input: SendMessageRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_assistant_id = match input.assistant_id {
+    Some(v) => v
+    None => return Err("input member assistantId is required")
+  }
+  if label_assistant_id == "" {
+    return Err("input member assistantId must not be empty")
+  }
+  let label_session_id = match input.session_id {
+    Some(v) => v
+    None => return Err("input member sessionId is required")
+  }
+  if label_session_id == "" {
+    return Err("input member sessionId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.type_value {
+    fs.push(("type", json.Value.Str(x)))
+  }
+  if let Some(x) = input.message {
+    fs.push(("message", json_of_message_input(x)))
+  }
+  if let Some(x) = input.ai_agent_id {
+    fs.push(("aiAgentId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.conversation_context {
+    fs.push(("conversationContext", json_of_conversation_context(x)))
+  }
+  if let Some(x) = input.configuration {
+    fs.push(("configuration", json_of_message_configuration(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.orchestrator_use_case {
+    fs.push(("orchestratorUseCase", json.Value.Str(x)))
+  }
+  if let Some(x) = input.metadata {
+    fs.push(("metadata", json_of_message_metadata(x)))
+  }
+  if let Some(x) = input.origin_request_id {
+    fs.push(("originRequestId", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/assistants/${rest.escape(label_assistant_id, false)}/sessions/${rest.escape(label_session_id, false)}/message"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_send_message(resp: http.Response) -> SendMessageResponse ! Str {
+  var out = SendMessageResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "requestMessageId" => out.request_message_id = jsonv.read_str(fv)?
+      "configuration" => out.configuration = from_json_message_configuration(fv)?
+      "nextMessageToken" => out.next_message_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of SendMessage.
+pub enum SendMessageErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  DependencyFailedException(e: DependencyFailedException)
+  RequestTimeoutException(e: RequestTimeoutException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: SendMessageErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    DependencyFailedException(x) => "DependencyFailedException: ${x:?}"
+    RequestTimeoutException(x) => "RequestTimeoutException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_send_message_error(resp: http.Response) -> SendMessageErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return SendMessageErr.AccessDeniedException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return SendMessageErr.ConflictException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "DependencyFailedException" => match read_error_dependency_failed_exception(resp, body) {
+      Ok(x) => return SendMessageErr.DependencyFailedException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "RequestTimeoutException" => match read_error_request_timeout_exception(resp, body) {
+      Ok(x) => return SendMessageErr.RequestTimeoutException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return SendMessageErr.ResourceNotFoundException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return SendMessageErr.ServiceQuotaExceededException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return SendMessageErr.ThrottlingException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return SendMessageErr.ValidationException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  SendMessageErr.Api(restjson.api_error(resp, body))
+}
+
+/// Submits a message to the Amazon Q in Connect session.
+pub fn (c: Client) send_message(input: SendMessageRequest) -> SendMessageResponse ! SendMessageErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_send_message(c.params, input)) ?? e => return Err(SendMessageErr.InvalidInput(e))
+  var req = serialize_send_message(ep, input, rest.uuid(c.rand)) ?? e => return Err(SendMessageErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SendMessageErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_send_message_error(resp))
+  }
+  deserialize_send_message(resp) ?? e => Err(SendMessageErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_content_upload(base: EndpointParameters, input: StartContentUploadRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartContentUpload.
+pub fn serialize_start_content_upload(ep: rest.Endpoint, input: StartContentUploadRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_knowledge_base_id = match input.knowledge_base_id {
+    Some(v) => v
+    None => return Err("input member knowledgeBaseId is required")
+  }
+  if label_knowledge_base_id == "" {
+    return Err("input member knowledgeBaseId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.content_type {
+    fs.push(("contentType", json.Value.Str(x)))
+  }
+  if let Some(x) = input.presigned_url_time_to_live {
+    fs.push(("presignedUrlTimeToLive", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/knowledgeBases/${rest.escape(label_knowledge_base_id, false)}/upload"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_content_upload(resp: http.Response) -> StartContentUploadResponse ! Str {
+  var out = StartContentUploadResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "uploadId" => out.upload_id = jsonv.read_str(fv)?
+      "url" => out.url = jsonv.read_str(fv)?
+      "urlExpiry" => out.url_expiry = jsonv.read_time(fv, "epoch-seconds")?
+      "headersToInclude" => out.headers_to_include = from_json_headers(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartContentUpload.
+pub enum StartContentUploadErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  UnauthorizedException(e: UnauthorizedException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: StartContentUploadErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
@@ -947,6 +1512,7 @@ pub fn deserialize_update_assistant_ai_agent(resp: http.Response) -> UpdateAssis
 /// The errors of UpdateAssistantAIAgent.
 pub enum UpdateAssistantAIAgentErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
@@ -963,6 +1529,7 @@ pub enum UpdateAssistantAIAgentErr {
 pub fn (e: UpdateAssistantAIAgentErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
@@ -978,6 +1545,10 @@ pub fn deserialize_update_assistant_ai_agent_error(resp: http.Response) -> Updat
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return UpdateAssistantAIAgentErr.AccessDeniedException(x)
+      Err(msg) => return UpdateAssistantAIAgentErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateAssistantAIAgentErr.ConflictException(x)
       Err(msg) => return UpdateAssistantAIAgentErr.Deserialize(msg)
     }
     "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {

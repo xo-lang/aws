@@ -7726,6 +7726,9 @@ fn json_of_step(v: Step) -> json.Value {
   if let Some(x) = v.encryption_key_arn {
     fs.push(("EncryptionKeyArn", json.Value.Str(x)))
   }
+  if let Some(x) = v.additional_info {
+    fs.push(("AdditionalInfo", json_of_step_additional_info(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -7744,6 +7747,33 @@ fn from_json_step(v: json.Value) -> Step ! Str {
       "ExecutionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
       "LogUri" => out.log_uri = jsonv.read_str(fv)?
       "EncryptionKeyArn" => out.encryption_key_arn = jsonv.read_str(fv)?
+      "AdditionalInfo" => out.additional_info = from_json_step_additional_info(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_step_additional_info(v: StepAdditionalInfo) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_manager_application_ids {
+    fs.push(("ResourceManagerApplicationIds", json_of_string_list(x)))
+  }
+  if let Some(x) = v.resource_manager {
+    fs.push(("ResourceManager", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_step_additional_info(v: json.Value) -> StepAdditionalInfo ! Str {
+  var out = StepAdditionalInfo{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ResourceManagerApplicationIds" => out.resource_manager_application_ids = from_json_string_list(fv)?
+      "ResourceManager" => out.resource_manager = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -8017,6 +8047,9 @@ fn json_of_step_summary(v: StepSummary) -> json.Value {
   if let Some(x) = v.encryption_key_arn {
     fs.push(("EncryptionKeyArn", json.Value.Str(x)))
   }
+  if let Some(x) = v.additional_info {
+    fs.push(("AdditionalInfo", json_of_step_additional_info(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -8034,6 +8067,7 @@ fn from_json_step_summary(v: json.Value) -> StepSummary ! Str {
       "Status" => out.status = from_json_step_status(fv)?
       "LogUri" => out.log_uri = jsonv.read_str(fv)?
       "EncryptionKeyArn" => out.encryption_key_arn = jsonv.read_str(fv)?
+      "AdditionalInfo" => out.additional_info = from_json_step_additional_info(fv)?
       _ => {}
     }
   }
@@ -13327,31 +13361,4 @@ pub enum ListSupportedInstanceTypesErr {
   InvalidInput(msg: Str)
   /// The response is not what the protocol says.
   Deserialize(msg: Str)
-}
-
-pub fn (e: ListSupportedInstanceTypesErr) display() -> Str {
-  match e {
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_list_supported_instance_types_error(resp: http.Response) -> ListSupportedInstanceTypesErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return ListSupportedInstanceTypesErr.InternalServerException(x)
-      Err(msg) => return ListSupportedInstanceTypesErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return ListSupportedInstanceTypesErr.InvalidRequestException(x)
-      Err(msg) => return ListSupportedInstanceTypesErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ListSupportedInstanceTypesErr.Api(restjson.api_error(resp, body))
 }

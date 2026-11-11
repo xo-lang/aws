@@ -8,6 +8,91 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Updates a specified subscription request in Amazon DataZone.
+pub fn (c: Client) update_subscription_request(input: UpdateSubscriptionRequestInput) -> UpdateSubscriptionRequestOutput ! UpdateSubscriptionRequestErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_subscription_request(c.params, input)) ?? e => return Err(UpdateSubscriptionRequestErr.InvalidInput(e))
+  var req = serialize_update_subscription_request(ep, input, "") ?? e => return Err(UpdateSubscriptionRequestErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateSubscriptionRequestErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_subscription_request_error(resp))
+  }
+  deserialize_update_subscription_request(resp) ?? e => Err(UpdateSubscriptionRequestErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_subscription_target(base: EndpointParameters, input: UpdateSubscriptionTargetInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateSubscriptionTarget.
+pub fn serialize_update_subscription_target(ep: rest.Endpoint, input: UpdateSubscriptionTargetInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_identifier = match input.domain_identifier {
+    Some(v) => v
+    None => return Err("input member domainIdentifier is required")
+  }
+  if label_domain_identifier == "" {
+    return Err("input member domainIdentifier must not be empty")
+  }
+  let label_environment_identifier = match input.environment_identifier {
+    Some(v) => v
+    None => return Err("input member environmentIdentifier is required")
+  }
+  if label_environment_identifier == "" {
+    return Err("input member environmentIdentifier must not be empty")
+  }
+  let label_identifier = match input.identifier {
+    Some(v) => v
+    None => return Err("input member identifier is required")
+  }
+  if label_identifier == "" {
+    return Err("input member identifier must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.authorized_principals {
+    fs.push(("authorizedPrincipals", json_of_authorized_principal_identifiers(x)))
+  }
+  if let Some(x) = input.applicable_asset_types {
+    fs.push(("applicableAssetTypes", json_of_applicable_asset_types(x)))
+  }
+  if let Some(x) = input.subscription_target_config {
+    fs.push(("subscriptionTargetConfig", json_of_subscription_target_forms(x)))
+  }
+  if let Some(x) = input.manage_access_role {
+    fs.push(("manageAccessRole", json.Value.Str(x)))
+  }
+  if let Some(x) = input.provider {
+    fs.push(("provider", json.Value.Str(x)))
+  }
+  if let Some(x) = input.subscription_grant_creation_mode {
+    fs.push(("subscriptionGrantCreationMode", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v2/domains/${rest.escape(label_domain_identifier, false)}/environments/${rest.escape(label_environment_identifier, false)}/subscription-targets/${rest.escape(label_identifier, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_update_subscription_target(resp: http.Response) -> UpdateSubscriptionTargetOutput ! Str {
   var out = UpdateSubscriptionTargetOutput{}
   let body = jsonv.parse_body(resp.body)?

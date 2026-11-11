@@ -3196,6 +3196,36 @@ fn from_json_resources(v: json.Value) -> List[Str] ! Str {
   Ok(out)
 }
 
+fn json_of_retryable_conflict_exception(v: RetryableConflictException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_id {
+    fs.push(("resourceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_type {
+    fs.push(("resourceType", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_retryable_conflict_exception(v: json.Value) -> RetryableConflictException ! Str {
+  var out = RetryableConflictException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_route53_health_check(v: Route53HealthCheck) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.hosted_zone_id {
@@ -4402,6 +4432,23 @@ fn read_error_resource_not_found_exception(resp: http.Response, body: json.Value
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_retryable_conflict_exception(resp: http.Response, body: json.Value) -> RetryableConflictException ! Str {
+  let _ = (resp, body)
+  var out = RetryableConflictException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -6635,6 +6682,7 @@ pub fn deserialize_update_plan(resp: http.Response) -> UpdatePlanResponse ! Str 
 /// The errors of UpdatePlan.
 pub enum UpdatePlanErr {
   ResourceNotFoundException(e: ResourceNotFoundException)
+  RetryableConflictException(e: RetryableConflictException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
   /// The request was not sent or no response came (after retries).
@@ -6648,6 +6696,7 @@ pub enum UpdatePlanErr {
 pub fn (e: UpdatePlanErr) display() -> Str {
   match e {
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    RetryableConflictException(x) => "RetryableConflictException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
     InvalidInput(msg) => "invalid input: ${msg}"
@@ -6660,6 +6709,10 @@ pub fn deserialize_update_plan_error(resp: http.Response) -> UpdatePlanErr {
   match restjson.error_code(resp, body) {
     "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
       Ok(x) => return UpdatePlanErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdatePlanErr.Deserialize(msg)
+    }
+    "RetryableConflictException" => match read_error_retryable_conflict_exception(resp, body) {
+      Ok(x) => return UpdatePlanErr.RetryableConflictException(x)
       Err(msg) => return UpdatePlanErr.Deserialize(msg)
     }
     _ => {}

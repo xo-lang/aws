@@ -193,6 +193,9 @@ fn json_of_create_workflow_request(v: CreateWorkflowRequest) -> json.Value {
   if let Some(x) = v.network_configuration {
     fs.push(("NetworkConfiguration", json_of_network_configuration(x)))
   }
+  if let Some(x) = v.environment {
+    fs.push(("Environment", json_of_environment(x)))
+  }
   if let Some(x) = v.tags {
     fs.push(("Tags", json_of_tags(x)))
   }
@@ -219,6 +222,7 @@ fn from_json_create_workflow_request(v: json.Value) -> CreateWorkflowRequest ! S
       "LoggingConfiguration" => out.logging_configuration = from_json_logging_configuration(fv)?
       "EngineVersion" => out.engine_version = EngineVersion.from(jsonv.read_int(fv)?)
       "NetworkConfiguration" => out.network_configuration = from_json_network_configuration(fv)?
+      "Environment" => out.environment = from_json_environment(fv)?
       "Tags" => out.tags = from_json_tags(fv)?
       "TriggerMode" => out.trigger_mode = jsonv.read_str(fv)?
       _ => {}
@@ -377,6 +381,44 @@ fn from_json_encryption_configuration(v: json.Value) -> EncryptionConfiguration 
       "KmsKeyId" => out.kms_key_id = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_environment(v: Environment) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.variables {
+    fs.push(("Variables", json_of_environment_variables_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_environment(v: json.Value) -> Environment ! Str {
+  var out = Environment{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Variables" => out.variables = from_json_environment_variables_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_environment_variables_map(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_environment_variables_map(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -581,6 +623,9 @@ fn json_of_get_workflow_response(v: GetWorkflowResponse) -> json.Value {
   if let Some(x) = v.network_configuration {
     fs.push(("NetworkConfiguration", json_of_network_configuration(x)))
   }
+  if let Some(x) = v.environment {
+    fs.push(("Environment", json_of_environment(x)))
+  }
   if let Some(x) = v.trigger_mode {
     fs.push(("TriggerMode", json.Value.Str(x)))
   }
@@ -613,6 +658,7 @@ fn from_json_get_workflow_response(v: json.Value) -> GetWorkflowResponse ! Str {
       "ScheduleConfiguration" => out.schedule_configuration = from_json_schedule_configuration(fv)?
       "RoleArn" => out.role_arn = jsonv.read_str(fv)?
       "NetworkConfiguration" => out.network_configuration = from_json_network_configuration(fv)?
+      "Environment" => out.environment = from_json_environment(fv)?
       "TriggerMode" => out.trigger_mode = jsonv.read_str(fv)?
       "WorkflowDefinition" => out.workflow_definition = jsonv.read_str(fv)?
       _ => {}
@@ -1627,6 +1673,9 @@ fn json_of_update_workflow_request(v: UpdateWorkflowRequest) -> json.Value {
   if let Some(x) = v.network_configuration {
     fs.push(("NetworkConfiguration", json_of_network_configuration(x)))
   }
+  if let Some(x) = v.environment {
+    fs.push(("Environment", json_of_environment(x)))
+  }
   if let Some(x) = v.trigger_mode {
     fs.push(("TriggerMode", json.Value.Str(x)))
   }
@@ -1648,6 +1697,7 @@ fn from_json_update_workflow_request(v: json.Value) -> UpdateWorkflowRequest ! S
       "LoggingConfiguration" => out.logging_configuration = from_json_logging_configuration(fv)?
       "EngineVersion" => out.engine_version = EngineVersion.from(jsonv.read_int(fv)?)
       "NetworkConfiguration" => out.network_configuration = from_json_network_configuration(fv)?
+      "Environment" => out.environment = from_json_environment(fv)?
       "TriggerMode" => out.trigger_mode = jsonv.read_str(fv)?
       _ => {}
     }
@@ -2207,6 +2257,9 @@ pub fn serialize_create_workflow(ep: rest.Endpoint, input: CreateWorkflowRequest
   if let Some(x) = input.network_configuration {
     fs.push(("NetworkConfiguration", json_of_network_configuration(x)))
   }
+  if let Some(x) = input.environment {
+    fs.push(("Environment", json_of_environment(x)))
+  }
   if let Some(x) = input.tags {
     fs.push(("Tags", json_of_tags(x)))
   }
@@ -2697,6 +2750,7 @@ pub fn deserialize_get_workflow(resp: http.Response) -> GetWorkflowResponse ! St
       "ScheduleConfiguration" => out.schedule_configuration = from_json_schedule_configuration(fv)?
       "RoleArn" => out.role_arn = jsonv.read_str(fv)?
       "NetworkConfiguration" => out.network_configuration = from_json_network_configuration(fv)?
+      "Environment" => out.environment = from_json_environment(fv)?
       "TriggerMode" => out.trigger_mode = jsonv.read_str(fv)?
       "WorkflowDefinition" => out.workflow_definition = jsonv.read_str(fv)?
       _ => {}
@@ -4151,6 +4205,9 @@ pub fn serialize_update_workflow(ep: rest.Endpoint, input: UpdateWorkflowRequest
   }
   if let Some(x) = input.network_configuration {
     fs.push(("NetworkConfiguration", json_of_network_configuration(x)))
+  }
+  if let Some(x) = input.environment {
+    fs.push(("Environment", json_of_environment(x)))
   }
   if let Some(x) = input.trigger_mode {
     fs.push(("TriggerMode", json.Value.Str(x)))

@@ -8,6 +8,275 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn from_json_validation(v: json.Value) -> Validation ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "stringValidation" => Ok(Validation.StringValidation(from_json_string_validation(fv)?))
+      "stringListValidation" => Ok(Validation.StringListValidation(from_json_string_list_validation(fv)?))
+      "numberValidation" => Ok(Validation.NumberValidation(from_json_number_validation(fv)?))
+      _ => Ok(Validation.Unknown(k))
+    }
+  }
+  Err("Validation: no member set")
+}
+
+fn json_of_validation_exception(v: ValidationException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("reason", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.field_list {
+    fs.push(("fieldList", json_of_validation_exception_field_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_validation_exception(v: json.Value) -> ValidationException ! Str {
+  var out = ValidationException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "reason" => out.reason = ValidationExceptionReason.from(jsonv.read_str(fv)?)
+      "fieldList" => out.field_list = from_json_validation_exception_field_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_validation_exception_field(v: ValidationExceptionField) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_validation_exception_field(v: json.Value) -> ValidationExceptionField ! Str {
+  var out = ValidationExceptionField{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_validation_exception_field_list(v: List[ValidationExceptionField]) -> json.Value {
+  json.Value.List(v.map(fn(x: ValidationExceptionField) -> json.Value { json_of_validation_exception_field(x) }))
+}
+
+fn from_json_validation_exception_field_list(v: json.Value) -> List[ValidationExceptionField] ! Str {
+  var out: List[ValidationExceptionField] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_validation_exception_field(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_version_created_by_source(v: VersionCreatedBySource) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_version_created_by_source(v: json.Value) -> VersionCreatedBySource ! Str {
+  var out = VersionCreatedBySource{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_version_filter(v: VersionFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.branch_name {
+    fs.push(("branchName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_by_name {
+    fs.push(("createdByName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.latest_per_branch {
+    fs.push(("latestPerBranch", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_version_filter(v: json.Value) -> VersionFilter ! Str {
+  var out = VersionFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "branchName" => out.branch_name = jsonv.read_str(fv)?
+      "createdByName" => out.created_by_name = jsonv.read_str(fv)?
+      "latestPerBranch" => out.latest_per_branch = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_version_lineage_metadata(v: VersionLineageMetadata) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.parent_version_ids {
+    fs.push(("parentVersionIds", json_of_configuration_bundle_version_list(x)))
+  }
+  if let Some(x) = v.branch_name {
+    fs.push(("branchName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_by {
+    fs.push(("createdBy", json_of_version_created_by_source(x)))
+  }
+  if let Some(x) = v.commit_message {
+    fs.push(("commitMessage", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_version_lineage_metadata(v: json.Value) -> VersionLineageMetadata ! Str {
+  var out = VersionLineageMetadata{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "parentVersionIds" => out.parent_version_ids = from_json_configuration_bundle_version_list(fv)?
+      "branchName" => out.branch_name = jsonv.read_str(fv)?
+      "createdBy" => out.created_by = from_json_version_created_by_source(fv)?
+      "commitMessage" => out.commit_message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_volume_configuration(v: VolumeConfiguration) -> json.Value {
+  match v {
+    EbsConfiguration(x) => json.Value.Object([("ebsConfiguration", json_of_ebs_volume_configuration(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_volume_configuration(v: json.Value) -> VolumeConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "ebsConfiguration" => Ok(VolumeConfiguration.EbsConfiguration(from_json_ebs_volume_configuration(fv)?))
+      _ => Ok(VolumeConfiguration.Unknown(k))
+    }
+  }
+  Err("VolumeConfiguration: no member set")
+}
+
+fn json_of_volume_configuration_list(v: List[VolumeConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: VolumeConfiguration) -> json.Value { json_of_volume_configuration(x) }))
+}
+
+fn from_json_volume_configuration_list(v: json.Value) -> List[VolumeConfiguration] ! Str {
+  var out: List[VolumeConfiguration] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_volume_configuration(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_vpc_config(v: VpcConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.security_groups {
+    fs.push(("securityGroups", json_of_security_groups(x)))
+  }
+  if let Some(x) = v.subnets {
+    fs.push(("subnets", json_of_subnets(x)))
+  }
+  if let Some(x) = v.require_service_s3_endpoint {
+    fs.push(("requireServiceS3Endpoint", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_vpc_config(v: json.Value) -> VpcConfig ! Str {
+  var out = VpcConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "securityGroups" => out.security_groups = from_json_security_groups(fv)?
+      "subnets" => out.subnets = from_json_subnets(fv)?
+      "requireServiceS3Endpoint" => out.require_service_s3_endpoint = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_vpc_configuration(v: VpcConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.subnets {
+    fs.push(("subnets", json_of_subnet_id_list(x)))
+  }
+  if let Some(x) = v.security_groups {
+    fs.push(("securityGroups", json_of_security_group_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_vpc_configuration(v: json.Value) -> VpcConfiguration ! Str {
+  var out = VpcConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "subnets" => out.subnets = from_json_subnet_id_list(fv)?
+      "securityGroups" => out.security_groups = from_json_security_group_id_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_waf_configuration(v: WafConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.failure_mode {
@@ -740,6 +1009,9 @@ pub fn serialize_create_agent_runtime(ep: rest.Endpoint, input: CreateAgentRunti
   if let Some(x) = input.lifecycle_configuration {
     fs.push(("lifecycleConfiguration", json_of_lifecycle_configuration(x)))
   }
+  if let Some(x) = input.hooks_configuration {
+    fs.push(("hooksConfiguration", json_of_runtime_hooks_configuration(x)))
+  }
   if let Some(x) = input.environment_variables {
     fs.push(("environmentVariables", json_of_environment_variables_map(x)))
   }
@@ -757,6 +1029,9 @@ pub fn serialize_create_agent_runtime(ep: rest.Endpoint, input: CreateAgentRunti
   }
   if let Some(x) = input.allowed_ports {
     fs.push(("allowedPorts", json_of_allowed_ports(x)))
+  }
+  if let Some(x) = input.resource_configurations {
+    fs.push(("resourceConfigurations", json_of_resource_configurations(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -2651,6 +2926,9 @@ pub fn serialize_create_gateway(ep: rest.Endpoint, input: CreateGatewayRequest, 
   if let Some(x) = input.tags {
     fs.push(("tags", json_of_tags_map(x)))
   }
+  if let Some(x) = input.domain_override {
+    fs.push(("domainOverride", json_of_domain_override(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -2698,6 +2976,7 @@ pub fn deserialize_create_gateway(resp: http.Response) -> CreateGatewayResponse 
       "exceptionLevel" => out.exception_level = ExceptionLevel.from(jsonv.read_str(fv)?)
       "webAclArn" => out.web_acl_arn = jsonv.read_str(fv)?
       "wafConfiguration" => out.waf_configuration = from_json_waf_configuration(fv)?
+      "domainOverride" => out.domain_override = from_json_domain_override(fv)?
       _ => {}
     }
   }
@@ -9430,6 +9709,7 @@ pub fn deserialize_get_agent_runtime(resp: http.Response) -> GetAgentRuntimeResp
       "networkConfiguration" => out.network_configuration = from_json_network_configuration(fv)?
       "status" => out.status = AgentRuntimeStatus.from(jsonv.read_str(fv)?)
       "lifecycleConfiguration" => out.lifecycle_configuration = from_json_lifecycle_configuration(fv)?
+      "hooksConfiguration" => out.hooks_configuration = from_json_runtime_hooks_configuration(fv)?
       "failureReason" => out.failure_reason = jsonv.read_str(fv)?
       "description" => out.description = jsonv.read_str(fv)?
       "workloadIdentityDetails" => out.workload_identity_details = from_json_workload_identity_details(fv)?
@@ -9443,6 +9723,7 @@ pub fn deserialize_get_agent_runtime(resp: http.Response) -> GetAgentRuntimeResp
       "capacityProviderConfiguration" => out.capacity_provider_configuration = from_json_capacity_provider_configuration(fv)?
       "platformVersion" => out.platform_version = jsonv.read_str(fv)?
       "allowedPorts" => out.allowed_ports = from_json_allowed_ports(fv)?
+      "resourceConfigurations" => out.resource_configurations = from_json_resource_configurations(fv)?
       _ => {}
     }
   }
@@ -10500,178 +10781,4 @@ pub fn serialize_get_configuration_bundle_version(ep: rest.Endpoint, input: GetC
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_get_configuration_bundle_version(resp: http.Response) -> GetConfigurationBundleVersionResponse ! Str {
-  var out = GetConfigurationBundleVersionResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "bundleArn" => out.bundle_arn = jsonv.read_str(fv)?
-      "bundleId" => out.bundle_id = jsonv.read_str(fv)?
-      "bundleName" => out.bundle_name = jsonv.read_str(fv)?
-      "description" => out.description = jsonv.read_str(fv)?
-      "versionId" => out.version_id = jsonv.read_str(fv)?
-      "components" => out.components = from_json_component_configuration_map(fv)?
-      "lineageMetadata" => out.lineage_metadata = from_json_version_lineage_metadata(fv)?
-      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
-      "versionCreatedAt" => out.version_created_at = jsonv.read_time(fv, "epoch-seconds")?
-      "kmsKeyArn" => out.kms_key_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of GetConfigurationBundleVersion.
-pub enum GetConfigurationBundleVersionErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: GetConfigurationBundleVersionErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_get_configuration_bundle_version_error(resp: http.Response) -> GetConfigurationBundleVersionErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return GetConfigurationBundleVersionErr.AccessDeniedException(x)
-      Err(msg) => return GetConfigurationBundleVersionErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return GetConfigurationBundleVersionErr.InternalServerException(x)
-      Err(msg) => return GetConfigurationBundleVersionErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return GetConfigurationBundleVersionErr.ResourceNotFoundException(x)
-      Err(msg) => return GetConfigurationBundleVersionErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return GetConfigurationBundleVersionErr.ThrottlingException(x)
-      Err(msg) => return GetConfigurationBundleVersionErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return GetConfigurationBundleVersionErr.ValidationException(x)
-      Err(msg) => return GetConfigurationBundleVersionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  GetConfigurationBundleVersionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Gets a specific version of a configuration bundle by its version
-/// identifier.
-pub fn (c: Client) get_configuration_bundle_version(input: GetConfigurationBundleVersionRequest) -> GetConfigurationBundleVersionResponse ! GetConfigurationBundleVersionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_configuration_bundle_version(c.params, input)) ?? e => return Err(GetConfigurationBundleVersionErr.InvalidInput(e))
-  var req = serialize_get_configuration_bundle_version(ep, input, "") ?? e => return Err(GetConfigurationBundleVersionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetConfigurationBundleVersionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_get_configuration_bundle_version_error(resp))
-  }
-  deserialize_get_configuration_bundle_version(resp) ?? e => Err(GetConfigurationBundleVersionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_get_consent_portal(base: EndpointParameters, input: GetConsentPortalRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of GetConsentPortal.
-pub fn serialize_get_consent_portal(ep: rest.Endpoint, input: GetConsentPortalRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.consent_portal_identifier {
-    fs.push(("consentPortalIdentifier", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/identities/GetConsentPortal"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_get_consent_portal(resp: http.Response) -> GetConsentPortalResponse ! Str {
-  var out = GetConsentPortalResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "sources" => out.sources = from_json_consent_portal_sources(fv)?
-      "consentPortalArn" => out.consent_portal_arn = jsonv.read_str(fv)?
-      "consentPortalId" => out.consent_portal_id = jsonv.read_str(fv)?
-      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
-      "description" => out.description = jsonv.read_str(fv)?
-      "executionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
-      "idpConfig" => out.idp_config = from_json_consent_portal_idp_config(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "portalUrl" => out.portal_url = jsonv.read_str(fv)?
-      "status" => out.status = ConsentPortalStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of GetConsentPortal.
-pub enum GetConsentPortalErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  UnauthorizedException(e: UnauthorizedException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
 }

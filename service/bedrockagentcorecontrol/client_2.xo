@@ -3,6 +3,112 @@
 use std/json
 use github.com/xo-lang/aws/protocol/jsonv
 
+fn from_json_harness_hook_sns_target(v: json.Value) -> HarnessHookSnsTarget ! Str {
+  var out = HarnessHookSnsTarget{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_harness_hook_target(v: HarnessHookTarget) -> json.Value {
+  match v {
+    Lambda(x) => json.Value.Object([("lambda", json_of_harness_hook_lambda_target(x))])
+    Sns(x) => json.Value.Object([("sns", json_of_harness_hook_sns_target(x))])
+    EventBridge(x) => json.Value.Object([("eventBridge", json_of_harness_hook_event_bridge_target(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_harness_hook_target(v: json.Value) -> HarnessHookTarget ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "lambda" => Ok(HarnessHookTarget.Lambda(from_json_harness_hook_lambda_target(fv)?))
+      "sns" => Ok(HarnessHookTarget.Sns(from_json_harness_hook_sns_target(fv)?))
+      "eventBridge" => Ok(HarnessHookTarget.EventBridge(from_json_harness_hook_event_bridge_target(fv)?))
+      _ => Ok(HarnessHookTarget.Unknown(k))
+    }
+  }
+  Err("HarnessHookTarget: no member set")
+}
+
+fn json_of_harness_hooks(v: List[HarnessHook]) -> json.Value {
+  json.Value.List(v.map(fn(x: HarnessHook) -> json.Value { json_of_harness_hook(x) }))
+}
+
+fn from_json_harness_hooks(v: json.Value) -> List[HarnessHook] ! Str {
+  var out: List[HarnessHook] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_harness_hook(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_harness_inline_function_config(v: HarnessInlineFunctionConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.input_schema {
+    fs.push(("inputSchema", x))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_harness_inline_function_config(v: json.Value) -> HarnessInlineFunctionConfig ! Str {
+  var out = HarnessInlineFunctionConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "description" => out.description = jsonv.read_str(fv)?
+      "inputSchema" => out.input_schema = fv
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_harness_lite_llm_model_config(v: HarnessLiteLlmModelConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.model_id {
+    fs.push(("modelId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.api_key_arn {
+    fs.push(("apiKeyArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.api_base {
+    fs.push(("apiBase", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_tokens {
+    fs.push(("maxTokens", json.Value.Int(x)))
+  }
+  if let Some(x) = v.temperature {
+    fs.push(("temperature", jsonv.float32(x)))
+  }
+  if let Some(x) = v.top_p {
+    fs.push(("topP", jsonv.float32(x)))
+  }
+  if let Some(x) = v.additional_params {
+    fs.push(("additionalParams", x))
+  }
+  json.Value.Object(fs)
+}
+
 fn from_json_harness_lite_llm_model_config(v: json.Value) -> HarnessLiteLlmModelConfig ! Str {
   var out = HarnessLiteLlmModelConfig{}
   for (k, fv) in jsonv.fields(v)? {
@@ -815,6 +921,32 @@ fn from_json_http_headers_map(v: json.Value) -> Map[Str, Str] ! Str {
       continue
     }
     out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_http_post_lifecycle_hook_action(v: HttpPostLifecycleHookAction) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.path {
+    fs.push(("path", json.Value.Str(x)))
+  }
+  if let Some(x) = v.port {
+    fs.push(("port", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_http_post_lifecycle_hook_action(v: json.Value) -> HttpPostLifecycleHookAction ! Str {
+  var out = HttpPostLifecycleHookAction{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "path" => out.path = jsonv.read_str(fv)?
+      "port" => out.port = jsonv.read_int(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -1767,6 +1899,48 @@ fn from_json_lifecycle_configuration(v: json.Value) -> LifecycleConfiguration ! 
     }
   }
   Ok(out)
+}
+
+fn json_of_lifecycle_hook(v: LifecycleHook) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.action {
+    fs.push(("action", json_of_lifecycle_hook_action(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_lifecycle_hook(v: json.Value) -> LifecycleHook ! Str {
+  var out = LifecycleHook{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "action" => out.action = from_json_lifecycle_hook_action(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_lifecycle_hook_action(v: LifecycleHookAction) -> json.Value {
+  match v {
+    HttpPost(x) => json.Value.Object([("httpPost", json_of_http_post_lifecycle_hook_action(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_lifecycle_hook_action(v: json.Value) -> LifecycleHookAction ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "httpPost" => Ok(LifecycleHookAction.HttpPost(from_json_http_post_lifecycle_hook_action(fv)?))
+      _ => Ok(LifecycleHookAction.Unknown(k))
+    }
+  }
+  Err("LifecycleHookAction: no member set")
 }
 
 fn json_of_limit_entries(v: List[LimitEntry]) -> json.Value {
@@ -7179,6 +7353,22 @@ fn from_json_provider_prefix(v: json.Value) -> ProviderPrefix ! Str {
   Ok(out)
 }
 
+fn json_of_public_domain_name_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_public_domain_name_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_put_resource_policy_request(v: PutResourcePolicyRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.resource_arn {
@@ -7781,6 +7971,44 @@ fn from_json_resource(v: json.Value) -> Resource ! Str {
   Err("Resource: no member set")
 }
 
+fn json_of_resource_configuration(v: ResourceConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.minimum_memory_in_mi_b {
+    fs.push(("minimumMemoryInMiB", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resource_configuration(v: json.Value) -> ResourceConfiguration ! Str {
+  var out = ResourceConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "minimumMemoryInMiB" => out.minimum_memory_in_mi_b = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_resource_configurations(v: List[ResourceConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: ResourceConfiguration) -> json.Value { json_of_resource_configuration(x) }))
+}
+
+fn from_json_resource_configurations(v: json.Value) -> List[ResourceConfiguration] ! Str {
+  var out: List[ResourceConfiguration] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_resource_configuration(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_resource_limit_exceeded_exception(v: ResourceLimitExceededException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -8071,6 +8299,28 @@ fn from_json_rule(v: json.Value) -> Rule ! Str {
       "samplingConfig" => out.sampling_config = from_json_sampling_config(fv)?
       "filters" => out.filters = from_json_filter_list(fv)?
       "sessionConfig" => out.session_config = from_json_session_config(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_runtime_hooks_configuration(v: RuntimeHooksConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.build {
+    fs.push(("build", json_of_build_lifecycle_hooks(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_runtime_hooks_configuration(v: json.Value) -> RuntimeHooksConfiguration ! Str {
+  var out = RuntimeHooksConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "build" => out.build = from_json_build_lifecycle_hooks(fv)?
       _ => {}
     }
   }
@@ -10892,6 +11142,9 @@ fn json_of_update_agent_runtime_request(v: UpdateAgentRuntimeRequest) -> json.Va
   if let Some(x) = v.lifecycle_configuration {
     fs.push(("lifecycleConfiguration", json_of_lifecycle_configuration(x)))
   }
+  if let Some(x) = v.hooks_configuration {
+    fs.push(("hooksConfiguration", json_of_runtime_hooks_configuration(x)))
+  }
   if let Some(x) = v.metadata_configuration {
     fs.push(("metadataConfiguration", json_of_runtime_metadata_configuration(x)))
   }
@@ -10909,6 +11162,9 @@ fn json_of_update_agent_runtime_request(v: UpdateAgentRuntimeRequest) -> json.Va
   }
   if let Some(x) = v.allowed_ports {
     fs.push(("allowedPorts", json_of_allowed_ports(x)))
+  }
+  if let Some(x) = v.resource_configurations {
+    fs.push(("resourceConfigurations", json_of_resource_configurations(x)))
   }
   if let Some(x) = v.client_token {
     fs.push(("clientToken", json.Value.Str(x)))
@@ -10932,12 +11188,14 @@ fn from_json_update_agent_runtime_request(v: json.Value) -> UpdateAgentRuntimeRe
       "requestHeaderConfiguration" => out.request_header_configuration = from_json_request_header_configuration(fv)?
       "protocolConfiguration" => out.protocol_configuration = from_json_protocol_configuration(fv)?
       "lifecycleConfiguration" => out.lifecycle_configuration = from_json_lifecycle_configuration(fv)?
+      "hooksConfiguration" => out.hooks_configuration = from_json_runtime_hooks_configuration(fv)?
       "metadataConfiguration" => out.metadata_configuration = from_json_runtime_metadata_configuration(fv)?
       "environmentVariables" => out.environment_variables = from_json_environment_variables_map(fv)?
       "filesystemConfigurations" => out.filesystem_configurations = from_json_filesystem_configurations(fv)?
       "capacityProviderConfiguration" => out.capacity_provider_configuration = from_json_capacity_provider_configuration(fv)?
       "platformVersion" => out.platform_version = jsonv.read_str(fv)?
       "allowedPorts" => out.allowed_ports = from_json_allowed_ports(fv)?
+      "resourceConfigurations" => out.resource_configurations = from_json_resource_configurations(fv)?
       "clientToken" => out.client_token = jsonv.read_str(fv)?
       _ => {}
     }
@@ -11667,6 +11925,9 @@ fn json_of_update_gateway_request(v: UpdateGatewayRequest) -> json.Value {
   if let Some(x) = v.waf_configuration {
     fs.push(("wafConfiguration", json_of_waf_configuration(x)))
   }
+  if let Some(x) = v.domain_override {
+    fs.push(("domainOverride", json_of_domain_override(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -11691,6 +11952,7 @@ fn from_json_update_gateway_request(v: json.Value) -> UpdateGatewayRequest ! Str
       "policyEngineConfiguration" => out.policy_engine_configuration = from_json_gateway_policy_engine_configuration(fv)?
       "exceptionLevel" => out.exception_level = ExceptionLevel.from(jsonv.read_str(fv)?)
       "wafConfiguration" => out.waf_configuration = from_json_waf_configuration(fv)?
+      "domainOverride" => out.domain_override = from_json_domain_override(fv)?
       _ => {}
     }
   }
@@ -11765,6 +12027,9 @@ fn json_of_update_gateway_response(v: UpdateGatewayResponse) -> json.Value {
   if let Some(x) = v.waf_configuration {
     fs.push(("wafConfiguration", json_of_waf_configuration(x)))
   }
+  if let Some(x) = v.domain_override {
+    fs.push(("domainOverride", json_of_domain_override(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -11797,6 +12062,7 @@ fn from_json_update_gateway_response(v: json.Value) -> UpdateGatewayResponse ! S
       "exceptionLevel" => out.exception_level = ExceptionLevel.from(jsonv.read_str(fv)?)
       "webAclArn" => out.web_acl_arn = jsonv.read_str(fv)?
       "wafConfiguration" => out.waf_configuration = from_json_waf_configuration(fv)?
+      "domainOverride" => out.domain_override = from_json_domain_override(fv)?
       _ => {}
     }
   }
@@ -13924,273 +14190,4 @@ fn json_of_validation(v: Validation) -> json.Value {
     NumberValidation(x) => json.Value.Object([("numberValidation", json_of_number_validation(x))])
     Unknown(_) => json.Value.Object([])
   }
-}
-
-fn from_json_validation(v: json.Value) -> Validation ! Str {
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null || k == "__type" {
-      continue
-    }
-    return match k {
-      "stringValidation" => Ok(Validation.StringValidation(from_json_string_validation(fv)?))
-      "stringListValidation" => Ok(Validation.StringListValidation(from_json_string_list_validation(fv)?))
-      "numberValidation" => Ok(Validation.NumberValidation(from_json_number_validation(fv)?))
-      _ => Ok(Validation.Unknown(k))
-    }
-  }
-  Err("Validation: no member set")
-}
-
-fn json_of_validation_exception(v: ValidationException) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.message {
-    fs.push(("message", json.Value.Str(x)))
-  }
-  if let Some(x) = v.reason {
-    fs.push(("reason", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.field_list {
-    fs.push(("fieldList", json_of_validation_exception_field_list(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_validation_exception(v: json.Value) -> ValidationException ! Str {
-  var out = ValidationException{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "message" => out.message = jsonv.read_str(fv)?
-      "reason" => out.reason = ValidationExceptionReason.from(jsonv.read_str(fv)?)
-      "fieldList" => out.field_list = from_json_validation_exception_field_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_validation_exception_field(v: ValidationExceptionField) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.message {
-    fs.push(("message", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_validation_exception_field(v: json.Value) -> ValidationExceptionField ! Str {
-  var out = ValidationExceptionField{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "name" => out.name = jsonv.read_str(fv)?
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_validation_exception_field_list(v: List[ValidationExceptionField]) -> json.Value {
-  json.Value.List(v.map(fn(x: ValidationExceptionField) -> json.Value { json_of_validation_exception_field(x) }))
-}
-
-fn from_json_validation_exception_field_list(v: json.Value) -> List[ValidationExceptionField] ! Str {
-  var out: List[ValidationExceptionField] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_validation_exception_field(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_version_created_by_source(v: VersionCreatedBySource) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.arn {
-    fs.push(("arn", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_version_created_by_source(v: json.Value) -> VersionCreatedBySource ! Str {
-  var out = VersionCreatedBySource{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "name" => out.name = jsonv.read_str(fv)?
-      "arn" => out.arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_version_filter(v: VersionFilter) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.branch_name {
-    fs.push(("branchName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.created_by_name {
-    fs.push(("createdByName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.latest_per_branch {
-    fs.push(("latestPerBranch", json.Value.Bool(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_version_filter(v: json.Value) -> VersionFilter ! Str {
-  var out = VersionFilter{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "branchName" => out.branch_name = jsonv.read_str(fv)?
-      "createdByName" => out.created_by_name = jsonv.read_str(fv)?
-      "latestPerBranch" => out.latest_per_branch = jsonv.read_bool(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_version_lineage_metadata(v: VersionLineageMetadata) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.parent_version_ids {
-    fs.push(("parentVersionIds", json_of_configuration_bundle_version_list(x)))
-  }
-  if let Some(x) = v.branch_name {
-    fs.push(("branchName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.created_by {
-    fs.push(("createdBy", json_of_version_created_by_source(x)))
-  }
-  if let Some(x) = v.commit_message {
-    fs.push(("commitMessage", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_version_lineage_metadata(v: json.Value) -> VersionLineageMetadata ! Str {
-  var out = VersionLineageMetadata{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "parentVersionIds" => out.parent_version_ids = from_json_configuration_bundle_version_list(fv)?
-      "branchName" => out.branch_name = jsonv.read_str(fv)?
-      "createdBy" => out.created_by = from_json_version_created_by_source(fv)?
-      "commitMessage" => out.commit_message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_volume_configuration(v: VolumeConfiguration) -> json.Value {
-  match v {
-    EbsConfiguration(x) => json.Value.Object([("ebsConfiguration", json_of_ebs_volume_configuration(x))])
-    Unknown(_) => json.Value.Object([])
-  }
-}
-
-fn from_json_volume_configuration(v: json.Value) -> VolumeConfiguration ! Str {
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null || k == "__type" {
-      continue
-    }
-    return match k {
-      "ebsConfiguration" => Ok(VolumeConfiguration.EbsConfiguration(from_json_ebs_volume_configuration(fv)?))
-      _ => Ok(VolumeConfiguration.Unknown(k))
-    }
-  }
-  Err("VolumeConfiguration: no member set")
-}
-
-fn json_of_volume_configuration_list(v: List[VolumeConfiguration]) -> json.Value {
-  json.Value.List(v.map(fn(x: VolumeConfiguration) -> json.Value { json_of_volume_configuration(x) }))
-}
-
-fn from_json_volume_configuration_list(v: json.Value) -> List[VolumeConfiguration] ! Str {
-  var out: List[VolumeConfiguration] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_volume_configuration(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_vpc_config(v: VpcConfig) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.security_groups {
-    fs.push(("securityGroups", json_of_security_groups(x)))
-  }
-  if let Some(x) = v.subnets {
-    fs.push(("subnets", json_of_subnets(x)))
-  }
-  if let Some(x) = v.require_service_s3_endpoint {
-    fs.push(("requireServiceS3Endpoint", json.Value.Bool(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_vpc_config(v: json.Value) -> VpcConfig ! Str {
-  var out = VpcConfig{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "securityGroups" => out.security_groups = from_json_security_groups(fv)?
-      "subnets" => out.subnets = from_json_subnets(fv)?
-      "requireServiceS3Endpoint" => out.require_service_s3_endpoint = jsonv.read_bool(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_vpc_configuration(v: VpcConfiguration) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.subnets {
-    fs.push(("subnets", json_of_subnet_id_list(x)))
-  }
-  if let Some(x) = v.security_groups {
-    fs.push(("securityGroups", json_of_security_group_id_list(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_vpc_configuration(v: json.Value) -> VpcConfiguration ! Str {
-  var out = VpcConfiguration{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "subnets" => out.subnets = from_json_subnet_id_list(fv)?
-      "securityGroups" => out.security_groups = from_json_security_group_id_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

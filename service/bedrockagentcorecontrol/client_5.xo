@@ -8,6 +8,207 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn (e: UpdateConfigurationBundleErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_configuration_bundle_error(resp: http.Response) -> UpdateConfigurationBundleErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateConfigurationBundleErr.AccessDeniedException(x)
+      Err(msg) => return UpdateConfigurationBundleErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateConfigurationBundleErr.ConflictException(x)
+      Err(msg) => return UpdateConfigurationBundleErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateConfigurationBundleErr.InternalServerException(x)
+      Err(msg) => return UpdateConfigurationBundleErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateConfigurationBundleErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateConfigurationBundleErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateConfigurationBundleErr.ThrottlingException(x)
+      Err(msg) => return UpdateConfigurationBundleErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateConfigurationBundleErr.ValidationException(x)
+      Err(msg) => return UpdateConfigurationBundleErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateConfigurationBundleErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates a configuration bundle by creating a new version with the
+/// specified changes. Each update creates a new version in the version
+/// history.
+pub fn (c: Client) update_configuration_bundle(input: UpdateConfigurationBundleRequest) -> UpdateConfigurationBundleResponse ! UpdateConfigurationBundleErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_configuration_bundle(c.params, input)) ?? e => return Err(UpdateConfigurationBundleErr.InvalidInput(e))
+  var req = serialize_update_configuration_bundle(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateConfigurationBundleErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateConfigurationBundleErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_configuration_bundle_error(resp))
+  }
+  deserialize_update_configuration_bundle(resp) ?? e => Err(UpdateConfigurationBundleErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_consent_portal(base: EndpointParameters, input: UpdateConsentPortalRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateConsentPortal.
+pub fn serialize_update_consent_portal(ep: rest.Endpoint, input: UpdateConsentPortalRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.consent_portal_identifier {
+    fs.push(("consentPortalIdentifier", json.Value.Str(x)))
+  }
+  if let Some(x) = input.execution_role_arn {
+    fs.push(("executionRoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.idp_config {
+    fs.push(("idpConfig", json_of_consent_portal_idp_config(x)))
+  }
+  if let Some(x) = input.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/identities/UpdateConsentPortal"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_consent_portal(resp: http.Response) -> UpdateConsentPortalResponse ! Str {
+  var out = UpdateConsentPortalResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sources" => out.sources = from_json_consent_portal_sources(fv)?
+      "consentPortalArn" => out.consent_portal_arn = jsonv.read_str(fv)?
+      "consentPortalId" => out.consent_portal_id = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "description" => out.description = jsonv.read_str(fv)?
+      "executionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
+      "idpConfig" => out.idp_config = from_json_consent_portal_idp_config(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "portalUrl" => out.portal_url = jsonv.read_str(fv)?
+      "status" => out.status = ConsentPortalStatus.from(jsonv.read_str(fv)?)
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateConsentPortal.
+pub enum UpdateConsentPortalErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  UnauthorizedException(e: UnauthorizedException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateConsentPortalErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_consent_portal_error(resp: http.Response) -> UpdateConsentPortalErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.AccessDeniedException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.ConflictException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.InternalServerException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.ThrottlingException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.UnauthorizedException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateConsentPortalErr.ValidationException(x)
+      Err(msg) => return UpdateConsentPortalErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateConsentPortalErr.Api(restjson.api_error(resp, body))
+}
+
 /// Updates an existing consent portal.
 pub fn (c: Client) update_consent_portal(input: UpdateConsentPortalRequest) -> UpdateConsentPortalResponse ! UpdateConsentPortalErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_consent_portal(c.params, input)) ?? e => return Err(UpdateConsentPortalErr.InvalidInput(e))
@@ -532,6 +733,9 @@ pub fn serialize_update_gateway(ep: rest.Endpoint, input: UpdateGatewayRequest, 
   if let Some(x) = input.waf_configuration {
     fs.push(("wafConfiguration", json_of_waf_configuration(x)))
   }
+  if let Some(x) = input.domain_override {
+    fs.push(("domainOverride", json_of_domain_override(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -579,6 +783,7 @@ pub fn deserialize_update_gateway(resp: http.Response) -> UpdateGatewayResponse 
       "exceptionLevel" => out.exception_level = ExceptionLevel.from(jsonv.read_str(fv)?)
       "webAclArn" => out.web_acl_arn = jsonv.read_str(fv)?
       "wafConfiguration" => out.waf_configuration = from_json_waf_configuration(fv)?
+      "domainOverride" => out.domain_override = from_json_domain_override(fv)?
       _ => {}
     }
   }

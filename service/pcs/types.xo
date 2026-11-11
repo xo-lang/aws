@@ -174,6 +174,22 @@ pub struct ClusterSummary {
 
 /// A compute node group associated with a cluster.
 pub struct ComputeNodeGroup {
+  /// The ID of the Amazon Machine Image (AMI) that PCS uses to launch
+  /// instances. If not present, PCS uses the AMI ID specified in the custom
+  /// launch template.
+  pub ami_id: Str? = None
+  /// The IDs of the EC2 security groups configured directly on the compute
+  /// node group. PCS uses these security groups instead of the security
+  /// groups in the custom launch template. This value isn't present if
+  /// security groups aren't configured directly on the compute node group. In
+  /// that case, PCS uses the security groups in the custom launch template.
+  pub security_group_ids: List[Str]? = None
+  /// The name of the EC2 key pair configured directly on the compute node
+  /// group. PCS uses this key pair instead of the key pair in the custom
+  /// launch template. This value isn't present if a key pair isn't configured
+  /// directly on the compute node group. In that case, PCS uses the key pair
+  /// in the custom launch template, if one is specified.
+  pub ssh_key_name: Str? = None
   /// The name that identifies the compute node group.
   pub name: Str? = None
   /// The generated unique ID of the compute node group.
@@ -196,10 +212,6 @@ pub struct ComputeNodeGroup {
   /// SUSPENDED . For more information, see Frequently asked questions about
   /// Slurm versions in PCS in the PCS User Guide .
   pub status: ComputeNodeGroupStatus? = None
-  /// The ID of the Amazon Machine Image (AMI) that PCS uses to launch
-  /// instances. If not provided, PCS uses the AMI ID specified in the custom
-  /// launch template.
-  pub ami_id: Str? = None
   /// The list of subnet IDs where instances are provisioned by the compute
   /// node group. The subnets must be in the same VPC as the cluster.
   pub subnet_ids: List[Str]? = None
@@ -216,6 +228,15 @@ pub struct ComputeNodeGroup {
   /// information, see Using ODCRs with PCS . If you don't provide this
   /// option, it defaults to On-Demand.
   pub purchase_option: PurchaseOption? = None
+  /// Indicates whether the compute node group uses a custom launch template
+  /// or a launch template that PCS manages. The default value is CUSTOM .
+  /// Valid values: CUSTOM – The compute node group uses the launch template
+  /// in customLaunchTemplate . MANAGED – PCS creates and manages the launch
+  /// template.
+  pub launch_template_mode: LaunchTemplateMode? = None
+  /// The custom Amazon EC2 launch template associated with the compute node
+  /// group. This value is present when launchTemplateMode is CUSTOM and isn't
+  /// present when launchTemplateMode is MANAGED .
   pub custom_launch_template: CustomLaunchTemplate? = None
   /// The Amazon Resource Name (ARN) of the IAM instance profile used to pass
   /// an IAM role when launching EC2 instances. The role contained in your
@@ -361,7 +382,7 @@ pub struct CreateClusterRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
   /// 1 or more tags added to the resource. Each tag consists of a tag key and
   /// tag value. The tag value is optional and can be an empty string.
@@ -374,14 +395,35 @@ pub struct CreateClusterResponse {
 }
 
 pub struct CreateComputeNodeGroupRequest {
+  /// The ID of the Amazon Machine Image (AMI) that PCS uses to launch compute
+  /// nodes (Amazon EC2 instances). This value overrides the AMI ID in the
+  /// custom launch template. If you don't provide this value, PCS uses the
+  /// AMI ID specified in the custom launch template. You must provide this
+  /// value if launchTemplateMode is MANAGED .
+  pub ami_id: Str? = None
+  /// The IDs of the EC2 security groups to configure directly on the compute
+  /// node group. The security groups must be in the same VPC as the cluster.
+  /// PCS uses these security groups instead of the security groups in the
+  /// custom launch template. You can't specify this value if the custom
+  /// launch template defines network interfaces. If you don't provide this
+  /// value, PCS uses the security groups in the custom launch template. You
+  /// must provide this value if launchTemplateMode is MANAGED . For more
+  /// information, see Configuring instance settings for compute node groups
+  /// in PCS in the PCS User Guide .
+  pub security_group_ids: List[Str]? = None
+  /// The name of the EC2 key pair to configure directly on the compute node
+  /// group. The key pair must exist in your account and Amazon Web Services
+  /// Region. PCS uses this key pair instead of the key pair in the custom
+  /// launch template. If you don't provide this value, PCS uses the key pair
+  /// in the custom launch template, if one is specified. You must have
+  /// permission for ec2:DescribeKeyPairs . If you delete the key pair later,
+  /// future instance launches can fail. For more information, see Configuring
+  /// instance settings for compute node groups in PCS in the PCS User Guide .
+  pub ssh_key_name: Str? = None
   /// The name or ID of the cluster to create a compute node group in.
   pub cluster_identifier: Str? = None
   /// A name to identify the cluster. Example: MyCluster
   pub compute_node_group_name: Str? = None
-  /// The ID of the Amazon Machine Image (AMI) that PCS uses to launch compute
-  /// nodes (Amazon EC2 instances). If you don't provide this value, PCS uses
-  /// the AMI ID specified in the custom launch template.
-  pub ami_id: Str? = None
   /// The list of subnet IDs where the compute node group launches instances.
   /// Subnets must be in the same VPC as the cluster.
   pub subnet_ids: List[Str]? = None
@@ -398,6 +440,16 @@ pub struct CreateComputeNodeGroupRequest {
   /// information, see Using ODCRs with PCS . If you don't provide this
   /// option, it defaults to On-Demand.
   pub purchase_option: PurchaseOption? = None
+  /// Specifies whether the compute node group uses a custom launch template
+  /// or a launch template that PCS manages. The default value is CUSTOM . If
+  /// the value is CUSTOM , provide customLaunchTemplate . If the value is
+  /// MANAGED , omit customLaunchTemplate and provide amiId and
+  /// securityGroupIds .
+  pub launch_template_mode: LaunchTemplateMode? = None
+  /// The custom Amazon EC2 launch template to associate with the compute node
+  /// group. Specify the launch template id and version when
+  /// launchTemplateMode is CUSTOM . Don't specify this value when
+  /// launchTemplateMode is MANAGED .
   pub custom_launch_template: CustomLaunchTemplate? = None
   /// The Amazon Resource Name (ARN) of the IAM instance profile used to pass
   /// an IAM role when launching EC2 instances. The role contained in your
@@ -425,7 +477,7 @@ pub struct CreateComputeNodeGroupRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
   /// 1 or more tags added to the resource. Each tag consists of a tag key and
   /// tag value. The tag value is optional and can be an empty string.
@@ -452,7 +504,7 @@ pub struct CreateQueueRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
   /// 1 or more tags added to the resource. Each tag consists of a tag key and
   /// tag value. The tag value is optional and can be an empty string.
@@ -463,12 +515,14 @@ pub struct CreateQueueResponse {
   pub queue: Queue? = None
 }
 
-/// An Amazon EC2 launch template PCS uses to launch compute nodes.
+/// An Amazon EC2 launch template PCS uses to launch compute nodes. The
+/// structure contains the launch template ID and version.
 pub struct CustomLaunchTemplate {
-  /// The ID of the EC2 launch template to use to provision instances.
-  /// Example: lt-xxxx
+  /// The ID of the EC2 launch template to use to provision instances. Specify
+  /// this value together with version . Example: lt-xxxx
   pub id: Str? = None
   /// The version of the EC2 launch template to use to provision instances.
+  /// Specify this value together with id .
   pub version: Str? = None
 }
 
@@ -481,7 +535,7 @@ pub struct DeleteClusterRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
 }
 
@@ -499,7 +553,7 @@ pub struct DeleteComputeNodeGroupRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
 }
 
@@ -517,7 +571,7 @@ pub struct DeleteQueueRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
 }
 
@@ -624,6 +678,12 @@ pub struct JwtKey {
   /// The version of the Amazon Web Services Secrets Manager secret containing
   /// the JWT key.
   pub secret_version: Str? = None
+}
+
+pub enum LaunchTemplateMode: Str {
+  Custom = "CUSTOM"
+  Managed = "MANAGED"
+  Unknown(value: Str)
 }
 
 pub struct ListClustersRequest {
@@ -1204,7 +1264,7 @@ pub struct UpdateClusterRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
   /// Additional options related to the Slurm scheduler.
   pub slurm_configuration: UpdateClusterSlurmConfigurationRequest? = None
@@ -1239,17 +1299,59 @@ pub struct UpdateClusterSlurmConfigurationRequest {
 }
 
 pub struct UpdateComputeNodeGroupRequest {
+  /// The ID of the Amazon Machine Image (AMI) that PCS uses to launch
+  /// instances. This value overrides the AMI ID in the custom launch
+  /// template. Specify an empty string ( "" ) to remove the AMI ID from the
+  /// compute node group and use the AMI ID specified in the custom launch
+  /// template. Omit this value to leave the current setting unchanged.
+  pub ami_id: Str? = None
+  /// The IDs of the EC2 security groups to configure directly on the compute
+  /// node group. The security groups must be in the same VPC as the cluster.
+  /// PCS uses these security groups instead of the security groups in the
+  /// custom launch template. You can't specify this value if the custom
+  /// launch template defines network interfaces. Specify an empty list ( [] )
+  /// to remove the security groups from the compute node group and use the
+  /// security groups in the custom launch template. Omit this value to leave
+  /// the current setting unchanged.
+  pub security_group_ids: List[Str]? = None
+  /// The name of the EC2 key pair to configure directly on the compute node
+  /// group. The key pair must exist in your account and Amazon Web Services
+  /// Region. PCS uses this key pair instead of the key pair in the custom
+  /// launch template. Specify an empty string ( "" ) to remove the key pair
+  /// from the compute node group and use the key pair in the custom launch
+  /// template. Omit this value to leave the current setting unchanged. You
+  /// must have permission for ec2:DescribeKeyPairs to specify a key pair. If
+  /// you delete the key pair later, future instance launches can fail.
+  pub ssh_key_name: Str? = None
   /// The name or ID of the cluster of the compute node group.
   pub cluster_identifier: Str? = None
   /// The name or ID of the compute node group.
   pub compute_node_group_identifier: Str? = None
-  /// The ID of the Amazon Machine Image (AMI) that PCS uses to launch
-  /// instances. If not provided, PCS uses the AMI ID specified in the custom
-  /// launch template.
-  pub ami_id: Str? = None
   /// The list of subnet IDs where the compute node group provisions
   /// instances. The subnets must be in the same VPC as the cluster.
   pub subnet_ids: List[Str]? = None
+  /// Specifies whether the compute node group uses a custom launch template
+  /// or a launch template that PCS manages. Omit this value to keep the
+  /// current mode. Valid values: CUSTOM – Use a custom launch template. To
+  /// switch from MANAGED , also provide customLaunchTemplate . If the compute
+  /// node group already uses CUSTOM and you omit customLaunchTemplate , the
+  /// existing launch template is unchanged. MANAGED – Use a launch template
+  /// created and managed by PCS. Omit customLaunchTemplate . Switching to
+  /// this mode removes the custom launch template association but doesn't
+  /// delete the launch template. When switching to MANAGED , the compute node
+  /// group must have amiId and securityGroupIds configured. You can set these
+  /// values in the same request.
+  pub launch_template_mode: LaunchTemplateMode? = None
+  /// The custom Amazon EC2 launch template to associate with the compute node
+  /// group. To set or change the custom launch template, specify id and
+  /// version . If you provide this value and omit launchTemplateMode , the
+  /// compute node group must already use CUSTOM mode. To switch from MANAGED
+  /// to CUSTOM , specify launchTemplateMode as CUSTOM and provide this value.
+  /// If the compute node group already uses CUSTOM , omit this value while
+  /// also omitting launchTemplateMode , or while specifying CUSTOM , to keep
+  /// the existing custom launch template. For more information, see Migrating
+  /// a compute node group from a custom launch template in the PCS User Guide
+  /// .
   pub custom_launch_template: CustomLaunchTemplate? = None
   /// Specifies how EC2 instances are purchased on your behalf. PCS supports
   /// On-Demand Instances, Spot Instances, Interruptible Capacity
@@ -1287,7 +1389,7 @@ pub struct UpdateComputeNodeGroupRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
 }
 
@@ -1343,7 +1445,7 @@ pub struct UpdateQueueRequest {
   /// completes successfully, the subsequent retries with the same client
   /// token return the result from the original successful request and they
   /// have no additional effect. If you don't specify a client token, the CLI
-  /// and SDK automatically generate 1 for you.
+  /// and SDK automatically generate one for you.
   pub client_token: Str? = None
 }
 

@@ -1397,6 +1397,9 @@ fn from_json_cancel_job_response(v: json.Value) -> CancelJobResponse ! Str {
 
 fn json_of_caption_description(v: CaptionDescription) -> json.Value {
   var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.audio_source_names {
+    fs.push(("audioSourceNames", json_of_list_of_string_min1(x)))
+  }
   if let Some(x) = v.caption_selector_name {
     fs.push(("captionSelectorName", json.Value.Str(x)))
   }
@@ -1412,6 +1415,9 @@ fn json_of_caption_description(v: CaptionDescription) -> json.Value {
   if let Some(x) = v.language_description {
     fs.push(("languageDescription", json.Value.Str(x)))
   }
+  if let Some(x) = v.source {
+    fs.push(("source", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -1422,11 +1428,13 @@ fn from_json_caption_description(v: json.Value) -> CaptionDescription ! Str {
       continue
     }
     match k {
+      "audioSourceNames" => out.audio_source_names = from_json_list_of_string_min1(fv)?
       "captionSelectorName" => out.caption_selector_name = jsonv.read_str(fv)?
       "customLanguageCode" => out.custom_language_code = jsonv.read_str(fv)?
       "destinationSettings" => out.destination_settings = from_json_caption_destination_settings(fv)?
       "languageCode" => out.language_code = LanguageCode.from(jsonv.read_str(fv)?)
       "languageDescription" => out.language_description = jsonv.read_str(fv)?
+      "source" => out.source = CaptionSource.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -2408,6 +2416,9 @@ fn json_of_create_job_request(v: CreateJobRequest) -> json.Value {
   if let Some(x) = v.client_request_token {
     fs.push(("clientRequestToken", json.Value.Str(x)))
   }
+  if let Some(x) = v.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
+  }
   if let Some(x) = v.hop_destinations {
     fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
   }
@@ -2454,6 +2465,7 @@ fn from_json_create_job_request(v: json.Value) -> CreateJobRequest ! Str {
       "accelerationSettings" => out.acceleration_settings = from_json_acceleration_settings(fv)?
       "billingTagsSource" => out.billing_tags_source = BillingTagsSource.from(jsonv.read_str(fv)?)
       "clientRequestToken" => out.client_request_token = jsonv.read_str(fv)?
+      "elementalInferenceSettings" => out.elemental_inference_settings = from_json_elemental_inference_settings(fv)?
       "hopDestinations" => out.hop_destinations = from_json_list_of_hop_destination(fv)?
       "jobEngineVersion" => out.job_engine_version = jsonv.read_str(fv)?
       "jobTemplate" => out.job_template = jsonv.read_str(fv)?
@@ -2504,6 +2516,9 @@ fn json_of_create_job_template_request(v: CreateJobTemplateRequest) -> json.Valu
   if let Some(x) = v.description {
     fs.push(("description", json.Value.Str(x)))
   }
+  if let Some(x) = v.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
+  }
   if let Some(x) = v.hop_destinations {
     fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
   }
@@ -2538,6 +2553,7 @@ fn from_json_create_job_template_request(v: json.Value) -> CreateJobTemplateRequ
       "accelerationSettings" => out.acceleration_settings = from_json_acceleration_settings(fv)?
       "category" => out.category = jsonv.read_str(fv)?
       "description" => out.description = jsonv.read_str(fv)?
+      "elementalInferenceSettings" => out.elemental_inference_settings = from_json_elemental_inference_settings(fv)?
       "hopDestinations" => out.hop_destinations = from_json_list_of_hop_destination(fv)?
       "name" => out.name = jsonv.read_str(fv)?
       "priority" => out.priority = jsonv.read_int(fv)?
@@ -3930,6 +3946,50 @@ fn from_json_elemental_inference_feed(v: json.Value) -> ElementalInferenceFeed !
     match k {
       "arn" => out.arn = jsonv.read_str(fv)?
       "feedManagementState" => out.feed_management_state = ElementalInferenceFeedManagementState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_elemental_inference_feed_configuration_source(v: ElementalInferenceFeedConfigurationSource) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.feed_arn {
+    fs.push(("feedArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_elemental_inference_feed_configuration_source(v: json.Value) -> ElementalInferenceFeedConfigurationSource ! Str {
+  var out = ElementalInferenceFeedConfigurationSource{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "feedArn" => out.feed_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_elemental_inference_settings(v: ElementalInferenceSettings) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.feed_configuration_source {
+    fs.push(("feedConfigurationSource", json_of_elemental_inference_feed_configuration_source(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_elemental_inference_settings(v: json.Value) -> ElementalInferenceSettings ! Str {
+  var out = ElementalInferenceSettings{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "feedConfigurationSource" => out.feed_configuration_source = from_json_elemental_inference_feed_configuration_source(fv)?
       _ => {}
     }
   }
@@ -6315,6 +6375,9 @@ fn json_of_job(v: Job) -> json.Value {
   if let Some(x) = v.elemental_inference_configuration {
     fs.push(("elementalInferenceConfiguration", json_of_elemental_inference_configuration(x)))
   }
+  if let Some(x) = v.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
+  }
   if let Some(x) = v.error_code {
     fs.push(("errorCode", json.Value.Int(x)))
   }
@@ -6405,6 +6468,7 @@ fn from_json_job(v: json.Value) -> Job ! Str {
       "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "currentPhase" => out.current_phase = JobPhase.from(jsonv.read_str(fv)?)
       "elementalInferenceConfiguration" => out.elemental_inference_configuration = from_json_elemental_inference_configuration(fv)?
+      "elementalInferenceSettings" => out.elemental_inference_settings = from_json_elemental_inference_settings(fv)?
       "errorCode" => out.error_code = jsonv.read_int(fv)?
       "errorMessage" => out.error_message = jsonv.read_str(fv)?
       "hopDestinations" => out.hop_destinations = from_json_list_of_hop_destination(fv)?
@@ -6582,6 +6646,9 @@ fn json_of_job_template(v: JobTemplate) -> json.Value {
   if let Some(x) = v.description {
     fs.push(("description", json.Value.Str(x)))
   }
+  if let Some(x) = v.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
+  }
   if let Some(x) = v.hop_destinations {
     fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
   }
@@ -6621,6 +6688,7 @@ fn from_json_job_template(v: json.Value) -> JobTemplate ! Str {
       "category" => out.category = jsonv.read_str(fv)?
       "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "description" => out.description = jsonv.read_str(fv)?
+      "elementalInferenceSettings" => out.elemental_inference_settings = from_json_elemental_inference_settings(fv)?
       "hopDestinations" => out.hop_destinations = from_json_list_of_hop_destination(fv)?
       "lastUpdated" => out.last_updated = jsonv.read_time(fv, "epoch-seconds")?
       "name" => out.name = jsonv.read_str(fv)?
@@ -10436,6 +10504,9 @@ fn json_of_update_job_template_request(v: UpdateJobTemplateRequest) -> json.Valu
   if let Some(x) = v.description {
     fs.push(("description", json.Value.Str(x)))
   }
+  if let Some(x) = v.elemental_inference_settings {
+    fs.push(("elementalInferenceSettings", json_of_elemental_inference_settings(x)))
+  }
   if let Some(x) = v.hop_destinations {
     fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
   }
@@ -10467,6 +10538,7 @@ fn from_json_update_job_template_request(v: json.Value) -> UpdateJobTemplateRequ
       "accelerationSettings" => out.acceleration_settings = from_json_acceleration_settings(fv)?
       "category" => out.category = jsonv.read_str(fv)?
       "description" => out.description = jsonv.read_str(fv)?
+      "elementalInferenceSettings" => out.elemental_inference_settings = from_json_elemental_inference_settings(fv)?
       "hopDestinations" => out.hop_destinations = from_json_list_of_hop_destination(fv)?
       "Name" => out.name = jsonv.read_str(fv)?
       "priority" => out.priority = jsonv.read_int(fv)?
@@ -13263,92 +13335,4 @@ pub fn deserialize_cancel_job_error(resp: http.Response) -> CancelJobErr {
     _ => {}
   }
   CancelJobErr.Api(restjson.api_error(resp, body))
-}
-
-/// Permanently cancel a job. Once you have canceled a job, you can't start
-/// it again.
-pub fn (c: Client) cancel_job(input: CancelJobRequest) -> CancelJobResponse ! CancelJobErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_cancel_job(c.params, input)) ?? e => return Err(CancelJobErr.InvalidInput(e))
-  var req = serialize_cancel_job(ep, input, "") ?? e => return Err(CancelJobErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CancelJobErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_cancel_job_error(resp))
-  }
-  deserialize_cancel_job(resp) ?? e => Err(CancelJobErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_job(base: EndpointParameters, input: CreateJobRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateJob.
-pub fn serialize_create_job(ep: rest.Endpoint, input: CreateJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.acceleration_settings {
-    fs.push(("accelerationSettings", json_of_acceleration_settings(x)))
-  }
-  if let Some(x) = input.billing_tags_source {
-    fs.push(("billingTagsSource", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("clientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.hop_destinations {
-    fs.push(("hopDestinations", json_of_list_of_hop_destination(x)))
-  }
-  if let Some(x) = input.job_engine_version {
-    fs.push(("jobEngineVersion", json.Value.Str(x)))
-  }
-  if let Some(x) = input.job_template {
-    fs.push(("jobTemplate", json.Value.Str(x)))
-  }
-  if let Some(x) = input.priority {
-    fs.push(("priority", json.Value.Int(x)))
-  }
-  if let Some(x) = input.queue {
-    fs.push(("queue", json.Value.Str(x)))
-  }
-  if let Some(x) = input.role {
-    fs.push(("role", json.Value.Str(x)))
-  }
-  if let Some(x) = input.settings {
-    fs.push(("settings", json_of_job_settings(x)))
-  }
-  if let Some(x) = input.simulate_reserved_queue {
-    fs.push(("simulateReservedQueue", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.status_update_interval {
-    fs.push(("statusUpdateInterval", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("tags", json_of_map_of_string(x)))
-  }
-  if let Some(x) = input.user_metadata {
-    fs.push(("userMetadata", json_of_map_of_string(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2017-08-29/jobs"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

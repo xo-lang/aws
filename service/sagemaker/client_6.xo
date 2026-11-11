@@ -8,6 +8,561 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_create_inference_experiment(resp: http.Response) -> CreateInferenceExperimentResponse ! Str {
+  var out = CreateInferenceExperimentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "InferenceExperimentArn" => out.inference_experiment_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateInferenceExperiment.
+pub enum CreateInferenceExperimentErr {
+  ResourceInUse(e: ResourceInUse)
+  ResourceLimitExceeded(e: ResourceLimitExceeded)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateInferenceExperimentErr) display() -> Str {
+  match e {
+    ResourceInUse(x) => "ResourceInUse: ${x:?}"
+    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_inference_experiment_error(resp: http.Response) -> CreateInferenceExperimentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ResourceInUse" => match read_error_resource_in_use(resp, body) {
+      Ok(x) => return CreateInferenceExperimentErr.ResourceInUse(x)
+      Err(msg) => return CreateInferenceExperimentErr.Deserialize(msg)
+    }
+    "ResourceLimitExceeded" => match read_error_resource_limit_exceeded(resp, body) {
+      Ok(x) => return CreateInferenceExperimentErr.ResourceLimitExceeded(x)
+      Err(msg) => return CreateInferenceExperimentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateInferenceExperimentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates an inference experiment using the configurations specified in
+/// the request. Use this API to setup and schedule an experiment to compare
+/// model variants on a Amazon SageMaker inference endpoint. For more
+/// information about inference experiments, see Shadow tests . Amazon
+/// SageMaker begins your experiment at the scheduled time and routes
+/// traffic to your endpoint's model variants based on your specified
+/// configuration. While the experiment is in progress or after it has
+/// concluded, you can view metrics that compare your model variants. For
+/// more information, see View, monitor, and edit shadow tests .
+pub fn (c: Client) create_inference_experiment(input: CreateInferenceExperimentRequest) -> CreateInferenceExperimentResponse ! CreateInferenceExperimentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_inference_experiment(c.params, input)) ?? e => return Err(CreateInferenceExperimentErr.InvalidInput(e))
+  var req = serialize_create_inference_experiment(ep, input, "") ?? e => return Err(CreateInferenceExperimentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateInferenceExperimentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_inference_experiment_error(resp))
+  }
+  deserialize_create_inference_experiment(resp) ?? e => Err(CreateInferenceExperimentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_inference_recommendations_job(base: EndpointParameters, input: CreateInferenceRecommendationsJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateInferenceRecommendationsJob.
+pub fn serialize_create_inference_recommendations_job(ep: rest.Endpoint, input: CreateInferenceRecommendationsJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.job_name {
+    fs.push(("JobName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.job_type {
+    fs.push(("JobType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.role_arn {
+    fs.push(("RoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.input_config {
+    fs.push(("InputConfig", json_of_recommendation_job_input_config(x)))
+  }
+  if let Some(x) = input.job_description {
+    fs.push(("JobDescription", json.Value.Str(x)))
+  }
+  if let Some(x) = input.stopping_conditions {
+    fs.push(("StoppingConditions", json_of_recommendation_job_stopping_conditions(x)))
+  }
+  if let Some(x) = input.output_config {
+    fs.push(("OutputConfig", json_of_recommendation_job_output_config(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.CreateInferenceRecommendationsJob"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_inference_recommendations_job(resp: http.Response) -> CreateInferenceRecommendationsJobResponse ! Str {
+  var out = CreateInferenceRecommendationsJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "JobArn" => out.job_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateInferenceRecommendationsJob.
+pub enum CreateInferenceRecommendationsJobErr {
+  ResourceInUse(e: ResourceInUse)
+  ResourceLimitExceeded(e: ResourceLimitExceeded)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateInferenceRecommendationsJobErr) display() -> Str {
+  match e {
+    ResourceInUse(x) => "ResourceInUse: ${x:?}"
+    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_inference_recommendations_job_error(resp: http.Response) -> CreateInferenceRecommendationsJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ResourceInUse" => match read_error_resource_in_use(resp, body) {
+      Ok(x) => return CreateInferenceRecommendationsJobErr.ResourceInUse(x)
+      Err(msg) => return CreateInferenceRecommendationsJobErr.Deserialize(msg)
+    }
+    "ResourceLimitExceeded" => match read_error_resource_limit_exceeded(resp, body) {
+      Ok(x) => return CreateInferenceRecommendationsJobErr.ResourceLimitExceeded(x)
+      Err(msg) => return CreateInferenceRecommendationsJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateInferenceRecommendationsJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts a recommendation job. You can create either an instance
+/// recommendation or load test job.
+pub fn (c: Client) create_inference_recommendations_job(input: CreateInferenceRecommendationsJobRequest) -> CreateInferenceRecommendationsJobResponse ! CreateInferenceRecommendationsJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_inference_recommendations_job(c.params, input)) ?? e => return Err(CreateInferenceRecommendationsJobErr.InvalidInput(e))
+  var req = serialize_create_inference_recommendations_job(ep, input, "") ?? e => return Err(CreateInferenceRecommendationsJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateInferenceRecommendationsJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_inference_recommendations_job_error(resp))
+  }
+  deserialize_create_inference_recommendations_job(resp) ?? e => Err(CreateInferenceRecommendationsJobErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_job(base: EndpointParameters, input: CreateJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateJob.
+pub fn serialize_create_job(ep: rest.Endpoint, input: CreateJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.job_name {
+    fs.push(("JobName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.role_arn {
+    fs.push(("RoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.job_category {
+    fs.push(("JobCategory", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.job_config_schema_version {
+    fs.push(("JobConfigSchemaVersion", json.Value.Str(x)))
+  }
+  if let Some(x) = input.job_config_document {
+    fs.push(("JobConfigDocument", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.CreateJob"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_job(resp: http.Response) -> CreateJobResponse ! Str {
+  var out = CreateJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "JobArn" => out.job_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateJob.
+pub enum CreateJobErr {
+  ResourceInUse(e: ResourceInUse)
+  ResourceLimitExceeded(e: ResourceLimitExceeded)
+  ResourceNotFound(e: ResourceNotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateJobErr) display() -> Str {
+  match e {
+    ResourceInUse(x) => "ResourceInUse: ${x:?}"
+    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
+    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_job_error(resp: http.Response) -> CreateJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ResourceInUse" => match read_error_resource_in_use(resp, body) {
+      Ok(x) => return CreateJobErr.ResourceInUse(x)
+      Err(msg) => return CreateJobErr.Deserialize(msg)
+    }
+    "ResourceLimitExceeded" => match read_error_resource_limit_exceeded(resp, body) {
+      Ok(x) => return CreateJobErr.ResourceLimitExceeded(x)
+      Err(msg) => return CreateJobErr.Deserialize(msg)
+    }
+    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
+      Ok(x) => return CreateJobErr.ResourceNotFound(x)
+      Err(msg) => return CreateJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates a model customization job in Amazon SageMaker. A job runs a
+/// workload based on the job category and configuration you provide. You
+/// specify the job category, a schema-versioned configuration document, and
+/// an IAM role that grants Amazon SageMaker permission to access resources
+/// on your behalf. Use the AgentRFT category to fine-tune a model using
+/// multi-turn reinforcement learning with reward signals. Use the
+/// AgentRFTEvaluation category to evaluate a fine-tuned or base model by
+/// running multi-turn rollouts against a held-out prompt dataset and
+/// computing metrics such as pass@k and mean reward. Before creating a job,
+/// call ListJobSchemaVersions and DescribeJobSchemaVersion to retrieve the
+/// configuration schema for your job category. The JobConfigDocument must
+/// conform to the schema specified by JobConfigSchemaVersion . The
+/// following operations are related to CreateJob : DescribeJob ListJobs
+/// StopJob DeleteJob ListJobSchemaVersions DescribeJobSchemaVersion
+pub fn (c: Client) create_job(input: CreateJobRequest) -> CreateJobResponse ! CreateJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_job(c.params, input)) ?? e => return Err(CreateJobErr.InvalidInput(e))
+  var req = serialize_create_job(ep, input, "") ?? e => return Err(CreateJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_job_error(resp))
+  }
+  deserialize_create_job(resp) ?? e => Err(CreateJobErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_labeling_job(base: EndpointParameters, input: CreateLabelingJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateLabelingJob.
+pub fn serialize_create_labeling_job(ep: rest.Endpoint, input: CreateLabelingJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.labeling_job_name {
+    fs.push(("LabelingJobName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.label_attribute_name {
+    fs.push(("LabelAttributeName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.input_config {
+    fs.push(("InputConfig", json_of_labeling_job_input_config(x)))
+  }
+  if let Some(x) = input.output_config {
+    fs.push(("OutputConfig", json_of_labeling_job_output_config(x)))
+  }
+  if let Some(x) = input.role_arn {
+    fs.push(("RoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.label_category_config_s3_uri {
+    fs.push(("LabelCategoryConfigS3Uri", json.Value.Str(x)))
+  }
+  if let Some(x) = input.stopping_conditions {
+    fs.push(("StoppingConditions", json_of_labeling_job_stopping_conditions(x)))
+  }
+  if let Some(x) = input.labeling_job_algorithms_config {
+    fs.push(("LabelingJobAlgorithmsConfig", json_of_labeling_job_algorithms_config(x)))
+  }
+  if let Some(x) = input.human_task_config {
+    fs.push(("HumanTaskConfig", json_of_human_task_config(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.CreateLabelingJob"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_labeling_job(resp: http.Response) -> CreateLabelingJobResponse ! Str {
+  var out = CreateLabelingJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "LabelingJobArn" => out.labeling_job_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateLabelingJob.
+pub enum CreateLabelingJobErr {
+  ResourceInUse(e: ResourceInUse)
+  ResourceLimitExceeded(e: ResourceLimitExceeded)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateLabelingJobErr) display() -> Str {
+  match e {
+    ResourceInUse(x) => "ResourceInUse: ${x:?}"
+    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_labeling_job_error(resp: http.Response) -> CreateLabelingJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ResourceInUse" => match read_error_resource_in_use(resp, body) {
+      Ok(x) => return CreateLabelingJobErr.ResourceInUse(x)
+      Err(msg) => return CreateLabelingJobErr.Deserialize(msg)
+    }
+    "ResourceLimitExceeded" => match read_error_resource_limit_exceeded(resp, body) {
+      Ok(x) => return CreateLabelingJobErr.ResourceLimitExceeded(x)
+      Err(msg) => return CreateLabelingJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateLabelingJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates a job that uses workers to label the data objects in your input
+/// dataset. You can use the labeled data to train machine learning models.
+/// You can select your workforce from one of three providers: A private
+/// workforce that you create. It can include employees, contractors, and
+/// outside experts. Use a private workforce when want the data to stay
+/// within your organization or when a specific set of skills is required.
+/// One or more vendors that you select from the Amazon Web Services
+/// Marketplace. Vendors provide expertise in specific areas. The Amazon
+/// Mechanical Turk workforce. This is the largest workforce, but it should
+/// only be used for public data or data that has been stripped of any
+/// personally identifiable information. You can also use automated data
+/// labeling to reduce the number of data objects that need to be labeled by
+/// a human. Automated data labeling uses active learning to determine if a
+/// data object can be labeled by machine or if it needs to be sent to a
+/// human worker. For more information, see Using Automated Data Labeling .
+/// The data objects to be labeled are contained in an Amazon S3 bucket. You
+/// create a manifest file that describes the location of each object. For
+/// more information, see Using Input and Output Data . The output can be
+/// used as the manifest file for another labeling job or as training data
+/// for your machine learning models. You can use this operation to create a
+/// static labeling job or a streaming labeling job. A static labeling job
+/// stops if all data objects in the input manifest file identified in
+/// ManifestS3Uri have been labeled. A streaming labeling job runs
+/// perpetually until it is manually stopped, or remains idle for 10 days.
+/// You can send new data objects to an active ( InProgress ) streaming
+/// labeling job in real time. To learn how to create a static labeling job,
+/// see Create a Labeling Job (API) in the Amazon SageMaker Developer Guide.
+/// To learn how to create a streaming labeling job, see Create a Streaming
+/// Labeling Job .
+pub fn (c: Client) create_labeling_job(input: CreateLabelingJobRequest) -> CreateLabelingJobResponse ! CreateLabelingJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_labeling_job(c.params, input)) ?? e => return Err(CreateLabelingJobErr.InvalidInput(e))
+  var req = serialize_create_labeling_job(ep, input, "") ?? e => return Err(CreateLabelingJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateLabelingJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_labeling_job_error(resp))
+  }
+  deserialize_create_labeling_job(resp) ?? e => Err(CreateLabelingJobErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_mlflow_app(base: EndpointParameters, input: CreateMlflowAppRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateMlflowApp.
+pub fn serialize_create_mlflow_app(ep: rest.Endpoint, input: CreateMlflowAppRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("Name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.artifact_store_uri {
+    fs.push(("ArtifactStoreUri", json.Value.Str(x)))
+  }
+  if let Some(x) = input.role_arn {
+    fs.push(("RoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.kms_key_id {
+    fs.push(("KmsKeyId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.model_registration_mode {
+    fs.push(("ModelRegistrationMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.weekly_maintenance_window_start {
+    fs.push(("WeeklyMaintenanceWindowStart", json.Value.Str(x)))
+  }
+  if let Some(x) = input.account_default_status {
+    fs.push(("AccountDefaultStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.default_domain_id_list {
+    fs.push(("DefaultDomainIdList", json_of_default_domain_id_list(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.CreateMlflowApp"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_create_mlflow_app(resp: http.Response) -> CreateMlflowAppResponse ! Str {
   var out = CreateMlflowAppResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -2085,6 +2640,9 @@ pub fn serialize_create_pipeline(ep: rest.Endpoint, input: CreatePipelineRequest
   }
   if let Some(x) = input.parallelism_configuration {
     fs.push(("ParallelismConfiguration", json_of_parallelism_configuration(x)))
+  }
+  if let Some(x) = input.pipeline_version_aliases {
+    fs.push(("PipelineVersionAliases", json_of_pipeline_version_alias_list(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
@@ -5378,6 +5936,126 @@ pub fn (c: Client) delete_cluster(input: DeleteClusterRequest) -> DeleteClusterR
     return Err(deserialize_delete_cluster_error(resp))
   }
   deserialize_delete_cluster(resp) ?? e => Err(DeleteClusterErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_cluster_extension(base: EndpointParameters, input: DeleteClusterExtensionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteClusterExtension.
+pub fn serialize_delete_cluster_extension(ep: rest.Endpoint, input: DeleteClusterExtensionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.cluster_arn {
+    fs.push(("ClusterArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.extension_arn {
+    fs.push(("ExtensionArn", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.DeleteClusterExtension"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_cluster_extension(resp: http.Response) -> DeleteClusterExtensionResponse ! Str {
+  var out = DeleteClusterExtensionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ExtensionArn" => out.extension_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteClusterExtension.
+pub enum DeleteClusterExtensionErr {
+  ConflictException(e: ConflictException)
+  ResourceInUse(e: ResourceInUse)
+  ResourceNotFound(e: ResourceNotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteClusterExtensionErr) display() -> Str {
+  match e {
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ResourceInUse(x) => "ResourceInUse: ${x:?}"
+    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_cluster_extension_error(resp: http.Response) -> DeleteClusterExtensionErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteClusterExtensionErr.ConflictException(x)
+      Err(msg) => return DeleteClusterExtensionErr.Deserialize(msg)
+    }
+    "ResourceInUse" => match read_error_resource_in_use(resp, body) {
+      Ok(x) => return DeleteClusterExtensionErr.ResourceInUse(x)
+      Err(msg) => return DeleteClusterExtensionErr.Deserialize(msg)
+    }
+    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
+      Ok(x) => return DeleteClusterExtensionErr.ResourceNotFound(x)
+      Err(msg) => return DeleteClusterExtensionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteClusterExtensionErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes an extension from a SageMaker HyperPod cluster. SageMaker
+/// HyperPod removes the extension's software from every node in the
+/// cluster. While SageMaker HyperPod removes the extension, its status is
+/// Deleting . After SageMaker HyperPod removes the extension from all
+/// nodes, it no longer appears in ListClusterExtensions , and
+/// DescribeClusterExtension returns a ResourceNotFound error. Deleting an
+/// extension doesn't delete data that the extension sent to other Amazon
+/// Web Services services, such as metrics in Amazon CloudWatch or Amazon
+/// Managed Service for Prometheus.
+pub fn (c: Client) delete_cluster_extension(input: DeleteClusterExtensionRequest) -> DeleteClusterExtensionResponse ! DeleteClusterExtensionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_cluster_extension(c.params, input)) ?? e => return Err(DeleteClusterExtensionErr.InvalidInput(e))
+  var req = serialize_delete_cluster_extension(ep, input, "") ?? e => return Err(DeleteClusterExtensionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteClusterExtensionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_cluster_extension_error(resp))
+  }
+  deserialize_delete_cluster_extension(resp) ?? e => Err(DeleteClusterExtensionErr.Deserialize(e))
 }
 
 pub fn endpoint_params_delete_cluster_scheduler_config(base: EndpointParameters, input: DeleteClusterSchedulerConfigRequest) -> EndpointParameters {
@@ -10932,649 +11610,4 @@ pub fn deserialize_describe_app(resp: http.Response) -> DescribeAppResponse ! St
     }
   }
   Ok(out)
-}
-
-/// The errors of DescribeApp.
-pub enum DescribeAppErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeAppErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_app_error(resp: http.Response) -> DescribeAppErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return DescribeAppErr.ResourceNotFound(x)
-      Err(msg) => return DescribeAppErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeAppErr.Api(restjson.api_error(resp, body))
-}
-
-/// Describes the app.
-pub fn (c: Client) describe_app(input: DescribeAppRequest) -> DescribeAppResponse ! DescribeAppErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_app(c.params, input)) ?? e => return Err(DescribeAppErr.InvalidInput(e))
-  var req = serialize_describe_app(ep, input, "") ?? e => return Err(DescribeAppErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeAppErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_app_error(resp))
-  }
-  deserialize_describe_app(resp) ?? e => Err(DescribeAppErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_app_image_config(base: EndpointParameters, input: DescribeAppImageConfigRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeAppImageConfig.
-pub fn serialize_describe_app_image_config(ep: rest.Endpoint, input: DescribeAppImageConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.app_image_config_name {
-    fs.push(("AppImageConfigName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.DescribeAppImageConfig"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_describe_app_image_config(resp: http.Response) -> DescribeAppImageConfigResponse ! Str {
-  var out = DescribeAppImageConfigResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "AppImageConfigArn" => out.app_image_config_arn = jsonv.read_str(fv)?
-      "AppImageConfigName" => out.app_image_config_name = jsonv.read_str(fv)?
-      "CreationTime" => out.creation_time = jsonv.read_time(fv, "epoch-seconds")?
-      "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
-      "KernelGatewayImageConfig" => out.kernel_gateway_image_config = from_json_kernel_gateway_image_config(fv)?
-      "JupyterLabAppImageConfig" => out.jupyter_lab_app_image_config = from_json_jupyter_lab_app_image_config(fv)?
-      "CodeEditorAppImageConfig" => out.code_editor_app_image_config = from_json_code_editor_app_image_config(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DescribeAppImageConfig.
-pub enum DescribeAppImageConfigErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeAppImageConfigErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_app_image_config_error(resp: http.Response) -> DescribeAppImageConfigErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return DescribeAppImageConfigErr.ResourceNotFound(x)
-      Err(msg) => return DescribeAppImageConfigErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeAppImageConfigErr.Api(restjson.api_error(resp, body))
-}
-
-/// Describes an AppImageConfig.
-pub fn (c: Client) describe_app_image_config(input: DescribeAppImageConfigRequest) -> DescribeAppImageConfigResponse ! DescribeAppImageConfigErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_app_image_config(c.params, input)) ?? e => return Err(DescribeAppImageConfigErr.InvalidInput(e))
-  var req = serialize_describe_app_image_config(ep, input, "") ?? e => return Err(DescribeAppImageConfigErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeAppImageConfigErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_app_image_config_error(resp))
-  }
-  deserialize_describe_app_image_config(resp) ?? e => Err(DescribeAppImageConfigErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_artifact(base: EndpointParameters, input: DescribeArtifactRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeArtifact.
-pub fn serialize_describe_artifact(ep: rest.Endpoint, input: DescribeArtifactRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.artifact_arn {
-    fs.push(("ArtifactArn", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.DescribeArtifact"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_describe_artifact(resp: http.Response) -> DescribeArtifactResponse ! Str {
-  var out = DescribeArtifactResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ArtifactName" => out.artifact_name = jsonv.read_str(fv)?
-      "ArtifactArn" => out.artifact_arn = jsonv.read_str(fv)?
-      "Source" => out.source = from_json_artifact_source(fv)?
-      "ArtifactType" => out.artifact_type = jsonv.read_str(fv)?
-      "Properties" => out.properties = from_json_lineage_entity_parameters(fv)?
-      "CreationTime" => out.creation_time = jsonv.read_time(fv, "epoch-seconds")?
-      "CreatedBy" => out.created_by = from_json_user_context(fv)?
-      "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
-      "LastModifiedBy" => out.last_modified_by = from_json_user_context(fv)?
-      "MetadataProperties" => out.metadata_properties = from_json_metadata_properties(fv)?
-      "LineageGroupArn" => out.lineage_group_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DescribeArtifact.
-pub enum DescribeArtifactErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeArtifactErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_artifact_error(resp: http.Response) -> DescribeArtifactErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return DescribeArtifactErr.ResourceNotFound(x)
-      Err(msg) => return DescribeArtifactErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeArtifactErr.Api(restjson.api_error(resp, body))
-}
-
-/// Describes an artifact.
-pub fn (c: Client) describe_artifact(input: DescribeArtifactRequest) -> DescribeArtifactResponse ! DescribeArtifactErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_artifact(c.params, input)) ?? e => return Err(DescribeArtifactErr.InvalidInput(e))
-  var req = serialize_describe_artifact(ep, input, "") ?? e => return Err(DescribeArtifactErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeArtifactErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_artifact_error(resp))
-  }
-  deserialize_describe_artifact(resp) ?? e => Err(DescribeArtifactErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_auto_ml_job(base: EndpointParameters, input: DescribeAutoMLJobRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeAutoMLJob.
-pub fn serialize_describe_auto_ml_job(ep: rest.Endpoint, input: DescribeAutoMLJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.auto_ml_job_name {
-    fs.push(("AutoMLJobName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.DescribeAutoMLJob"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_describe_auto_ml_job(resp: http.Response) -> DescribeAutoMLJobResponse ! Str {
-  var out = DescribeAutoMLJobResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "AutoMLJobName" => out.auto_ml_job_name = jsonv.read_str(fv)?
-      "AutoMLJobArn" => out.auto_ml_job_arn = jsonv.read_str(fv)?
-      "InputDataConfig" => out.input_data_config = from_json_auto_ml_input_data_config(fv)?
-      "OutputDataConfig" => out.output_data_config = from_json_auto_ml_output_data_config(fv)?
-      "RoleArn" => out.role_arn = jsonv.read_str(fv)?
-      "AutoMLJobObjective" => out.auto_ml_job_objective = from_json_auto_ml_job_objective(fv)?
-      "ProblemType" => out.problem_type = ProblemType.from(jsonv.read_str(fv)?)
-      "AutoMLJobConfig" => out.auto_ml_job_config = from_json_auto_ml_job_config(fv)?
-      "CreationTime" => out.creation_time = jsonv.read_time(fv, "epoch-seconds")?
-      "EndTime" => out.end_time = jsonv.read_time(fv, "epoch-seconds")?
-      "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
-      "FailureReason" => out.failure_reason = jsonv.read_str(fv)?
-      "PartialFailureReasons" => out.partial_failure_reasons = from_json_auto_ml_partial_failure_reasons(fv)?
-      "BestCandidate" => out.best_candidate = from_json_auto_ml_candidate(fv)?
-      "AutoMLJobStatus" => out.auto_ml_job_status = AutoMLJobStatus.from(jsonv.read_str(fv)?)
-      "AutoMLJobSecondaryStatus" => out.auto_ml_job_secondary_status = AutoMLJobSecondaryStatus.from(jsonv.read_str(fv)?)
-      "GenerateCandidateDefinitionsOnly" => out.generate_candidate_definitions_only = jsonv.read_bool(fv)?
-      "AutoMLJobArtifacts" => out.auto_ml_job_artifacts = from_json_auto_ml_job_artifacts(fv)?
-      "ResolvedAttributes" => out.resolved_attributes = from_json_resolved_attributes(fv)?
-      "ModelDeployConfig" => out.model_deploy_config = from_json_model_deploy_config(fv)?
-      "ModelDeployResult" => out.model_deploy_result = from_json_model_deploy_result(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DescribeAutoMLJob.
-pub enum DescribeAutoMLJobErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeAutoMLJobErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_auto_ml_job_error(resp: http.Response) -> DescribeAutoMLJobErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return DescribeAutoMLJobErr.ResourceNotFound(x)
-      Err(msg) => return DescribeAutoMLJobErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeAutoMLJobErr.Api(restjson.api_error(resp, body))
-}
-
-/// Returns information about an AutoML job created by calling
-/// CreateAutoMLJob . AutoML jobs created by calling CreateAutoMLJobV2
-/// cannot be described by DescribeAutoMLJob .
-pub fn (c: Client) describe_auto_ml_job(input: DescribeAutoMLJobRequest) -> DescribeAutoMLJobResponse ! DescribeAutoMLJobErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_auto_ml_job(c.params, input)) ?? e => return Err(DescribeAutoMLJobErr.InvalidInput(e))
-  var req = serialize_describe_auto_ml_job(ep, input, "") ?? e => return Err(DescribeAutoMLJobErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeAutoMLJobErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_auto_ml_job_error(resp))
-  }
-  deserialize_describe_auto_ml_job(resp) ?? e => Err(DescribeAutoMLJobErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_auto_ml_job_v2(base: EndpointParameters, input: DescribeAutoMLJobV2Request) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeAutoMLJobV2.
-pub fn serialize_describe_auto_ml_job_v2(ep: rest.Endpoint, input: DescribeAutoMLJobV2Request, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.auto_ml_job_name {
-    fs.push(("AutoMLJobName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.DescribeAutoMLJobV2"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_describe_auto_ml_job_v2(resp: http.Response) -> DescribeAutoMLJobV2Response ! Str {
-  var out = DescribeAutoMLJobV2Response{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "AutoMLJobName" => out.auto_ml_job_name = jsonv.read_str(fv)?
-      "AutoMLJobArn" => out.auto_ml_job_arn = jsonv.read_str(fv)?
-      "AutoMLJobInputDataConfig" => out.auto_ml_job_input_data_config = from_json_auto_ml_job_input_data_config(fv)?
-      "OutputDataConfig" => out.output_data_config = from_json_auto_ml_output_data_config(fv)?
-      "RoleArn" => out.role_arn = jsonv.read_str(fv)?
-      "AutoMLJobObjective" => out.auto_ml_job_objective = from_json_auto_ml_job_objective(fv)?
-      "AutoMLProblemTypeConfig" => out.auto_ml_problem_type_config = from_json_auto_ml_problem_type_config(fv)?
-      "AutoMLProblemTypeConfigName" => out.auto_ml_problem_type_config_name = AutoMLProblemTypeConfigName.from(jsonv.read_str(fv)?)
-      "CreationTime" => out.creation_time = jsonv.read_time(fv, "epoch-seconds")?
-      "EndTime" => out.end_time = jsonv.read_time(fv, "epoch-seconds")?
-      "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
-      "FailureReason" => out.failure_reason = jsonv.read_str(fv)?
-      "PartialFailureReasons" => out.partial_failure_reasons = from_json_auto_ml_partial_failure_reasons(fv)?
-      "BestCandidate" => out.best_candidate = from_json_auto_ml_candidate(fv)?
-      "AutoMLJobStatus" => out.auto_ml_job_status = AutoMLJobStatus.from(jsonv.read_str(fv)?)
-      "AutoMLJobSecondaryStatus" => out.auto_ml_job_secondary_status = AutoMLJobSecondaryStatus.from(jsonv.read_str(fv)?)
-      "AutoMLJobArtifacts" => out.auto_ml_job_artifacts = from_json_auto_ml_job_artifacts(fv)?
-      "ResolvedAttributes" => out.resolved_attributes = from_json_auto_ml_resolved_attributes(fv)?
-      "ModelDeployConfig" => out.model_deploy_config = from_json_model_deploy_config(fv)?
-      "ModelDeployResult" => out.model_deploy_result = from_json_model_deploy_result(fv)?
-      "DataSplitConfig" => out.data_split_config = from_json_auto_ml_data_split_config(fv)?
-      "SecurityConfig" => out.security_config = from_json_auto_ml_security_config(fv)?
-      "AutoMLComputeConfig" => out.auto_ml_compute_config = from_json_auto_ml_compute_config(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DescribeAutoMLJobV2.
-pub enum DescribeAutoMLJobV2Err {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeAutoMLJobV2Err) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_auto_ml_job_v2_error(resp: http.Response) -> DescribeAutoMLJobV2Err {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return DescribeAutoMLJobV2Err.ResourceNotFound(x)
-      Err(msg) => return DescribeAutoMLJobV2Err.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeAutoMLJobV2Err.Api(restjson.api_error(resp, body))
-}
-
-/// Returns information about an AutoML job created by calling
-/// CreateAutoMLJobV2 or CreateAutoMLJob .
-pub fn (c: Client) describe_auto_ml_job_v2(input: DescribeAutoMLJobV2Request) -> DescribeAutoMLJobV2Response ! DescribeAutoMLJobV2Err uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_auto_ml_job_v2(c.params, input)) ?? e => return Err(DescribeAutoMLJobV2Err.InvalidInput(e))
-  var req = serialize_describe_auto_ml_job_v2(ep, input, "") ?? e => return Err(DescribeAutoMLJobV2Err.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeAutoMLJobV2Err.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_auto_ml_job_v2_error(resp))
-  }
-  deserialize_describe_auto_ml_job_v2(resp) ?? e => Err(DescribeAutoMLJobV2Err.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_cluster(base: EndpointParameters, input: DescribeClusterRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeCluster.
-pub fn serialize_describe_cluster(ep: rest.Endpoint, input: DescribeClusterRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cluster_name {
-    fs.push(("ClusterName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.DescribeCluster"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_describe_cluster(resp: http.Response) -> DescribeClusterResponse ! Str {
-  var out = DescribeClusterResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ClusterArn" => out.cluster_arn = jsonv.read_str(fv)?
-      "ClusterName" => out.cluster_name = jsonv.read_str(fv)?
-      "ClusterStatus" => out.cluster_status = ClusterStatus.from(jsonv.read_str(fv)?)
-      "CreationTime" => out.creation_time = jsonv.read_time(fv, "epoch-seconds")?
-      "FailureMessage" => out.failure_message = jsonv.read_str(fv)?
-      "InstanceGroups" => out.instance_groups = from_json_cluster_instance_group_details_list(fv)?
-      "RestrictedInstanceGroups" => out.restricted_instance_groups = from_json_cluster_restricted_instance_group_details_list(fv)?
-      "RestrictedInstanceGroupsConfig" => out.restricted_instance_groups_config = from_json_cluster_restricted_instance_groups_config_output(fv)?
-      "VpcConfig" => out.vpc_config = from_json_vpc_config(fv)?
-      "Orchestrator" => out.orchestrator = from_json_cluster_orchestrator(fv)?
-      "TieredStorageConfig" => out.tiered_storage_config = from_json_cluster_tiered_storage_config(fv)?
-      "NodeRecovery" => out.node_recovery = ClusterNodeRecovery.from(jsonv.read_str(fv)?)
-      "NodeProvisioningMode" => out.node_provisioning_mode = ClusterNodeProvisioningMode.from(jsonv.read_str(fv)?)
-      "ClusterRole" => out.cluster_role = jsonv.read_str(fv)?
-      "AutoScaling" => out.auto_scaling = from_json_cluster_auto_scaling_config_output(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DescribeCluster.
-pub enum DescribeClusterErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeClusterErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_cluster_error(resp: http.Response) -> DescribeClusterErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return DescribeClusterErr.ResourceNotFound(x)
-      Err(msg) => return DescribeClusterErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DescribeClusterErr.Api(restjson.api_error(resp, body))
-}
-
-/// Retrieves information of a SageMaker HyperPod cluster.
-pub fn (c: Client) describe_cluster(input: DescribeClusterRequest) -> DescribeClusterResponse ! DescribeClusterErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_cluster(c.params, input)) ?? e => return Err(DescribeClusterErr.InvalidInput(e))
-  var req = serialize_describe_cluster(ep, input, "") ?? e => return Err(DescribeClusterErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeClusterErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_describe_cluster_error(resp))
-  }
-  deserialize_describe_cluster(resp) ?? e => Err(DescribeClusterErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_cluster_event(base: EndpointParameters, input: DescribeClusterEventRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeClusterEvent.
-pub fn serialize_describe_cluster_event(ep: rest.Endpoint, input: DescribeClusterEventRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.event_id {
-    fs.push(("EventId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.cluster_name {
-    fs.push(("ClusterName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.DescribeClusterEvent"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

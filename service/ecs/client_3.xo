@@ -8,6 +8,68 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn (e: ListServicesByNamespaceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ClientException(x) => "ClientException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    NamespaceNotFoundException(x) => "NamespaceNotFoundException: ${x:?}"
+    ServerException(x) => "ServerException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_services_by_namespace_error(resp: http.Response) -> ListServicesByNamespaceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListServicesByNamespaceErr.AccessDeniedException(x)
+      Err(msg) => return ListServicesByNamespaceErr.Deserialize(msg)
+    }
+    "ClientException" => match read_error_client_exception(resp, body) {
+      Ok(x) => return ListServicesByNamespaceErr.ClientException(x)
+      Err(msg) => return ListServicesByNamespaceErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return ListServicesByNamespaceErr.InvalidParameterException(x)
+      Err(msg) => return ListServicesByNamespaceErr.Deserialize(msg)
+    }
+    "NamespaceNotFoundException" => match read_error_namespace_not_found_exception(resp, body) {
+      Ok(x) => return ListServicesByNamespaceErr.NamespaceNotFoundException(x)
+      Err(msg) => return ListServicesByNamespaceErr.Deserialize(msg)
+    }
+    "ServerException" => match read_error_server_exception(resp, body) {
+      Ok(x) => return ListServicesByNamespaceErr.ServerException(x)
+      Err(msg) => return ListServicesByNamespaceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListServicesByNamespaceErr.Api(restjson.api_error(resp, body))
+}
+
+/// This operation lists all of the services that are associated with a
+/// Cloud Map namespace. This list might include services in different
+/// clusters. In contrast, ListServices can only list services in one
+/// cluster at a time. If you need to filter the list of services in a
+/// single cluster by various parameters, use ListServices . For more
+/// information, see Service Connect in the Amazon Elastic Container Service
+/// Developer Guide .
+pub fn (c: Client) list_services_by_namespace(input: ListServicesByNamespaceRequest) -> ListServicesByNamespaceResponse ! ListServicesByNamespaceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_services_by_namespace(c.params, input)) ?? e => return Err(ListServicesByNamespaceErr.InvalidInput(e))
+  var req = serialize_list_services_by_namespace(ep, input, "") ?? e => return Err(ListServicesByNamespaceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListServicesByNamespaceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_services_by_namespace_error(resp))
+  }
+  deserialize_list_services_by_namespace(resp) ?? e => Err(ListServicesByNamespaceErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_tags_for_resource(base: EndpointParameters, input: ListTagsForResourceRequest) -> EndpointParameters {
   let _ = input
   base
@@ -1458,6 +1520,9 @@ pub fn serialize_register_task_definition(ep: rest.Endpoint, input: RegisterTask
   }
   if let Some(x) = input.enable_fault_injection {
     fs.push(("enableFaultInjection", json.Value.Bool(x)))
+  }
+  if let Some(x) = input.trusted_execution_configuration {
+    fs.push(("trustedExecutionConfiguration", json_of_trusted_execution_configuration(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))

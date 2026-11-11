@@ -8,6 +8,1002 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_list_clusters(resp: http.Response) -> ListClustersResponse ! Str {
+  var out = ListClustersResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      "ClusterSummaries" => out.cluster_summaries = from_json_cluster_summaries(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListClusters.
+pub enum ListClustersErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListClustersErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_clusters_error(resp: http.Response) -> ListClustersErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListClustersErr.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves the list of SageMaker HyperPod clusters.
+pub fn (c: Client) list_clusters(input: ListClustersRequest) -> ListClustersResponse ! ListClustersErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_clusters(c.params, input)) ?? e => return Err(ListClustersErr.InvalidInput(e))
+  var req = serialize_list_clusters(ep, input, "") ?? e => return Err(ListClustersErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListClustersErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_clusters_error(resp))
+  }
+  deserialize_list_clusters(resp) ?? e => Err(ListClustersErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_code_repositories(base: EndpointParameters, input: ListCodeRepositoriesInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListCodeRepositories.
+pub fn serialize_list_code_repositories(ep: rest.Endpoint, input: ListCodeRepositoriesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.creation_time_after {
+    fs.push(("CreationTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.creation_time_before {
+    fs.push(("CreationTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_after {
+    fs.push(("LastModifiedTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_before {
+    fs.push(("LastModifiedTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.name_contains {
+    fs.push(("NameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListCodeRepositories"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_code_repositories(resp: http.Response) -> ListCodeRepositoriesOutput ! Str {
+  var out = ListCodeRepositoriesOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CodeRepositorySummaryList" => out.code_repository_summary_list = from_json_code_repository_summary_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListCodeRepositories.
+pub enum ListCodeRepositoriesErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListCodeRepositoriesErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_code_repositories_error(resp: http.Response) -> ListCodeRepositoriesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListCodeRepositoriesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets a list of the Git repositories in your account.
+pub fn (c: Client) list_code_repositories(input: ListCodeRepositoriesInput) -> ListCodeRepositoriesOutput ! ListCodeRepositoriesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_code_repositories(c.params, input)) ?? e => return Err(ListCodeRepositoriesErr.InvalidInput(e))
+  var req = serialize_list_code_repositories(ep, input, "") ?? e => return Err(ListCodeRepositoriesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListCodeRepositoriesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_code_repositories_error(resp))
+  }
+  deserialize_list_code_repositories(resp) ?? e => Err(ListCodeRepositoriesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_compilation_jobs(base: EndpointParameters, input: ListCompilationJobsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListCompilationJobs.
+pub fn serialize_list_compilation_jobs(ep: rest.Endpoint, input: ListCompilationJobsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.creation_time_after {
+    fs.push(("CreationTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.creation_time_before {
+    fs.push(("CreationTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_after {
+    fs.push(("LastModifiedTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_before {
+    fs.push(("LastModifiedTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.name_contains {
+    fs.push(("NameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.status_equals {
+    fs.push(("StatusEquals", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListCompilationJobs"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_compilation_jobs(resp: http.Response) -> ListCompilationJobsResponse ! Str {
+  var out = ListCompilationJobsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CompilationJobSummaries" => out.compilation_job_summaries = from_json_compilation_job_summaries(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListCompilationJobs.
+pub enum ListCompilationJobsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListCompilationJobsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_compilation_jobs_error(resp: http.Response) -> ListCompilationJobsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListCompilationJobsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists model compilation jobs that satisfy various filters. To create a
+/// model compilation job, use CreateCompilationJob . To get information
+/// about a particular model compilation job you have created, use
+/// DescribeCompilationJob .
+pub fn (c: Client) list_compilation_jobs(input: ListCompilationJobsRequest) -> ListCompilationJobsResponse ! ListCompilationJobsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_compilation_jobs(c.params, input)) ?? e => return Err(ListCompilationJobsErr.InvalidInput(e))
+  var req = serialize_list_compilation_jobs(ep, input, "") ?? e => return Err(ListCompilationJobsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListCompilationJobsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_compilation_jobs_error(resp))
+  }
+  deserialize_list_compilation_jobs(resp) ?? e => Err(ListCompilationJobsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_compute_quotas(base: EndpointParameters, input: ListComputeQuotasRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListComputeQuotas.
+pub fn serialize_list_compute_quotas(ep: rest.Endpoint, input: ListComputeQuotasRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.created_after {
+    fs.push(("CreatedAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.created_before {
+    fs.push(("CreatedBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.name_contains {
+    fs.push(("NameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.status {
+    fs.push(("Status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.cluster_arn {
+    fs.push(("ClusterArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListComputeQuotas"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_compute_quotas(resp: http.Response) -> ListComputeQuotasResponse ! Str {
+  var out = ListComputeQuotasResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ComputeQuotaSummaries" => out.compute_quota_summaries = from_json_compute_quota_summary_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListComputeQuotas.
+pub enum ListComputeQuotasErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListComputeQuotasErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_compute_quotas_error(resp: http.Response) -> ListComputeQuotasErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListComputeQuotasErr.Api(restjson.api_error(resp, body))
+}
+
+/// List the resource allocation definitions.
+pub fn (c: Client) list_compute_quotas(input: ListComputeQuotasRequest) -> ListComputeQuotasResponse ! ListComputeQuotasErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_compute_quotas(c.params, input)) ?? e => return Err(ListComputeQuotasErr.InvalidInput(e))
+  var req = serialize_list_compute_quotas(ep, input, "") ?? e => return Err(ListComputeQuotasErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListComputeQuotasErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_compute_quotas_error(resp))
+  }
+  deserialize_list_compute_quotas(resp) ?? e => Err(ListComputeQuotasErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_contexts(base: EndpointParameters, input: ListContextsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListContexts.
+pub fn serialize_list_contexts(ep: rest.Endpoint, input: ListContextsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.source_uri {
+    fs.push(("SourceUri", json.Value.Str(x)))
+  }
+  if let Some(x) = input.context_type {
+    fs.push(("ContextType", json.Value.Str(x)))
+  }
+  if let Some(x) = input.created_after {
+    fs.push(("CreatedAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.created_before {
+    fs.push(("CreatedBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListContexts"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_contexts(resp: http.Response) -> ListContextsResponse ! Str {
+  var out = ListContextsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextSummaries" => out.context_summaries = from_json_context_summaries(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListContexts.
+pub enum ListContextsErr {
+  ResourceNotFound(e: ResourceNotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListContextsErr) display() -> Str {
+  match e {
+    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_contexts_error(resp: http.Response) -> ListContextsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
+      Ok(x) => return ListContextsErr.ResourceNotFound(x)
+      Err(msg) => return ListContextsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListContextsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the contexts in your account and their properties.
+pub fn (c: Client) list_contexts(input: ListContextsRequest) -> ListContextsResponse ! ListContextsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_contexts(c.params, input)) ?? e => return Err(ListContextsErr.InvalidInput(e))
+  var req = serialize_list_contexts(ep, input, "") ?? e => return Err(ListContextsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListContextsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_contexts_error(resp))
+  }
+  deserialize_list_contexts(resp) ?? e => Err(ListContextsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_data_quality_job_definitions(base: EndpointParameters, input: ListDataQualityJobDefinitionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDataQualityJobDefinitions.
+pub fn serialize_list_data_quality_job_definitions(ep: rest.Endpoint, input: ListDataQualityJobDefinitionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.endpoint_name {
+    fs.push(("EndpointName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.name_contains {
+    fs.push(("NameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.creation_time_before {
+    fs.push(("CreationTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.creation_time_after {
+    fs.push(("CreationTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListDataQualityJobDefinitions"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_data_quality_job_definitions(resp: http.Response) -> ListDataQualityJobDefinitionsResponse ! Str {
+  var out = ListDataQualityJobDefinitionsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "JobDefinitionSummaries" => out.job_definition_summaries = from_json_monitoring_job_definition_summary_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDataQualityJobDefinitions.
+pub enum ListDataQualityJobDefinitionsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDataQualityJobDefinitionsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_data_quality_job_definitions_error(resp: http.Response) -> ListDataQualityJobDefinitionsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListDataQualityJobDefinitionsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the data quality job definitions in your account.
+pub fn (c: Client) list_data_quality_job_definitions(input: ListDataQualityJobDefinitionsRequest) -> ListDataQualityJobDefinitionsResponse ! ListDataQualityJobDefinitionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_data_quality_job_definitions(c.params, input)) ?? e => return Err(ListDataQualityJobDefinitionsErr.InvalidInput(e))
+  var req = serialize_list_data_quality_job_definitions(ep, input, "") ?? e => return Err(ListDataQualityJobDefinitionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDataQualityJobDefinitionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_data_quality_job_definitions_error(resp))
+  }
+  deserialize_list_data_quality_job_definitions(resp) ?? e => Err(ListDataQualityJobDefinitionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_device_fleets(base: EndpointParameters, input: ListDeviceFleetsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDeviceFleets.
+pub fn serialize_list_device_fleets(ep: rest.Endpoint, input: ListDeviceFleetsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.creation_time_after {
+    fs.push(("CreationTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.creation_time_before {
+    fs.push(("CreationTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_after {
+    fs.push(("LastModifiedTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_before {
+    fs.push(("LastModifiedTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.name_contains {
+    fs.push(("NameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListDeviceFleets"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_device_fleets(resp: http.Response) -> ListDeviceFleetsResponse ! Str {
+  var out = ListDeviceFleetsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DeviceFleetSummaries" => out.device_fleet_summaries = from_json_device_fleet_summaries(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDeviceFleets.
+pub enum ListDeviceFleetsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDeviceFleetsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_device_fleets_error(resp: http.Response) -> ListDeviceFleetsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListDeviceFleetsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a list of devices in the fleet.
+pub fn (c: Client) list_device_fleets(input: ListDeviceFleetsRequest) -> ListDeviceFleetsResponse ! ListDeviceFleetsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_device_fleets(c.params, input)) ?? e => return Err(ListDeviceFleetsErr.InvalidInput(e))
+  var req = serialize_list_device_fleets(ep, input, "") ?? e => return Err(ListDeviceFleetsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDeviceFleetsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_device_fleets_error(resp))
+  }
+  deserialize_list_device_fleets(resp) ?? e => Err(ListDeviceFleetsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_devices(base: EndpointParameters, input: ListDevicesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDevices.
+pub fn serialize_list_devices(ep: rest.Endpoint, input: ListDevicesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.latest_heartbeat_after {
+    fs.push(("LatestHeartbeatAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.model_name {
+    fs.push(("ModelName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.device_fleet_name {
+    fs.push(("DeviceFleetName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListDevices"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_devices(resp: http.Response) -> ListDevicesResponse ! Str {
+  var out = ListDevicesResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DeviceSummaries" => out.device_summaries = from_json_device_summaries(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDevices.
+pub enum ListDevicesErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDevicesErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_devices_error(resp: http.Response) -> ListDevicesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListDevicesErr.Api(restjson.api_error(resp, body))
+}
+
+/// A list of devices.
+pub fn (c: Client) list_devices(input: ListDevicesRequest) -> ListDevicesResponse ! ListDevicesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_devices(c.params, input)) ?? e => return Err(ListDevicesErr.InvalidInput(e))
+  var req = serialize_list_devices(ep, input, "") ?? e => return Err(ListDevicesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDevicesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_devices_error(resp))
+  }
+  deserialize_list_devices(resp) ?? e => Err(ListDevicesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_domains(base: EndpointParameters, input: ListDomainsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDomains.
+pub fn serialize_list_domains(ep: rest.Endpoint, input: ListDomainsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListDomains"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_domains(resp: http.Response) -> ListDomainsResponse ! Str {
+  var out = ListDomainsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Domains" => out.domains = from_json_domain_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDomains.
+pub enum ListDomainsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDomainsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_domains_error(resp: http.Response) -> ListDomainsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ListDomainsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the domains.
+pub fn (c: Client) list_domains(input: ListDomainsRequest) -> ListDomainsResponse ! ListDomainsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_domains(c.params, input)) ?? e => return Err(ListDomainsErr.InvalidInput(e))
+  var req = serialize_list_domains(ep, input, "") ?? e => return Err(ListDomainsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDomainsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_domains_error(resp))
+  }
+  deserialize_list_domains(resp) ?? e => Err(ListDomainsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_edge_deployment_plans(base: EndpointParameters, input: ListEdgeDeploymentPlansRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListEdgeDeploymentPlans.
+pub fn serialize_list_edge_deployment_plans(ep: rest.Endpoint, input: ListEdgeDeploymentPlansRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.creation_time_after {
+    fs.push(("CreationTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.creation_time_before {
+    fs.push(("CreationTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_after {
+    fs.push(("LastModifiedTimeAfter", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.last_modified_time_before {
+    fs.push(("LastModifiedTimeBefore", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.name_contains {
+    fs.push(("NameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.device_fleet_name_contains {
+    fs.push(("DeviceFleetNameContains", json.Value.Str(x)))
+  }
+  if let Some(x) = input.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SageMaker.ListEdgeDeploymentPlans"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_list_edge_deployment_plans(resp: http.Response) -> ListEdgeDeploymentPlansResponse ! Str {
   var out = ListEdgeDeploymentPlansResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -4998,6 +5994,9 @@ pub fn serialize_list_pipeline_executions(ep: rest.Endpoint, input: ListPipeline
   if let Some(x) = input.max_results {
     fs.push(("MaxResults", json.Value.Int(x)))
   }
+  if let Some(x) = input.pipeline_version_alias {
+    fs.push(("PipelineVersionAlias", json.Value.Str(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
   headers.push(("X-Amz-Target", "SageMaker.ListPipelineExecutions"))
@@ -5330,6 +6329,9 @@ pub fn serialize_list_pipelines(ep: rest.Endpoint, input: ListPipelinesRequest, 
   }
   if let Some(x) = input.max_results {
     fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.managed_by {
+    fs.push(("ManagedBy", json.Value.Str(x.value())))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
@@ -9137,6 +10139,12 @@ pub fn serialize_start_pipeline_execution(ep: rest.Endpoint, input: StartPipelin
   if let Some(x) = input.mlflow_experiment_name {
     fs.push(("MlflowExperimentName", json.Value.Str(x)))
   }
+  if let Some(x) = input.pipeline_version_alias {
+    fs.push(("PipelineVersionAlias", json.Value.Str(x)))
+  }
+  if let Some(x) = input.role_arn {
+    fs.push(("RoleArn", json.Value.Str(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
   headers.push(("X-Amz-Target", "SageMaker.StartPipelineExecution"))
@@ -11084,969 +12092,4 @@ pub fn deserialize_stop_training_session_error(resp: http.Response) -> StopTrain
     _ => {}
   }
   StopTrainingSessionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Stops a running training session and sets the session status to Stopping
-/// . After the session stops, the status changes to Stopped . To delete a
-/// stopped session, use the DeleteTrainingSession operation. The following
-/// operations are related to StopTrainingSession : CreateTrainingSession
-/// DescribeTrainingSession DeleteTrainingSession
-pub fn (c: Client) stop_training_session(input: StopTrainingSessionRequest) -> StopTrainingSessionResponse ! StopTrainingSessionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_stop_training_session(c.params, input)) ?? e => return Err(StopTrainingSessionErr.InvalidInput(e))
-  var req = serialize_stop_training_session(ep, input, "") ?? e => return Err(StopTrainingSessionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StopTrainingSessionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_stop_training_session_error(resp))
-  }
-  deserialize_stop_training_session(resp) ?? e => Err(StopTrainingSessionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_stop_transform_job(base: EndpointParameters, input: StopTransformJobRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of StopTransformJob.
-pub fn serialize_stop_transform_job(ep: rest.Endpoint, input: StopTransformJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.transform_job_name {
-    fs.push(("TransformJobName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.StopTransformJob"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_stop_transform_job(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of StopTransformJob.
-pub enum StopTransformJobErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: StopTransformJobErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_stop_transform_job_error(resp: http.Response) -> StopTransformJobErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return StopTransformJobErr.ResourceNotFound(x)
-      Err(msg) => return StopTransformJobErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  StopTransformJobErr.Api(restjson.api_error(resp, body))
-}
-
-/// Stops a batch transform job. When Amazon SageMaker receives a
-/// StopTransformJob request, the status of the job changes to Stopping .
-/// After Amazon SageMaker stops the job, the status is set to Stopped .
-/// When you stop a batch transform job before it is completed, Amazon
-/// SageMaker doesn't store the job's output in Amazon S3.
-pub fn (c: Client) stop_transform_job(input: StopTransformJobRequest) -> () ! StopTransformJobErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_stop_transform_job(c.params, input)) ?? e => return Err(StopTransformJobErr.InvalidInput(e))
-  var req = serialize_stop_transform_job(ep, input, "") ?? e => return Err(StopTransformJobErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StopTransformJobErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_stop_transform_job_error(resp))
-  }
-  deserialize_stop_transform_job(resp) ?? e => Err(StopTransformJobErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_action(base: EndpointParameters, input: UpdateActionRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateAction.
-pub fn serialize_update_action(ep: rest.Endpoint, input: UpdateActionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.action_name {
-    fs.push(("ActionName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.status {
-    fs.push(("Status", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.properties {
-    fs.push(("Properties", json_of_lineage_entity_parameters(x)))
-  }
-  if let Some(x) = input.properties_to_remove {
-    fs.push(("PropertiesToRemove", json_of_list_lineage_entity_parameter_key(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateAction"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_action(resp: http.Response) -> UpdateActionResponse ! Str {
-  var out = UpdateActionResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ActionArn" => out.action_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateAction.
-pub enum UpdateActionErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateActionErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_action_error(resp: http.Response) -> UpdateActionErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateActionErr.ConflictException(x)
-      Err(msg) => return UpdateActionErr.Deserialize(msg)
-    }
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return UpdateActionErr.ResourceNotFound(x)
-      Err(msg) => return UpdateActionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateActionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an action.
-pub fn (c: Client) update_action(input: UpdateActionRequest) -> UpdateActionResponse ! UpdateActionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_action(c.params, input)) ?? e => return Err(UpdateActionErr.InvalidInput(e))
-  var req = serialize_update_action(ep, input, "") ?? e => return Err(UpdateActionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateActionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_action_error(resp))
-  }
-  deserialize_update_action(resp) ?? e => Err(UpdateActionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_app_image_config(base: EndpointParameters, input: UpdateAppImageConfigRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateAppImageConfig.
-pub fn serialize_update_app_image_config(ep: rest.Endpoint, input: UpdateAppImageConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.app_image_config_name {
-    fs.push(("AppImageConfigName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.kernel_gateway_image_config {
-    fs.push(("KernelGatewayImageConfig", json_of_kernel_gateway_image_config(x)))
-  }
-  if let Some(x) = input.jupyter_lab_app_image_config {
-    fs.push(("JupyterLabAppImageConfig", json_of_jupyter_lab_app_image_config(x)))
-  }
-  if let Some(x) = input.code_editor_app_image_config {
-    fs.push(("CodeEditorAppImageConfig", json_of_code_editor_app_image_config(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateAppImageConfig"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_app_image_config(resp: http.Response) -> UpdateAppImageConfigResponse ! Str {
-  var out = UpdateAppImageConfigResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "AppImageConfigArn" => out.app_image_config_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateAppImageConfig.
-pub enum UpdateAppImageConfigErr {
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateAppImageConfigErr) display() -> Str {
-  match e {
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_app_image_config_error(resp: http.Response) -> UpdateAppImageConfigErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return UpdateAppImageConfigErr.ResourceNotFound(x)
-      Err(msg) => return UpdateAppImageConfigErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateAppImageConfigErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the properties of an AppImageConfig.
-pub fn (c: Client) update_app_image_config(input: UpdateAppImageConfigRequest) -> UpdateAppImageConfigResponse ! UpdateAppImageConfigErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_app_image_config(c.params, input)) ?? e => return Err(UpdateAppImageConfigErr.InvalidInput(e))
-  var req = serialize_update_app_image_config(ep, input, "") ?? e => return Err(UpdateAppImageConfigErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateAppImageConfigErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_app_image_config_error(resp))
-  }
-  deserialize_update_app_image_config(resp) ?? e => Err(UpdateAppImageConfigErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_artifact(base: EndpointParameters, input: UpdateArtifactRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateArtifact.
-pub fn serialize_update_artifact(ep: rest.Endpoint, input: UpdateArtifactRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.artifact_arn {
-    fs.push(("ArtifactArn", json.Value.Str(x)))
-  }
-  if let Some(x) = input.artifact_name {
-    fs.push(("ArtifactName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.properties {
-    fs.push(("Properties", json_of_artifact_properties(x)))
-  }
-  if let Some(x) = input.properties_to_remove {
-    fs.push(("PropertiesToRemove", json_of_list_lineage_entity_parameter_key(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateArtifact"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_artifact(resp: http.Response) -> UpdateArtifactResponse ! Str {
-  var out = UpdateArtifactResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ArtifactArn" => out.artifact_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateArtifact.
-pub enum UpdateArtifactErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateArtifactErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_artifact_error(resp: http.Response) -> UpdateArtifactErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateArtifactErr.ConflictException(x)
-      Err(msg) => return UpdateArtifactErr.Deserialize(msg)
-    }
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return UpdateArtifactErr.ResourceNotFound(x)
-      Err(msg) => return UpdateArtifactErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateArtifactErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an artifact.
-pub fn (c: Client) update_artifact(input: UpdateArtifactRequest) -> UpdateArtifactResponse ! UpdateArtifactErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_artifact(c.params, input)) ?? e => return Err(UpdateArtifactErr.InvalidInput(e))
-  var req = serialize_update_artifact(ep, input, "") ?? e => return Err(UpdateArtifactErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateArtifactErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_artifact_error(resp))
-  }
-  deserialize_update_artifact(resp) ?? e => Err(UpdateArtifactErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_cluster(base: EndpointParameters, input: UpdateClusterRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateCluster.
-pub fn serialize_update_cluster(ep: rest.Endpoint, input: UpdateClusterRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cluster_name {
-    fs.push(("ClusterName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.instance_groups {
-    fs.push(("InstanceGroups", json_of_cluster_instance_group_specifications(x)))
-  }
-  if let Some(x) = input.restricted_instance_groups {
-    fs.push(("RestrictedInstanceGroups", json_of_cluster_restricted_instance_group_specifications(x)))
-  }
-  if let Some(x) = input.restricted_instance_groups_config {
-    fs.push(("RestrictedInstanceGroupsConfig", json_of_cluster_restricted_instance_groups_config(x)))
-  }
-  if let Some(x) = input.tiered_storage_config {
-    fs.push(("TieredStorageConfig", json_of_cluster_tiered_storage_config(x)))
-  }
-  if let Some(x) = input.node_recovery {
-    fs.push(("NodeRecovery", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.instance_groups_to_delete {
-    fs.push(("InstanceGroupsToDelete", json_of_cluster_instance_groups_to_delete(x)))
-  }
-  if let Some(x) = input.node_provisioning_mode {
-    fs.push(("NodeProvisioningMode", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.cluster_role {
-    fs.push(("ClusterRole", json.Value.Str(x)))
-  }
-  if let Some(x) = input.auto_scaling {
-    fs.push(("AutoScaling", json_of_cluster_auto_scaling_config(x)))
-  }
-  if let Some(x) = input.orchestrator {
-    fs.push(("Orchestrator", json_of_cluster_orchestrator(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateCluster"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_cluster(resp: http.Response) -> UpdateClusterResponse ! Str {
-  var out = UpdateClusterResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ClusterArn" => out.cluster_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateCluster.
-pub enum UpdateClusterErr {
-  ConflictException(e: ConflictException)
-  ResourceLimitExceeded(e: ResourceLimitExceeded)
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateClusterErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_cluster_error(resp: http.Response) -> UpdateClusterErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateClusterErr.ConflictException(x)
-      Err(msg) => return UpdateClusterErr.Deserialize(msg)
-    }
-    "ResourceLimitExceeded" => match read_error_resource_limit_exceeded(resp, body) {
-      Ok(x) => return UpdateClusterErr.ResourceLimitExceeded(x)
-      Err(msg) => return UpdateClusterErr.Deserialize(msg)
-    }
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return UpdateClusterErr.ResourceNotFound(x)
-      Err(msg) => return UpdateClusterErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateClusterErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates a SageMaker HyperPod cluster.
-pub fn (c: Client) update_cluster(input: UpdateClusterRequest) -> UpdateClusterResponse ! UpdateClusterErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_cluster(c.params, input)) ?? e => return Err(UpdateClusterErr.InvalidInput(e))
-  var req = serialize_update_cluster(ep, input, "") ?? e => return Err(UpdateClusterErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateClusterErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_cluster_error(resp))
-  }
-  deserialize_update_cluster(resp) ?? e => Err(UpdateClusterErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_cluster_scheduler_config(base: EndpointParameters, input: UpdateClusterSchedulerConfigRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateClusterSchedulerConfig.
-pub fn serialize_update_cluster_scheduler_config(ep: rest.Endpoint, input: UpdateClusterSchedulerConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cluster_scheduler_config_id {
-    fs.push(("ClusterSchedulerConfigId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.target_version {
-    fs.push(("TargetVersion", json.Value.Int(x)))
-  }
-  if let Some(x) = input.scheduler_config {
-    fs.push(("SchedulerConfig", json_of_scheduler_config(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateClusterSchedulerConfig"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_cluster_scheduler_config(resp: http.Response) -> UpdateClusterSchedulerConfigResponse ! Str {
-  var out = UpdateClusterSchedulerConfigResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ClusterSchedulerConfigArn" => out.cluster_scheduler_config_arn = jsonv.read_str(fv)?
-      "ClusterSchedulerConfigVersion" => out.cluster_scheduler_config_version = jsonv.read_int(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateClusterSchedulerConfig.
-pub enum UpdateClusterSchedulerConfigErr {
-  ConflictException(e: ConflictException)
-  ResourceLimitExceeded(e: ResourceLimitExceeded)
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateClusterSchedulerConfigErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceLimitExceeded(x) => "ResourceLimitExceeded: ${x:?}"
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_cluster_scheduler_config_error(resp: http.Response) -> UpdateClusterSchedulerConfigErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateClusterSchedulerConfigErr.ConflictException(x)
-      Err(msg) => return UpdateClusterSchedulerConfigErr.Deserialize(msg)
-    }
-    "ResourceLimitExceeded" => match read_error_resource_limit_exceeded(resp, body) {
-      Ok(x) => return UpdateClusterSchedulerConfigErr.ResourceLimitExceeded(x)
-      Err(msg) => return UpdateClusterSchedulerConfigErr.Deserialize(msg)
-    }
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return UpdateClusterSchedulerConfigErr.ResourceNotFound(x)
-      Err(msg) => return UpdateClusterSchedulerConfigErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateClusterSchedulerConfigErr.Api(restjson.api_error(resp, body))
-}
-
-/// Update the cluster policy configuration.
-pub fn (c: Client) update_cluster_scheduler_config(input: UpdateClusterSchedulerConfigRequest) -> UpdateClusterSchedulerConfigResponse ! UpdateClusterSchedulerConfigErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_cluster_scheduler_config(c.params, input)) ?? e => return Err(UpdateClusterSchedulerConfigErr.InvalidInput(e))
-  var req = serialize_update_cluster_scheduler_config(ep, input, "") ?? e => return Err(UpdateClusterSchedulerConfigErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateClusterSchedulerConfigErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_cluster_scheduler_config_error(resp))
-  }
-  deserialize_update_cluster_scheduler_config(resp) ?? e => Err(UpdateClusterSchedulerConfigErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_cluster_software(base: EndpointParameters, input: UpdateClusterSoftwareRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateClusterSoftware.
-pub fn serialize_update_cluster_software(ep: rest.Endpoint, input: UpdateClusterSoftwareRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cluster_name {
-    fs.push(("ClusterName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.instance_groups {
-    fs.push(("InstanceGroups", json_of_update_cluster_software_instance_groups(x)))
-  }
-  if let Some(x) = input.deployment_config {
-    fs.push(("DeploymentConfig", json_of_deployment_configuration(x)))
-  }
-  if let Some(x) = input.image_id {
-    fs.push(("ImageId", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateClusterSoftware"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_cluster_software(resp: http.Response) -> UpdateClusterSoftwareResponse ! Str {
-  var out = UpdateClusterSoftwareResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ClusterArn" => out.cluster_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateClusterSoftware.
-pub enum UpdateClusterSoftwareErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFound(e: ResourceNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateClusterSoftwareErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFound(x) => "ResourceNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_cluster_software_error(resp: http.Response) -> UpdateClusterSoftwareErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateClusterSoftwareErr.ConflictException(x)
-      Err(msg) => return UpdateClusterSoftwareErr.Deserialize(msg)
-    }
-    "ResourceNotFound" => match read_error_resource_not_found(resp, body) {
-      Ok(x) => return UpdateClusterSoftwareErr.ResourceNotFound(x)
-      Err(msg) => return UpdateClusterSoftwareErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateClusterSoftwareErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the platform software of a SageMaker HyperPod cluster for
-/// security patching. To learn how to use this API, see Update the
-/// SageMaker HyperPod platform software of a cluster . The
-/// UpgradeClusterSoftware API call may impact your SageMaker HyperPod
-/// cluster uptime and availability. Plan accordingly to mitigate potential
-/// disruptions to your workloads.
-pub fn (c: Client) update_cluster_software(input: UpdateClusterSoftwareRequest) -> UpdateClusterSoftwareResponse ! UpdateClusterSoftwareErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_cluster_software(c.params, input)) ?? e => return Err(UpdateClusterSoftwareErr.InvalidInput(e))
-  var req = serialize_update_cluster_software(ep, input, "") ?? e => return Err(UpdateClusterSoftwareErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateClusterSoftwareErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_cluster_software_error(resp))
-  }
-  deserialize_update_cluster_software(resp) ?? e => Err(UpdateClusterSoftwareErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_code_repository(base: EndpointParameters, input: UpdateCodeRepositoryInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateCodeRepository.
-pub fn serialize_update_code_repository(ep: rest.Endpoint, input: UpdateCodeRepositoryInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.code_repository_name {
-    fs.push(("CodeRepositoryName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.git_config {
-    fs.push(("GitConfig", json_of_git_config_for_update(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateCodeRepository"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_code_repository(resp: http.Response) -> UpdateCodeRepositoryOutput ! Str {
-  var out = UpdateCodeRepositoryOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "CodeRepositoryArn" => out.code_repository_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateCodeRepository.
-pub enum UpdateCodeRepositoryErr {
-  ConflictException(e: ConflictException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateCodeRepositoryErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_code_repository_error(resp: http.Response) -> UpdateCodeRepositoryErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateCodeRepositoryErr.ConflictException(x)
-      Err(msg) => return UpdateCodeRepositoryErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateCodeRepositoryErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the specified Git repository with the specified values.
-pub fn (c: Client) update_code_repository(input: UpdateCodeRepositoryInput) -> UpdateCodeRepositoryOutput ! UpdateCodeRepositoryErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_code_repository(c.params, input)) ?? e => return Err(UpdateCodeRepositoryErr.InvalidInput(e))
-  var req = serialize_update_code_repository(ep, input, "") ?? e => return Err(UpdateCodeRepositoryErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateCodeRepositoryErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_code_repository_error(resp))
-  }
-  deserialize_update_code_repository(resp) ?? e => Err(UpdateCodeRepositoryErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_compute_quota(base: EndpointParameters, input: UpdateComputeQuotaRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateComputeQuota.
-pub fn serialize_update_compute_quota(ep: rest.Endpoint, input: UpdateComputeQuotaRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.compute_quota_id {
-    fs.push(("ComputeQuotaId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.target_version {
-    fs.push(("TargetVersion", json.Value.Int(x)))
-  }
-  if let Some(x) = input.compute_quota_config {
-    fs.push(("ComputeQuotaConfig", json_of_compute_quota_config(x)))
-  }
-  if let Some(x) = input.compute_quota_target {
-    fs.push(("ComputeQuotaTarget", json_of_compute_quota_target(x)))
-  }
-  if let Some(x) = input.activation_state {
-    fs.push(("ActivationState", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "SageMaker.UpdateComputeQuota"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

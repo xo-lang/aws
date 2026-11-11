@@ -210,6 +210,13 @@ pub struct AmazonRedshiftTarget {
   pub inputs: List[Str]? = None
 }
 
+/// The type of upgrade analysis. For auto-upgrade jobs, this value is
+/// AUTO_UPGRADE .
+pub enum AnalysisType: Str {
+  AutoUpgrade = "AUTO_UPGRADE"
+  Unknown(value: Str)
+}
+
 /// A failed annotation.
 pub struct AnnotationError {
   /// The Profile ID for the failed annotation.
@@ -404,6 +411,33 @@ pub struct AutoDataQuality {
   /// The evaluation context for the automatic data quality checks. This
   /// defines the scope and parameters for the data quality evaluation.
   pub evaluation_context: Str? = None
+}
+
+/// The auto-upgrade assessment information for a job configured with
+/// glueVersion=auto.
+pub struct AutoUpgradeMetadata {
+  /// The target Glue runtime version the job is being upgraded to.
+  pub target_version: Str? = None
+  /// The source Glue runtime version the job was running before auto-version
+  /// was enabled.
+  pub source_version: Str? = None
+  /// The current auto-upgrade lifecycle status (OBSERVING, UPGRADING,
+  /// UPGRADE_SUCCEEDED, UPGRADE_FAILED, STOPPED, WAITING_FOR_CONSENT).
+  pub status: AutoUpgradeStatus? = None
+  /// The unique identifier of the auto-upgrade assessment analysis.
+  pub analysis_id: Str? = None
+}
+
+/// The current phase of the auto-upgrade lifecycle for a job configured
+/// with GlueVersion=auto .
+pub enum AutoUpgradeStatus: Str {
+  Observing = "OBSERVING"
+  Upgrading = "UPGRADING"
+  UpgradeSucceeded = "UPGRADE_SUCCEEDED"
+  UpgradeFailed = "UPGRADE_FAILED"
+  Stopped = "STOPPED"
+  WaitingForConsent = "WAITING_FOR_CONSENT"
+  Unknown(value: Str)
 }
 
 /// A list of errors that can occur when registering partition indexes for
@@ -3025,6 +3059,86 @@ pub struct CreateCustomEntityTypeResponse {
   pub name: Str? = None
 }
 
+pub struct CreateDataQualityEvaluationConfigRequest {
+  /// A name for the data quality evaluation configuration. The name must be
+  /// unique within your account.
+  pub name: Str? = None
+  /// The Glue Data Catalog hierarchical level that the configuration applies
+  /// to. Valid values are CATALOG , DATABASE , and TABLE .
+  pub level: DataQualityEvaluationConfigLevel? = None
+  /// The catalog, database, or table that the configuration applies to, as
+  /// specified by Level .
+  pub data_source: DataQualityEvaluationConfigDataSource? = None
+  /// The name of a Data Quality Definition Language (DQDL) ruleset,
+  /// containing analyzers, rules, or both, to evaluate tables with. You
+  /// create the ruleset using the CreateDataQualityRuleset API. Specify
+  /// either RulesetName or ManagedRulesetName , not both.
+  pub ruleset_name: Str? = None
+  /// A built-in ruleset that profiles each table, used when RulesetName is
+  /// not set. The default is SIMPLE . Choose from the following built-in
+  /// rulesets: SIMPLE Row count and column count, completeness, minimum, and
+  /// maximum for every column, mean, sum, and standard deviation for numeric
+  /// columns, and column length for string columns. ADVANCED Every statistic
+  /// in SIMPLE , plus distribution, uniqueness, and distinct values count.
+  pub managed_ruleset_name: DataQualityEvaluationConfigManagedRuleset? = None
+  /// When the configuration evaluates tables. You can choose one or more
+  /// triggers, and each table is evaluated at most once an hour. The default
+  /// is ONCE . Choose from the following triggers: ONCE Evaluates each table
+  /// one time, including when tables are added to a database or catalog.
+  /// SCHEDULE Evaluates each table on the cron or rate expression in
+  /// ScheduleExpression , between the optional StartAt and EndAt times.
+  /// METADATA_CHANGE Evaluates a table whenever its Glue Data Catalog
+  /// metadata changes, such as a schema change or an Apache Iceberg commit.
+  pub triggers: List[DataQualityEvaluationConfigTrigger]? = None
+  /// A cron or rate expression, in UTC, for the SCHEDULE trigger, for example
+  /// cron(0 6 * * ? *) . The schedule can run at most once an hour.
+  pub schedule_expression: Str? = None
+  /// The time from which the schedule runs, inclusive.
+  pub start_at: Time? = None
+  /// The time at which the schedule stops running, exclusive.
+  pub end_at: Time? = None
+  /// The IAM role that evaluations assume. You can specify the role name or
+  /// the role Amazon Resource Name (ARN). The role must allow the
+  /// glue.amazonaws.com service principal to assume it, and needs permissions
+  /// to read the catalog ( glue:GetCatalog , glue:GetDatabase , glue:GetTable
+  /// , glue:SearchTables , and glue:GetPartitions ), read and create rulesets
+  /// ( glue:GetDataQualityRuleset and glue:CreateDataQualityRuleset ), start
+  /// evaluations ( glue:StartDataQualityRulesetEvaluationRun ,
+  /// glue:PublishDataQuality , and iam:PassRole on the role itself), read the
+  /// tables' data in Amazon S3, and write logs to Amazon CloudWatch Logs. If
+  /// a catalog-level or database-level configuration applies to an Amazon S3
+  /// Tables catalog, the role also needs s3tables:ListTableBuckets and
+  /// s3tables:ListTables . If you use Lake Formation, the role needs the
+  /// DESCRIBE permission on the tables.
+  pub role: Str? = None
+  /// The number of G.1X workers to be used in the run. The default is 5.
+  pub number_of_workers: Int? = None
+  /// The timeout for a run in minutes. This is the maximum time that a run
+  /// can consume resources before it is terminated and enters TIMEOUT status.
+  /// The default is 2,880 minutes (48 hours).
+  pub timeout: Int? = None
+  /// Additional run options you can specify for an evaluation run.
+  pub additional_run_options: DataQualityEvaluationConfigAdditionalRunOptions? = None
+  /// A map of reference strings to additional data sources you can specify
+  /// for an evaluation run.
+  pub additional_data_sources: Map[Str, DataSource]? = None
+  /// A list of tags applied to the data quality evaluation configuration.
+  pub tags: Map[Str, Str]? = None
+  /// A unique, case-sensitive identifier that you provide to ensure the
+  /// operation completes no more than one time. If this token matches a
+  /// previous request, the service ignores the request, but does not return
+  /// an error.
+  pub client_token: Str? = None
+}
+
+pub struct CreateDataQualityEvaluationConfigResponse {
+  /// The name of the data quality evaluation configuration.
+  pub name: Str? = None
+  /// The evaluation run mode of the configuration's results, which is
+  /// EVALUATION_CONFIG .
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+}
+
 /// A request to create a data quality ruleset.
 pub struct CreateDataQualityRulesetRequest {
   /// A unique name for the data quality ruleset.
@@ -4466,6 +4580,136 @@ pub enum DataQualityEngine: Str {
   Unknown(value: Str)
 }
 
+/// Additional run options for each evaluation of a data quality evaluation
+/// configuration.
+pub struct DataQualityEvaluationConfigAdditionalRunOptions {
+  /// Specifies whether to enable CloudWatch metrics.
+  pub cloud_watch_metrics_enabled: Bool? = None
+  /// Prefix for Amazon S3 to store results.
+  pub results_s3_prefix: Str? = None
+  /// Set the evaluation method for composite rules in the ruleset to
+  /// ROW/COLUMN
+  pub composite_rule_evaluation_method: DQCompositeRuleEvaluationMethod? = None
+  /// The configuration for writing row-level evaluation results to a Glue
+  /// Data Catalog table.
+  pub row_level_results: RowLevelResultsOptions? = None
+  /// The configuration for writing profiling results to a Glue Data Catalog
+  /// table.
+  pub profiling_results: ProfilingResultsOptions? = None
+  /// The scope of the observation for the evaluation run. Specifies whether
+  /// anomaly detection is enabled or disabled.
+  pub observation_scope: ObservationConfiguration? = None
+  /// The observation mode for the evaluation run. Specifies how anomaly
+  /// detection bounds are calculated.
+  pub observation_mode: ObservationMode? = None
+  /// The configuration for writing rule results to a Glue Data Catalog table.
+  pub data_quality_rule_results: DataQualityRuleResultsOptions? = None
+  /// The configuration for writing observation results to a Glue Data Catalog
+  /// table.
+  pub observation_results: ObservationResultsOptions? = None
+  /// A custom prefix for the CloudWatch log group names. When specified,
+  /// evaluation run logs are written to /error and /output instead of the
+  /// default /aws-glue/data-quality/error and /aws-glue/data-quality/output
+  /// log groups.
+  pub custom_log_group_prefix: Str? = None
+}
+
+/// The data source that a data quality evaluation configuration applies to.
+pub struct DataQualityEvaluationConfigDataSource {
+  /// The Glue Data Catalog tables that the configuration applies to.
+  pub glue_tables: DataQualityEvaluationConfigGlueTables? = None
+}
+
+/// Identifies the Glue Data Catalog tables that a data quality evaluation
+/// configuration applies to.
+pub struct DataQualityEvaluationConfigGlueTables {
+  /// A unique identifier for the Glue Data Catalog.
+  pub catalog_id: Str? = None
+  /// A database name in the Glue Data Catalog.
+  pub database_name: Str? = None
+  /// For the CATALOG and DATABASE levels, a glob pattern, such as orders_* ,
+  /// that selects tables. If you don't specify a pattern, every table at the
+  /// level is in scope. For the TABLE level, the name of the table.
+  pub table_name_pattern: Str? = None
+  /// SQL Query of SparkSQL format that can be used to pre-process the data
+  /// for the table in Glue Data Catalog, before running the Data Quality
+  /// Operation. For the CATALOG and DATABASE levels, use the
+  /// {{DATABASE_NAME}} and {{TABLE_NAME}} placeholders, which are filled in
+  /// for each table.
+  pub pre_processing_query: Str? = None
+  /// The name of the connection to the Glue Data Catalog.
+  pub connection_name: Str? = None
+  /// Options for reading the table. The following keys are supported:
+  /// pushDownPredicate : to filter on partitions without having to list and
+  /// read all the files in your dataset. catalogPartitionPredicate : to use
+  /// server-side partition pruning using partition indexes in the Glue Data
+  /// Catalog.
+  pub additional_options: Map[Str, Str]? = None
+}
+
+pub enum DataQualityEvaluationConfigLevel: Str {
+  Catalog = "CATALOG"
+  Database = "DATABASE"
+  Table = "TABLE"
+  Unknown(value: Str)
+}
+
+/// The data source that a data quality evaluation configuration applies to.
+pub struct DataQualityEvaluationConfigListDataSource {
+  /// The Glue Data Catalog tables that the configuration applies to.
+  pub glue_tables: DataQualityEvaluationConfigListGlueTables? = None
+}
+
+/// Describes a data quality evaluation configuration.
+pub struct DataQualityEvaluationConfigListDetails {
+  /// The name of the data quality evaluation configuration.
+  pub name: Str? = None
+  /// The evaluation run mode of the configuration's results, which is
+  /// EVALUATION_CONFIG .
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The time when the configuration was created.
+  pub created_on: Time? = None
+  /// The time when the configuration was last modified.
+  pub last_modified_on: Time? = None
+  /// The Glue Data Catalog hierarchical level that the configuration applies
+  /// to.
+  pub level: DataQualityEvaluationConfigLevel? = None
+  /// The catalog, database, or table that the configuration applies to.
+  pub data_source: DataQualityEvaluationConfigListDataSource? = None
+  /// The name of the data quality ruleset that tables are evaluated with.
+  pub ruleset_name: Str? = None
+  /// The built-in ruleset that tables are evaluated with.
+  pub managed_ruleset_name: DataQualityEvaluationConfigManagedRuleset? = None
+  /// Specifies whether evaluations are paused.
+  pub pause_runs: Bool? = None
+}
+
+/// Identifies the Glue Data Catalog tables that a data quality evaluation
+/// configuration applies to.
+pub struct DataQualityEvaluationConfigListGlueTables {
+  /// A unique identifier for the Glue Data Catalog.
+  pub catalog_id: Str? = None
+  /// A database name in the Glue Data Catalog.
+  pub database_name: Str? = None
+  /// For the CATALOG and DATABASE levels, a glob pattern, such as orders_* ,
+  /// that selects tables. If you don't specify a pattern, every table at the
+  /// level is in scope. For the TABLE level, the name of the table.
+  pub table_name_pattern: Str? = None
+}
+
+pub enum DataQualityEvaluationConfigManagedRuleset: Str {
+  Simple = "SIMPLE"
+  Advanced = "ADVANCED"
+  Unknown(value: Str)
+}
+
+pub enum DataQualityEvaluationConfigTrigger: Str {
+  Once = "ONCE"
+  Schedule = "SCHEDULE"
+  MetadataChange = "METADATA_CHANGE"
+  Unknown(value: Str)
+}
+
 /// Additional run options you can specify for an evaluation run.
 pub struct DataQualityEvaluationRunAdditionalRunOptions {
   /// Whether or not to enable CloudWatch metrics.
@@ -4497,6 +4741,12 @@ pub struct DataQualityEvaluationRunAdditionalRunOptions {
   /// The configuration for writing observation results to a Glue Data Catalog
   /// table.
   pub observation_results: ObservationResultsOptions? = None
+}
+
+pub enum DataQualityEvaluationRunMode: Str {
+  OnDemand = "ON_DEMAND"
+  EvaluationConfig = "EVALUATION_CONFIG"
+  Unknown(value: Str)
 }
 
 /// The database and table in the Glue Data Catalog that is used for input
@@ -4559,6 +4809,15 @@ pub struct DataQualityObservation {
 pub struct DataQualityResult {
   /// A unique result ID for the data quality result.
   pub result_id: Str? = None
+  /// How the evaluation run that produced the result started: ON_DEMAND for a
+  /// run started by StartDataQualityRulesetEvaluationRun , or
+  /// EVALUATION_CONFIG for a run started by a data quality evaluation
+  /// configuration. Not returned for results that no evaluation run produced,
+  /// such as results from any ETL job.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The name of the data quality evaluation configuration that started the
+  /// evaluation run, returned when EvaluationRunMode is EVALUATION_CONFIG .
+  pub data_quality_evaluation_config: Str? = None
   /// The Profile ID for the data quality result.
   pub profile_id: Str? = None
   /// An aggregate data quality score. Represents the ratio of rules that
@@ -4604,6 +4863,15 @@ pub struct DataQualityResult {
 pub struct DataQualityResultDescription {
   /// The unique result ID for this data quality result.
   pub result_id: Str? = None
+  /// How the evaluation run that produced the result started: ON_DEMAND for a
+  /// run started by StartDataQualityRulesetEvaluationRun , or
+  /// EVALUATION_CONFIG for a run started by a data quality evaluation
+  /// configuration. Not returned for results that no evaluation run produced,
+  /// such as results from any ETL job.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The name of the data quality evaluation configuration that started the
+  /// evaluation run, returned when EvaluationRunMode is EVALUATION_CONFIG .
+  pub data_quality_evaluation_config: Str? = None
   /// The table name associated with the data quality result.
   pub data_source: DataSource? = None
   /// The job name associated with the data quality result.
@@ -4627,6 +4895,13 @@ pub struct DataQualityResultFilterCriteria {
   pub started_after: Time? = None
   /// Filter results by runs that started before this time.
   pub started_before: Time? = None
+  /// Filter results by how their evaluation run started: ON_DEMAND or
+  /// EVALUATION_CONFIG . Results that no evaluation run produced match
+  /// neither value.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// Filter results by the evaluation configuration name which started the
+  /// evaluation run.
+  pub data_quality_evaluation_config: Str? = None
 }
 
 /// Describes a data quality result returned by BatchGetDataQualityResultV2
@@ -4634,6 +4909,15 @@ pub struct DataQualityResultFilterCriteria {
 pub struct DataQualityResultV2Item {
   /// A unique result ID for the data quality result.
   pub result_id: Str? = None
+  /// How the evaluation run that produced the result started: ON_DEMAND for a
+  /// run started by StartDataQualityRulesetEvaluationRun , or
+  /// EVALUATION_CONFIG for a run started by a data quality evaluation
+  /// configuration. Not returned for results that no evaluation run produced,
+  /// such as results from any ETL job.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The name of the data quality evaluation configuration that started the
+  /// evaluation run, returned when EvaluationRunMode is EVALUATION_CONFIG .
+  pub data_quality_evaluation_config: Str? = None
   /// The table associated with the data quality result, if any.
   pub data_source: DataSource? = None
   /// A map of platform-specific identifiers, such as cluster, application,
@@ -4681,6 +4965,15 @@ pub struct DataQualityResultV2Item {
 pub struct DataQualityResultsV2Description {
   /// The unique result ID for this data quality result.
   pub result_id: Str? = None
+  /// How the evaluation run that produced the result started: ON_DEMAND for a
+  /// run started by StartDataQualityRulesetEvaluationRun , or
+  /// EVALUATION_CONFIG for a run started by a data quality evaluation
+  /// configuration. Not returned for results that no evaluation run produced,
+  /// such as results from any ETL job.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The name of the data quality evaluation configuration that started the
+  /// evaluation run, returned when EvaluationRunMode is EVALUATION_CONFIG .
+  pub data_quality_evaluation_config: Str? = None
   /// The table associated with the data quality result, if any.
   pub data_source: DataSource? = None
   /// The date and time when this data quality result was published.
@@ -4717,6 +5010,13 @@ pub struct DataQualityResultsV2FilterCriteria {
   pub dimensions: Map[Str, Str]? = None
   /// The evaluation context to filter results by.
   pub evaluation_context: Str? = None
+  /// Filter results by how their evaluation run started: ON_DEMAND or
+  /// EVALUATION_CONFIG . Results that no evaluation run produced match
+  /// neither value.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// Filter results by the evaluation configuration name which started the
+  /// evaluation run.
+  pub data_quality_evaluation_config: Str? = None
 }
 
 /// Additional run options you can specify for a recommendation run.
@@ -5190,6 +5490,14 @@ pub struct DeleteCustomEntityTypeRequest {
 pub struct DeleteCustomEntityTypeResponse {
   /// The name of the custom pattern you deleted.
   pub name: Str? = None
+}
+
+pub struct DeleteDataQualityEvaluationConfigRequest {
+  /// The name of the data quality evaluation configuration to delete.
+  pub name: Str? = None
+}
+
+pub struct DeleteDataQualityEvaluationConfigResponse {
 }
 
 pub struct DeleteDataQualityRulesetRequest {
@@ -7118,6 +7426,60 @@ pub struct GetDataCatalogExportConfigurationOutput {
   pub updated_at: Time? = None
 }
 
+pub struct GetDataQualityEvaluationConfigRequest {
+  /// The name of the data quality evaluation configuration.
+  pub name: Str? = None
+}
+
+pub struct GetDataQualityEvaluationConfigResponse {
+  /// The name of the data quality evaluation configuration.
+  pub name: Str? = None
+  /// The evaluation run mode of the configuration's results, which is
+  /// EVALUATION_CONFIG .
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The time when the configuration was created.
+  pub created_on: Time? = None
+  /// The time when the configuration was last modified.
+  pub last_modified_on: Time? = None
+  /// The Glue Data Catalog hierarchical level that the configuration applies
+  /// to.
+  pub level: DataQualityEvaluationConfigLevel? = None
+  /// The catalog, database, or table that the configuration applies to.
+  pub data_source: DataQualityEvaluationConfigDataSource? = None
+  /// The name of the data quality ruleset that tables are evaluated with.
+  pub ruleset_name: Str? = None
+  /// The built-in ruleset that tables are evaluated with.
+  pub managed_ruleset_name: DataQualityEvaluationConfigManagedRuleset? = None
+  /// When the configuration evaluates tables: ONCE Each table is evaluated
+  /// one time, including when tables are added to a database or catalog.
+  /// SCHEDULE Each table is evaluated on the cron or rate expression in
+  /// ScheduleExpression . METADATA_CHANGE A table is evaluated whenever its
+  /// Glue Data Catalog metadata changes.
+  pub triggers: List[DataQualityEvaluationConfigTrigger]? = None
+  /// The cron or rate expression, in UTC, for the SCHEDULE trigger.
+  pub schedule_expression: Str? = None
+  /// The time from which the schedule runs, inclusive.
+  pub start_at: Time? = None
+  /// The time at which the schedule stops running, exclusive.
+  pub end_at: Time? = None
+  /// Specifies whether evaluations are paused.
+  pub pause_runs: Bool? = None
+  /// The Amazon Resource Name (ARN) of the IAM role that evaluation runs
+  /// assume.
+  pub role: Str? = None
+  /// The number of G.1X workers to be used in the run. The default is 5.
+  pub number_of_workers: Int? = None
+  /// The timeout for a run in minutes. This is the maximum time that a run
+  /// can consume resources before it is terminated and enters TIMEOUT status.
+  /// The default is 2,880 minutes (48 hours).
+  pub timeout: Int? = None
+  /// Additional run options you can specify for an evaluation run.
+  pub additional_run_options: DataQualityEvaluationConfigAdditionalRunOptions? = None
+  /// A map of reference strings to additional data sources you can specify
+  /// for an evaluation run.
+  pub additional_data_sources: Map[Str, DataSource]? = None
+}
+
 pub struct GetDataQualityModelRequest {
   /// The Statistic ID.
   pub statistic_id: Str? = None
@@ -7159,6 +7521,15 @@ pub struct GetDataQualityResultRequest {
 pub struct GetDataQualityResultResponse {
   /// A unique result ID for the data quality result.
   pub result_id: Str? = None
+  /// How the evaluation run that produced the result started: ON_DEMAND for a
+  /// run started by StartDataQualityRulesetEvaluationRun , or
+  /// EVALUATION_CONFIG for a run started by a data quality evaluation
+  /// configuration. Not returned for results that no evaluation run produced,
+  /// such as results from any ETL job.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The name of the data quality evaluation configuration that started the
+  /// evaluation run, returned when EvaluationRunMode is EVALUATION_CONFIG .
+  pub data_quality_evaluation_config: Str? = None
   /// The Profile ID for the data quality result.
   pub profile_id: Str? = None
   /// An aggregate data quality score. Represents the ratio of rules that
@@ -7208,6 +7579,15 @@ pub struct GetDataQualityResultV2Request {
 pub struct GetDataQualityResultV2Response {
   /// A unique result ID for the data quality result.
   pub result_id: Str? = None
+  /// How the evaluation run that produced the result started: ON_DEMAND for a
+  /// run started by StartDataQualityRulesetEvaluationRun , or
+  /// EVALUATION_CONFIG for a run started by a data quality evaluation
+  /// configuration. Not returned for results that no evaluation run produced,
+  /// such as results from any ETL job.
+  pub evaluation_run_mode: DataQualityEvaluationRunMode? = None
+  /// The name of the data quality evaluation configuration that started the
+  /// evaluation run, returned when EvaluationRunMode is EVALUATION_CONFIG .
+  pub data_quality_evaluation_config: Str? = None
   /// The table associated with the data quality result, if any.
   pub data_source: DataSource? = None
   /// The Profile ID for the data quality result.
@@ -7651,6 +8031,39 @@ pub struct GetJobRunsResponse {
   pub job_runs: List[JobRun]? = None
   /// A continuation token, if not all requested job runs have been returned.
   pub next_token: Str? = None
+}
+
+pub struct GetJobUpgradeAnalysisRequest {
+  /// The unique identifier of the upgrade analysis to retrieve.
+  pub analysis_id: Str? = None
+  /// The name of the job associated with the analysis.
+  pub job_name: Str? = None
+}
+
+pub struct GetJobUpgradeAnalysisResponse {
+  /// The name of the job associated with this analysis.
+  pub job_name: Str? = None
+  /// The unique identifier of the upgrade analysis.
+  pub analysis_id: Str? = None
+  /// The current status of the analysis.
+  pub status: Status? = None
+  /// The Glue version the job was running before the upgrade, for example 4.0
+  /// .
+  pub source_version: Str? = None
+  /// The Glue version the job will be upgraded to, for example 6.0 .
+  pub target_version: Str? = None
+  /// The type of upgrade analysis. For auto-upgrade jobs, this value is
+  /// AUTO_UPGRADE .
+  pub analysis_type: AnalysisType? = None
+  /// The Amazon S3 URI of the terminal-state evaluation summary, available
+  /// once the analysis reaches a terminal status ( SUCCEEDED or FAILED ).
+  pub auto_upgrade_evaluation_summary: Str? = None
+  /// The reason the analysis did not complete.
+  pub error_message: Str? = None
+  /// The Amazon S3 URI of the consent report summarizing upgrade assessment
+  /// findings. Populated when the analysis reaches WAITING_FOR_CONSENT and
+  /// remains available in all subsequent states.
+  pub auto_upgrade_eligibility_summary: Str? = None
 }
 
 pub struct GetJobsRequest {
@@ -8814,6 +9227,12 @@ pub struct GlueTable {
   /// to use server-side partition pruning using partition indexes in the Glue
   /// Data Catalog.
   pub additional_options: Map[Str, Str]? = None
+}
+
+pub enum GovernanceMode: Str {
+  IamOnly = "IAM_ONLY"
+  LakeFormation = "LAKE_FORMATION"
+  Unknown(value: Str)
 }
 
 /// Specifies the data store in the governed Glue Data Catalog.
@@ -10024,6 +10443,10 @@ pub struct Job {
   pub maintenance_window: Str? = None
   /// The name of an Glue usage profile associated with the job.
   pub profile_name: Str? = None
+  /// The auto-upgrade assessment information for a job configured with
+  /// glueVersion=auto. This field is null when the job is not configured to
+  /// auto.
+  pub auto_upgrade_metadata: AutoUpgradeMetadata? = None
 }
 
 /// Defines a point that a job can resume processing.
@@ -10313,292 +10736,4 @@ pub struct JobRun {
   /// the scope of the job, without requiring the creation of additional IAM
   /// roles.
   pub execution_role_session_policy: Str? = None
-}
-
-pub enum JobRunState: Str {
-  Starting = "STARTING"
-  Running = "RUNNING"
-  Stopping = "STOPPING"
-  Stopped = "STOPPED"
-  Succeeded = "SUCCEEDED"
-  Failed = "FAILED"
-  Timeout = "TIMEOUT"
-  Error = "ERROR"
-  Waiting = "WAITING"
-  Expired = "EXPIRED"
-  Unknown(value: Str)
-}
-
-/// Specifies information used to update an existing job definition. The
-/// previous job definition is completely overwritten by this information.
-pub struct JobUpdate {
-  /// A mode that describes how a job was created. Valid values are: SCRIPT -
-  /// The job was created using the Glue Studio script editor. VISUAL - The
-  /// job was created using the Glue Studio visual editor. NOTEBOOK - The job
-  /// was created using an interactive sessions notebook. When the JobMode
-  /// field is missing or null, SCRIPT is assigned as the default value.
-  pub job_mode: JobMode? = None
-  /// Specifies whether job run queuing is enabled for the job runs for this
-  /// job. A value of true means job run queuing is enabled for the job runs.
-  /// If false or not populated, the job runs will not be considered for
-  /// queueing. If this field does not match the value set in the job run,
-  /// then the value from the job run field will be used.
-  pub job_run_queuing_enabled: Bool? = None
-  /// Description of the job being defined.
-  pub description: Str? = None
-  /// This field is reserved for future use.
-  pub log_uri: Str? = None
-  /// The name or Amazon Resource Name (ARN) of the IAM role associated with
-  /// this job (required).
-  pub role: Str? = None
-  /// An ExecutionProperty specifying the maximum number of concurrent runs
-  /// allowed for this job.
-  pub execution_property: ExecutionProperty? = None
-  /// The JobCommand that runs this job (required).
-  pub command: JobCommand? = None
-  /// The default arguments for every run of this job, specified as name-value
-  /// pairs. You can specify arguments here that your own job-execution script
-  /// consumes, as well as arguments that Glue itself consumes. Job arguments
-  /// may be logged. Do not pass plaintext secrets as arguments. Retrieve
-  /// secrets from a Glue Connection, Secrets Manager or other secret
-  /// management mechanism if you intend to keep them within the Job. For
-  /// information about how to specify and consume your own Job arguments, see
-  /// the Calling Glue APIs in Python topic in the developer guide. For
-  /// information about the arguments you can provide to this field when
-  /// configuring Spark jobs, see the Special Parameters Used by Glue topic in
-  /// the developer guide. For information about the arguments you can provide
-  /// to this field when configuring Ray jobs, see Using job parameters in Ray
-  /// jobs in the developer guide.
-  pub default_arguments: Map[Str, Str]? = None
-  /// Arguments for this job that are not overridden when providing job
-  /// arguments in a job run, specified as name-value pairs.
-  pub non_overridable_arguments: Map[Str, Str]? = None
-  /// The connections used for this job.
-  pub connections: ConnectionsList? = None
-  /// The maximum number of times to retry this job if it fails.
-  pub max_retries: Int? = None
-  /// This field is deprecated. Use MaxCapacity instead. The number of Glue
-  /// data processing units (DPUs) to allocate to this job. You can allocate a
-  /// minimum of 2 DPUs; the default is 10. A DPU is a relative measure of
-  /// processing power that consists of 4 vCPUs of compute capacity and 16 GB
-  /// of memory. For more information, see the Glue pricing page .
-  pub allocated_capacity: Int? = None
-  /// The job timeout in minutes. This is the maximum time that a job run can
-  /// consume resources before it is terminated and enters TIMEOUT status.
-  /// Jobs must have timeout values less than 7 days or 10080 minutes.
-  /// Otherwise, the jobs will throw an exception. When the value is left
-  /// blank, the timeout is defaulted to 2,880 minutes for Glue version 4.0
-  /// and earlier, or 480 minutes for Glue version 5.0 and later. Any existing
-  /// Glue jobs that had a timeout value greater than 7 days will be defaulted
-  /// to 7 days. For instance if you have specified a timeout of 20 days for a
-  /// batch job, it will be stopped on the 7th day. For streaming jobs, if you
-  /// have set up a maintenance window, it will be restarted during the
-  /// maintenance window after 7 days.
-  pub timeout: Int? = None
-  /// For Glue version 1.0 or earlier jobs, using the standard worker type,
-  /// the number of Glue data processing units (DPUs) that can be allocated
-  /// when this job runs. A DPU is a relative measure of processing power that
-  /// consists of 4 vCPUs of compute capacity and 16 GB of memory. For more
-  /// information, see the Glue pricing page . For Glue version 2.0+ jobs, you
-  /// cannot specify a Maximum capacity . Instead, you should specify a Worker
-  /// type and the Number of workers . Do not set MaxCapacity if using
-  /// WorkerType and NumberOfWorkers . The value that can be allocated for
-  /// MaxCapacity depends on whether you are running a Python shell job, an
-  /// Apache Spark ETL job, or an Apache Spark streaming ETL job: When you
-  /// specify a Python shell job ( JobCommand.Name ="pythonshell"), you can
-  /// allocate either 0.0625 or 1 DPU. The default is 0.0625 DPU. When you
-  /// specify an Apache Spark ETL job ( JobCommand.Name ="glueetl") or Apache
-  /// Spark streaming ETL job ( JobCommand.Name ="gluestreaming"), you can
-  /// allocate from 2 to 100 DPUs. The default is 10 DPUs. This job type
-  /// cannot have a fractional DPU allocation.
-  pub max_capacity: Float? = None
-  /// The type of predefined worker that is allocated when a job runs. Accepts
-  /// a value of G.025X, G.1X, G.2X, G.4X, G.8X, G.12X, G.16X, R.1X, R.2X,
-  /// R.4X, or R.8X for Spark jobs. Accepts the value Z.2X for Ray jobs. For
-  /// more information, see Defining job properties for Spark jobs The G.12X ,
-  /// G.16X , and R.1X through R.8X worker types are available only for Glue
-  /// version 4.0 or later Spark ETL jobs in select Amazon Web Services
-  /// Regions. For the supported Regions, see Configuring job properties for
-  /// Spark jobs in the developer guide.
-  pub worker_type: WorkerType? = None
-  /// The number of workers of a defined workerType that are allocated when a
-  /// job runs.
-  pub number_of_workers: Int? = None
-  /// The name of the SecurityConfiguration structure to be used with this
-  /// job.
-  pub security_configuration: Str? = None
-  /// Specifies the configuration properties of a job notification.
-  pub notification_property: NotificationProperty? = None
-  /// In Spark jobs, GlueVersion determines the versions of Apache Spark and
-  /// Python that Glue available in a job. The Python version indicates the
-  /// version supported for jobs of type Spark. Ray jobs should set
-  /// GlueVersion to 4.0 or greater. However, the versions of Ray, Python and
-  /// additional libraries available in your Ray job are determined by the
-  /// Runtime parameter of the Job command. For more information about the
-  /// available Glue versions and corresponding Spark and Python versions, see
-  /// Glue version in the developer guide. If not provided in the update
-  /// request, the Glue version retains the value from the existing job
-  /// definition.
-  pub glue_version: Str? = None
-  /// The representation of a directed acyclic graph on which both the Glue
-  /// Studio visual component and Glue Studio code generation is based.
-  pub code_gen_configuration_nodes: Map[Str, CodeGenConfigurationNode]? = None
-  /// Indicates whether the job is run with a standard or flexible execution
-  /// class. The standard execution-class is ideal for time-sensitive
-  /// workloads that require fast job startup and dedicated resources. The
-  /// flexible execution class is appropriate for time-insensitive jobs whose
-  /// start and completion times may vary. Only jobs with Glue version 3.0 and
-  /// above and command type glueetl will be allowed to set ExecutionClass to
-  /// FLEX . The flexible execution class is available for Spark jobs.
-  pub execution_class: ExecutionClass? = None
-  /// The details for a source control configuration for a job, allowing
-  /// synchronization of job artifacts to or from a remote repository.
-  pub source_control_details: SourceControlDetails? = None
-  /// This field specifies a day of the week and hour for a maintenance window
-  /// for streaming jobs. Glue periodically performs maintenance activities.
-  /// During these maintenance windows, Glue will need to restart your
-  /// streaming jobs. Glue will restart the job within 3 hours of the
-  /// specified maintenance window. For instance, if you set up the
-  /// maintenance window for Monday at 10:00AM GMT, your jobs will be
-  /// restarted between 10:00AM GMT to 1:00PM GMT.
-  pub maintenance_window: Str? = None
-}
-
-/// Specifies a transform that joins two datasets into one dataset using a
-/// comparison phrase on the specified data property keys. You can use
-/// inner, outer, left, right, left semi, and left anti joins.
-pub struct Join {
-  /// The name of the transform node.
-  pub name: Str? = None
-  /// The data inputs identified by their node names.
-  pub inputs: List[Str]? = None
-  /// Specifies the type of join to be performed on the datasets.
-  pub join_type: JoinType? = None
-  /// A list of the two columns to be joined.
-  pub columns: List[JoinColumn]? = None
-}
-
-/// Specifies a column to be joined.
-pub struct JoinColumn {
-  /// The column to be joined.
-  pub from_value: Str? = None
-  /// The key of the column to be joined.
-  pub keys: List[List[Str]]? = None
-}
-
-pub enum JoinType: Str {
-  Equijoin = "equijoin"
-  Left = "left"
-  Right = "right"
-  Outer = "outer"
-  LeftSemi = "leftsemi"
-  LeftAnti = "leftanti"
-  Unknown(value: Str)
-}
-
-/// A classifier for JSON content.
-pub struct JsonClassifier {
-  /// The name of the classifier.
-  pub name: Str? = None
-  /// The time that this classifier was registered.
-  pub creation_time: Time? = None
-  /// The time that this classifier was last updated.
-  pub last_updated: Time? = None
-  /// The version of this classifier.
-  pub version: Int? = None
-  /// A JsonPath string defining the JSON data for the classifier to classify.
-  /// Glue supports a subset of JsonPath, as described in Writing JsonPath
-  /// Custom Classifiers .
-  pub json_path: Str? = None
-}
-
-/// The KMS key specified is not accessible.
-pub struct KMSKeyNotAccessibleFault {
-  /// A message describing the problem.
-  pub message: Str? = None
-}
-
-/// Additional options for streaming.
-pub struct KafkaStreamingSourceOptions {
-  /// A list of bootstrap server URLs, for example, as
-  /// b-1.vpc-test-2.o4q88o.c6.kafka.us-east-1.amazonaws.com:9094 . This
-  /// option must be specified in the API call or defined in the table
-  /// metadata in the Data Catalog.
-  pub bootstrap_servers: Str? = None
-  /// The protocol used to communicate with brokers. The possible values are
-  /// "SSL" or "PLAINTEXT" .
-  pub security_protocol: Str? = None
-  /// The name of the connection.
-  pub connection_name: Str? = None
-  /// The topic name as specified in Apache Kafka. You must specify at least
-  /// one of "topicName" , "assign" or "subscribePattern" .
-  pub topic_name: Str? = None
-  /// The specific TopicPartitions to consume. You must specify at least one
-  /// of "topicName" , "assign" or "subscribePattern" .
-  pub assign: Str? = None
-  /// A Java regex string that identifies the topic list to subscribe to. You
-  /// must specify at least one of "topicName" , "assign" or
-  /// "subscribePattern" .
-  pub subscribe_pattern: Str? = None
-  /// An optional classification.
-  pub classification: Str? = None
-  /// Specifies the delimiter character.
-  pub delimiter: Str? = None
-  /// The starting position in the Kafka topic to read data from. The possible
-  /// values are "earliest" or "latest" . The default value is "latest" .
-  pub starting_offsets: Str? = None
-  /// The end point when a batch query is ended. Possible values are either
-  /// "latest" or a JSON string that specifies an ending offset for each
-  /// TopicPartition .
-  pub ending_offsets: Str? = None
-  /// The timeout in milliseconds to poll data from Kafka in Spark job
-  /// executors. The default value is 512 .
-  pub poll_timeout_ms: Int? = None
-  /// The number of times to retry before failing to fetch Kafka offsets. The
-  /// default value is 3 .
-  pub num_retries: Int? = None
-  /// The time in milliseconds to wait before retrying to fetch Kafka offsets.
-  /// The default value is 10 .
-  pub retry_interval_ms: Int? = None
-  /// The rate limit on the maximum number of offsets that are processed per
-  /// trigger interval. The specified total number of offsets is
-  /// proportionally split across topicPartitions of different volumes. The
-  /// default value is null, which means that the consumer reads all offsets
-  /// until the known latest offset.
-  pub max_offsets_per_trigger: Int? = None
-  /// The desired minimum number of partitions to read from Kafka. The default
-  /// value is null, which means that the number of spark partitions is equal
-  /// to the number of Kafka partitions.
-  pub min_partitions: Int? = None
-  /// Whether to include the Kafka headers. When the option is set to "true",
-  /// the data output will contain an additional column named
-  /// "glue_streaming_kafka_headers" with type Array[Struct(key: String,
-  /// value: String)] . The default value is "false". This option is available
-  /// in Glue version 3.0 or later only.
-  pub include_headers: Bool? = None
-  /// When this option is set to 'true', the data output will contain an
-  /// additional column named "__src_timestamp" that indicates the time when
-  /// the corresponding record received by the topic. The default value is
-  /// 'false'. This option is supported in Glue version 4.0 or later.
-  pub add_record_timestamp: Str? = None
-  /// When this option is set to 'true', for each batch, it will emit the
-  /// metrics for the duration between the oldest record received by the topic
-  /// and the time it arrives in Glue to CloudWatch. The metric's name is
-  /// "glue.driver.streaming.maxConsumerLagInMs". The default value is
-  /// 'false'. This option is supported in Glue version 4.0 or later.
-  pub emit_consumer_lag_metrics: Str? = None
-  /// The timestamp of the record in the Kafka topic to start reading data
-  /// from. The possible values are a timestamp string in UTC format of the
-  /// pattern yyyy-mm-ddTHH:MM:SSZ (where Z represents a UTC timezone offset
-  /// with a +/-. For example: "2023-04-04T08:00:00+08:00"). Only one of
-  /// StartingTimestamp or StartingOffsets must be set.
-  pub starting_timestamp: Time? = None
-}
-
-/// A partition key pair consisting of a name and a type.
-pub struct KeySchemaElement {
-  /// The name of a partition key.
-  pub name: Str? = None
-  /// The type of a partition key.
-  pub type_value: Str? = None
 }

@@ -77,6 +77,17 @@ says what happened, not a general opinion. Bugs with repros go in
   emitted form covers known values, unknown values from newer services,
   and `E.from(s)`, with no hand-written helpers.
 
+- **Name hints for other languages' methods (2026-11-11, gcp storage
+  step 3).** Writing the signing port, `.has`, `.chars` and
+  `Str.from_byte` each failed with a note naming the Xo spelling
+  (`contains`, `runes`) or the way to build the value (`BytesBuilder`),
+  and `Time.UNIX_EPOCH()` was answered with "a constant, not a
+  function". Each error took seconds to fix, not a lookup.
+- **FakeNet names a missing route (2026-11-11).** A request to a host
+  with no handler fails at once with "no fake handler for GET
+  https://nowhere.fake/x". A test that seemed to hang was the
+  storage client's own retries of that error, not FakeNet.
+
 ## Didn't like, or cost time
 
 - **`env.args()` leaves out the program name (2026-11-04).** Go's

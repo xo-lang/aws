@@ -98,7 +98,29 @@ hits=$(echo "$files" | xargs grep -n -I -o -E '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 
 hits=$(echo "$files" | xargs grep -n -I -E '@' 2>/dev/null | strip_allowed "$ALLOW_EMAILS" | grep -E '^[^:]*:[0-9]+:.*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 [ -n "$hits" ] && report "email addresses" "$hits"
 
-if command -v gitleaks >/dev/null; then
+# gitleaks_run WHAT DIR ARGS...: runs gitleaks ARGS in DIR. On a failure
+# it says whether gitleaks found leaks or failed to run (both exit 1;
+# the "leaks found" line tells them apart), with the last lines of its
+# redacted output.
+gitleaks_run() {
+  what=$1
+  dir=$2
+  shift 2
+  out=$(mktemp "${TMPDIR:-/tmp}/gitleaks-out.XXXXXX")
+  (cd "$dir" && gitleaks "$@" --no-banner --no-color --redact -v) >"$out" 2>&1 && { rm -f "$out"; return 0; }
+  rc=$?
+  if grep -q 'leaks found' "$out"; then
+    echo "check-public: gitleaks found leaks in $what:" >&2
+  else
+    echo "check-public: gitleaks failed on $what (exit $rc):" >&2
+  fi
+  tail -20 "$out" | sed 's/^/  /' >&2
+  rm -f "$out"
+  fail=1
+  return 1
+}
+
+if command -v gitleaks >/dev/null 2>&1; then
   # the shared configuration (or gitleaks' defaults) extended with this
   # repository's exact-value allowlist (scripts/gitleaks-extra.toml)
   gdir=$(mktemp -d); gcfg="$gdir/gitleaks.toml"
@@ -111,10 +133,10 @@ if command -v gitleaks >/dev/null; then
   cfg="--config $gcfg"
   if [ $dirs_only = 1 ]; then
     for d in "$@"; do
-      gitleaks dir $cfg --no-banner "$d" >/dev/null 2>&1 || { gitleaks dir $cfg --no-banner --verbose --redact "$d" 2>&1 | grep 'RuleID\|File:\|Line:' | head -20 >&2; report "gitleaks found leaks in $d" ""; }
+      gitleaks_run "$d" . dir $cfg "$d"
     done
   else
-    gitleaks git $cfg --no-banner . >/dev/null 2>&1 || { gitleaks git $cfg --no-banner . 2>&1 | tail -20 >&2; report "gitleaks found leaks" ""; }
+    gitleaks_run "the git history" . git $cfg .
     # the working tree too: history alone misses what the next commit adds
     # (tracked and new files only: a copy, so ignored model downloads are skipped)
     tree=$(mktemp -d)
@@ -126,13 +148,13 @@ if command -v gitleaks >/dev/null; then
       report "could not copy the working tree for gitleaks" ""
     fi
     rm -f "$list" "$list.deleted"
-    cfgabs="$cfg"
-    (cd "$tree" && gitleaks dir $cfgabs --no-banner . >/dev/null 2>&1) || { (cd "$tree" && gitleaks dir $cfgabs --no-banner . 2>&1 | tail -20 >&2); report "gitleaks found leaks in the working tree" ""; }
+    gitleaks_run "the working tree" "$tree" dir $cfg .
     rm -r "$tree"
   fi
   rm -r "$gdir"
 else
-  report "gitleaks is not installed" ""
+  echo "check-public: gitleaks is not installed or not on PATH (go install puts it in ~/go/bin); nothing was scanned" >&2
+  fail=1
 fi
 
 # where each allowed placeholder occurs, so a reviewer can spot one that

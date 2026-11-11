@@ -3325,3 +3325,22 @@ Disliked:
   bytes (`read(3)` gave all 5 bytes of "hello"), though std.md says "at
   most max". The storage Reader now buffers the excess; a caller that
   sizes a buffer by `max` would overrun it.
+
+### 2026-11-11: BigQuery step 1 (gcp ac7f65d)
+
+Liked:
+- The storage port's pattern carried over whole: a fake on FakeNet, Go's
+  JSON rendered from `json.Value`, and a generated test file. 43 of 44
+  Go oracle cases passed on the first run; the 44th was a planned
+  departure (std/json's error text).
+- Effect-generic handles (`Table[fx]`, `Routine[fx]`) caught a helper
+  that forgot its `[fx: Effects]` (XO0702 names the fix).
+
+Disliked:
+- XO1301 reads a Google API version as a semver major: `require
+  github.com/xo-lang/gcp/bigquery/v2 v0.1.0` fails ("a module path
+  ending in /v2 takes only v2.x.y versions") though the tag
+  `bigquery/v2/v0.1.0` exists. 91 generated gcp modules end in `/v2` or
+  above, so none of them can be required outside the workspace.
+  `bigquery` resolves `bigquery/v2` through `xo.work` until the owner
+  picks a fix (tag them vN, exempt them, or rename the paths).

@@ -3344,3 +3344,37 @@ Disliked:
   above, so none of them can be required outside the workspace.
   `bigquery` resolves `bigquery/v2` through `xo.work` until the owner
   picks a fix (tag them vN, exempt them, or rename the paths).
+  (Settled 2026-11-11 by gcp decision 0012: `apivN` paths.)
+
+### 2026-11-11: BigQuery step 2a, row values (gcp decision 0011)
+
+Liked:
+- An enum `Value` with one variant per BigQuery kind made Go's `any`
+  plus type switches into exhaustive matches; the checker found every
+  conversion that forgot a kind. All 39 Go oracle cases passed on the
+  first full run once the module type-checked.
+- `Float.to_general(-1)`, `to_exp(-1)` and `to_fixed(-1)` reproduce
+  Go's `%v`, `strconv 'g'` and encoding/json's float forms exactly, and
+  `Int.parse`/`Bool.parse`/`Float.parse` name the Go functions they
+  match, so Go's strconv error texts could be kept byte for byte.
+- Compile errors were precise and fixable in one pass: XO0410 (Map
+  index faults) with the `get_or_fault` fix, XO0403 naming the
+  variant's field names, XO0156 for an interpolation spanning lines.
+
+Disliked:
+- An interface method cannot take `var self` (XO0403), and there is no
+  `Self` type, so Go's `ValueLoader` (whose `Load` fills its receiver)
+  cannot be an interface: it became a function `fn(List[Value], Schema)
+  -> T ! BqErr`. A loader interface with a `var self` method, or a
+  static constructor in an interface, would keep Go's shape.
+- `Json` is a marker with no hook for a type's own JSON form, so Go's
+  `NullInt64`/`NullFloat64`/`NullTime` (custom MarshalJSON: `"NaN"`,
+  civil strings) have no port; Options cover NULL, but not those forms.
+- `Time` holds only 1677-09-21 to 2262-04-11 (nanoseconds in an Int).
+  BigQuery TIMESTAMPs span the years 1 to 9999, so a year-1 cell
+  (`-62135596800000000` microseconds) is an error in Xo where Go reads
+  it. A wider `Time` (or a microsecond instant type) would close it.
+- `json.Value.Object` is a field list, so a Map's JSON has to be sorted
+  by hand to match Go's encoding/json (sorted map keys); the saver's
+  row JSON (sorted keys, `<>&` escapes, NaN refused) is a hand-written
+  encoder.

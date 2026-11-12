@@ -3405,16 +3405,13 @@ Liked:
   a free function over `Client[fx]` (`fn f[fx: Effects](...)`).
 
 Disliked:
-- A false XO0407, "type alias `Schema` refers to itself" (at the alias's
-  own use in `FieldSchema.schema: Schema = []`), appears when a private
-  struct in another file has a field `schema: Schema?` next to
-  `rows: List[List[Value]]` (gcp bigquery/iterator.xo `FetchedPage`;
-  `pub type Schema = List[FieldSchema]`). Writing the field as
-  `List[FieldSchema]?` compiles. The same `Schema?` in a pub struct
-  field with a default, a tuple result and a function result is
-  accepted. Small repros (alias and struct in separate files, generic
-  holders, private structs) do not trigger it yet; the one-line trigger
-  in the gcp tree does.
+- A false XO0407, "type alias `Schema` refers to itself", depends on
+  declaration names. Minimal repro (three declarations): `struct A {
+  schema: Schema }`, `type Schema = List[Field]`, `struct Field {
+  schema: Schema }` errors at Field's field; rename `A` to `B` (sorting
+  after `Field`) and it checks clean. In gcp it came from bigquery's
+  `FetchedPage` (sorting before `FieldSchema`) holding a `Schema?`;
+  writing `List[FieldSchema]?` works around it. Sent to Lang 1.
 - `Error` is the prelude interface, so Go's bigquery `Error` struct had
   to be renamed (`ServiceError`); XO0603's note suggests `BigqueryErr`,
   which here would clash with the module's own `BqErr`.

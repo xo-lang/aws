@@ -3370,7 +3370,11 @@ Disliked:
   `fn(List[Value], Schema) -> T ! BqErr`. With a plain `self` in the
   interface, a `var` receiver method satisfies it, but the native
   backends refuse the call through the interface (XO1201, planned).
-  Repro sent to the lead.
+  Repro sent to the lead. Update 2026-11-12: fixed on xo main 1d8f3fd02
+  (decision 0613 step 4) for generic bounds; gcp's ValueLoader is an
+  interface again on a held branch for Xo 0.50 (`next_into[T:
+  ValueLoader](var dst: T)` writes back, tested). Interface values of
+  it still give XO1201 until step 5.
 - (Corrected: my first draft said std/json had no hook for a type's own
   JSON form. It has one, `derive Json(via: P, to: f, from: g)`
   (decision 0478, core 2.3); I had not checked the spec. The `Null*`
@@ -3412,6 +3416,9 @@ Disliked:
   after `Field`) and it checks clean. In gcp it came from bigquery's
   `FetchedPage` (sorting before `FieldSchema`) holding a `Schema?`;
   writing `List[FieldSchema]?` works around it. Sent to Lang 1.
+  Update 2026-11-12: fixed on xo main 955837e2c (any name order checks
+  clean; a true cycle is still XO0407). gcp goes back to `Schema?` with
+  Xo 0.50; Xo 0.49.1 still has the bug.
 - `Error` is the prelude interface, so Go's bigquery `Error` struct had
   to be renamed (`ServiceError`); XO0603's note suggests `BigqueryErr`,
   which here would clash with the module's own `BqErr`.

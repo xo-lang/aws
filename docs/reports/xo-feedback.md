@@ -3362,18 +3362,26 @@ Liked:
   variant's field names, XO0156 for an interpolation spanning lines.
 
 Disliked:
-- An interface method cannot take `var self` (XO0403), and there is no
-  `Self` type, so Go's `ValueLoader` (whose `Load` fills its receiver)
-  cannot be an interface: it became a function `fn(List[Value], Schema)
-  -> T ! BqErr`. A loader interface with a `var self` method, or a
-  static constructor in an interface, would keep Go's shape.
-- `Json` is a marker with no hook for a type's own JSON form, so Go's
-  `NullInt64`/`NullFloat64`/`NullTime` (custom MarshalJSON: `"NaN"`,
-  civil strings) have no port; Options cover NULL, but not those forms.
-- `Time` holds only 1677-09-21 to 2262-04-11 (nanoseconds in an Int).
-  BigQuery TIMESTAMPs span the years 1 to 9999, so a year-1 cell
-  (`-62135596800000000` microseconds) is an error in Xo where Go reads
-  it. A wider `Time` (or a microsecond instant type) would close it.
+- An interface method cannot declare `var self`: `interface Loader {
+  fn load(var self, n: Int) }` gives XO0403 ("must take `self` first")
+  and XO0160, though a type's own method can (`fn (var b: Box)
+  load(...)`, as the spec's `next(var self)` iterators do). So Go's
+  `ValueLoader` (whose `Load` fills its receiver) became a function
+  `fn(List[Value], Schema) -> T ! BqErr`. With a plain `self` in the
+  interface, a `var` receiver method satisfies it, but the native
+  backends refuse the call through the interface (XO1201, planned).
+  Repro sent to the lead.
+- (Corrected: my first draft said std/json had no hook for a type's own
+  JSON form. It has one, `derive Json(via: P, to: f, from: g)`
+  (decision 0478, core 2.3); I had not checked the spec. The `Null*`
+  types now use it, with `json.Value` as the proxy: 3 more Go cases
+  pass. One snag: `derive Json(via: ...)` still requires every field to
+  implement Json (XO0404 on a `DateTime` field), though the fields never
+  travel; `DateTime` gained `derive Json` to satisfy it.)
+- `Time` holds 1677-09-21 to 2262-04-11 by design (decision 0364), so a
+  BigQuery TIMESTAMP outside those years (the API allows 1 to 9999, a
+  year-1 cell is `-62135596800000000` microseconds) is an error in Xo
+  where Go reads it. The lead has asked for an ADR on Go's full range.
 - `json.Value.Object` is a field list, so a Map's JSON has to be sorted
   by hand to match Go's encoding/json (sorted map keys); the saver's
   row JSON (sorted keys, `<>&` escapes, NaN refused) is a hand-written

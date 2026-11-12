@@ -3386,3 +3386,35 @@ Disliked:
   by hand to match Go's encoding/json (sorted map keys); the saver's
   row JSON (sorted keys, `<>&` escapes, NaN refused) is a hand-written
   encoder.
+
+### 2026-11-11: BigQuery step 3, queries, jobs, rows and inserts (gcp decision 0011)
+
+Liked:
+- Interface values (`List[ValueSaver]`) made Go's `Put(src any)` of a
+  slice of savers a plain typed parameter; mixed saver types in one
+  list need no reflection.
+- `var self` methods on a value type (`Job.status`, `RowIterator.next`)
+  carry Go's pointer-receiver state (last status, the page buffer)
+  without aliasing; a copied iterator is independent.
+- The injected `Clock` and `Rand` made Go's random job and insert ids
+  and its time-stamped request ids testable: the tests run every poll
+  and retry pause at 1 ms. All 43 Go oracle cases matched on the first
+  run that type-checked (a mutated expected line fails, as it should).
+- XO0603 caught a field and a method with the same name (`Job.config`
+  and `config()`) and named both; XO0702's note gave the exact fix for
+  a free function over `Client[fx]` (`fn f[fx: Effects](...)`).
+
+Disliked:
+- A false XO0407, "type alias `Schema` refers to itself" (at the alias's
+  own use in `FieldSchema.schema: Schema = []`), appears when a private
+  struct in another file has a field `schema: Schema?` next to
+  `rows: List[List[Value]]` (gcp bigquery/iterator.xo `FetchedPage`;
+  `pub type Schema = List[FieldSchema]`). Writing the field as
+  `List[FieldSchema]?` compiles. The same `Schema?` in a pub struct
+  field with a default, a tuple result and a function result is
+  accepted. Small repros (alias and struct in separate files, generic
+  holders, private structs) do not trigger it yet; the one-line trigger
+  in the gcp tree does.
+- `Error` is the prelude interface, so Go's bigquery `Error` struct had
+  to be renamed (`ServiceError`); XO0603's note suggests `BigqueryErr`,
+  which here would clash with the module's own `BqErr`.

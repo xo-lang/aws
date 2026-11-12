@@ -412,7 +412,9 @@ Disliked:
   (`fn(var l: List[Str], code: Str)`), but `xo test` on the native
   backends then stops with XO1201 "function values with `var`
   parameters (support is planned)". The checker could warn, since every
-  default build is native.
+  default build is native. Fixed on xo main by fd27a4579 (2026-11-05):
+  a stored closure with a `var` parameter, passed as a value and called
+  from a `List`, runs on arm64, LLVM, Go and wasm (golden c6f84649e).
 - `xo test --run` is a substring match (documented in `xo help
   test`), where Go's `-run` is a regular expression, so `--run 'a|b'`
   quietly matches nothing. The "no tests match" message could say it

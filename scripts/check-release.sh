@@ -56,10 +56,16 @@ use github.com/xo-lang/aws/fileio
 use github.com/xo-lang/aws/service/s3
 
 fn main(os: Os) {
-  let c = s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: aws.static_provider("AKIDEXAMPLE000000000", "invented-secret")})
-  let _ = c
-  let _ = config.load_default_config
-  let _ = fileio.upload_file
+  match s3.new(os.net, os.clock, os.rand, s3.Options{region: "us-west-2", credentials: aws.static_provider("AKIDEXAMPLE000000000", "invented-secret")}) {
+    Ok(_) => os.stdio.println("s3 client")
+    Err(e) => os.stdio.println("s3: ${e}")
+  }
+}
+
+fn load(os: Os) -> aws.Config ! Str {
+  let cfg = config.load_default_config(os.env, os.fs, os.net, os.clock, os.rand) ?? e => return Err("${e:?}")
+  let _ = fileio.upload_file(os.tasks, os.fs, "x").ignore_err("probe")
+  Ok(cfg)
 }
 XO
 "$xo" get github.com/xo-lang/aws@"$v" github.com/xo-lang/aws/service/s3@"$v" github.com/xo-lang/aws/config@"$v" github.com/xo-lang/aws/fileio@"$v" > "$work/get.out" 2>&1 || { echo "check-release: FAIL xo get"; tail -5 "$work/get.out"; exit 1; }

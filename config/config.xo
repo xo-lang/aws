@@ -2,6 +2,7 @@
 // files, with the precedence of the AWS SDKs and Tools Reference Guide
 // (decision 0003).
 
+use std/task
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/credentials/container
@@ -271,7 +272,7 @@ fn sso_options(ctx: RoleContext, profile: Str, p: Section) -> ssocreds.Options? 
   let token = match known {
     Some(t) => t
     None => {
-      let t = aws.token_file_or_empty(ctx.fs, path)
+      let t = credentials.token_file_or_empty(ctx.fs, path)
       ctx.token_files.with(fn(var l: List[aws.TokenFile]) { l.push(t) })
       t
     }
@@ -290,7 +291,7 @@ fn sso_options(ctx: RoleContext, profile: Str, p: Section) -> ssocreds.Options? 
 /// Assume `arn` with the web identity token in `path` (read now), over
 /// an unsigned STS call.
 fn web_identity(ctx: RoleContext, path: Str, arn: Str, session: Str?, region: Str?) -> aws.CredentialsProvider ! ConfigErr {
-  let token = aws.load_token_file(ctx.fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "web_identity_token_file", value: path, msg: e))
+  let token = credentials.load_token_file(ctx.fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "web_identity_token_file", value: path, msg: e))
   ctx.token_files.with(fn(var l: List[aws.TokenFile]) { l.push(token) })
   let r = region ?? return Err(ConfigErr.Invalid(setting: "region", value: "", msg: "assuming role ${arn} with a web identity needs a region"))
   let client = sts.new(ctx.net, ctx.clock, ctx.rand, sts.Options{
@@ -323,7 +324,7 @@ fn container_options(env: Env, fs: Fs) -> container.Options? ! ConfigErr uses (e
     }
   }
   let token = match non_empty(env.get("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE")) {
-    Some(path) => aws.load_token_file(fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", value: path, msg: e))
+    Some(path) => credentials.load_token_file(fs, path) ?? e => return Err(ConfigErr.Invalid(setting: "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", value: path, msg: e))
     None => aws.fixed_token(env.get("AWS_CONTAINER_AUTHORIZATION_TOKEN") ?? "")
   }
   Ok(Some(container.Options{uri: uri, token: token}))
@@ -479,5 +480,26 @@ fn non_empty(s: Str?) -> Str? {
   match s {
     Some(v) => if v == "" { None } else { Some(v) }
     None => None
+  }
+}
+
+/// Starts a watch of each of `cfg.token_files` on `tasks`, a group that
+/// lives as long as the program (`os.tasks`). Long running programs on
+/// EKS need it: the service account token rotates and expires (24 hours
+/// by default). Lambda and short programs can leave it out. (Before
+/// v0.3.0, `cfg.watch_token_files(...)`; decision 0011.)
+pub fn watch_token_files(cfg: aws.Config, tasks: task.Group, fs: Fs, clock: Clock, every: Duration = 5m) uses (fs, clock) {
+  for f in cfg.token_files {
+    tasks.spawn_background(fn() { credentials.watch(f, fs, clock, every) })
+  }
+}
+
+/// Starts each of `cfg.processes` on `tasks`, a group that lives as long
+/// as the program (`os.tasks`). Needed only when a profile names a
+/// credential_process. (Before v0.3.0,
+/// `cfg.run_credential_processes(...)`; decision 0011.)
+pub fn run_credential_processes(cfg: aws.Config, tasks: task.Group, proc: Proc, clock: Clock) uses (proc, clock) {
+  for p in cfg.processes {
+    credentials.start_process(p, tasks, proc, clock)
   }
 }

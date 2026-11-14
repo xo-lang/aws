@@ -1,0 +1,61 @@
+// Credentials that need no discovery (decision 0011): fixed keys and the
+// per-resource session cache (S3 Express). They live in the root so a
+// service module needs nothing from the credentials module, whose
+// providers read the environment, files and processes.
+
+/// Fixed keys, for tests and for programs that load keys themselves.
+pub struct StaticProvider {
+  pub creds: Credentials
+}
+
+pub fn static_provider(access_key_id: Str, secret_access_key: Str, session_token: Str? = None, account_id: Str? = None) -> StaticProvider {
+  StaticProvider{creds: Credentials{
+    access_key_id: access_key_id,
+    secret_access_key: Secret.new(secret_access_key),
+    session_token: session_token.map(fn(t) { Secret.new(t) }),
+    source: "StaticCredentials",
+    features: ["e"],
+    account_id: account_id,
+  }}
+}
+
+pub fn (p: StaticProvider) retrieve() -> Credentials ! CredentialsErr uses (net.dial, clock, rand) {
+  if p.creds.access_key_id == "" || p.creds.secret_access_key.reveal() == "" {
+    return Err(CredentialsErr.Invalid("static credentials are empty"))
+  }
+  Ok(p.creds)
+}
+
+/// Session credentials by key (S3 Express: the base credentials' HMAC and
+/// the bucket), for providers that mint one per resource.
+pub struct SessionCache {
+  entries: Mutex[Map[Str, Credentials]]
+}
+
+pub fn new_session_cache() -> SessionCache {
+  SessionCache{entries: Mutex.new({})}
+}
+
+/// The cached credentials for `key` while they have more than `window`
+/// left at `now`.
+pub fn (c: SessionCache) get(key: Str, now: Time, window: Duration) -> Credentials? {
+  let s = c.entries.with_read(fn(m: Map[Str, Credentials]) -> Credentials? { m.get(key) }) ?? return None
+  let exp = s.expires ?? return None
+  if exp - now > window { Some(s) } else { None }
+}
+
+/// Stores `creds` for `key` unless the entry there lasts longer (two
+/// callers may both have fetched one), and returns the one kept.
+pub fn (c: SessionCache) put(key: Str, creds: Credentials) -> Credentials {
+  c.entries.with(fn(var m: Map[Str, Credentials]) -> Credentials {
+    if let Some(other) = m.get(key) {
+      if let (Some(a), Some(b)) = (other.expires, creds.expires) {
+        if a > b {
+          return other
+        }
+      }
+    }
+    m.put(key, creds)
+    creds
+  })
+}

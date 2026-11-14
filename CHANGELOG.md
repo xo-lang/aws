@@ -6,6 +6,26 @@ compatibility); a generator fix lists the service modules it touches.
 
 ## Unreleased
 
+## v0.3.0
+
+**Breaking** ([decision 0011](docs/decisions/0011-credential-modules.md),
+gcp decision 0014 for all SDKs): `credentials`, `config` and the new
+`fileio` are modules of their own, so the core module and every service
+reach only `clock`, `net.dial` and `rand` (v0.2.1's core: `clock, env,
+fs, net.dial, proc, rand`). The core keeps the types: `StaticProvider`
+and `static_provider`, `SessionCache` (from `credentials`), `TokenFile`
+and `CredentialProcess` without their file and process work, which
+moved to `credentials`; `cfg.watch_token_files` and
+`cfg.run_credential_processes` are `config.watch_token_files(cfg, ...)`
+and `config.run_credential_processes(cfg, ...)`; `aws.upload_file` is
+`fileio.upload_file`, and `aws.upload_opener` retries a body the
+program gives afresh per attempt. The core no longer requires
+`service/sts`, which ends the cycle of decision 0003: every module is
+tagged v0.3.0 at one commit (`scripts/release-all.sh`, rehearsed by
+`scripts/check-release.sh`, which also checks the effects). The
+generator writes `aws.SessionCache` for S3. Migration:
+[docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
+
 JSON numbers (`protocol/jsonv`): a body's integer `-0` reads as +0 and
 `"nan"`, `"INFINITY"` and the like as NaN and the infinities, as
 smithy-go's JSON decoder reads them (its integer fast path and

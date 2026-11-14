@@ -442,7 +442,7 @@ test "a rotated token file is read again by the watch" {
   let seen = Mutex[List[Str]].new([])
   fake_web_sts(os.net, seen)
   let cfg = load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
-  cfg.watch_token_files(os.tasks, os.fs, os.clock)
+  watch_token_files(cfg, os.tasks, os.fs, os.clock)
   os.fs.write("/var/run/irsa/token", b"jwt-two")?
   os.clock.advance(6m)
   // the old credentials expire; the refresh sends the new token
@@ -569,11 +569,11 @@ test "a profile's credential_process runs on the program's tasks, also as a role
   })
   let tool = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("tool")})?
   expect(tool.processes.map(fn(p: aws.CredentialProcess) -> Str { p.command })) == ["get-creds --account dev"]
-  tool.run_credential_processes(os.tasks, os.proc, os.clock)
+  run_credential_processes(tool, os.tasks, os.proc, os.clock)
   let tc = (tool.credentials ?? return Err("no provider")).retrieve()?
   expect(tc.source) == "ProcessProvider"
   expect(tc.features) == ["v", "w"]
   let admin = load_default_config(os.env, os.fs, os.net, os.clock, os.rand, Options{profile: Some("admin")})?
-  admin.run_credential_processes(os.tasks, os.proc, os.clock)
+  run_credential_processes(admin, os.tasks, os.proc, os.clock)
   expect((admin.credentials ?? return Err("no provider")).retrieve()?.access_key_id) == "ROLEKEYEXAMPLE00001"
 }

@@ -1,4 +1,4 @@
 module github.com/xo-lang/aws/service/schemas
 edition preview
 
-require github.com/xo-lang/aws v0.2.0
+require github.com/xo-lang/aws v0.3.0

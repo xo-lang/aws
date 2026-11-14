@@ -8,6 +8,7 @@ use std/testing
 use github.com/xo-lang/aws
 use github.com/xo-lang/aws/checksum
 use github.com/xo-lang/aws/credentials
+use github.com/xo-lang/aws/fileio
 use github.com/xo-lang/aws/service/s3
 
 fn upload_client(net: testing.FakeNet, clock: Clock, rand: Rand) -> s3.Client ! Str {
@@ -67,7 +68,7 @@ test "PutObject streams a file in aws-chunked chunks with a CRC32 trailer" {
     http.text(200, "")
   })
   let c = upload_client(os.net, os.clock, os.rand)?
-  let up = aws.upload_file(os.tasks, os.fs, "/up/big.bin")?
+  let up = fileio.upload_file(os.tasks, os.fs, "/up/big.bin")?
   c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "big", body_stream: Some(up)})?
   let reqs = seen.with_read(fn(xs: List[http.Request]) -> List[http.Request] { xs })
   expect(reqs.len()) == 1
@@ -99,7 +100,7 @@ test "a streamed file is sent again from its start on a retry" {
     http.text(200, "")
   })
   let c = upload_client(os.net, os.clock, os.rand)?
-  let up = aws.upload_file(os.tasks, os.fs, "/up/small.txt")?
+  let up = fileio.upload_file(os.tasks, os.fs, "/up/small.txt")?
   c.put_object(s3.PutObjectRequest{bucket: "bucket", key: "small", body_stream: Some(up)})?
   expect(bodies.with_read(fn(xs: List[Bytes]) -> List[Bytes] { xs })) == [b"retry me", b"retry me"]
 }

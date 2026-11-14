@@ -6,13 +6,14 @@
 //
 // A provider's `retrieve` cannot run a program (it has no `proc`
 // effect), so the command runs on a background task started by
-// `cfg.run_credential_processes(os.tasks, os.proc, os.clock)`: once at
-// once, and again 5 minutes before the credentials expire. `retrieve`
-// waits for the first run and returns its credentials, or says how to
-// start the task when it has not been started.
+// `config.run_credential_processes(cfg, os.tasks, os.proc, os.clock)`:
+// once at once, and again 5 minutes before the credentials expire.
+// `retrieve` waits for the first run and returns its credentials, or
+// says how to start the task when it has not been started. The type
+// lives in the root, which runs no programs (decision 0011); the
+// credentials module runs the command (`credentials.run_process`).
 
 use std/json
-use std/task
 
 struct ProcessState {
   creds: Credentials? = None
@@ -45,7 +46,7 @@ pub fn credential_process(profile: Str, command: Str, windows: Bool = false) -> 
 
 pub fn (c: CredentialProcess) retrieve() -> Credentials ! CredentialsErr uses (net.dial, clock, rand) {
   if !c.started.get() {
-    return Err(CredentialsErr.Fetch("profile ${c.profile} uses credential_process, which runs on a task: call cfg.run_credential_processes(os.tasks, os.proc, os.clock) after config.load_default_config"))
+    return Err(CredentialsErr.Fetch("profile ${c.profile} uses credential_process, which runs on a task: call config.run_credential_processes(cfg, os.tasks, os.proc, os.clock) after config.load_default_config"))
   }
   // the first run's result; a closed channel returns at once
   let _ = c.ready.recv()
@@ -56,29 +57,30 @@ pub fn (c: CredentialProcess) retrieve() -> Credentials ! CredentialsErr uses (n
   }
 }
 
-/// Runs the command once and keeps its credentials; a failure keeps the
-/// last good ones and records the error.
-pub fn (c: CredentialProcess) run_once(proc: Proc, clock: Clock) -> () ! Str uses (proc, clock) {
-  let (shell, flag) = if c.windows { ("cmd.exe", "/C") } else { ("sh", "-c") }
-  let out = task.with_timeout(clock, c.timeout, fn() -> ProcOutput ! ProcErr { proc.cmd(shell, [flag, c.command]).output() }) ?? e => {
-    let msg = match e {
-      task.Timed.TimedOut => "did not finish within ${c.timeout}"
-      task.Timed.Failed(pe) => pe.display()
-    }
-    return c.failed(msg)
-  }
-  if out.code != 0 {
-    let err = (out.stderr.to_str() ?? "").trim()
-    return c.failed("exit status ${out.code}${if err == "" { "" } else { ": ${err}" }}")
-  }
-  let creds = parse_process_output(out.stdout) ?? e => return c.failed(e)
-  c.state.reset(ProcessState{creds: Some(creds)})
-  Ok(())
+/// Marks the command's task started; false when it already was.
+pub fn (c: CredentialProcess) start() -> Bool {
+  !c.started.swap(true)
 }
 
-fn (c: CredentialProcess) failed(msg: Str) -> () ! Str {
+/// Keeps `creds` from a run of the command.
+pub fn (c: CredentialProcess) succeeded(creds: Credentials) {
+  c.state.reset(ProcessState{creds: Some(creds)})
+}
+
+/// Records a failed run; the last good credentials are kept.
+pub fn (c: CredentialProcess) failed(msg: Str) -> () ! Str {
   c.state.with(fn(var s: ProcessState) { s.err = msg })
   Err(msg)
+}
+
+/// Lets `retrieve` return: the first run has finished.
+pub fn (c: CredentialProcess) first_run_done() {
+  c.ready.close()
+}
+
+/// When the kept credentials expire, if there are any and they do.
+pub fn (c: CredentialProcess) expires() -> Time? {
+  c.state.with_read(fn(s: ProcessState) -> Time? { s.creds.and_then(fn(cr: Credentials) -> Time? { cr.expires }) })
 }
 
 /// The command's JSON as credentials (aws-sdk-go-v2's checks).
@@ -117,38 +119,4 @@ pub fn parse_process_output(stdout: Bytes) -> Credentials ! Str {
     features: ["w"],
     account_id: if field("AccountId") == "" { None } else { Some(field("AccountId")) },
   })
-}
-
-/// Runs the command now and again 5 minutes before the credentials
-/// expire, until cancelled; after a failure it tries again in a minute.
-/// Credentials without an Expiration are fetched once.
-pub fn (c: CredentialProcess) run(proc: Proc, clock: Clock) uses (proc, clock) {
-  var first = true
-  while true {
-    let ok = c.run_once(proc, clock).is_ok()
-    if first {
-      first = false
-      c.ready.close()
-    }
-    let next = if ok {
-      match c.state.with_read(fn(s: ProcessState) -> Time? { s.creds.and_then(fn(cr: Credentials) -> Time? { cr.expires }) }) {
-        Some(t) => (t.unix_millis() - clock.now().unix_millis() - 5 * 60 * 1000).max(10 * 1000)
-        None => return
-      }
-    } else {
-      60 * 1000
-    }
-    clock.sleep(Duration.from_millis(next))
-  }
-}
-
-/// Starts each of `c.processes` on `tasks`, a group that lives as long
-/// as the program (`os.tasks`). Needed only when a profile names a
-/// credential_process.
-pub fn (c: Config) run_credential_processes(tasks: task.Group, proc: Proc, clock: Clock) uses (proc, clock) {
-  for p in c.processes {
-    if !p.started.swap(true) {
-      tasks.spawn_background(fn() { p.run(proc, clock) })
-    }
-  }
 }

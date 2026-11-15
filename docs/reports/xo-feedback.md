@@ -3456,3 +3456,13 @@ Disliked:
   lint for `?? Time.UNIX_EPOCH` on a constant literal would have shown
   it at once. The driver now keeps such dates as `Text`, as pg keeps
   `infinity`.
+- **A closure literal in a std native module broke another module's
+  darwin test link (2026-11-15, std/sql MySQL driver).** Passing
+  `fn(b) { sha1.sum(b) }` to llrt rsa's `encrypt_oaep_fn` in
+  std/native/llrt/mysqlauth.xo made `xo test --std-module=native/llrt/pg
+  --backend=native` fail at link with `no FDE for the DWARF mode function
+  at 4295777592` (no symbol name), deterministically; llvm, the other
+  modules and ordinary builds were fine. Passing `sha1.sum` directly
+  links. Disliked: the failure surfaced in an unrelated module's test and
+  named no function, so it took a bisect to find. Repro:
+  ~/xo-lead/notes/aws-43/fde-closure. Sent to the lead for Lang 1/2.

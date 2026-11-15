@@ -3466,3 +3466,28 @@ Disliked:
   links. Disliked: the failure surfaced in an unrelated module's test and
   named no function, so it took a bisect to find. Repro:
   ~/xo-lead/notes/aws-43/fde-closure. Sent to the lead for Lang 1/2.
+  Update (2026-11-15): fixed in xo f1cae7e48 (compiler/macho store.xo,
+  Lang 1). The cause was not the closure: pg's test defines
+  mysql.handshake strongly, and the std store's weak copy left its
+  fault-stubs region's compact unwind entry behind; any change to that
+  function could trigger it (stage D hit it with no closure at all). The
+  error now names the nearest symbol and the entry's relocation. Liked:
+  a fix within the hour of a bisect file.
+- **std/sql stage D: prepared statements and query_all (2026-11-15).**
+  Liked: one Xo implementation of the pool serves native, llvm and wasm,
+  and the Go rt mirror plus golden Go parity caught the one order
+  difference (a Go map where native keeps a list) before it shipped.
+  Disliked: (1) interfaces have no default methods, so adding the
+  optional `DriverConn.prepare` is a breaking change for every driver
+  written in Xo (seven implementers in the tree, as `copy_from` was in
+  0479); a default body, or an "optional method" check, would make
+  driver interfaces extensible. (2) A struct declared in a std
+  declaration file cannot hold the native module's opaque types
+  (`ResultSet{rows: List[Row]}` is `List[sql.Row]` against
+  `List[native.sql.Row]`, XO0401), so `ResultSet` had to become an opaque
+  handle with accessors. (3) `XO_LLVM_GOLDENS` takes commas; a space
+  separated list silently skips every golden ("not selected") and the
+  run passes, which looked like success until `-v`. (4) Adding `prepare`
+  collided with std/sqlite's own private `prepare(q, at)` (a duplicate
+  declaration): method names of a type share one namespace whatever
+  their arity, so an interface addition can break a driver's internals.

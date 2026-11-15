@@ -6,6 +6,15 @@ compatibility); a generator fix lists the service modules it touches.
 
 ## Unreleased
 
+## v0.3.1
+
+Fix (core module, `transport`): the retry classification of
+`http.ClientErr` ends in a wildcard arm, so the SDK builds on Xo 0.51
+and 0.52 (0.52 adds `ClientErr.Tls`, a failed TLS handshake, which 0.51
+reports as `Protocol`; both stay Transient, as before) (#6). Only the
+core module is tagged; services keep requiring v0.3.0 and pick up
+v0.3.1 when an app requires it.
+
 ## v0.3.0
 
 **Breaking** ([decision 0011](docs/decisions/0011-credential-modules.md),

@@ -3424,3 +3424,13 @@ Disliked:
 - `Error` is the prelude interface, so Go's bigquery `Error` struct had
   to be renamed (`ServiceError`); XO0603's note suggests `BigqueryErr`,
   which here would clash with the module's own `BqErr`.
+- **XO0510 on a match binding of a move only value inside a loop
+  (2026-11-15, std/hpke corpus).** `for _ in 0..2 { var c = match mk() {
+  Ok(x) => x  Err(e) => fault(e) } ... }`, with `mk` returning a std
+  `@move_only` handle (`compress.Compressor` reproduces it), is
+  `XO0510: use of moved value x` at the `Ok(x) => x` arm; the same body
+  outside a loop checks clean, and `mk() ?? e => fault(e)` fails the same
+  way (its desugared `ok`). The binding is fresh each iteration, so the
+  checker seems to carry the arm's move into the next iteration. 13 line
+  repro: ~/xo-lead/notes/aws-43/xo0510-loop-match/main.xo. Workaround:
+  the loop body in a helper function. Sent to the lead for Lang 1.

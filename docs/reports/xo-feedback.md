@@ -3434,3 +3434,5 @@ Disliked:
   checker seems to carry the arm's move into the next iteration. 13 line
   repro: ~/xo-lead/notes/aws-43/xo0510-loop-match/main.xo. Workaround:
   the loop body in a helper function. Sent to the lead for Lang 1.
+  Update 2026-11-15: fixed on xo main 4e1d41a4c (Lang 1); the repro
+  checks clean with bin/xo rebuilt from main.

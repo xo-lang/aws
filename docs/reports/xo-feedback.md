@@ -3518,3 +3518,24 @@ Disliked:
   (4) Pushq's TestStdChecks caught the XO0804s only after a full
   offload gate had passed; the gate does not run `TestStdChecks`, so
   the gate had to run twice.
+
+### 2026-11-15: std/tls QUIC (decision 0644 T14)
+
+- Liked: the native TLS engines are sans-I/O (feed bytes, take bytes),
+  so QUIC was hooks at three points (handshake bytes out, keys set, a
+  pause for transport parameters) and a small ordering layer, not a
+  second handshake. The go backend over Go's own QUICConn gave the
+  exact event order to match, and the golden diffed byte for byte
+  across native, llvm and split on the first full run.
+- Disliked: (1) `if var x = opt { ... }` does not parse (XO0160);
+  mutating an optional field's payload needs `if let Some(x0) = o {
+  var x = x0 ... o = Some(x) }`, three lines for one idea. (2) A
+  bodyless std method (`fn (l: QuicEncryptionLevel) display()`) is
+  implemented natively as `quicencryptionlevel_display`; the XO0606
+  error for declaring the method directly does not name that
+  convention. (3) `xo test --std-module` on a module without tests says
+  "no tests" and it is not clear whether it type-checked the module;
+  parse errors show, so it did, but saying "checked, no tests" would
+  settle it. (4) A golden's want.txt needs the `exit 0` / `--- stdout`
+  / `--- stderr` wrapper, while `xo run` prints only stdout; a
+  `--golden` output mode would remove a hand step.

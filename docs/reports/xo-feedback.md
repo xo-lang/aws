@@ -3436,3 +3436,12 @@ Disliked:
   the loop body in a helper function. Sent to the lead for Lang 1.
   Update 2026-11-15: fixed on xo main 4e1d41a4c (Lang 1); the repro
   checks clean with bin/xo rebuilt from main.
+- **XO0804 fires for `if let` but not for the same `match` (2026-11-15,
+  std/sql MySQL driver).** A loop that takes a value out of a Mutex in
+  one `with`, then on `None` reads the socket and appends in a second
+  `with`, warns "acts on a decision about `got`" when the test is
+  `if let Some(x) = got { ... return }`, and checks clean when it is
+  `match got { Some(x) => { ... return } None => {} }`. Both are the
+  same control flow. Either the warning is right and the `match` form
+  misses it, or the `if let` form is a false positive; pg.xo's identical
+  loop uses `match` and never warns. Not yet sent.

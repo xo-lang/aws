@@ -3445,3 +3445,14 @@ Disliked:
   same control flow. Either the warning is right and the `match` form
   misses it, or the `if let` form is a false positive; pg.xo's identical
   loop uses `match` and never warns. Not yet sent.
+- **`Time` cannot hold Go's zero time (2026-11-15, std/sql MySQL
+  driver).** `Time` is int64 nanoseconds (1678 to 2262), so
+  go-sql-driver's mapping of MySQL's zero date to `time.Time{}` (year 1)
+  has no `Time`; `Time.parse_rfc3339("0001-01-01T00:00:00Z")` is `None`,
+  and the driver's `?? Time.UNIX_EPOCH` fallback silently gave
+  1970-01-01 until the conformance run caught it. Liked: the range is
+  documented and `Civil` covers wide years. Disliked: the `?? EPOCH`
+  idiom (also in pgdiff) hides the failure; a `Time.MIN`/`MAX` or a
+  lint for `?? Time.UNIX_EPOCH` on a constant literal would have shown
+  it at once. The driver now keeps such dates as `Text`, as pg keeps
+  `infinity`.

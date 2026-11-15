@@ -3491,3 +3491,30 @@ Disliked:
   collided with std/sqlite's own private `prepare(q, at)` (a duplicate
   declaration): method names of a type share one namespace whatever
   their arity, so an interface addition can break a driver's internals.
+
+### 2026-11-15: std/sql cancellation (MySQL KILL QUERY, Postgres CancelRequest, DSN timeouts)
+
+- Liked: `{ defer { ... } }` as a shielded block made "do the cleanup
+  call even though this task is cancelled" one line, and XO-F005's 5 s
+  cap gave a concrete budget (1 s dial, 2 s exchange). A fake server on
+  FakeNet plus a `Chan[Str]` of what it saw made the KILL and
+  CancelRequest tests exact; disabling the call turns them into an
+  XO-F001 deadlock, so they are not vacuous. Deadlines on FakeNet
+  conns work through the same `netconn.set_deadline` path as real
+  sockets.
+- Disliked: (1) awaiting a cancelled task faults ("awaited a task that
+  was canceled before it finished"), and a cancelled task's code after
+  its cancellation point never runs (a `Mutex.with` storing the result
+  is skipped), so a test cannot observe what a cancelled call returned;
+  a `t.await` that gave `Err(Canceled)`, or a `t.result()`, would help.
+  (2) XO0804 (split critical section) is intraprocedural: the same
+  check then act, moved into a helper function (`add_stmt`,
+  `put_idle`), passes. Here the code was correct (the state was owned
+  by the task), so the helper is honest, but the warning is easy to
+  hide by accident too; an `xo:allow XO0804 <reason>` would say why.
+  (3) `xo fmt` on a std file that was not fmt-clean rewrote unrelated
+  code (a packed OID list into one item per line, 180 lines of diff);
+  std files should be fmt-clean or `xo fmt --lines` should exist.
+  (4) Pushq's TestStdChecks caught the XO0804s only after a full
+  offload gate had passed; the gate does not run `TestStdChecks`, so
+  the gate had to run twice.

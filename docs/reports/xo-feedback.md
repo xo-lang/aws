@@ -3564,3 +3564,23 @@ Disliked:
   private field to a std struct silently invalidates
   std/rt/std_gen_*.go; only repotest's TestStdGenCurrent notices, after
   everything else passed.
+
+### 2026-11-16: #115 and #117 fuzz harnesses (amqp, grpc, httpproxy, otp)
+
+- Liked: (1) The stress programs (amqp over an amqptest broker, otp)
+  built and passed on amd64 and llvm on the first run once they type
+  checked; 16 AMQP clients over loopback in 0.2 s. (2) `${e:?}` gives a
+  readable error for any enum, so fail-first tests and diff programs
+  need no Display impls. (3) std/url's rule for decoded bytes that are
+  not UTF-8 (keep the `%XX`) is documented in one place, so the otp
+  fuzz modeled it in ten lines instead of chasing 38 "differences".
+- Disliked: (1) On the native backends `Float32.from_bits` quiets a
+  signaling NaN (0x7f800043 reads back 0x7fc00043): the prelude narrows
+  a double, and `float32_to_bits` forces the quiet bit; the Go backend
+  keeps the bits. Bit exact float32 decoding (AMQP, CBOR, protobuf)
+  needs a raw bitcast; found by the amqp fuzz. (2) `${e}` on an enum
+  without Display is XO0404; the hint could suggest `:?`. (3) A stress
+  program under std/evidence cannot be checked or built in place
+  ("inside std"), so every run copies it to a temp dir first.
+  (4) Matching `x is Some` on an Option is XO0302; `is Some(..)` is
+  required, a small papercut for a very common test.

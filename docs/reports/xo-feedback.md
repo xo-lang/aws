@@ -3539,3 +3539,28 @@ Disliked:
   settle it. (4) A golden's want.txt needs the `exit 0` / `--- stdout`
   / `--- stderr` wrapper, while `xo run` prints only stdout; a
   `--golden` output mode would remove a hand step.
+
+### 2026-11-16: #90 fuzz harnesses and stress (websocket, dns, smtp, multipart, netip)
+
+- Liked: (1) Checked Int arithmetic caught a bug in my own stress
+  program at once (an LCG multiply overflowed with a clear fault and
+  line), and `wrapping_mul` / `wrapping_add` were there to say what I
+  meant. (2) The Go-port style of std made each differential cheap:
+  when std/smtp, std/dns and std/multipart differed from Go, the cause
+  was a named Go function (textproto ReadLine at EOF, checkHeader,
+  partReader's Peek window) and the fix followed its shape. Five
+  harnesses found six real bugs (a websocket length fault, three dns
+  answers, three smtp reply-reading cases, one multipart resume point).
+  (3) Bytes.quote matches Go's %q for invalid UTF-8, so keeping a
+  reply's raw bytes was enough to print Go's error text exactly.
+- Disliked: (1) The xo binary carries its std: editing std/*.xo and
+  rebuilding a test program with XO_STD pointed at the tree still
+  compiles the old std until `go run ./scripts/xobuild`. A mutation
+  check passed silently because of it; `xo build` could warn when
+  XO_STD's sources differ from the std it carries. (2) `Str` from
+  outside bytes is lossy by design (decision 0259), and std/smtp had
+  turned that into `?? ""`, losing a whole reply line; a lint for
+  `to_str() ?? ""` on input bytes would have flagged it. (3) Adding a
+  private field to a std struct silently invalidates
+  std/rt/std_gen_*.go; only repotest's TestStdGenCurrent notices, after
+  everything else passed.

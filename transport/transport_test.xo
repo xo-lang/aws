@@ -1,12 +1,11 @@
 use std/http
 use github.com/xo-lang/aws
-use github.com/xo-lang/aws/credentials
 use github.com/xo-lang/aws/retry
 use github.com/xo-lang/aws/sigv4
 use github.com/xo-lang/aws/sigv4a
 
 fn test_client(net: Net, clock: Clock, rand: Rand) -> Client {
-  new_client(net, clock, rand, credentials.static_provider("AKIDTEST0000000000", "invented-secret"), retry.standard())
+  new_client(net, clock, rand, aws.static_provider("AKIDTEST0000000000", "invented-secret"), retry.standard())
 }
 
 fn sts_request() -> Request {
@@ -112,7 +111,7 @@ test "a repeated Date is its first field when correcting skew, as Go's Header.Ge
 }
 
 test "missing credentials fail without sending" {
-  let c = new_client(os.net, os.clock, os.rand, credentials.FixedResult{result: Err(aws.CredentialsErr.NotFound("none"))}, retry.standard())
+  let c = new_client(os.net, os.clock, os.rand, NoCredentials{}, retry.standard())
   expect(send(c, sts_request(), SIGNING, status_failure) is Err(SendErr.Credentials(_))) == true
   expect(os.net.requests().len()) == 0
 }
@@ -123,7 +122,7 @@ test "auth None and Optional send unsigned when credentials are missing; Optiona
     seen.with(fn(var xs: List[Bool]) { xs.push(req.header("Authorization").is_some()) })
     http.text(200, "ok")
   })
-  let none = new_client(os.net, os.clock, os.rand, credentials.FixedResult{result: Err(aws.CredentialsErr.NotFound("none"))}, retry.standard())
+  let none = new_client(os.net, os.clock, os.rand, NoCredentials{}, retry.standard())
   send(none, sts_request(), SIGNING with {auth: Auth.None}, status_failure)?
   send(none, sts_request(), SIGNING with {auth: Auth.Optional}, status_failure)?
   let some = test_client(os.net, os.clock, os.rand)
@@ -259,4 +258,12 @@ test "presigning with a region set uses SigV4a" {
   let p = presign(c, Request{method: "GET", host: "mrap.accesspoint.s3-global.test", path: "/k"}, Signing{service: "s3", region: "us-east-1", s3: true, region_set: Some(["*"])}, 15m)?
   expect(p.url.contains("X-Amz-Algorithm=AWS4-ECDSA-P256-SHA256&")) == true
   expect(p.url.contains("X-Amz-Region-Set=%2A&")) == true
+}
+
+/// A provider that finds nothing (the credentials module's FixedResult
+/// is out of the root's reach, decision 0011).
+struct NoCredentials {}
+
+fn (p: NoCredentials) retrieve() -> aws.Credentials ! aws.CredentialsErr uses (net.dial, clock, rand) {
+  Err(aws.CredentialsErr.NotFound("none"))
 }

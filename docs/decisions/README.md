@@ -15,3 +15,4 @@ deleted.
 - [0008](0008-continuous-integration.md): the weekly models workflow: newest Xo release, model update, every check, merge and tag on green, pull request and issue on red, no AWS in CI (Accepted)
 - [0009](0009-streamed-uploads.md): streamed request bodies: `aws.Upload` from a file (retried from its start) or a reader (sent once), S3 uploads in aws-chunked with a trailing checksum, `aws.auth#unsignedPayload` honored (Accepted)
 - [0010](0010-float32-members.md): Smithy `float` members as `Float32`, each protocol rounding as Go does (Accepted)
+- [0011](0011-credential-modules.md): credential discovery, config and file uploads in modules of their own, the root and services at clock, net.dial and rand (gcp 0014, all SDKs; v0.3.0) (Accepted)

@@ -36,8 +36,29 @@ bumped() {
 plan=$(mktemp)
 # tags this run made or, without --push, would make
 planned=$(mktemp)
-trap 'rm -f "$plan" "$planned"' EXIT
+trap 'rm -f "$plan" "$plan.x" "$planned"' EXIT
 scripts/changed-modules.sh "$base" | awk -F'\t' '$1 == "." || $1 ~ /^service\//' > "$plan"
+# The root and service/sts are rated against their own newest tags, not
+# against the run's base: a root that changed since its last tag is
+# tagged by the next run that tags anything, even when that run's own
+# commits did not touch it (2026-11-11: the models run's base was its
+# PR's parent, the root had changed since v0.1.0 in earlier commits, so
+# the root was not in the plan and check-core-requires refused the
+# services against v0.1.0). The services are rated from the base as
+# before, and each is checked against the root this run tags.
+rerate() {
+  m=$1
+  v=$(latest "$m")
+  [ -n "$v" ] || return 0
+  b=$(scripts/changed-modules.sh "$(prefix_of "$m")v$v" | awk -F'\t' -v m="$m" '$1 == m { print $2 }')
+  awk -F'\t' -v m="$m" '$1 != m' "$plan" > "$plan.x"
+  if [ -n "$b" ]; then
+    printf '%s\t%s\n' "$m" "$b" >> "$plan.x"
+  fi
+  mv "$plan.x" "$plan"
+}
+rerate .
+rerate service/sts
 if [ ! -s "$plan" ]; then
   echo "tag-modules: no published module changed since $base"
   exit 0

@@ -54,9 +54,9 @@ assume role through `source_profile` or `credential_source`), and EC2
 instance metadata (IMDSv2), ECS and EKS container credentials, web
 identity (IRSA), IAM Identity Center (SSO) and `credential_process`, on
 main since v0.1.0. Two need one call after loading the configuration:
-`cfg.run_credential_processes(os.tasks, os.proc, os.clock)` for a
-`credential_process`, and `cfg.watch_token_files(os.tasks, os.fs,
-os.clock)` for a program on EKS that runs longer than a day, or to
+`config.run_credential_processes(cfg, os.tasks, os.proc, os.clock)` for
+a `credential_process`, and `config.watch_token_files(cfg, os.tasks,
+os.fs, os.clock)` for a program on EKS that runs longer than a day, or to
 write a refreshed SSO token back to its cache (see
 [usage](docs/usage.md)). Lambda works, since it sets the environment.
 
@@ -77,17 +77,26 @@ this repository's tests also need 0.40.0's full duplex test network.
 ## Install
 
 Each service is its own module, next to the core module
-`github.com/xo-lang/aws`. Require the core and the services you use in
+`github.com/xo-lang/aws`. Credential discovery (`config`,
+`credentials`) and file uploads (`fileio`) are modules of their own too,
+so the core and every service reach only the network, the clock and
+randomness, and a program accepts reading the environment, files or
+running a `credential_process` only for the module that does it
+(decision 0011, v0.3.0). Require the core and the modules you use in
 your `xo.mod`:
 
 ```
 module example.com/app
 edition preview
 
-require github.com/xo-lang/aws v0.1.0
-require github.com/xo-lang/aws/service/s3 v0.1.0
-require github.com/xo-lang/aws/service/dynamodb v0.1.0
+require github.com/xo-lang/aws v0.3.0
+require github.com/xo-lang/aws/config v0.3.0
+require github.com/xo-lang/aws/credentials v0.3.0
+require github.com/xo-lang/aws/service/s3 v0.3.0
+require github.com/xo-lang/aws/service/dynamodb v0.3.0
 ```
+
+or `xo get github.com/xo-lang/aws/config@v0.3.0` and the rest.
 
 Then import the packages you use:
 
@@ -96,9 +105,11 @@ use github.com/xo-lang/aws/config
 use github.com/xo-lang/aws/service/s3
 ```
 
-Versions are git tags: `vX.Y.Z` for the core and `service/<name>/vX.Y.Z`
-for a service (`service/s3/v0.1.0`). v0.1.0 tags every module at one
-commit; after it, each module gets a new tag only when it changes.
+Versions are git tags: `vX.Y.Z` for the core and `<module>/vX.Y.Z`
+for the others (`service/s3/v0.3.0`, `config/v0.3.0`). v0.1.0 and v0.3.0
+tag every module at one commit; between them, each module gets a new
+tag only when it changes. Upgrading from v0.2: see
+[docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
 
 ## Layout
 

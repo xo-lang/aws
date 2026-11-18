@@ -77,6 +77,17 @@ says what happened, not a general opinion. Bugs with repros go in
   emitted form covers known values, unknown values from newer services,
   and `E.from(s)`, with no hand-written helpers.
 
+- **Name hints for other languages' methods (2026-11-11, gcp storage
+  step 3).** Writing the signing port, `.has`, `.chars` and
+  `Str.from_byte` each failed with a note naming the Xo spelling
+  (`contains`, `runes`) or the way to build the value (`BytesBuilder`),
+  and `Time.UNIX_EPOCH()` was answered with "a constant, not a
+  function". Each error took seconds to fix, not a lookup.
+- **FakeNet names a missing route (2026-11-11).** A request to a host
+  with no handler fails at once with "no fake handler for GET
+  https://nowhere.fake/x". A test that seemed to hang was the
+  storage client's own retries of that error, not FakeNet.
+
 ## Didn't like, or cost time
 
 - **`env.args()` leaves out the program name (2026-11-04).** Go's
@@ -401,7 +412,9 @@ Disliked:
   (`fn(var l: List[Str], code: Str)`), but `xo test` on the native
   backends then stops with XO1201 "function values with `var`
   parameters (support is planned)". The checker could warn, since every
-  default build is native.
+  default build is native. Fixed on xo main by fd27a4579 (2026-11-05):
+  a stored closure with a `var` parameter, passed as a value and called
+  from a `List`, runs on arm64, LLVM, Go and wasm (golden c6f84649e).
 - `xo test --run` is a substring match (documented in `xo help
   test`), where Go's `-run` is a regular expression, so `--run 'a|b'`
   quietly matches nothing. The "no tests match" message could say it
@@ -3284,3 +3297,245 @@ Disliked:
 - A module in a subdirectory of its repository has no LICENSE in its tree
   (Go copies the root's), so a "no license, no docs" site hides nearly all
   of them; decision 0590 proposes Go's rule.
+
+## 2026-11-11: the gcp Cloud Storage client, step 1 (decision 0010)
+
+Liked:
+- FakeNet plus a Go program printing every request made a line-for-line
+  oracle easy: 28 cases (headers, sorted queries, bodies, errors,
+  retries) passed on first run, and changing one expected line failed
+  4 tests, so the comparison is real.
+- `json.Value` built by hand is enough for Go's ForceSendFields and
+  NullFields PATCH bodies (empty values sent, nulls on purpose), with no
+  reflection.
+
+Disliked:
+- A FakeNet handler cannot cut a response body short: an `http.stream`
+  whose function returns `Err` after writing reads as a clean end, and a
+  `Content-Length` larger than the body is ignored. Go's server drops the
+  connection there, and the client sees `unexpected EOF`. So the storage
+  Reader's reopen-after-a-dropped-connection path can't be tested
+  against FakeNet. The same holds for a real `http.server` on an
+  in-memory listener: a stream's `Err` ends a chunked body cleanly, where
+  Go's handler can abort the connection (panic(http.ErrAbortHandler)).
+  And an `http.client` cannot reach a raw `os.net.listen` listener under
+  FakeNet ("fakenet: raw listener"), so a hand-written short response
+  isn't possible either. Proposal: a stream function's `Err` aborts the
+  connection, so the client's `read` gets `Protocol("unexpected EOF")`,
+  as std.md 4.5 says for a body cut short.
+- Under FakeNet, `ClientStream.read(max)` can return more than `max`
+  bytes (`read(3)` gave all 5 bytes of "hello"), though std.md says "at
+  most max". The storage Reader now buffers the excess; a caller that
+  sizes a buffer by `max` would overrun it.
+
+### 2026-11-11: BigQuery step 1 (gcp ac7f65d)
+
+Liked:
+- The storage port's pattern carried over whole: a fake on FakeNet, Go's
+  JSON rendered from `json.Value`, and a generated test file. 43 of 44
+  Go oracle cases passed on the first run; the 44th was a planned
+  departure (std/json's error text).
+- Effect-generic handles (`Table[fx]`, `Routine[fx]`) caught a helper
+  that forgot its `[fx: Effects]` (XO0702 names the fix).
+
+Disliked:
+- XO1301 reads a Google API version as a semver major: `require
+  github.com/xo-lang/gcp/bigquery/v2 v0.1.0` fails ("a module path
+  ending in /v2 takes only v2.x.y versions") though the tag
+  `bigquery/v2/v0.1.0` exists. 91 generated gcp modules end in `/v2` or
+  above, so none of them can be required outside the workspace.
+  `bigquery` resolves `bigquery/v2` through `xo.work` until the owner
+  picks a fix (tag them vN, exempt them, or rename the paths).
+  (Settled 2026-11-11 by gcp decision 0012: `apivN` paths.)
+
+### 2026-11-11: BigQuery step 2a, row values (gcp decision 0011)
+
+Liked:
+- An enum `Value` with one variant per BigQuery kind made Go's `any`
+  plus type switches into exhaustive matches; the checker found every
+  conversion that forgot a kind. All 39 Go oracle cases passed on the
+  first full run once the module type-checked.
+- `Float.to_general(-1)`, `to_exp(-1)` and `to_fixed(-1)` reproduce
+  Go's `%v`, `strconv 'g'` and encoding/json's float forms exactly, and
+  `Int.parse`/`Bool.parse`/`Float.parse` name the Go functions they
+  match, so Go's strconv error texts could be kept byte for byte.
+- Compile errors were precise and fixable in one pass: XO0410 (Map
+  index faults) with the `get_or_fault` fix, XO0403 naming the
+  variant's field names, XO0156 for an interpolation spanning lines.
+
+Disliked:
+- An interface method cannot declare `var self`: `interface Loader {
+  fn load(var self, n: Int) }` gives XO0403 ("must take `self` first")
+  and XO0160, though a type's own method can (`fn (var b: Box)
+  load(...)`, as the spec's `next(var self)` iterators do). So Go's
+  `ValueLoader` (whose `Load` fills its receiver) became a function
+  `fn(List[Value], Schema) -> T ! BqErr`. With a plain `self` in the
+  interface, a `var` receiver method satisfies it, but the native
+  backends refuse the call through the interface (XO1201, planned).
+  Repro sent to the lead. Update 2026-11-12: fixed on xo main 1d8f3fd02
+  (decision 0613 step 4) for generic bounds; gcp's ValueLoader is an
+  interface again on a held branch for Xo 0.50 (`next_into[T:
+  ValueLoader](var dst: T)` writes back, tested). Interface values of
+  it still give XO1201 until step 5.
+- (Corrected: my first draft said std/json had no hook for a type's own
+  JSON form. It has one, `derive Json(via: P, to: f, from: g)`
+  (decision 0478, core 2.3); I had not checked the spec. The `Null*`
+  types now use it, with `json.Value` as the proxy: 3 more Go cases
+  pass. One snag: `derive Json(via: ...)` still requires every field to
+  implement Json (XO0404 on a `DateTime` field), though the fields never
+  travel; `DateTime` gained `derive Json` to satisfy it.)
+- `Time` holds 1677-09-21 to 2262-04-11 by design (decision 0364), so a
+  BigQuery TIMESTAMP outside those years (the API allows 1 to 9999, a
+  year-1 cell is `-62135596800000000` microseconds) is an error in Xo
+  where Go reads it. The lead has asked for an ADR on Go's full range.
+- `json.Value.Object` is a field list, so a Map's JSON has to be sorted
+  by hand to match Go's encoding/json (sorted map keys); the saver's
+  row JSON (sorted keys, `<>&` escapes, NaN refused) is a hand-written
+  encoder.
+
+### 2026-11-11: BigQuery step 3, queries, jobs, rows and inserts (gcp decision 0011)
+
+Liked:
+- Interface values (`List[ValueSaver]`) made Go's `Put(src any)` of a
+  slice of savers a plain typed parameter; mixed saver types in one
+  list need no reflection.
+- `var self` methods on a value type (`Job.status`, `RowIterator.next`)
+  carry Go's pointer-receiver state (last status, the page buffer)
+  without aliasing; a copied iterator is independent.
+- The injected `Clock` and `Rand` made Go's random job and insert ids
+  and its time-stamped request ids testable: the tests run every poll
+  and retry pause at 1 ms. All 43 Go oracle cases matched on the first
+  run that type-checked (a mutated expected line fails, as it should).
+- XO0603 caught a field and a method with the same name (`Job.config`
+  and `config()`) and named both; XO0702's note gave the exact fix for
+  a free function over `Client[fx]` (`fn f[fx: Effects](...)`).
+
+Disliked:
+- A false XO0407, "type alias `Schema` refers to itself", depends on
+  declaration names. Minimal repro (three declarations): `struct A {
+  schema: Schema }`, `type Schema = List[Field]`, `struct Field {
+  schema: Schema }` errors at Field's field; rename `A` to `B` (sorting
+  after `Field`) and it checks clean. In gcp it came from bigquery's
+  `FetchedPage` (sorting before `FieldSchema`) holding a `Schema?`;
+  writing `List[FieldSchema]?` works around it. Sent to Lang 1.
+  Update 2026-11-12: fixed on xo main 955837e2c (any name order checks
+  clean; a true cycle is still XO0407). gcp goes back to `Schema?` with
+  Xo 0.50; Xo 0.49.1 still has the bug.
+- `Error` is the prelude interface, so Go's bigquery `Error` struct had
+  to be renamed (`ServiceError`); XO0603's note suggests `BigqueryErr`,
+  which here would clash with the module's own `BqErr`.
+- **XO0510 on a match binding of a move only value inside a loop
+  (2026-11-15, std/hpke corpus).** `for _ in 0..2 { var c = match mk() {
+  Ok(x) => x  Err(e) => fault(e) } ... }`, with `mk` returning a std
+  `@move_only` handle (`compress.Compressor` reproduces it), is
+  `XO0510: use of moved value x` at the `Ok(x) => x` arm; the same body
+  outside a loop checks clean, and `mk() ?? e => fault(e)` fails the same
+  way (its desugared `ok`). The binding is fresh each iteration, so the
+  checker seems to carry the arm's move into the next iteration. 13 line
+  repro: ~/xo-lead/notes/aws-43/xo0510-loop-match/main.xo. Workaround:
+  the loop body in a helper function. Sent to the lead for Lang 1.
+  Update 2026-11-15: fixed on xo main 4e1d41a4c (Lang 1); the repro
+  checks clean with bin/xo rebuilt from main.
+- **XO0804 fires for `if let` but not for the same `match` (2026-11-15,
+  std/sql MySQL driver).** A loop that takes a value out of a Mutex in
+  one `with`, then on `None` reads the socket and appends in a second
+  `with`, warns "acts on a decision about `got`" when the test is
+  `if let Some(x) = got { ... return }`, and checks clean when it is
+  `match got { Some(x) => { ... return } None => {} }`. Both are the
+  same control flow. Either the warning is right and the `match` form
+  misses it, or the `if let` form is a false positive; pg.xo's identical
+  loop uses `match` and never warns. Not yet sent.
+- **`Time` cannot hold Go's zero time (2026-11-15, std/sql MySQL
+  driver).** `Time` is int64 nanoseconds (1678 to 2262), so
+  go-sql-driver's mapping of MySQL's zero date to `time.Time{}` (year 1)
+  has no `Time`; `Time.parse_rfc3339("0001-01-01T00:00:00Z")` is `None`,
+  and the driver's `?? Time.UNIX_EPOCH` fallback silently gave
+  1970-01-01 until the conformance run caught it. Liked: the range is
+  documented and `Civil` covers wide years. Disliked: the `?? EPOCH`
+  idiom (also in pgdiff) hides the failure; a `Time.MIN`/`MAX` or a
+  lint for `?? Time.UNIX_EPOCH` on a constant literal would have shown
+  it at once. The driver now keeps such dates as `Text`, as pg keeps
+  `infinity`.
+- **A closure literal in a std native module broke another module's
+  darwin test link (2026-11-15, std/sql MySQL driver).** Passing
+  `fn(b) { sha1.sum(b) }` to llrt rsa's `encrypt_oaep_fn` in
+  std/native/llrt/mysqlauth.xo made `xo test --std-module=native/llrt/pg
+  --backend=native` fail at link with `no FDE for the DWARF mode function
+  at 4295777592` (no symbol name), deterministically; llvm, the other
+  modules and ordinary builds were fine. Passing `sha1.sum` directly
+  links. Disliked: the failure surfaced in an unrelated module's test and
+  named no function, so it took a bisect to find. Repro:
+  ~/xo-lead/notes/aws-43/fde-closure. Sent to the lead for Lang 1/2.
+  Update (2026-11-15): fixed in xo f1cae7e48 (compiler/macho store.xo,
+  Lang 1). The cause was not the closure: pg's test defines
+  mysql.handshake strongly, and the std store's weak copy left its
+  fault-stubs region's compact unwind entry behind; any change to that
+  function could trigger it (stage D hit it with no closure at all). The
+  error now names the nearest symbol and the entry's relocation. Liked:
+  a fix within the hour of a bisect file.
+- **std/sql stage D: prepared statements and query_all (2026-11-15).**
+  Liked: one Xo implementation of the pool serves native, llvm and wasm,
+  and the Go rt mirror plus golden Go parity caught the one order
+  difference (a Go map where native keeps a list) before it shipped.
+  Disliked: (1) interfaces have no default methods, so adding the
+  optional `DriverConn.prepare` is a breaking change for every driver
+  written in Xo (seven implementers in the tree, as `copy_from` was in
+  0479); a default body, or an "optional method" check, would make
+  driver interfaces extensible. (2) A struct declared in a std
+  declaration file cannot hold the native module's opaque types
+  (`ResultSet{rows: List[Row]}` is `List[sql.Row]` against
+  `List[native.sql.Row]`, XO0401), so `ResultSet` had to become an opaque
+  handle with accessors. (3) `XO_LLVM_GOLDENS` takes commas; a space
+  separated list silently skips every golden ("not selected") and the
+  run passes, which looked like success until `-v`. (4) Adding `prepare`
+  collided with std/sqlite's own private `prepare(q, at)` (a duplicate
+  declaration): method names of a type share one namespace whatever
+  their arity, so an interface addition can break a driver's internals.
+
+### 2026-11-15: std/sql cancellation (MySQL KILL QUERY, Postgres CancelRequest, DSN timeouts)
+
+- Liked: `{ defer { ... } }` as a shielded block made "do the cleanup
+  call even though this task is cancelled" one line, and XO-F005's 5 s
+  cap gave a concrete budget (1 s dial, 2 s exchange). A fake server on
+  FakeNet plus a `Chan[Str]` of what it saw made the KILL and
+  CancelRequest tests exact; disabling the call turns them into an
+  XO-F001 deadlock, so they are not vacuous. Deadlines on FakeNet
+  conns work through the same `netconn.set_deadline` path as real
+  sockets.
+- Disliked: (1) awaiting a cancelled task faults ("awaited a task that
+  was canceled before it finished"), and a cancelled task's code after
+  its cancellation point never runs (a `Mutex.with` storing the result
+  is skipped), so a test cannot observe what a cancelled call returned;
+  a `t.await` that gave `Err(Canceled)`, or a `t.result()`, would help.
+  (2) XO0804 (split critical section) is intraprocedural: the same
+  check then act, moved into a helper function (`add_stmt`,
+  `put_idle`), passes. Here the code was correct (the state was owned
+  by the task), so the helper is honest, but the warning is easy to
+  hide by accident too; an `xo:allow XO0804 <reason>` would say why.
+  (3) `xo fmt` on a std file that was not fmt-clean rewrote unrelated
+  code (a packed OID list into one item per line, 180 lines of diff);
+  std files should be fmt-clean or `xo fmt --lines` should exist.
+  (4) Pushq's TestStdChecks caught the XO0804s only after a full
+  offload gate had passed; the gate does not run `TestStdChecks`, so
+  the gate had to run twice.
+
+### 2026-11-15: std/tls QUIC (decision 0644 T14)
+
+- Liked: the native TLS engines are sans-I/O (feed bytes, take bytes),
+  so QUIC was hooks at three points (handshake bytes out, keys set, a
+  pause for transport parameters) and a small ordering layer, not a
+  second handshake. The go backend over Go's own QUICConn gave the
+  exact event order to match, and the golden diffed byte for byte
+  across native, llvm and split on the first full run.
+- Disliked: (1) `if var x = opt { ... }` does not parse (XO0160);
+  mutating an optional field's payload needs `if let Some(x0) = o {
+  var x = x0 ... o = Some(x) }`, three lines for one idea. (2) A
+  bodyless std method (`fn (l: QuicEncryptionLevel) display()`) is
+  implemented natively as `quicencryptionlevel_display`; the XO0606
+  error for declaring the method directly does not name that
+  convention. (3) `xo test --std-module` on a module without tests says
+  "no tests" and it is not clear whether it type-checked the module;
+  parse errors show, so it did, but saying "checked, no tests" would
+  settle it. (4) A golden's want.txt needs the `exit 0` / `--- stdout`
+  / `--- stderr` wrapper, while `xo run` prints only stdout; a
+  `--golden` output mode would remove a hand step.

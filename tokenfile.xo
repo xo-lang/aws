@@ -6,14 +6,12 @@
 //
 // aws-sdk-go-v2 reads the file at every credentials refresh. Here a
 // provider's `retrieve` has no file effect, so the file is read when it
-// is loaded, and `watch`, run as a background task on a group that
-// lives as long as the program (`os.tasks`), reads it again every few
-// minutes, or writes it back after `set`. `config.load_default_config`
-// lists the files it read in
-// `Config.token_files`; `cfg.watch_token_files(os.tasks, os.fs, os.clock)`
-// starts their watches.
-
-use std/task
+// is loaded and read again (or written back after `set`) by a watch on
+// a background task. The type lives in the root, which reaches no files
+// (decision 0011); the credentials module reads and watches the file
+// (`credentials.load_token_file`, `credentials.watch`), and
+// `config.watch_token_files(cfg, os.tasks, os.fs, os.clock)` starts the
+// watches of the files `config.load_default_config` read.
 
 /// A token from a file; copies share the token.
 pub struct TokenFile {
@@ -23,21 +21,15 @@ pub struct TokenFile {
   dirty: Atomic[Bool]
 }
 
-/// Reads `path` now (surrounding white space dropped).
-pub fn load_token_file(fs: Fs, path: Str) -> TokenFile ! Str uses fs.read {
-  let t = read_token(fs, path)?
-  Ok(TokenFile{path: path, token: Mutex.new(t), dirty: Atomic.new(false)})
-}
-
-/// The token file at `path`, empty when it cannot be read now (an SSO
-/// cache before `aws sso login`); the watch reads it again later.
-pub fn token_file_or_empty(fs: Fs, path: Str) -> TokenFile uses fs.read {
-  load_token_file(fs, path) ?? _ => TokenFile{path: path, token: Mutex.new(Secret.new("")), dirty: Atomic.new(false)}
+/// The token file at `path` holding `token`, as read from it (the
+/// credentials module reads it).
+pub fn token_file(path: Str, token: Secret[Str]) -> TokenFile {
+  TokenFile{path: path, token: Mutex.new(token), dirty: Atomic.new(false)}
 }
 
 /// A token file holding `token`, for tests and for tokens from elsewhere.
 pub fn fixed_token(token: Str) -> TokenFile {
-  TokenFile{path: "", token: Mutex.new(Secret.new(token)), dirty: Atomic.new(false)}
+  token_file("", Secret.new(token))
 }
 
 /// The token as last read.
@@ -52,66 +44,23 @@ pub fn (t: TokenFile) set(token: Str) {
   t.dirty.set(true)
 }
 
-/// Writes the token to the file when `set` changed it, keeping the
-/// file's permission bits (`write_atomic`).
-pub fn (t: TokenFile) flush(fs: Fs) -> () ! Str uses fs {
-  if t.path == "" || !t.dirty.get() {
-    return Ok(())
-  }
-  t.dirty.set(false)
-  write_atomic(fs, t.path, t.get().reveal().bytes()) ?? e => {
-    t.dirty.set(true)
-    return Err("${t.path}: ${e.display()}")
-  }
-  Ok(())
+/// Replaces the token with one read from the file (not to be written
+/// back).
+pub fn (t: TokenFile) loaded(token: Secret[Str]) {
+  t.token.reset(token)
 }
 
-/// Reads the file again; on an error the last token is kept and the
-/// error returned.
-pub fn (t: TokenFile) reload(fs: Fs) -> () ! Str uses fs.read {
-  let s = read_token(fs, t.path)?
-  t.token.reset(s)
-  Ok(())
+/// Whether `set` changed the token since the file was last written, and
+/// clears the mark; a failed write puts it back with `mark_dirty`.
+pub fn (t: TokenFile) take_dirty() -> Bool {
+  t.dirty.swap(false)
 }
 
-/// Every `every` until cancelled: writes the file if `set` changed the
-/// token, else reads it again. Run it as a
-/// background task: `os.tasks.spawn_background(fn() { t.watch(os.fs,
-/// os.clock) })`. A failed read keeps the last token (the file is being
-/// replaced, or is briefly missing) and is tried again next time.
-pub fn (t: TokenFile) watch(fs: Fs, clock: Clock, every: Duration = 5m) uses (fs, clock) {
-  if t.path == "" {
-    return
-  }
-  while true {
-    clock.sleep(every)
-    if t.dirty.get() {
-      let _ = t.flush(fs).ignore_err("still dirty; the next pass writes it again")
-    } else {
-      let _ = t.reload(fs).ignore_err("the last token is kept; the next pass reads the file again")
-    }
-  }
+pub fn (t: TokenFile) mark_dirty() {
+  t.dirty.set(true)
 }
 
-/// Starts a watch of each of `c.token_files` on `tasks`, a group that
-/// lives as long as the program (`os.tasks`). Long running programs on
-/// EKS need it: the service account token rotates and expires (24 hours
-/// by default). Lambda and short programs can leave it out.
-pub fn (c: Config) watch_token_files(tasks: task.Group, fs: Fs, clock: Clock, every: Duration = 5m) uses (fs, clock) {
-  for f in c.token_files {
-    tasks.spawn_background(fn() { f.watch(fs, clock, every) })
-  }
-}
-
-fn read_token(fs: Fs, path: Str) -> Secret[Str] ! Str uses fs.read {
-  match fs.read_text(path) {
-    Ok(s) => {
-      let t = s.trim()
-      if t == "" {
-        return Err("${path} is empty")
-      }
-      Ok(Secret.new(t))
-    }
-    Err(e) => Err("${path}: ${e.display()}")
-  }
+/// Whether the token waits to be written to the file.
+pub fn (t: TokenFile) is_dirty() -> Bool {
+  t.dirty.get()
 }

@@ -73,8 +73,8 @@ Two kinds of credentials need a task on `os.tasks`, since a provider's
 
 ```
 let cfg = config.load_default_config(os.env, os.fs, os.net, os.clock, os.rand)?
-cfg.watch_token_files(os.tasks, os.fs, os.clock)          // token files
-cfg.run_credential_processes(os.tasks, os.proc, os.clock) // credential_process
+config.watch_token_files(cfg, os.tasks, os.fs, os.clock)          // token files
+config.run_credential_processes(cfg, os.tasks, os.proc, os.clock) // credential_process
 ```
 
 - Token files (the IRSA token, `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`,
@@ -160,12 +160,17 @@ UploadPart) also takes `<payload>_stream`, a body sent as it is read, so
 a large file is not held in memory (decision 0009):
 
 ```
-let up = aws.upload_file(os.tasks, os.fs, "backup.tar")?
+let up = fileio.upload_file(os.tasks, os.fs, "backup.tar")?
 c.put_object(s3.PutObjectRequest{bucket: "b", key: "backup.tar", body_stream: Some(up)})?
 ```
 
-The file is read on a task started on `os.tasks`, again from its start
-when an attempt is retried. `aws.upload_reader(reader, length)` sends
+`fileio` (`use github.com/xo-lang/aws/fileio`) is a module of its own,
+the one that reads files (decision 0011). The file is read on a task
+started on `os.tasks`, again from its start when an attempt is
+retried. `aws.upload_opener(open, length, done)` retries any body the
+program can give afresh: `open` returns a new `http.BodyReader` per
+attempt, and `done` runs when the operation returns.
+`aws.upload_reader(reader, length)` sends
 any `http.BodyReader` (an `http.pipe()` a task writes) once, with no
 retries. S3 needs the length, and sends the body in the `aws-chunked`
 encoding with its checksum (CRC32 by default) as a trailer, computed as

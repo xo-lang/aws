@@ -46,6 +46,11 @@ current as work finds new ones.
    one commit, and tags the services there. Before 2026-11-06 it tagged
    services that still required v0.1.0 while calling newer core
    functions; check a release the same way, against a scratch clone.
+   The root and `service/sts` are rated against their own newest tags,
+   not against the run's base, so a root that changed since its last tag
+   is tagged by the next run that tags anything (2026-11-11: a run whose
+   base was its PR's parent left the root out, and the services were
+   refused against the old root).
 9. **CI.** Push `.github/workflows/models.yml` only after the repository
    is public, run it once by hand (a `workflow_dispatch` dry run) and
    report its timings before the first scheduled Wednesday run

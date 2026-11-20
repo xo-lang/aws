@@ -8,6 +8,27 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+fn xml_read_streaming_distribution_summary(e: xml.Element) -> StreamingDistributionSummary ! Str {
+  var out = StreamingDistributionSummary{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Id" => out.id = c.text()
+      "ARN" => out.arn = c.text()
+      "Status" => out.status = c.text()
+      "LastModifiedTime" => out.last_modified_time = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
+      "DomainName" => out.domain_name = c.text()
+      "S3Origin" => out.s3_origin = xml_read_s3_origin(c)?
+      "Aliases" => out.aliases = xml_read_aliases(c)?
+      "TrustedSigners" => out.trusted_signers = xml_read_trusted_signers(c)?
+      "Comment" => out.comment = c.text()
+      "PriceClass" => out.price_class = PriceClass.from(c.text())
+      "Enabled" => out.enabled = xmlv.read_bool(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_streaming_distribution_summary_list(var w: xmlv.Writer, v: List[StreamingDistributionSummary], name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)

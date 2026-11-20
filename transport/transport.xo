@@ -134,8 +134,8 @@ enum AttemptErr {
 /// (its retry quota and clock offset are shared too).
 pub struct Client {
   pub http: http.Client
-  pub clock: Clock
-  pub rand: Rand
+  pub clock: Clock[clock]
+  pub rand: Rand[rand]
   pub retryer: retry.Standard
   pub credentials: aws.CredentialsProvider
   /// No versions: each module is tagged on its own (scripts/tag-modules.sh),
@@ -156,7 +156,7 @@ pub struct Client {
   skew_ms: Atomic[Int]
 }
 
-pub fn new_client(net: Net, clock: Clock, rand: Rand, credentials: aws.CredentialsProvider, retryer: retry.Standard, timeout: Duration = 60s) -> Client {
+pub fn new_client(net: Net, clock: Clock[clock], rand: Rand[rand], credentials: aws.CredentialsProvider, retryer: retry.Standard, timeout: Duration = 60s) -> Client {
   Client{
     http: http.client(net, timeout),
     clock: clock,
@@ -184,7 +184,7 @@ pub fn send(c: Client, req: Request, signing: Signing, classify: fn(http.Respons
     return r
   }
   let max = c.retryer.max_attempts
-  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
+  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand, sync) {
     attempt_once(c, req, signing, classify, attempt, max)
   }, fn(e: AttemptErr) -> retry.Failure {
     match e {
@@ -401,7 +401,7 @@ fn send_upload(c: Client, req: Request, signing: Signing, classify: fn(http.Resp
   let payload = if req.trailer_checksum.is_some() { sigv4.STREAMING_UNSIGNED_TRAILER } else { sigv4.UNSIGNED_PAYLOAD }
   let max = if u.reopenable() { c.retryer.max_attempts } else { 1 }
   let retryer = c.retryer with {max_attempts: max}
-  let r = retry.run(retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand) {
+  let r = retry.run(retryer, c.clock, c.rand, fn(attempt: Int) -> http.Response ! AttemptErr uses (net.dial, clock, rand, sync) {
     let (signed, _, _, _) = sign_attempt(c, sreq, signing, attempt, max, Some(payload))?
     let source = u.open() ?? e => return Err(AttemptErr.Net(http.ClientErr.Protocol(e)))
     var hreq = signed
@@ -557,7 +557,7 @@ pub enum Opened {
 /// head: a body read error is the caller's.
 pub fn open(c: Client, req: Request, signing: Signing, classify: fn(http.Response) -> retry.Failure) -> Opened ! SendErr uses (net.dial, clock, rand) {
   let max = c.retryer.max_attempts
-  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> Opened ! AttemptErr uses (net.dial, clock, rand) {
+  let r = retry.run(c.retryer, c.clock, c.rand, fn(attempt: Int) -> Opened ! AttemptErr uses (net.dial, clock, rand, sync) {
     let hreq = signed_request(c, req, signing, attempt, max)?
     let st = match c.http.open(hreq) {
       Ok(x) => x

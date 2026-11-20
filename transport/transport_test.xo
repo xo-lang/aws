@@ -4,7 +4,7 @@ use github.com/xo-lang/aws/retry
 use github.com/xo-lang/aws/sigv4
 use github.com/xo-lang/aws/sigv4a
 
-fn test_client(net: Net, clock: Clock, rand: Rand) -> Client {
+fn test_client(net: Net, clock: Clock[clock], rand: Rand[rand]) -> Client {
   new_client(net, clock, rand, aws.static_provider("AKIDTEST0000000000", "invented-secret"), retry.standard())
 }
 
@@ -266,4 +266,19 @@ struct NoCredentials {}
 
 fn (p: NoCredentials) retrieve() -> aws.Credentials ! aws.CredentialsErr uses (net.dial, clock, rand) {
   Err(aws.CredentialsErr.NotFound("none"))
+}
+
+// Decision 0652 step 2b made Rand take an effect argument; a bare `Rand`
+// struct field became an effect nobody can name, so a closure with a fixed
+// uses list could not call a Client (xo-4c, 2026-11-16, task #160). The
+// field is Rand[rand]: the OS generator's effect, which a test Rand meets.
+test "a Client is callable from a closure with a fixed uses list" {
+  os.net.handle("POST https://sts.test/", fn(_req: http.Request) -> http.Response {
+    http.text(200, "<ok/>")
+  })
+  let c = test_client(os.net, os.clock, os.rand)
+  let call: fn() -> Int ! SendErr uses (net.dial, clock, rand, sync) = fn() -> Int ! SendErr uses (net.dial, clock, rand, sync) {
+    Ok(send(c, sts_request(), SIGNING, status_failure)?.status)
+  }
+  expect(call()?) == 200
 }

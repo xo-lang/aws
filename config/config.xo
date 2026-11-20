@@ -46,7 +46,7 @@ pub fn (e: ConfigErr) display() -> Str {
 /// environment names them, else EC2 instance metadata; a profile may
 /// also name IAM Identity Center (SSO)), retries, and configured endpoints. `net` and `rand`
 /// are kept for the role provider's STS calls; nothing is sent here.
-pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock, rand: Rand, opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
+pub fn load_default_config(env: Env, fs: Fs, net: Net, clock: Clock[clock], rand: Rand[rand], opts: Options = Options{}) -> aws.Config ! ConfigErr uses (env, fs.read) {
   let explicit = opts.profile.is_some() || (env.get("AWS_PROFILE") ?? "") != ""
   let profile = opts.profile ?? profile_name(env)
   let sc = match load_shared(env, fs) {
@@ -196,8 +196,8 @@ struct RoleContext {
   fs: Fs
   sc: SharedConfig
   net: Net
-  clock: Clock
-  rand: Rand
+  clock: Clock[clock]
+  rand: Rand[rand]
   region: Str?
   endpoints: aws.ConfiguredEndpoints
   imds: imds.Options
@@ -488,7 +488,7 @@ fn non_empty(s: Str?) -> Str? {
 /// EKS need it: the service account token rotates and expires (24 hours
 /// by default). Lambda and short programs can leave it out. (Before
 /// v0.3.0, `cfg.watch_token_files(...)`; decision 0011.)
-pub fn watch_token_files(cfg: aws.Config, tasks: task.Group, fs: Fs, clock: Clock, every: Duration = 5m) uses (fs, clock) {
+pub fn watch_token_files(cfg: aws.Config, tasks: task.Group, fs: Fs, clock: Clock[clock], every: Duration = 5m) uses (fs, clock) {
   for f in cfg.token_files {
     tasks.spawn_background(fn() { credentials.watch(f, fs, clock, every) })
   }
@@ -498,7 +498,7 @@ pub fn watch_token_files(cfg: aws.Config, tasks: task.Group, fs: Fs, clock: Cloc
 /// as the program (`os.tasks`). Needed only when a profile names a
 /// credential_process. (Before v0.3.0,
 /// `cfg.run_credential_processes(...)`; decision 0011.)
-pub fn run_credential_processes(cfg: aws.Config, tasks: task.Group, proc: Proc, clock: Clock) uses (proc, clock) {
+pub fn run_credential_processes(cfg: aws.Config, tasks: task.Group, proc: Proc, clock: Clock[clock]) uses (proc, clock) {
   for p in cfg.processes {
     credentials.start_process(p, tasks, proc, clock)
   }

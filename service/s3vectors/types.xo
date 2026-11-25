@@ -7,6 +7,21 @@ pub struct AccessDeniedException {
   pub message: Str? = None
 }
 
+/// The backfill status of a text search analyzer.
+pub enum AnalyzerStatus: Str {
+  Active = "ACTIVE"
+  Building = "BUILDING"
+  Unknown(value: Str)
+}
+
+/// The raw BM25 relevance score for a single searchable metadata key.
+pub struct Bm25Score {
+  /// The searchable metadata key that the score applies to.
+  pub metadata_key: Str? = None
+  /// The BM25 relevance score.
+  pub score: Float32? = None
+}
+
 /// The request failed because a vector bucket name or a vector index name
 /// already exists. Vector bucket names must be unique within your Amazon
 /// Web Services account for each Amazon Web Services Region. Vector index
@@ -302,6 +317,23 @@ pub struct KmsNotFoundException {
   pub message: Str? = None
 }
 
+/// The analysis language for a text search analyzer. Valid values are en
+/// (English), fr (French), es (Spanish), pt (Portuguese), it (Italian), de
+/// (German), nl (Dutch), zh (Chinese), ja (Japanese), and ko (Korean).
+pub enum LanguageCode: Str {
+  En = "en"
+  Fr = "fr"
+  Es = "es"
+  Pt = "pt"
+  It = "it"
+  De = "de"
+  Nl = "nl"
+  Zh = "zh"
+  Ja = "ja"
+  Ko = "ko"
+  Unknown(value: Str)
+}
+
 pub struct ListIndexesInput {
   /// The name of the vector bucket that contains the vector indexes.
   pub vector_bucket_name: Str? = None
@@ -421,14 +453,28 @@ pub struct ListVectorsOutput {
 /// The metadata configuration for a vector index.
 pub struct MetadataConfiguration {
   /// Non-filterable metadata keys allow you to enrich vectors with additional
-  /// context during storage and retrieval. Unlike default metadata keys,
-  /// these keys can’t be used as query filters. Non-filterable metadata
-  /// keys can be retrieved but can’t be searched, queried, or filtered. You
-  /// can access non-filterable metadata keys of your vectors after finding
-  /// the vectors. For more information about non-filterable metadata keys,
-  /// see Vectors and Limitations and restrictions in the Amazon S3 User Guide
-  /// .
+  /// context during storage and retrieval. You can't use these keys in
+  /// metadata filters. You can still make a non-filterable key full-text
+  /// searchable by configuring it separately in textSearchConfigurations .
+  /// You can retrieve non-filterable metadata keys after finding the vectors.
+  /// For more information about non-filterable metadata keys, see Vectors and
+  /// Limitations and restrictions in the Amazon S3 User Guide .
   pub non_filterable_metadata_keys: List[Str]? = None
+  /// Full-text search configurations for searchable metadata keys.
+  pub text_search_configurations: List[TextSearchConfiguration]? = None
+}
+
+/// Text search configurations to add to a vector index.
+pub struct MetadataConfigurationAdd {
+  /// Text search configurations to add. Amazon S3 Vectors begins building the
+  /// corresponding full-text indexes after the update is accepted.
+  pub text_search_configurations: List[TextSearchConfiguration]? = None
+}
+
+/// Text search configurations to delete from a vector index.
+pub struct MetadataConfigurationDelete {
+  /// Searchable metadata keys whose text search configurations to delete.
+  pub text_search_configurations: List[TextSearchConfigurationKey]? = None
 }
 
 /// The request was rejected because the specified resource can't be found.
@@ -497,15 +543,40 @@ pub struct PutVectorsInput {
 pub struct PutVectorsOutput {
 }
 
-/// The attributes of a vector in the approximate nearest neighbor search.
+/// Contains the key and optional distance, relevance scores, and metadata
+/// for a vector returned by the QueryVectors operation.
 pub struct QueryOutputVector {
   /// The measure of similarity between the vector in the response and the
   /// query vector.
   pub distance: Float32? = None
-  /// The key of the vector in the approximate nearest neighbor search.
+  /// The relevance scores for a full-text-only or hybrid result, when
+  /// requested through returnScores .
+  pub scores: QueryScores? = None
+  /// The key of the matching vector.
   pub key: Str? = None
   /// The metadata associated with the vector, if requested.
   pub metadata: json.Value? = None
+}
+
+/// Relevance scores for a full-text-only or hybrid search result.
+pub struct QueryScores {
+  /// The Reciprocal Rank Fusion (RRF) score that combines the vector and
+  /// full-text rankings. This field is returned only for hybrid requests.
+  pub fused: Float32? = None
+  /// The BM25 scores for the searchable metadata keys that the result
+  /// matched.
+  pub bm25_scores: List[Bm25Score]? = None
+  /// The distance from the query vector. This field is returned when a hybrid
+  /// result matches the vector search.
+  pub vector_distance: Float32? = None
+}
+
+/// A full-text search query for a single metadata key.
+pub struct QueryText {
+  /// The full-text query string.
+  pub text: Str? = None
+  /// The searchable metadata key to query.
+  pub metadata_key: Str? = None
 }
 
 pub struct QueryVectorsInput {
@@ -517,10 +588,12 @@ pub struct QueryVectorsInput {
   pub index_arn: Str? = None
   /// The number of results to return for each query.
   pub top_k: Int? = None
-  /// The query vector. Ensure that the query vector has the same dimension as
-  /// the dimension of the vector index that's being queried. For example, if
-  /// your vector index contains vectors with 384 dimensions, your query
-  /// vector must also have 384 dimensions.
+  /// The query vector for vector similarity search. The query vector must
+  /// have the same dimension as the vector index. For example, if the vector
+  /// index has 384 dimensions, the query vector must also have 384
+  /// dimensions. You can omit this parameter when you supply queryTexts to
+  /// perform a full-text-only search. A request must include queryVector ,
+  /// queryTexts , or both.
   pub query_vector: VectorData? = None
   /// Metadata filter to apply during the query. For more information about
   /// metadata keys, see Metadata filtering in the Amazon S3 User Guide .
@@ -537,13 +610,25 @@ pub struct QueryVectorsInput {
   /// Indicates whether to include the computed distance in the response. The
   /// default value is false .
   pub return_distance: Bool? = None
+  /// Full-text queries for searchable metadata keys. Omit queryVector to run
+  /// a full-text-only search, or provide both fields to run a hybrid search.
+  /// Each entry must target a distinct searchable metadata key.
+  pub query_texts: List[QueryText]? = None
+  /// Indicates whether to include relevance scores in the response.
+  /// Full-text-only results can include BM25 scores. Hybrid results can also
+  /// include a Reciprocal Rank Fusion (RRF) score and vector distance. This
+  /// setting doesn't add scores to vector-only requests. The default value is
+  /// false .
+  pub return_scores: Bool? = None
   /// Pagination token from a previous request. The value of this field is
   /// empty for an initial request.
   pub next_token: Str? = None
 }
 
 pub struct QueryVectorsOutput {
-  /// The vectors in the approximate nearest neighbor search.
+  /// The matching vector results in ranked order. Results are ranked by
+  /// vector distance for a vector-only search, by BM25 relevance for a
+  /// full-text-only search, and by RRF score for a hybrid search.
   pub vectors: List[QueryOutputVector]? = None
   /// The distance metric that was used for the similarity search calculation.
   /// This is the same distance metric that was configured for the vector
@@ -590,6 +675,29 @@ pub struct TagResourceInput {
 pub struct TagResourceOutput {
 }
 
+/// A full-text search configuration for a single metadata key.
+pub struct TextSearchConfiguration {
+  /// The metadata key to make full-text searchable.
+  pub metadata_key: Str? = None
+  /// The language that the text search analyzer uses. Valid values are en
+  /// (English), fr (French), es (Spanish), pt (Portuguese), it (Italian), de
+  /// (German), nl (Dutch), zh (Chinese), ja (Japanese), and ko (Korean). If
+  /// you don't specify a language, Amazon S3 Vectors uses the default
+  /// standard analyzer.
+  pub language: LanguageCode? = None
+  /// The backfill status of the text search configuration. Valid values are
+  /// ACTIVE , which indicates that the analyzer is built and serving queries,
+  /// and BUILDING , which indicates that the analyzer is being backfilled and
+  /// isn't yet serving queries. This field is returned by GetIndex .
+  pub status: AnalyzerStatus? = None
+}
+
+/// A searchable metadata key that identifies a text search configuration.
+pub struct TextSearchConfigurationKey {
+  /// The searchable metadata key whose text search configuration to delete.
+  pub metadata_key: Str? = None
+}
+
 /// The request was denied due to request throttling.
 pub struct TooManyRequestsException {
   pub message: Str? = None
@@ -624,6 +732,24 @@ pub struct UpdateIndexModeInput {
 }
 
 pub struct UpdateIndexModeOutput {
+}
+
+pub struct UpdateMetadataConfigurationInput {
+  /// The name of the vector bucket that contains the vector index.
+  pub vector_bucket_name: Str? = None
+  /// The name of the vector index to update.
+  pub index_name: Str? = None
+  /// The Amazon Resource Name (ARN) of the vector index to update.
+  pub index_arn: Str? = None
+  /// Text search configurations to add to the vector index.
+  pub add: MetadataConfigurationAdd? = None
+  /// Text search configurations to delete from the vector index.
+  pub delete: MetadataConfigurationDelete? = None
+}
+
+pub struct UpdateMetadataConfigurationOutput {
+  /// The Amazon Resource Name (ARN) of the updated vector index.
+  pub index_arn: Str? = None
 }
 
 /// The requested action isn't valid.

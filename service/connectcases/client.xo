@@ -139,6 +139,9 @@ fn json_of_audit_event(v: AuditEvent) -> json.Value {
   if let Some(x) = v.performed_by {
     fs.push(("performedBy", json_of_audit_event_performed_by(x)))
   }
+  if let Some(x) = v.merge_metadata {
+    fs.push(("mergeMetadata", json_of_audit_merge_metadata(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -155,6 +158,7 @@ fn from_json_audit_event(v: json.Value) -> AuditEvent ! Str {
       "performedTime" => out.performed_time = jsonv.read_time(fv, "date-time")?
       "fields" => out.fields = from_json_audit_event_field_list(fv)?
       "performedBy" => out.performed_by = from_json_audit_event_performed_by(fv)?
+      "mergeMetadata" => out.merge_metadata = from_json_audit_merge_metadata(fv)?
       _ => {}
     }
   }
@@ -283,6 +287,36 @@ fn from_json_audit_events_list(v: json.Value) -> List[AuditEvent?] ! Str {
       continue
     }
     out.push(from_json_audit_event(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_audit_merge_metadata(v: AuditMergeMetadata) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.merge_event_id {
+    fs.push(("mergeEventId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.primary_case_id {
+    fs.push(("primaryCaseId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.secondary_case_id {
+    fs.push(("secondaryCaseId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_audit_merge_metadata(v: json.Value) -> AuditMergeMetadata ! Str {
+  var out = AuditMergeMetadata{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "mergeEventId" => out.merge_event_id = jsonv.read_str(fv)?
+      "primaryCaseId" => out.primary_case_id = jsonv.read_str(fv)?
+      "secondaryCaseId" => out.secondary_case_id = jsonv.read_str(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -1038,6 +1072,9 @@ fn json_of_case_event_included_data(v: CaseEventIncludedData) -> json.Value {
   if let Some(x) = v.fields {
     fs.push(("fields", json_of_field_identifier_list(x)))
   }
+  if let Some(x) = v.auto_include_fields {
+    fs.push(("autoIncludeFields", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1049,6 +1086,7 @@ fn from_json_case_event_included_data(v: json.Value) -> CaseEventIncludedData ! 
     }
     match k {
       "fields" => out.fields = from_json_field_identifier_list(fv)?
+      "autoIncludeFields" => out.auto_include_fields = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1095,6 +1133,22 @@ fn from_json_case_filter_list(v: json.Value) -> List[CaseFilter] ! Str {
       continue
     }
     out.push(from_json_case_filter(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_case_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_case_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -3051,6 +3105,48 @@ fn from_json_field_value_union(v: json.Value) -> FieldValueUnion ! Str {
   Err("FieldValueUnion: no member set")
 }
 
+fn json_of_fields_configuration(v: FieldsConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.field_ids {
+    fs.push(("fieldIds", json_of_field_identifier_list(x)))
+  }
+  if let Some(x) = v.source_case_id {
+    fs.push(("sourceCaseId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_fields_configuration(v: json.Value) -> FieldsConfiguration ! Str {
+  var out = FieldsConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "fieldIds" => out.field_ids = from_json_field_identifier_list(fv)?
+      "sourceCaseId" => out.source_case_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_fields_configuration_list(v: List[FieldsConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: FieldsConfiguration) -> json.Value { json_of_fields_configuration(x) }))
+}
+
+fn from_json_fields_configuration_list(v: json.Value) -> List[FieldsConfiguration] ! Str {
+  var out: List[FieldsConfiguration] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_fields_configuration(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_file_content(v: FileContent) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.file_arn {
@@ -3517,6 +3613,62 @@ fn from_json_get_layout_response(v: json.Value) -> GetLayoutResponse ! Str {
       "deleted" => out.deleted = jsonv.read_bool(fv)?
       "createdTime" => out.created_time = jsonv.read_time(fv, "date-time")?
       "lastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_merge_cases_status_request(v: GetMergeCasesStatusRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.case_id {
+    fs.push(("caseId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_merge_cases_status_request(v: json.Value) -> GetMergeCasesStatusRequest ! Str {
+  var out = GetMergeCasesStatusRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "caseId" => out.case_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_merge_cases_status_response(v: GetMergeCasesStatusResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x)))
+  }
+  if let Some(x) = v.primary_case_id {
+    fs.push(("primaryCaseId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.secondary_case_ids {
+    fs.push(("secondaryCaseIds", json_of_case_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_merge_cases_status_response(v: json.Value) -> GetMergeCasesStatusResponse ! Str {
+  var out = GetMergeCasesStatusResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = jsonv.read_str(fv)?
+      "primaryCaseId" => out.primary_case_id = jsonv.read_str(fv)?
+      "secondaryCaseIds" => out.secondary_case_ids = from_json_case_id_list(fv)?
       _ => {}
     }
   }
@@ -4518,6 +4670,7 @@ fn json_of_related_item_update_content(v: RelatedItemUpdateContent) -> json.Valu
   match v {
     Comment(x) => json.Value.Object([("comment", json_of_comment_update_content(x))])
     Custom(x) => json.Value.Object([("custom", json_of_custom_update_content(x))])
+    Sla(x) => json.Value.Object([("sla", json_of_sla_update_content(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -4530,10 +4683,45 @@ fn from_json_related_item_update_content(v: json.Value) -> RelatedItemUpdateCont
     return match k {
       "comment" => Ok(RelatedItemUpdateContent.Comment(from_json_comment_update_content(fv)?))
       "custom" => Ok(RelatedItemUpdateContent.Custom(from_json_custom_update_content(fv)?))
+      "sla" => Ok(RelatedItemUpdateContent.Sla(from_json_sla_update_content(fv)?))
       _ => Ok(RelatedItemUpdateContent.Unknown(k))
     }
   }
   Err("RelatedItemUpdateContent: no member set")
+}
+
+fn json_of_related_items_configuration(v: RelatedItemsConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.comment {
+    fs.push(("comment", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.connect_case {
+    fs.push(("connectCase", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.contact {
+    fs.push(("contact", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.custom {
+    fs.push(("custom", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_related_items_configuration(v: json.Value) -> RelatedItemsConfiguration ! Str {
+  var out = RelatedItemsConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "comment" => out.comment = jsonv.read_bool(fv)?
+      "connectCase" => out.connect_case = jsonv.read_bool(fv)?
+      "contact" => out.contact = jsonv.read_bool(fv)?
+      "custom" => out.custom = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
 }
 
 fn json_of_required_case_rule(v: RequiredCaseRule) -> json.Value {
@@ -5287,6 +5475,48 @@ fn from_json_sla_input_content(v: json.Value) -> SlaInputContent ! Str {
   Err("SlaInputContent: no member set")
 }
 
+fn json_of_sla_update_configuration(v: SlaUpdateConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.target_sla_minutes {
+    fs.push(("targetSlaMinutes", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_sla_update_configuration(v: json.Value) -> SlaUpdateConfiguration ! Str {
+  var out = SlaUpdateConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "targetSlaMinutes" => out.target_sla_minutes = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_sla_update_content(v: SlaUpdateContent) -> json.Value {
+  match v {
+    SlaUpdateConfiguration(x) => json.Value.Object([("slaUpdateConfiguration", json_of_sla_update_configuration(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_sla_update_content(v: json.Value) -> SlaUpdateContent ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "slaUpdateConfiguration" => Ok(SlaUpdateContent.SlaUpdateConfiguration(from_json_sla_update_configuration(fv)?))
+      _ => Ok(SlaUpdateContent.Unknown(k))
+    }
+  }
+  Err("SlaUpdateContent: no member set")
+}
+
 fn json_of_sort(v: Sort) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.field_id {
@@ -5326,6 +5556,59 @@ fn from_json_sort_list(v: json.Value) -> List[Sort] ! Str {
     }
     out.push(from_json_sort(fv)?)
   }
+  Ok(out)
+}
+
+fn json_of_start_merge_cases_request(v: StartMergeCasesRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.case_id {
+    fs.push(("caseId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.secondary_case_ids {
+    fs.push(("secondaryCaseIds", json_of_case_id_list(x)))
+  }
+  if let Some(x) = v.fields_configuration {
+    fs.push(("fieldsConfiguration", json_of_fields_configuration_list(x)))
+  }
+  if let Some(x) = v.related_items_configuration {
+    fs.push(("relatedItemsConfiguration", json_of_related_items_configuration(x)))
+  }
+  if let Some(x) = v.performed_by {
+    fs.push(("performedBy", json_of_user_union(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_merge_cases_request(v: json.Value) -> StartMergeCasesRequest ! Str {
+  var out = StartMergeCasesRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "caseId" => out.case_id = jsonv.read_str(fv)?
+      "secondaryCaseIds" => out.secondary_case_ids = from_json_case_id_list(fv)?
+      "fieldsConfiguration" => out.fields_configuration = from_json_fields_configuration_list(fv)?
+      "relatedItemsConfiguration" => out.related_items_configuration = from_json_related_items_configuration(fv)?
+      "performedBy" => out.performed_by = from_json_user_union(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_start_merge_cases_response(v: StartMergeCasesResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_start_merge_cases_response(v: json.Value) -> StartMergeCasesResponse ! Str {
+  var out = StartMergeCasesResponse{}
+  let _ = jsonv.fields(v)?
   Ok(out)
 }
 
@@ -7717,6 +8000,7 @@ pub fn deserialize_create_related_item(resp: http.Response) -> CreateRelatedItem
 /// The errors of CreateRelatedItem.
 pub enum CreateRelatedItemErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
@@ -7735,6 +8019,7 @@ pub enum CreateRelatedItemErr {
 pub fn (e: CreateRelatedItemErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
@@ -7752,6 +8037,10 @@ pub fn deserialize_create_related_item_error(resp: http.Response) -> CreateRelat
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return CreateRelatedItemErr.AccessDeniedException(x)
+      Err(msg) => return CreateRelatedItemErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateRelatedItemErr.ConflictException(x)
       Err(msg) => return CreateRelatedItemErr.Deserialize(msg)
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
@@ -7781,24 +8070,28 @@ pub fn deserialize_create_related_item_error(resp: http.Response) -> CreateRelat
 
 /// Creates a related item (comments, tasks, and contacts) and associates it
 /// with a case. There's a quota for the number of fields allowed in a
-/// Custom type related item. See Connect Customer Cases quotas . Use cases
-/// Following are examples of related items that you may want to associate
-/// with a case: Related contacts, such as calls, chats, emails tasks
-/// Comments, for agent notes SLAs, to capture target resolution goals
-/// Cases, to capture related Connect Customer Cases Files, such as policy
-/// documentation or customer-provided attachments Custom related items,
-/// which provide flexibility for you to define related items that such as
-/// bookings, orders, products, notices, and more Important things to know
-/// If you are associating a contact to a case by passing in Contact for a
-/// type , you must have DescribeContact permission on the ARN of the
-/// contact that you provide in content.contact.contactArn . A Related Item
-/// is a resource that is associated with a case. It may or may not have an
-/// external identifier linking it to an external resource (for example, a
-/// contactArn ). All Related Items have their own internal identifier, the
-/// relatedItemArn . Examples of related items include comments and contacts
-/// . If you provide a value for performedBy.userArn , you must also have
-/// DescribeUser permission on the ARN of the user that you provide.
-/// Endpoints : See Connect Customer endpoints and quotas .
+/// Custom type related item. See Connect Customer Cases quotas . There's a
+/// quota for the number of SLAs that can be attached to a case. See Connect
+/// Customer Cases quotas . Use cases Following are examples of related
+/// items that you may want to associate with a case: Related contacts, such
+/// as calls, chats, emails tasks Comments, for agent notes SLAs, to capture
+/// target resolution goals Cases, to capture related Connect Customer Cases
+/// Files, such as policy documentation or customer-provided attachments
+/// Custom related items, which provide flexibility for you to define
+/// related items that such as bookings, orders, products, notices, and more
+/// Important things to know If you are associating a contact to a case by
+/// passing in Contact for a type , you must have DescribeContact permission
+/// on the ARN of the contact that you provide in content.contact.contactArn
+/// . A Related Item is a resource that is associated with a case. It may or
+/// may not have an external identifier linking it to an external resource
+/// (for example, a contactArn ). All Related Items have their own internal
+/// identifier, the relatedItemArn . Examples of related items include
+/// comments and contacts . If you provide a value for performedBy.userArn ,
+/// you must also have DescribeUser permission on the ARN of the user that
+/// you provide. If the case is the secondary case of a merge that is
+/// running, the request fails with a ConflictException . For more
+/// information, see StartMergeCases . Endpoints : See Connect Customer
+/// endpoints and quotas .
 pub fn (c: Client) create_related_item(input: CreateRelatedItemRequest) -> CreateRelatedItemResponse ! CreateRelatedItemErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_create_related_item(c.params, input)) ?? e => return Err(CreateRelatedItemErr.InvalidInput(e))
   var req = serialize_create_related_item(ep, input, "") ?? e => return Err(CreateRelatedItemErr.InvalidInput(e))
@@ -8026,6 +8319,7 @@ pub fn deserialize_delete_case(resp: http.Response) -> DeleteCaseResponse ! Str 
 /// The errors of DeleteCase.
 pub enum DeleteCaseErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
@@ -8043,6 +8337,7 @@ pub enum DeleteCaseErr {
 pub fn (e: DeleteCaseErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
@@ -8059,6 +8354,10 @@ pub fn deserialize_delete_case_error(resp: http.Response) -> DeleteCaseErr {
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return DeleteCaseErr.AccessDeniedException(x)
+      Err(msg) => return DeleteCaseErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteCaseErr.ConflictException(x)
       Err(msg) => return DeleteCaseErr.Deserialize(msg)
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
@@ -8085,8 +8384,11 @@ pub fn deserialize_delete_case_error(resp: http.Response) -> DeleteCaseErr {
 /// The DeleteCase API permanently deletes a case and all its associated
 /// resources from the cases data store. After a successful deletion, you
 /// cannot: Retrieve related items Access audit history Perform any
-/// operations that require the CaseID This action is irreversible. After
-/// you delete a case, you cannot recover its data.
+/// operations that require the CaseID You can't delete a case while it's
+/// part of a merge that is running, as either the primary or the secondary
+/// case. The request fails with a ConflictException . For more information,
+/// see StartMergeCases . This action is irreversible. After you delete a
+/// case, you cannot recover its data.
 pub fn (c: Client) delete_case(input: DeleteCaseRequest) -> DeleteCaseResponse ! DeleteCaseErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_delete_case(c.params, input)) ?? e => return Err(DeleteCaseErr.InvalidInput(e))
   var req = serialize_delete_case(ep, input, "") ?? e => return Err(DeleteCaseErr.InvalidInput(e))
@@ -8671,6 +8973,7 @@ pub fn deserialize_delete_related_item(resp: http.Response) -> DeleteRelatedItem
 /// The errors of DeleteRelatedItem.
 pub enum DeleteRelatedItemErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
@@ -8688,6 +8991,7 @@ pub enum DeleteRelatedItemErr {
 pub fn (e: DeleteRelatedItemErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
@@ -8704,6 +9008,10 @@ pub fn deserialize_delete_related_item_error(resp: http.Response) -> DeleteRelat
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return DeleteRelatedItemErr.AccessDeniedException(x)
+      Err(msg) => return DeleteRelatedItemErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteRelatedItemErr.ConflictException(x)
       Err(msg) => return DeleteRelatedItemErr.Deserialize(msg)
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
@@ -8729,7 +9037,9 @@ pub fn deserialize_delete_related_item_error(resp: http.Response) -> DeleteRelat
 
 /// Deletes the related item resource under a case. This API cannot be used
 /// on a FILE type related attachment. To delete this type of file, use the
-/// DeleteAttachedFile API
+/// DeleteAttachedFile API If the case is the secondary case of a merge that
+/// is running, the request fails with a ConflictException . For more
+/// information, see StartMergeCases .
 pub fn (c: Client) delete_related_item(input: DeleteRelatedItemRequest) -> DeleteRelatedItemResponse ! DeleteRelatedItemErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_delete_related_item(c.params, input)) ?? e => return Err(DeleteRelatedItemErr.InvalidInput(e))
   var req = serialize_delete_related_item(ep, input, "") ?? e => return Err(DeleteRelatedItemErr.InvalidInput(e))
@@ -9529,6 +9839,144 @@ pub fn (c: Client) get_layout(input: GetLayoutRequest) -> GetLayoutResponse ! Ge
     return Err(deserialize_get_layout_error(resp))
   }
   deserialize_get_layout(resp) ?? e => Err(GetLayoutErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_merge_cases_status(base: EndpointParameters, input: GetMergeCasesStatusRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetMergeCasesStatus.
+pub fn serialize_get_merge_cases_status(ep: rest.Endpoint, input: GetMergeCasesStatusRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  let label_case_id = match input.case_id {
+    Some(v) => v
+    None => return Err("input member caseId is required")
+  }
+  if label_case_id == "" {
+    return Err("input member caseId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domains/${rest.escape(label_domain_id, false)}/cases/${rest.escape(label_case_id, false)}/merge-status"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_merge_cases_status(resp: http.Response) -> GetMergeCasesStatusResponse ! Str {
+  var out = GetMergeCasesStatusResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = jsonv.read_str(fv)?
+      "primaryCaseId" => out.primary_case_id = jsonv.read_str(fv)?
+      "secondaryCaseIds" => out.secondary_case_ids = from_json_case_id_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetMergeCasesStatus.
+pub enum GetMergeCasesStatusErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetMergeCasesStatusErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_merge_cases_status_error(resp: http.Response) -> GetMergeCasesStatusErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetMergeCasesStatusErr.AccessDeniedException(x)
+      Err(msg) => return GetMergeCasesStatusErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetMergeCasesStatusErr.InternalServerException(x)
+      Err(msg) => return GetMergeCasesStatusErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetMergeCasesStatusErr.ResourceNotFoundException(x)
+      Err(msg) => return GetMergeCasesStatusErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetMergeCasesStatusErr.ThrottlingException(x)
+      Err(msg) => return GetMergeCasesStatusErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetMergeCasesStatusErr.ValidationException(x)
+      Err(msg) => return GetMergeCasesStatusErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetMergeCasesStatusErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the merge status of a case. Use this operation to track a merge
+/// that you started with StartMergeCases , or to check whether a case is
+/// part of a merge before you modify it. The operation returns the
+/// following, depending on the case: For the primary case or the secondary
+/// case of a merge that is running, it returns IN_PROGRESS . For a case
+/// that was merged into another case as the secondary case, it returns
+/// COMPLETED . For any other case, it returns a ResourceNotFoundException .
+/// This includes the primary case after its merge finishes. Endpoints : See
+/// Connect Customer endpoints and quotas .
+pub fn (c: Client) get_merge_cases_status(input: GetMergeCasesStatusRequest) -> GetMergeCasesStatusResponse ! GetMergeCasesStatusErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_merge_cases_status(c.params, input)) ?? e => return Err(GetMergeCasesStatusErr.InvalidInput(e))
+  var req = serialize_get_merge_cases_status(ep, input, "") ?? e => return Err(GetMergeCasesStatusErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetMergeCasesStatusErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_merge_cases_status_error(resp))
+  }
+  deserialize_get_merge_cases_status(resp) ?? e => Err(GetMergeCasesStatusErr.Deserialize(e))
 }
 
 pub fn endpoint_params_get_template(base: EndpointParameters, input: GetTemplateRequest) -> EndpointParameters {
@@ -11274,6 +11722,177 @@ pub fn (c: Client) search_related_items(input: SearchRelatedItemsRequest) -> Sea
   deserialize_search_related_items(resp) ?? e => Err(SearchRelatedItemsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_start_merge_cases(base: EndpointParameters, input: StartMergeCasesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartMergeCases.
+pub fn serialize_start_merge_cases(ep: rest.Endpoint, input: StartMergeCasesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  let label_case_id = match input.case_id {
+    Some(v) => v
+    None => return Err("input member caseId is required")
+  }
+  if label_case_id == "" {
+    return Err("input member caseId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.secondary_case_ids {
+    fs.push(("secondaryCaseIds", json_of_case_id_list(x)))
+  }
+  if let Some(x) = input.fields_configuration {
+    fs.push(("fieldsConfiguration", json_of_fields_configuration_list(x)))
+  }
+  if let Some(x) = input.related_items_configuration {
+    fs.push(("relatedItemsConfiguration", json_of_related_items_configuration(x)))
+  }
+  if let Some(x) = input.performed_by {
+    fs.push(("performedBy", json_of_user_union(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domains/${rest.escape(label_domain_id, false)}/cases/${rest.escape(label_case_id, false)}/merge"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_merge_cases(resp: http.Response) -> StartMergeCasesResponse ! Str {
+  var out = StartMergeCasesResponse{}
+  Ok(out)
+}
+
+/// The errors of StartMergeCases.
+pub enum StartMergeCasesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartMergeCasesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_merge_cases_error(resp: http.Response) -> StartMergeCasesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.AccessDeniedException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.ConflictException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.InternalServerException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.ResourceNotFoundException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.ServiceQuotaExceededException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.ThrottlingException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return StartMergeCasesErr.ValidationException(x)
+      Err(msg) => return StartMergeCasesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartMergeCasesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Merges a secondary case into a primary case. The primary case, which you
+/// specify in the request URI, remains active. Both cases must belong to
+/// the same domain. The merge runs asynchronously. To track its progress,
+/// call GetMergeCasesStatus . When the merge finishes, the selected field
+/// values and related items from the secondary case are on the primary
+/// case, the two cases are linked, and the secondary case is closed. Both
+/// cases record the merge in their audit history. For more information, see
+/// GetCaseAuditEvents . Important things to know Both cases must have the
+/// same customer, or at least one of them must have no customer. While the
+/// merge runs, you can't modify the secondary case or its related items,
+/// and you can't delete the primary case. These requests return a
+/// ConflictException . After the merge, the secondary case can be reopened,
+/// updated, and deleted, but it can't be merged again. The request fails
+/// with a ValidationException , and no merge starts, if: The primary case
+/// and the secondary case are the same case. Either case is closed. Both
+/// cases have a customer, and the customers are different.
+/// fieldsConfiguration selects a field that can't be merged, or a field
+/// that the secondary case doesn't have. After the merge, the primary case
+/// would have more than 500 field values, or would exceed the maximum case
+/// size. The request fails with a ServiceQuotaExceededException if, after
+/// the merge, either case would exceed the quota for related items per
+/// case. For the primary case, the count is its existing related items,
+/// plus the related items moved from the secondary case, plus the new case
+/// link. See Connect Customer Cases quotas . The request fails with a
+/// ConflictException if either case is already part of a merge that is
+/// running, or was previously merged into another case as the secondary
+/// case. Endpoints : See Connect Customer endpoints and quotas .
+pub fn (c: Client) start_merge_cases(input: StartMergeCasesRequest) -> StartMergeCasesResponse ! StartMergeCasesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_merge_cases(c.params, input)) ?? e => return Err(StartMergeCasesErr.InvalidInput(e))
+  var req = serialize_start_merge_cases(ep, input, "") ?? e => return Err(StartMergeCasesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartMergeCasesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_merge_cases_error(resp))
+  }
+  deserialize_start_merge_cases(resp) ?? e => Err(StartMergeCasesErr.Deserialize(e))
+}
+
 pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceRequest) -> EndpointParameters {
   let _ = input
   base
@@ -11564,6 +12183,7 @@ pub fn deserialize_update_case(resp: http.Response) -> UpdateCaseResponse ! Str 
 /// The errors of UpdateCase.
 pub enum UpdateCaseErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
@@ -11581,6 +12201,7 @@ pub enum UpdateCaseErr {
 pub fn (e: UpdateCaseErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
@@ -11597,6 +12218,10 @@ pub fn deserialize_update_case_error(resp: http.Response) -> UpdateCaseErr {
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return UpdateCaseErr.AccessDeniedException(x)
+      Err(msg) => return UpdateCaseErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateCaseErr.ConflictException(x)
       Err(msg) => return UpdateCaseErr.Deserialize(msg)
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
@@ -11624,8 +12249,10 @@ pub fn deserialize_update_case_error(resp: http.Response) -> UpdateCaseErr {
 /// connect:DescribeUser permission on the user ARN that you provide.
 /// Updates the values of fields on a case. Fields to be updated are
 /// received as an array of id/value pairs identical to the CreateCase
-/// input. If the action is successful, the service sends back an HTTP 200
-/// response with an empty HTTP body.
+/// input. If the case is the secondary case of a merge that is running, the
+/// request fails with a ConflictException . For more information, see
+/// StartMergeCases . If the action is successful, the service sends back an
+/// HTTP 200 response with an empty HTTP body.
 pub fn (c: Client) update_case(input: UpdateCaseRequest) -> UpdateCaseResponse ! UpdateCaseErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_case(c.params, input)) ?? e => return Err(UpdateCaseErr.InvalidInput(e))
   var req = serialize_update_case(ep, input, "") ?? e => return Err(UpdateCaseErr.InvalidInput(e))
@@ -12143,6 +12770,7 @@ pub fn deserialize_update_related_item(resp: http.Response) -> UpdateRelatedItem
 /// The errors of UpdateRelatedItem.
 pub enum UpdateRelatedItemErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
@@ -12161,6 +12789,7 @@ pub enum UpdateRelatedItemErr {
 pub fn (e: UpdateRelatedItemErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
@@ -12178,6 +12807,10 @@ pub fn deserialize_update_related_item_error(resp: http.Response) -> UpdateRelat
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return UpdateRelatedItemErr.AccessDeniedException(x)
+      Err(msg) => return UpdateRelatedItemErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateRelatedItemErr.ConflictException(x)
       Err(msg) => return UpdateRelatedItemErr.Deserialize(msg)
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
@@ -12210,14 +12843,20 @@ pub fn deserialize_update_related_item_error(resp: http.Response) -> UpdateRelat
 /// content of an existing comment Custom - Update the fields of a custom
 /// related item. You can add, modify, and remove fields from a custom
 /// related item. There's a quota for the number of fields allowed in a
-/// Custom type related item. See Connect Customer Cases quotas . Important
-/// things to know When updating a Custom related item, all existing and new
-/// fields, and their associated values should be included in the request.
-/// Fields not included as part of this request will be removed. If you
-/// provide a value for performedBy.userArn , you must also have
-/// DescribeUser permission on the ARN of the user that you provide. System
-/// case fields cannot be used in a custom related item. Endpoints : See
-/// Connect Customer endpoints and quotas .
+/// Custom type related item. See Connect Customer Cases quotas . Sla -
+/// Update the target duration ( targetSlaMinutes ) of an SLA. The new
+/// deadline is counted from when the SLA was created. The SLA status is
+/// recalculated against the new deadline: an open SLA becomes Active or
+/// Overdue, and a completed SLA becomes Met or NotMet. Important things to
+/// know When updating a Custom related item, all existing and new fields,
+/// and their associated values should be included in the request. Fields
+/// not included as part of this request will be removed. If you provide a
+/// value for performedBy.userArn , you must also have DescribeUser
+/// permission on the ARN of the user that you provide. System case fields
+/// cannot be used in a custom related item. If the case is the secondary
+/// case of a merge that is running, the request fails with a
+/// ConflictException . For more information, see StartMergeCases .
+/// Endpoints : See Connect Customer endpoints and quotas .
 pub fn (c: Client) update_related_item(input: UpdateRelatedItemRequest) -> UpdateRelatedItemResponse ! UpdateRelatedItemErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_related_item(c.params, input)) ?? e => return Err(UpdateRelatedItemErr.InvalidInput(e))
   var req = serialize_update_related_item(ep, input, "") ?? e => return Err(UpdateRelatedItemErr.InvalidInput(e))
@@ -12298,94 +12937,4 @@ pub fn serialize_update_template(ep: rest.Endpoint, input: UpdateTemplateRequest
 pub fn deserialize_update_template(resp: http.Response) -> UpdateTemplateResponse ! Str {
   var out = UpdateTemplateResponse{}
   Ok(out)
-}
-
-/// The errors of UpdateTemplate.
-pub enum UpdateTemplateErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateTemplateErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_template_error(resp: http.Response) -> UpdateTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.AccessDeniedException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ConflictException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.InternalServerException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ThrottlingException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ValidationException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the attributes of an existing template. The template attributes
-/// that can be modified include name , description , layoutConfiguration ,
-/// requiredFields , and status . At least one of these attributes must not
-/// be null. If a null value is provided for a given attribute, that
-/// attribute is ignored and its current value is preserved. Other template
-/// APIs are: CreateTemplate DeleteTemplate GetTemplate ListTemplates
-pub fn (c: Client) update_template(input: UpdateTemplateRequest) -> UpdateTemplateResponse ! UpdateTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_template(c.params, input)) ?? e => return Err(UpdateTemplateErr.InvalidInput(e))
-  var req = serialize_update_template(ep, input, "") ?? e => return Err(UpdateTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_template_error(resp))
-  }
-  deserialize_update_template(resp) ?? e => Err(UpdateTemplateErr.Deserialize(e))
 }

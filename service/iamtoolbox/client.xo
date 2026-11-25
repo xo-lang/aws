@@ -173,6 +173,60 @@ fn from_json_authorization_context(v: json.Value) -> Map[Str, json.Value] ! Str 
   Ok(out)
 }
 
+fn json_of_check(v: Check) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.check_type {
+    fs.push(("checkType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.evaluated_effect {
+    fs.push(("evaluatedEffect", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.target_arn {
+    fs.push(("targetArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.relevant_policy_types {
+    fs.push(("relevantPolicyTypes", json_of_policy_type_list(x)))
+  }
+  if let Some(x) = v.matched_policies {
+    fs.push(("matchedPolicies", json_of_matched_policy_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_check(v: json.Value) -> Check ! Str {
+  var out = Check{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "checkType" => out.check_type = CheckType.from(jsonv.read_str(fv)?)
+      "evaluatedEffect" => out.evaluated_effect = CheckEffect.from(jsonv.read_str(fv)?)
+      "targetArn" => out.target_arn = jsonv.read_str(fv)?
+      "relevantPolicyTypes" => out.relevant_policy_types = from_json_policy_type_list(fv)?
+      "matchedPolicies" => out.matched_policies = from_json_matched_policy_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_check_list(v: List[Check]) -> json.Value {
+  json.Value.List(v.map(fn(x: Check) -> json.Value { json_of_check(x) }))
+}
+
+fn from_json_check_list(v: json.Value) -> List[Check] ! Str {
+  var out: List[Check] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_check(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_evaluation(v: Evaluation) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.action {
@@ -190,6 +244,9 @@ fn json_of_evaluation(v: Evaluation) -> json.Value {
   if let Some(x) = v.matched_policies {
     fs.push(("matchedPolicies", json_of_matched_policy_list(x)))
   }
+  if let Some(x) = v.checks {
+    fs.push(("checks", json_of_check_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -205,6 +262,7 @@ fn from_json_evaluation(v: json.Value) -> Evaluation ! Str {
       "context" => out.context = from_json_authorization_context(fv)?
       "evaluatedEffect" => out.evaluated_effect = EvaluatedEffect.from(jsonv.read_str(fv)?)
       "matchedPolicies" => out.matched_policies = from_json_matched_policy_list(fv)?
+      "checks" => out.checks = from_json_check_list(fv)?
       _ => {}
     }
   }
@@ -281,6 +339,54 @@ fn from_json_get_request_authorization_details_output(v: json.Value) -> GetReque
       "evaluations" => out.evaluations = from_json_evaluations(fv)?
       "policies" => out.policies = from_json_policy_info_list(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_request_authorization_policy_input(v: GetRequestAuthorizationPolicyInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.authorization_id {
+    fs.push(("authorizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.policy_uri {
+    fs.push(("policyUri", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_request_authorization_policy_input(v: json.Value) -> GetRequestAuthorizationPolicyInput ! Str {
+  var out = GetRequestAuthorizationPolicyInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "authorizationId" => out.authorization_id = jsonv.read_str(fv)?
+      "policyUri" => out.policy_uri = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_request_authorization_policy_output(v: GetRequestAuthorizationPolicyOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.policy_document {
+    fs.push(("policyDocument", x))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_request_authorization_policy_output(v: json.Value) -> GetRequestAuthorizationPolicyOutput ! Str {
+  var out = GetRequestAuthorizationPolicyOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "policyDocument" => out.policy_document = fv
       _ => {}
     }
   }
@@ -407,6 +513,9 @@ fn json_of_policy_info(v: PolicyInfo) -> json.Value {
   if let Some(x) = v.attached_to {
     fs.push(("attachedTo", json_of_attached_to_list(x)))
   }
+  if let Some(x) = v.policy_source {
+    fs.push(("policySource", json_of_policy_source(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -421,6 +530,7 @@ fn from_json_policy_info(v: json.Value) -> PolicyInfo ! Str {
       "inline" => out.inline = jsonv.read_bool(fv)?
       "uri" => out.uri = jsonv.read_str(fv)?
       "attachedTo" => out.attached_to = from_json_attached_to_list(fv)?
+      "policySource" => out.policy_source = from_json_policy_source(fv)?
       _ => {}
     }
   }
@@ -439,6 +549,38 @@ fn from_json_policy_info_list(v: json.Value) -> List[PolicyInfo] ! Str {
       continue
     }
     out.push(from_json_policy_info(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_policy_source(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_policy_source(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_policy_type_list(v: List[PolicyType]) -> json.Value {
+  json.Value.List(v.map(fn(x: PolicyType) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_policy_type_list(v: json.Value) -> List[PolicyType] ! Str {
+  var out: List[PolicyType] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(PolicyType.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -659,9 +801,11 @@ pub fn deserialize_get_request_authorization_details_error(resp: http.Response) 
 /// performed, and the policies that were evaluated. Use this operation to
 /// understand why a request was denied. Supported services include an
 /// authorization ID in the access denied error message. Pass that ID to
-/// this operation to retrieve the details. Authorization details are
-/// available for at least 24 hours after the denial. To use this operation,
-/// you must have the iam:GetRequestAuthorizationDetails permission.
+/// this operation to retrieve the details. To retrieve the content for a
+/// policy in the policies list, call GetRequestAuthorizationPolicy .
+/// Authorization details are available for at least 24 hours after the
+/// denial. To use this operation, you must have the
+/// iam:GetRequestAuthorizationDetails permission.
 pub fn (c: Client) get_request_authorization_details(input: GetRequestAuthorizationDetailsInput) -> GetRequestAuthorizationDetailsOutput ! GetRequestAuthorizationDetailsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_request_authorization_details(c.params, input)) ?? e => return Err(GetRequestAuthorizationDetailsErr.InvalidInput(e))
   var req = serialize_get_request_authorization_details(ep, input, "") ?? e => return Err(GetRequestAuthorizationDetailsErr.InvalidInput(e))
@@ -673,4 +817,135 @@ pub fn (c: Client) get_request_authorization_details(input: GetRequestAuthorizat
     return Err(deserialize_get_request_authorization_details_error(resp))
   }
   deserialize_get_request_authorization_details(resp) ?? e => Err(GetRequestAuthorizationDetailsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_request_authorization_policy(base: EndpointParameters, input: GetRequestAuthorizationPolicyInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetRequestAuthorizationPolicy.
+pub fn serialize_get_request_authorization_policy(ep: rest.Endpoint, input: GetRequestAuthorizationPolicyInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_authorization_id = match input.authorization_id {
+    Some(v) => v
+    None => return Err("input member authorizationId is required")
+  }
+  if label_authorization_id == "" {
+    return Err("input member authorizationId must not be empty")
+  }
+  if let Some(v) = input.policy_uri {
+    qs.push(("policyUri", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/authorization-details/${rest.escape(label_authorization_id, false)}/policy"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_request_authorization_policy(resp: http.Response) -> GetRequestAuthorizationPolicyOutput ! Str {
+  var out = GetRequestAuthorizationPolicyOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "policyDocument" => out.policy_document = fv
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetRequestAuthorizationPolicy.
+pub enum GetRequestAuthorizationPolicyErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetRequestAuthorizationPolicyErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_request_authorization_policy_error(resp: http.Response) -> GetRequestAuthorizationPolicyErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetRequestAuthorizationPolicyErr.AccessDeniedException(x)
+      Err(msg) => return GetRequestAuthorizationPolicyErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetRequestAuthorizationPolicyErr.InternalServerException(x)
+      Err(msg) => return GetRequestAuthorizationPolicyErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetRequestAuthorizationPolicyErr.ResourceNotFoundException(x)
+      Err(msg) => return GetRequestAuthorizationPolicyErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetRequestAuthorizationPolicyErr.ValidationException(x)
+      Err(msg) => return GetRequestAuthorizationPolicyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetRequestAuthorizationPolicyErr.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves a policy that was evaluated for a specific access denied
+/// request. The operation returns the structured JSON document of the
+/// policy that was captured with the original authorization request. It
+/// doesn't retrieve the current version of the policy. For some AWS
+/// services and policy types, the returned policy document includes all
+/// actions relevant to the service that processed the denied request, but
+/// might omit actions for other services. Specify the authorization ID from
+/// the access denied error message and the policy URI returned by
+/// GetRequestAuthorizationDetails for the same authorization ID. Access
+/// depends on the account and organization recorded for the principal that
+/// made the denied request. If an organization was recorded, the calling
+/// principal must belong to that organization. Otherwise, the calling
+/// principal must belong to the recorded account. To use this operation,
+/// you must have the iam:GetRequestAuthorizationPolicy permission.
+pub fn (c: Client) get_request_authorization_policy(input: GetRequestAuthorizationPolicyInput) -> GetRequestAuthorizationPolicyOutput ! GetRequestAuthorizationPolicyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_request_authorization_policy(c.params, input)) ?? e => return Err(GetRequestAuthorizationPolicyErr.InvalidInput(e))
+  var req = serialize_get_request_authorization_policy(ep, input, "") ?? e => return Err(GetRequestAuthorizationPolicyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetRequestAuthorizationPolicyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_request_authorization_policy_error(resp))
+  }
+  deserialize_get_request_authorization_policy(resp) ?? e => Err(GetRequestAuthorizationPolicyErr.Deserialize(e))
 }

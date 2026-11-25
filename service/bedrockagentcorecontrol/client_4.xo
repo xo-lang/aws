@@ -8,6 +8,724 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Retrieves information about an API key credential provider.
+pub fn (c: Client) get_api_key_credential_provider(input: GetApiKeyCredentialProviderRequest) -> GetApiKeyCredentialProviderResponse ! GetApiKeyCredentialProviderErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_api_key_credential_provider(c.params, input)) ?? e => return Err(GetApiKeyCredentialProviderErr.InvalidInput(e))
+  var req = serialize_get_api_key_credential_provider(ep, input, "") ?? e => return Err(GetApiKeyCredentialProviderErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetApiKeyCredentialProviderErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_api_key_credential_provider_error(resp))
+  }
+  deserialize_get_api_key_credential_provider(resp) ?? e => Err(GetApiKeyCredentialProviderErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_browser(base: EndpointParameters, input: GetBrowserRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBrowser.
+pub fn serialize_get_browser(ep: rest.Endpoint, input: GetBrowserRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_browser_id = match input.browser_id {
+    Some(v) => v
+    None => return Err("input member browserId is required")
+  }
+  if label_browser_id == "" {
+    return Err("input member browserId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/browsers/${rest.escape(label_browser_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_browser(resp: http.Response) -> GetBrowserResponse ! Str {
+  var out = GetBrowserResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "browserId" => out.browser_id = jsonv.read_str(fv)?
+      "browserArn" => out.browser_arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "executionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
+      "networkConfiguration" => out.network_configuration = from_json_browser_network_configuration(fv)?
+      "recording" => out.recording = from_json_recording_config(fv)?
+      "browserSigning" => out.browser_signing = from_json_browser_signing_config_output(fv)?
+      "enterprisePolicies" => out.enterprise_policies = from_json_browser_enterprise_policies(fv)?
+      "certificates" => out.certificates = from_json_certificates(fv)?
+      "filesystemConfigurations" => out.filesystem_configurations = from_json_tools_file_system_configurations(fv)?
+      "status" => out.status = BrowserStatus.from(jsonv.read_str(fv)?)
+      "failureReason" => out.failure_reason = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetBrowser.
+pub enum GetBrowserErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetBrowserErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_browser_error(resp: http.Response) -> GetBrowserErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetBrowserErr.AccessDeniedException(x)
+      Err(msg) => return GetBrowserErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetBrowserErr.InternalServerException(x)
+      Err(msg) => return GetBrowserErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetBrowserErr.ResourceNotFoundException(x)
+      Err(msg) => return GetBrowserErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return GetBrowserErr.ServiceQuotaExceededException(x)
+      Err(msg) => return GetBrowserErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetBrowserErr.ThrottlingException(x)
+      Err(msg) => return GetBrowserErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetBrowserErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets information about a custom browser.
+pub fn (c: Client) get_browser(input: GetBrowserRequest) -> GetBrowserResponse ! GetBrowserErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_browser(c.params, input)) ?? e => return Err(GetBrowserErr.InvalidInput(e))
+  var req = serialize_get_browser(ep, input, "") ?? e => return Err(GetBrowserErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetBrowserErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_browser_error(resp))
+  }
+  deserialize_get_browser(resp) ?? e => Err(GetBrowserErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_browser_profile(base: EndpointParameters, input: GetBrowserProfileRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBrowserProfile.
+pub fn serialize_get_browser_profile(ep: rest.Endpoint, input: GetBrowserProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_profile_id = match input.profile_id {
+    Some(v) => v
+    None => return Err("input member profileId is required")
+  }
+  if label_profile_id == "" {
+    return Err("input member profileId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/browser-profiles/${rest.escape(label_profile_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_browser_profile(resp: http.Response) -> GetBrowserProfileResponse ! Str {
+  var out = GetBrowserProfileResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "profileId" => out.profile_id = jsonv.read_str(fv)?
+      "profileArn" => out.profile_arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "status" => out.status = BrowserProfileStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
+      "lastSavedAt" => out.last_saved_at = jsonv.read_time(fv, "date-time")?
+      "lastSavedBrowserSessionId" => out.last_saved_browser_session_id = jsonv.read_str(fv)?
+      "lastSavedBrowserId" => out.last_saved_browser_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetBrowserProfile.
+pub enum GetBrowserProfileErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetBrowserProfileErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_browser_profile_error(resp: http.Response) -> GetBrowserProfileErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetBrowserProfileErr.AccessDeniedException(x)
+      Err(msg) => return GetBrowserProfileErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetBrowserProfileErr.InternalServerException(x)
+      Err(msg) => return GetBrowserProfileErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetBrowserProfileErr.ResourceNotFoundException(x)
+      Err(msg) => return GetBrowserProfileErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetBrowserProfileErr.ThrottlingException(x)
+      Err(msg) => return GetBrowserProfileErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetBrowserProfileErr.ValidationException(x)
+      Err(msg) => return GetBrowserProfileErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetBrowserProfileErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets information about a browser profile.
+pub fn (c: Client) get_browser_profile(input: GetBrowserProfileRequest) -> GetBrowserProfileResponse ! GetBrowserProfileErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_browser_profile(c.params, input)) ?? e => return Err(GetBrowserProfileErr.InvalidInput(e))
+  var req = serialize_get_browser_profile(ep, input, "") ?? e => return Err(GetBrowserProfileErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetBrowserProfileErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_browser_profile_error(resp))
+  }
+  deserialize_get_browser_profile(resp) ?? e => Err(GetBrowserProfileErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_capacity_provider(base: EndpointParameters, input: GetCapacityProviderInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetCapacityProvider.
+pub fn serialize_get_capacity_provider(ep: rest.Endpoint, input: GetCapacityProviderInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_capacity_provider_id = match input.capacity_provider_id {
+    Some(v) => v
+    None => return Err("input member capacityProviderId is required")
+  }
+  if label_capacity_provider_id == "" {
+    return Err("input member capacityProviderId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/capacity-providers/${rest.escape(label_capacity_provider_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_capacity_provider(resp: http.Response) -> GetCapacityProviderOutput ! Str {
+  var out = GetCapacityProviderOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "capacityProviderId" => out.capacity_provider_id = jsonv.read_str(fv)?
+      "capacityProviderArn" => out.capacity_provider_arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "status" => out.status = CapacityProviderStatus.from(jsonv.read_str(fv)?)
+      "description" => out.description = jsonv.read_str(fv)?
+      "statusCode" => out.status_code = CapacityProviderStatusCode.from(jsonv.read_str(fv)?)
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
+      "permissionsConfiguration" => out.permissions_configuration = from_json_permissions_configuration(fv)?
+      "computeConfiguration" => out.compute_configuration = from_json_compute_configuration(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetCapacityProvider.
+pub enum GetCapacityProviderErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetCapacityProviderErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_capacity_provider_error(resp: http.Response) -> GetCapacityProviderErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetCapacityProviderErr.AccessDeniedException(x)
+      Err(msg) => return GetCapacityProviderErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetCapacityProviderErr.InternalServerException(x)
+      Err(msg) => return GetCapacityProviderErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetCapacityProviderErr.ResourceNotFoundException(x)
+      Err(msg) => return GetCapacityProviderErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetCapacityProviderErr.ThrottlingException(x)
+      Err(msg) => return GetCapacityProviderErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetCapacityProviderErr.ValidationException(x)
+      Err(msg) => return GetCapacityProviderErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetCapacityProviderErr.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves information about a capacity provider, including its status,
+/// permissions configuration, and compute configuration.
+pub fn (c: Client) get_capacity_provider(input: GetCapacityProviderInput) -> GetCapacityProviderOutput ! GetCapacityProviderErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_capacity_provider(c.params, input)) ?? e => return Err(GetCapacityProviderErr.InvalidInput(e))
+  var req = serialize_get_capacity_provider(ep, input, "") ?? e => return Err(GetCapacityProviderErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetCapacityProviderErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_capacity_provider_error(resp))
+  }
+  deserialize_get_capacity_provider(resp) ?? e => Err(GetCapacityProviderErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_code_interpreter(base: EndpointParameters, input: GetCodeInterpreterRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetCodeInterpreter.
+pub fn serialize_get_code_interpreter(ep: rest.Endpoint, input: GetCodeInterpreterRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_code_interpreter_id = match input.code_interpreter_id {
+    Some(v) => v
+    None => return Err("input member codeInterpreterId is required")
+  }
+  if label_code_interpreter_id == "" {
+    return Err("input member codeInterpreterId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/code-interpreters/${rest.escape(label_code_interpreter_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_code_interpreter(resp: http.Response) -> GetCodeInterpreterResponse ! Str {
+  var out = GetCodeInterpreterResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "codeInterpreterId" => out.code_interpreter_id = jsonv.read_str(fv)?
+      "codeInterpreterArn" => out.code_interpreter_arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "executionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
+      "networkConfiguration" => out.network_configuration = from_json_code_interpreter_network_configuration(fv)?
+      "status" => out.status = CodeInterpreterStatus.from(jsonv.read_str(fv)?)
+      "certificates" => out.certificates = from_json_certificates(fv)?
+      "filesystemConfigurations" => out.filesystem_configurations = from_json_tools_file_system_configurations(fv)?
+      "failureReason" => out.failure_reason = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetCodeInterpreter.
+pub enum GetCodeInterpreterErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetCodeInterpreterErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_code_interpreter_error(resp: http.Response) -> GetCodeInterpreterErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetCodeInterpreterErr.AccessDeniedException(x)
+      Err(msg) => return GetCodeInterpreterErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetCodeInterpreterErr.InternalServerException(x)
+      Err(msg) => return GetCodeInterpreterErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetCodeInterpreterErr.ResourceNotFoundException(x)
+      Err(msg) => return GetCodeInterpreterErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return GetCodeInterpreterErr.ServiceQuotaExceededException(x)
+      Err(msg) => return GetCodeInterpreterErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetCodeInterpreterErr.ThrottlingException(x)
+      Err(msg) => return GetCodeInterpreterErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetCodeInterpreterErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets information about a custom code interpreter.
+pub fn (c: Client) get_code_interpreter(input: GetCodeInterpreterRequest) -> GetCodeInterpreterResponse ! GetCodeInterpreterErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_code_interpreter(c.params, input)) ?? e => return Err(GetCodeInterpreterErr.InvalidInput(e))
+  var req = serialize_get_code_interpreter(ep, input, "") ?? e => return Err(GetCodeInterpreterErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetCodeInterpreterErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_code_interpreter_error(resp))
+  }
+  deserialize_get_code_interpreter(resp) ?? e => Err(GetCodeInterpreterErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_configuration_bundle(base: EndpointParameters, input: GetConfigurationBundleRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetConfigurationBundle.
+pub fn serialize_get_configuration_bundle(ep: rest.Endpoint, input: GetConfigurationBundleRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_bundle_id = match input.bundle_id {
+    Some(v) => v
+    None => return Err("input member bundleId is required")
+  }
+  if label_bundle_id == "" {
+    return Err("input member bundleId must not be empty")
+  }
+  if let Some(v) = input.branch_name {
+    qs.push(("branchName", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/configuration-bundles/${rest.escape(label_bundle_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_configuration_bundle(resp: http.Response) -> GetConfigurationBundleResponse ! Str {
+  var out = GetConfigurationBundleResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "bundleArn" => out.bundle_arn = jsonv.read_str(fv)?
+      "bundleId" => out.bundle_id = jsonv.read_str(fv)?
+      "bundleName" => out.bundle_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "versionId" => out.version_id = jsonv.read_str(fv)?
+      "components" => out.components = from_json_component_configuration_map(fv)?
+      "lineageMetadata" => out.lineage_metadata = from_json_version_lineage_metadata(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "kmsKeyArn" => out.kms_key_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetConfigurationBundle.
+pub enum GetConfigurationBundleErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetConfigurationBundleErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_configuration_bundle_error(resp: http.Response) -> GetConfigurationBundleErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetConfigurationBundleErr.AccessDeniedException(x)
+      Err(msg) => return GetConfigurationBundleErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetConfigurationBundleErr.InternalServerException(x)
+      Err(msg) => return GetConfigurationBundleErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetConfigurationBundleErr.ResourceNotFoundException(x)
+      Err(msg) => return GetConfigurationBundleErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetConfigurationBundleErr.ThrottlingException(x)
+      Err(msg) => return GetConfigurationBundleErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetConfigurationBundleErr.ValidationException(x)
+      Err(msg) => return GetConfigurationBundleErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetConfigurationBundleErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets the latest version of a configuration bundle. By default, returns
+/// the latest version on the mainline branch. Use
+/// GetConfigurationBundleVersion to retrieve a specific historical version.
+pub fn (c: Client) get_configuration_bundle(input: GetConfigurationBundleRequest) -> GetConfigurationBundleResponse ! GetConfigurationBundleErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_configuration_bundle(c.params, input)) ?? e => return Err(GetConfigurationBundleErr.InvalidInput(e))
+  var req = serialize_get_configuration_bundle(ep, input, "") ?? e => return Err(GetConfigurationBundleErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetConfigurationBundleErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_configuration_bundle_error(resp))
+  }
+  deserialize_get_configuration_bundle(resp) ?? e => Err(GetConfigurationBundleErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_configuration_bundle_version(base: EndpointParameters, input: GetConfigurationBundleVersionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetConfigurationBundleVersion.
+pub fn serialize_get_configuration_bundle_version(ep: rest.Endpoint, input: GetConfigurationBundleVersionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_bundle_id = match input.bundle_id {
+    Some(v) => v
+    None => return Err("input member bundleId is required")
+  }
+  if label_bundle_id == "" {
+    return Err("input member bundleId must not be empty")
+  }
+  let label_version_id = match input.version_id {
+    Some(v) => v
+    None => return Err("input member versionId is required")
+  }
+  if label_version_id == "" {
+    return Err("input member versionId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/configuration-bundles/${rest.escape(label_bundle_id, false)}/versions/${rest.escape(label_version_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_get_configuration_bundle_version(resp: http.Response) -> GetConfigurationBundleVersionResponse ! Str {
   var out = GetConfigurationBundleVersionResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -298,6 +1016,7 @@ pub fn deserialize_get_dataset(resp: http.Response) -> GetDatasetResponse ! Str 
       "schemaType" => out.schema_type = DatasetSchemaType.from(jsonv.read_str(fv)?)
       "kmsKeyArn" => out.kms_key_arn = jsonv.read_str(fv)?
       "exampleCount" => out.example_count = jsonv.read_int(fv)?
+      "exampleCountByField" => out.example_count_by_field = from_json_example_count_by_field(fv)?
       "downloadUrl" => out.download_url = jsonv.read_str(fv)?
       "downloadUrlExpiresAt" => out.download_url_expires_at = jsonv.read_time(fv, "epoch-seconds")?
       "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
@@ -3639,6 +4358,122 @@ pub fn (c: Client) get_workload_identity(input: GetWorkloadIdentityRequest) -> G
   deserialize_get_workload_identity(resp) ?? e => Err(GetWorkloadIdentityErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_agent_insight_stores(base: EndpointParameters, input: ListAgentInsightStoresRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAgentInsightStores.
+pub fn serialize_list_agent_insight_stores(ep: rest.Endpoint, input: ListAgentInsightStoresRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/agent-insight-stores"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_agent_insight_stores(resp: http.Response) -> ListAgentInsightStoresResponse ! Str {
+  var out = ListAgentInsightStoresResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "agentInsightStores" => out.agent_insight_stores = from_json_agent_insight_store_summary_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAgentInsightStores.
+pub enum ListAgentInsightStoresErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAgentInsightStoresErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_agent_insight_stores_error(resp: http.Response) -> ListAgentInsightStoresErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListAgentInsightStoresErr.AccessDeniedException(x)
+      Err(msg) => return ListAgentInsightStoresErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListAgentInsightStoresErr.InternalServerException(x)
+      Err(msg) => return ListAgentInsightStoresErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListAgentInsightStoresErr.ThrottlingException(x)
+      Err(msg) => return ListAgentInsightStoresErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListAgentInsightStoresErr.ValidationException(x)
+      Err(msg) => return ListAgentInsightStoresErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAgentInsightStoresErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the account's service-defined default Agent Insight Store. The
+/// singleton backing state may be initialized on first access.
+pub fn (c: Client) list_agent_insight_stores(input: ListAgentInsightStoresRequest) -> ListAgentInsightStoresResponse ! ListAgentInsightStoresErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_agent_insight_stores(c.params, input)) ?? e => return Err(ListAgentInsightStoresErr.InvalidInput(e))
+  var req = serialize_list_agent_insight_stores(ep, input, "") ?? e => return Err(ListAgentInsightStoresErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAgentInsightStoresErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_agent_insight_stores_error(resp))
+  }
+  deserialize_list_agent_insight_stores(resp) ?? e => Err(ListAgentInsightStoresErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_agent_runtime_endpoints(base: EndpointParameters, input: ListAgentRuntimeEndpointsRequest) -> EndpointParameters {
   let _ = input
   base
@@ -5125,25 +5960,31 @@ pub fn serialize_list_dataset_examples(ep: rest.Endpoint, input: ListDatasetExam
   if label_dataset_id == "" {
     return Err("input member datasetId must not be empty")
   }
-  if let Some(v) = input.dataset_version {
-    qs.push(("datasetVersion", v))
-  }
-  if let Some(v) = input.max_results {
-    qs.push(("maxResults", "${v}"))
-  }
-  if let Some(v) = input.next_token {
-    qs.push(("nextToken", v))
-  }
   var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.dataset_version {
+    fs.push(("datasetVersion", json.Value.Str(x)))
+  }
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_list_dataset_examples_filter(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
   Ok(transport.Request{
-    method: "GET",
+    method: "POST",
     scheme: ep.scheme,
     host: ep.host,
     port: ep.port,
-    path: rest.join_path(ep.path, "/datasets/${rest.escape(label_dataset_id, false)}/examples"),
+    path: rest.join_path(ep.path, "/datasets/${rest.escape(label_dataset_id, false)}/examples/list"),
     query: rest.query(qs),
     headers: headers,
     body: body,
@@ -5237,7 +6078,9 @@ pub fn deserialize_list_dataset_examples_error(resp: http.Response) -> ListDatas
 /// Returns paginated examples from the dataset. The server embeds the
 /// resolved version in the pagination token. Once pagination begins, all
 /// subsequent pages are pinned to that version regardless of concurrent
-/// mutations.
+/// mutations. A request with a pagination token can omit datasetVersion .
+/// If it sets a version that differs from the token's version, the request
+/// fails with a ValidationException .
 pub fn (c: Client) list_dataset_examples(input: ListDatasetExamplesRequest) -> ListDatasetExamplesResponse ! ListDatasetExamplesErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_dataset_examples(c.params, input)) ?? e => return Err(ListDatasetExamplesErr.InvalidInput(e))
   var req = serialize_list_dataset_examples(ep, input, "") ?? e => return Err(ListDatasetExamplesErr.InvalidInput(e))
@@ -5268,22 +6111,28 @@ pub fn serialize_list_dataset_versions(ep: rest.Endpoint, input: ListDatasetVers
   if label_dataset_id == "" {
     return Err("input member datasetId must not be empty")
   }
-  if let Some(v) = input.next_token {
-    qs.push(("nextToken", v))
-  }
-  if let Some(v) = input.max_results {
-    qs.push(("maxResults", "${v}"))
-  }
   var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_list_dataset_versions_filter(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
   Ok(transport.Request{
-    method: "GET",
+    method: "POST",
     scheme: ep.scheme,
     host: ep.host,
     port: ep.port,
-    path: rest.join_path(ep.path, "/datasets/${rest.escape(label_dataset_id, false)}/versions"),
+    path: rest.join_path(ep.path, "/datasets/${rest.escape(label_dataset_id, false)}/versions/list"),
     query: rest.query(qs),
     headers: headers,
     body: body,
@@ -5390,22 +6239,28 @@ pub fn serialize_list_datasets(ep: rest.Endpoint, input: ListDatasetsRequest, id
   let _ = (idempotency_token, min_compress)
   var headers: List[(Str, Str)] = []
   var qs: List[(Str, Str)] = []
-  if let Some(v) = input.next_token {
-    qs.push(("nextToken", v))
-  }
-  if let Some(v) = input.max_results {
-    qs.push(("maxResults", "${v}"))
-  }
   var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_list_datasets_filter(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
   }
   Ok(transport.Request{
-    method: "GET",
+    method: "POST",
     scheme: ep.scheme,
     host: ep.host,
     port: ep.port,
-    path: rest.join_path(ep.path, "/datasets"),
+    path: rest.join_path(ep.path, "/datasets/list"),
     query: rest.query(qs),
     headers: headers,
     body: body,
@@ -9866,836 +10721,6 @@ pub fn deserialize_untag_resource(resp: http.Response) -> UntagResourceResponse 
 /// The errors of UntagResource.
 pub enum UntagResourceErr {
   AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UntagResourceErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UntagResourceErr.AccessDeniedException(x)
-      Err(msg) => return UntagResourceErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UntagResourceErr.InternalServerException(x)
-      Err(msg) => return UntagResourceErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UntagResourceErr.ResourceNotFoundException(x)
-      Err(msg) => return UntagResourceErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UntagResourceErr.ThrottlingException(x)
-      Err(msg) => return UntagResourceErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UntagResourceErr.ValidationException(x)
-      Err(msg) => return UntagResourceErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UntagResourceErr.Api(restjson.api_error(resp, body))
-}
-
-/// Removes the specified tags from the specified resource. This feature is
-/// currently available only for AgentCore Runtime, Browser, Browser
-/// Profile, Code Interpreter tool, and Gateway.
-pub fn (c: Client) untag_resource(input: UntagResourceRequest) -> UntagResourceResponse ! UntagResourceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
-  var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UntagResourceErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_untag_resource_error(resp))
-  }
-  deserialize_untag_resource(resp) ?? e => Err(UntagResourceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_agent_runtime(base: EndpointParameters, input: UpdateAgentRuntimeRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateAgentRuntime.
-pub fn serialize_update_agent_runtime(ep: rest.Endpoint, input: UpdateAgentRuntimeRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_agent_runtime_id = match input.agent_runtime_id {
-    Some(v) => v
-    None => return Err("input member agentRuntimeId is required")
-  }
-  if label_agent_runtime_id == "" {
-    return Err("input member agentRuntimeId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.agent_runtime_artifact {
-    fs.push(("agentRuntimeArtifact", json_of_agent_runtime_artifact(x)))
-  }
-  if let Some(x) = input.role_arn {
-    fs.push(("roleArn", json.Value.Str(x)))
-  }
-  if let Some(x) = input.network_configuration {
-    fs.push(("networkConfiguration", json_of_network_configuration(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.authorizer_configuration {
-    fs.push(("authorizerConfiguration", json_of_authorizer_configuration(x)))
-  }
-  if let Some(x) = input.request_header_configuration {
-    fs.push(("requestHeaderConfiguration", json_of_request_header_configuration(x)))
-  }
-  if let Some(x) = input.protocol_configuration {
-    fs.push(("protocolConfiguration", json_of_protocol_configuration(x)))
-  }
-  if let Some(x) = input.lifecycle_configuration {
-    fs.push(("lifecycleConfiguration", json_of_lifecycle_configuration(x)))
-  }
-  if let Some(x) = input.hooks_configuration {
-    fs.push(("hooksConfiguration", json_of_runtime_hooks_configuration(x)))
-  }
-  if let Some(x) = input.metadata_configuration {
-    fs.push(("metadataConfiguration", json_of_runtime_metadata_configuration(x)))
-  }
-  if let Some(x) = input.environment_variables {
-    fs.push(("environmentVariables", json_of_environment_variables_map(x)))
-  }
-  if let Some(x) = input.filesystem_configurations {
-    fs.push(("filesystemConfigurations", json_of_filesystem_configurations(x)))
-  }
-  if let Some(x) = input.capacity_provider_configuration {
-    fs.push(("capacityProviderConfiguration", json_of_capacity_provider_configuration(x)))
-  }
-  if let Some(x) = input.platform_version {
-    fs.push(("platformVersion", json.Value.Str(x)))
-  }
-  if let Some(x) = input.allowed_ports {
-    fs.push(("allowedPorts", json_of_allowed_ports(x)))
-  }
-  if let Some(x) = input.resource_configurations {
-    fs.push(("resourceConfigurations", json_of_resource_configurations(x)))
-  }
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/runtimes/${rest.escape(label_agent_runtime_id, false)}/"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_agent_runtime(resp: http.Response) -> UpdateAgentRuntimeResponse ! Str {
-  var out = UpdateAgentRuntimeResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "agentRuntimeArn" => out.agent_runtime_arn = jsonv.read_str(fv)?
-      "agentRuntimeId" => out.agent_runtime_id = jsonv.read_str(fv)?
-      "workloadIdentityDetails" => out.workload_identity_details = from_json_workload_identity_details(fv)?
-      "agentRuntimeVersion" => out.agent_runtime_version = jsonv.read_str(fv)?
-      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
-      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
-      "status" => out.status = AgentRuntimeStatus.from(jsonv.read_str(fv)?)
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateAgentRuntime.
-pub enum UpdateAgentRuntimeErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateAgentRuntimeErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_agent_runtime_error(resp: http.Response) -> UpdateAgentRuntimeErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.AccessDeniedException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.ConflictException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.InternalServerException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.ThrottlingException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeErr.ValidationException(x)
-      Err(msg) => return UpdateAgentRuntimeErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateAgentRuntimeErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an existing Amazon Secure Agent.
-pub fn (c: Client) update_agent_runtime(input: UpdateAgentRuntimeRequest) -> UpdateAgentRuntimeResponse ! UpdateAgentRuntimeErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_agent_runtime(c.params, input)) ?? e => return Err(UpdateAgentRuntimeErr.InvalidInput(e))
-  var req = serialize_update_agent_runtime(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateAgentRuntimeErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateAgentRuntimeErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_agent_runtime_error(resp))
-  }
-  deserialize_update_agent_runtime(resp) ?? e => Err(UpdateAgentRuntimeErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_agent_runtime_endpoint(base: EndpointParameters, input: UpdateAgentRuntimeEndpointRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateAgentRuntimeEndpoint.
-pub fn serialize_update_agent_runtime_endpoint(ep: rest.Endpoint, input: UpdateAgentRuntimeEndpointRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_agent_runtime_id = match input.agent_runtime_id {
-    Some(v) => v
-    None => return Err("input member agentRuntimeId is required")
-  }
-  if label_agent_runtime_id == "" {
-    return Err("input member agentRuntimeId must not be empty")
-  }
-  let label_endpoint_name = match input.endpoint_name {
-    Some(v) => v
-    None => return Err("input member endpointName is required")
-  }
-  if label_endpoint_name == "" {
-    return Err("input member endpointName must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.agent_runtime_version {
-    fs.push(("agentRuntimeVersion", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/runtimes/${rest.escape(label_agent_runtime_id, false)}/runtime-endpoints/${rest.escape(label_endpoint_name, false)}/"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_agent_runtime_endpoint(resp: http.Response) -> UpdateAgentRuntimeEndpointResponse ! Str {
-  var out = UpdateAgentRuntimeEndpointResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "liveVersion" => out.live_version = jsonv.read_str(fv)?
-      "targetVersion" => out.target_version = jsonv.read_str(fv)?
-      "agentRuntimeEndpointArn" => out.agent_runtime_endpoint_arn = jsonv.read_str(fv)?
-      "agentRuntimeArn" => out.agent_runtime_arn = jsonv.read_str(fv)?
-      "status" => out.status = AgentRuntimeEndpointStatus.from(jsonv.read_str(fv)?)
-      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
-      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateAgentRuntimeEndpoint.
-pub enum UpdateAgentRuntimeEndpointErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateAgentRuntimeEndpointErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_agent_runtime_endpoint_error(resp: http.Response) -> UpdateAgentRuntimeEndpointErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.AccessDeniedException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.ConflictException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.InternalServerException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.ThrottlingException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateAgentRuntimeEndpointErr.ValidationException(x)
-      Err(msg) => return UpdateAgentRuntimeEndpointErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateAgentRuntimeEndpointErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an existing Amazon Bedrock AgentCore Runtime endpoint.
-pub fn (c: Client) update_agent_runtime_endpoint(input: UpdateAgentRuntimeEndpointRequest) -> UpdateAgentRuntimeEndpointResponse ! UpdateAgentRuntimeEndpointErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_agent_runtime_endpoint(c.params, input)) ?? e => return Err(UpdateAgentRuntimeEndpointErr.InvalidInput(e))
-  var req = serialize_update_agent_runtime_endpoint(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateAgentRuntimeEndpointErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateAgentRuntimeEndpointErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_agent_runtime_endpoint_error(resp))
-  }
-  deserialize_update_agent_runtime_endpoint(resp) ?? e => Err(UpdateAgentRuntimeEndpointErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_api_key_credential_provider(base: EndpointParameters, input: UpdateApiKeyCredentialProviderRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateApiKeyCredentialProvider.
-pub fn serialize_update_api_key_credential_provider(ep: rest.Endpoint, input: UpdateApiKeyCredentialProviderRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = input.api_key {
-    fs.push(("apiKey", json.Value.Str(x)))
-  }
-  if let Some(x) = input.api_key_secret_config {
-    fs.push(("apiKeySecretConfig", json_of_secret_reference(x)))
-  }
-  if let Some(x) = input.api_key_secret_source {
-    fs.push(("apiKeySecretSource", json.Value.Str(x.value())))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/identities/UpdateApiKeyCredentialProvider"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_api_key_credential_provider(resp: http.Response) -> UpdateApiKeyCredentialProviderResponse ! Str {
-  var out = UpdateApiKeyCredentialProviderResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "apiKeySecretArn" => out.api_key_secret_arn = from_json_secret_shape(fv)?
-      "apiKeySecretJsonKey" => out.api_key_secret_json_key = jsonv.read_str(fv)?
-      "apiKeySecretSource" => out.api_key_secret_source = SecretSourceType.from(jsonv.read_str(fv)?)
-      "name" => out.name = jsonv.read_str(fv)?
-      "credentialProviderArn" => out.credential_provider_arn = jsonv.read_str(fv)?
-      "createdTime" => out.created_time = jsonv.read_time(fv, "epoch-seconds")?
-      "lastUpdatedTime" => out.last_updated_time = jsonv.read_time(fv, "epoch-seconds")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateApiKeyCredentialProvider.
-pub enum UpdateApiKeyCredentialProviderErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  DecryptionFailure(e: DecryptionFailure)
-  EncryptionFailure(e: EncryptionFailure)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  UnauthorizedException(e: UnauthorizedException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateApiKeyCredentialProviderErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    DecryptionFailure(x) => "DecryptionFailure: ${x:?}"
-    EncryptionFailure(x) => "EncryptionFailure: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_api_key_credential_provider_error(resp: http.Response) -> UpdateApiKeyCredentialProviderErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.AccessDeniedException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.ConflictException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "DecryptionFailure" => match read_error_decryption_failure(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.DecryptionFailure(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "EncryptionFailure" => match read_error_encryption_failure(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.EncryptionFailure(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.InternalServerException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.ThrottlingException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.UnauthorizedException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateApiKeyCredentialProviderErr.ValidationException(x)
-      Err(msg) => return UpdateApiKeyCredentialProviderErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateApiKeyCredentialProviderErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an existing API key credential provider.
-pub fn (c: Client) update_api_key_credential_provider(input: UpdateApiKeyCredentialProviderRequest) -> UpdateApiKeyCredentialProviderResponse ! UpdateApiKeyCredentialProviderErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_api_key_credential_provider(c.params, input)) ?? e => return Err(UpdateApiKeyCredentialProviderErr.InvalidInput(e))
-  var req = serialize_update_api_key_credential_provider(ep, input, "") ?? e => return Err(UpdateApiKeyCredentialProviderErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateApiKeyCredentialProviderErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_api_key_credential_provider_error(resp))
-  }
-  deserialize_update_api_key_credential_provider(resp) ?? e => Err(UpdateApiKeyCredentialProviderErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_capacity_provider(base: EndpointParameters, input: UpdateCapacityProviderInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateCapacityProvider.
-pub fn serialize_update_capacity_provider(ep: rest.Endpoint, input: UpdateCapacityProviderInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_capacity_provider_id = match input.capacity_provider_id {
-    Some(v) => v
-    None => return Err("input member capacityProviderId is required")
-  }
-  if label_capacity_provider_id == "" {
-    return Err("input member capacityProviderId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.description {
-    fs.push(("description", json_of_updated_description(x)))
-  }
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/capacity-providers/${rest.escape(label_capacity_provider_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_capacity_provider(resp: http.Response) -> UpdateCapacityProviderOutput ! Str {
-  var out = UpdateCapacityProviderOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "capacityProviderId" => out.capacity_provider_id = jsonv.read_str(fv)?
-      "capacityProviderArn" => out.capacity_provider_arn = jsonv.read_str(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "status" => out.status = CapacityProviderStatus.from(jsonv.read_str(fv)?)
-      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
-      "lastUpdatedAt" => out.last_updated_at = jsonv.read_time(fv, "date-time")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateCapacityProvider.
-pub enum UpdateCapacityProviderErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  RetryableConflictException(e: RetryableConflictException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateCapacityProviderErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    RetryableConflictException(x) => "RetryableConflictException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_capacity_provider_error(resp: http.Response) -> UpdateCapacityProviderErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.AccessDeniedException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.ConflictException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.InternalServerException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    "RetryableConflictException" => match read_error_retryable_conflict_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.RetryableConflictException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.ThrottlingException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateCapacityProviderErr.ValidationException(x)
-      Err(msg) => return UpdateCapacityProviderErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateCapacityProviderErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates a capacity provider. Only the description can be changed. To
-/// change other configuration, such as instance types, networking, or
-/// storage, create a new capacity provider.
-pub fn (c: Client) update_capacity_provider(input: UpdateCapacityProviderInput) -> UpdateCapacityProviderOutput ! UpdateCapacityProviderErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_capacity_provider(c.params, input)) ?? e => return Err(UpdateCapacityProviderErr.InvalidInput(e))
-  var req = serialize_update_capacity_provider(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateCapacityProviderErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateCapacityProviderErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_capacity_provider_error(resp))
-  }
-  deserialize_update_capacity_provider(resp) ?? e => Err(UpdateCapacityProviderErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_configuration_bundle(base: EndpointParameters, input: UpdateConfigurationBundleRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateConfigurationBundle.
-pub fn serialize_update_configuration_bundle(ep: rest.Endpoint, input: UpdateConfigurationBundleRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_bundle_id = match input.bundle_id {
-    Some(v) => v
-    None => return Err("input member bundleId is required")
-  }
-  if label_bundle_id == "" {
-    return Err("input member bundleId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.bundle_name {
-    fs.push(("bundleName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.components {
-    fs.push(("components", json_of_component_configuration_map(x)))
-  }
-  if let Some(x) = input.parent_version_ids {
-    fs.push(("parentVersionIds", json_of_configuration_bundle_version_list(x)))
-  }
-  if let Some(x) = input.branch_name {
-    fs.push(("branchName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.commit_message {
-    fs.push(("commitMessage", json.Value.Str(x)))
-  }
-  if let Some(x) = input.created_by {
-    fs.push(("createdBy", json_of_version_created_by_source(x)))
-  }
-  if let Some(x) = input.kms_key_arn {
-    fs.push(("kmsKeyArn", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/configuration-bundles/${rest.escape(label_bundle_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_configuration_bundle(resp: http.Response) -> UpdateConfigurationBundleResponse ! Str {
-  var out = UpdateConfigurationBundleResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "bundleArn" => out.bundle_arn = jsonv.read_str(fv)?
-      "bundleId" => out.bundle_id = jsonv.read_str(fv)?
-      "versionId" => out.version_id = jsonv.read_str(fv)?
-      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateConfigurationBundle.
-pub enum UpdateConfigurationBundleErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)

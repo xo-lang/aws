@@ -59,6 +59,14 @@ pub struct AcmCertificateMetadata {
   pub acme_endpoint_arn: Str? = None
   /// The ACME account identifier associated with the certificate.
   pub acme_account_id: Str? = None
+  /// The Extended Key Usage profile of the certificate. This value exists
+  /// only for Amazon N2 certificates. If CertificateUsage was omitted from
+  /// the request, this value is CLIENT_AND_SERVER_AUTH .
+  pub certificate_usage: CertificateUsage? = None
+  /// The root hierarchy from which the certificate was issued. This value
+  /// exists only for Amazon N2 certificates, which have a Type of
+  /// AMAZON_ISSUED .
+  pub root_hierarchy_type: RootHierarchyType? = None
 }
 
 /// Filters certificates by ACM metadata.
@@ -74,6 +82,7 @@ pub enum AcmCertificateMetadataFilter {
   CertificateKeyPairOrigin(value: CertificateKeyPairOrigin)
   AcmeEndpointArn(value: Str)
   AcmeAccountId(value: Str)
+  RootHierarchyType(value: RootHierarchyType)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -412,8 +421,8 @@ pub struct CertificateDetail {
   /// RenewCertificate command.
   pub renewal_eligibility: RenewalEligibility? = None
   /// Contains the certificate options. Certificate transparency logging
-  /// opt-out is no longer available. All public certificates are recorded in
-  /// a certificate transparency log.
+  /// opt-out is no longer available. ACM records all public certificates
+  /// other than Amazon N2 certificates in a certificate transparency log.
   pub options: CertificateOptions? = None
   /// Contains information about the most recent update to the certificate.
   /// This field exists only when the certificate type is AMAZON_ISSUED and a
@@ -425,6 +434,14 @@ pub struct CertificateDetail {
   pub acme_endpoint_arn: Str? = None
   /// The ACME account identifier associated with the certificate.
   pub acme_account_id: Str? = None
+  /// The Extended Key Usage profile of the certificate. This value exists
+  /// only for Amazon N2 certificates. If CertificateUsage was omitted from
+  /// the request, this value is CLIENT_AND_SERVER_AUTH .
+  pub certificate_usage: CertificateUsage? = None
+  /// The root hierarchy from which the certificate was issued. This value
+  /// exists only for Amazon N2 certificates, which have a Type of
+  /// AMAZON_ISSUED .
+  pub root_hierarchy_type: RootHierarchyType? = None
 }
 
 pub enum CertificateExport: Str {
@@ -477,16 +494,16 @@ pub enum CertificateMetadata {
 
 /// Structure that contains options for your certificate. You can use this
 /// structure to change the domain validation method or specify whether to
-/// export your certificate. All public certificates are recorded in a
-/// certificate transparency log. For general information, see Certificate
-/// Transparency Logging . You can export public ACM certificates to use
-/// with Amazon Web Services services as well as outside Amazon Web Services
-/// Cloud. For more information, see Certificate Manager exportable public
-/// certificate .
+/// export your certificate. ACM records all public certificates other than
+/// Amazon N2 certificates in a certificate transparency log. For general
+/// information, see Certificate Transparency Logging . You can export
+/// public ACM certificates to use with Amazon Web Services services as well
+/// as outside Amazon Web Services Cloud. For more information, see
+/// Certificate Manager exportable public certificate .
 pub struct CertificateOptions {
   /// This parameter has been deprecated. Certificate transparency logging
-  /// opt-out is no longer available. All public certificates are recorded in
-  /// a certificate transparency log.
+  /// opt-out is no longer available. ACM records all public certificates
+  /// other than Amazon N2 certificates in a certificate transparency log.
   pub certificate_transparency_logging_preference: CertificateTransparencyLoggingPreference? = None
   /// You can opt in to allow the export of your certificates by specifying
   /// ENABLED . You cannot update the value of Export after the the
@@ -606,6 +623,14 @@ pub struct CertificateSummary {
   pub managed_by: CertificateManagedBy? = None
   /// The origin of the certificate's key pair.
   pub certificate_key_pair_origin: CertificateKeyPairOrigin? = None
+  /// The Extended Key Usage profile of the certificate. This value exists
+  /// only for Amazon N2 certificates. If CertificateUsage was omitted from
+  /// the request, this value is CLIENT_AND_SERVER_AUTH .
+  pub certificate_usage: CertificateUsage? = None
+  /// The root hierarchy from which the certificate was issued. This value
+  /// exists only for Amazon N2 certificates, which have a Type of
+  /// AMAZON_ISSUED .
+  pub root_hierarchy_type: RootHierarchyType? = None
 }
 
 pub enum CertificateTransparencyLoggingPreference: Str {
@@ -618,6 +643,15 @@ pub enum CertificateType: Str {
   Imported = "IMPORTED"
   AmazonIssued = "AMAZON_ISSUED"
   Private = "PRIVATE"
+  Unknown(value: Str)
+}
+
+/// The Extended Key Usage profile of an Amazon N2 certificate. Valid
+/// values: CLIENT_AND_SERVER_AUTH – Authenticates both the client and the
+/// server. CLIENT_AUTH_ONLY – Authenticates only the client.
+pub enum CertificateUsage: Str {
+  ClientAndServerAuth = "CLIENT_AND_SERVER_AUTH"
+  ClientAuthOnly = "CLIENT_AUTH_ONLY"
   Unknown(value: Str)
 }
 
@@ -1353,6 +1387,12 @@ pub struct ListCertificatesRequest {
   /// or more CertificateKeyPairOrigin values. Default filtering returns only
   /// certificates with key pair origin of AWS_MANAGED and CUSTOMER_PROVIDED .
   pub certificate_key_pair_origins: List[CertificateKeyPairOrigin]? = None
+  /// Filter the certificate list by root hierarchy type. Specify one or more
+  /// RootHierarchyType values. By default, this action does not return
+  /// certificates with a RootHierarchyType of N2_AMAZON_MANAGED or
+  /// N2_SFG2_AMAZON_MANAGED . To list only Amazon N2 certificates, specify
+  /// one or both of these values in the RootHierarchyTypes filter.
+  pub root_hierarchy_types: List[RootHierarchyType]? = None
   /// Filter the certificate list. For more information, see the Filters
   /// structure.
   pub includes: Filters? = None
@@ -1561,12 +1601,12 @@ pub struct RequestCertificateRequest {
   pub domain_validation_options: List[DomainValidationOption]? = None
   /// You can use this parameter to specify whether to export your
   /// certificate. Certificate transparency logging opt-out is no longer
-  /// available. All public certificates are recorded in a certificate
-  /// transparency log. For more information, see Certificate Transparency
-  /// Logging . You can export public ACM certificates to use with Amazon Web
-  /// Services services as well as outside the Amazon Web Services Cloud. For
-  /// more information, see Certificate Manager exportable public certificate
-  /// .
+  /// available. ACM records all public certificates other than Amazon N2
+  /// certificates in a certificate transparency log. For more information,
+  /// see Certificate Transparency Logging . You can export public ACM
+  /// certificates to use with Amazon Web Services services as well as outside
+  /// the Amazon Web Services Cloud. For more information, see Certificate
+  /// Manager exportable public certificate .
   pub options: CertificateOptions? = None
   /// The Amazon Resource Name (ARN) of the private certificate authority (CA)
   /// that will be used to issue the certificate. If you do not provide an ARN
@@ -1599,6 +1639,32 @@ pub struct RequestCertificateRequest {
   /// Identifies the Amazon Web Services service that manages the certificate
   /// issued by ACM.
   pub managed_by: CertificateManagedBy? = None
+  /// The Extended Key Usage profile of the certificate. You can specify this
+  /// parameter only when RootHierarchyType is N2_AMAZON_MANAGED or
+  /// N2_SFG2_AMAZON_MANAGED . If you specify CertificateUsage with any other
+  /// root hierarchy type, or without RootHierarchyType , the request fails
+  /// with a ValidationException . CLIENT_AND_SERVER_AUTH authenticates both
+  /// the client and the server. Valid for both N2 root hierarchy types.
+  /// CLIENT_AUTH_ONLY authenticates only the client. Valid only for
+  /// N2_AMAZON_MANAGED . Default: CLIENT_AND_SERVER_AUTH
+  pub certificate_usage: CertificateUsage? = None
+  /// The root hierarchy from which ACM issues the certificate. Specify one of
+  /// the following values to request an Amazon N2 certificate:
+  /// N2_AMAZON_MANAGED – An Amazon N2 certificate that chains to an Amazon
+  /// N2 root. The maximum validity period, which is also the default, is 395
+  /// days. N2_SFG2_AMAZON_MANAGED – An Amazon N2 certificate that chains to
+  /// an Amazon N2 root cross-signed by Starfield G2. The maximum validity
+  /// period, which is also the default, is 98 days. You cannot specify
+  /// RootHierarchyType together with CertificateAuthorityArn . If you omit
+  /// this parameter, ACM issues a standard public certificate. A request that
+  /// specifies any value other than N2_AMAZON_MANAGED or
+  /// N2_SFG2_AMAZON_MANAGED fails with a ValidationException . An Amazon N2
+  /// certificate request must specify a ValidationMethod of DNS . Amazon N2
+  /// certificates are not recorded in a certificate transparency log. A
+  /// request for a validity period longer than the maximum fails with a
+  /// ValidationException . Algorithms supported for an N2 certificate request
+  /// include: RSA_2048 EC_prime256v1 EC_secp384r1
+  pub root_hierarchy_type: RootHierarchyType? = None
 }
 
 pub struct RequestCertificateResponse {
@@ -1702,6 +1768,16 @@ pub struct RevokeCertificateResponse {
   /// The Amazon Resource Name (ARN) of the public or private certificate that
   /// was revoked.
   pub certificate_arn: Str? = None
+}
+
+/// The root hierarchy from which a certificate is issued. Valid values:
+/// N2_AMAZON_MANAGED – An Amazon N2 certificate that chains to an Amazon
+/// N2 root. N2_SFG2_AMAZON_MANAGED – An Amazon N2 certificate that chains
+/// to an Amazon N2 root cross-signed by Starfield G2.
+pub enum RootHierarchyType: Str {
+  N2AmazonManaged = "N2_AMAZON_MANAGED"
+  N2Sfg2AmazonManaged = "N2_SFG2_AMAZON_MANAGED"
+  Unknown(value: Str)
 }
 
 pub struct SearchCertificatesRequest {

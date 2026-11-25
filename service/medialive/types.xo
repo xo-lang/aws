@@ -1441,6 +1441,7 @@ pub struct CaptionSelectorSettings {
   pub scte27_source_settings: Scte27SourceSettings? = None
   pub teletext_source_settings: TeletextSourceSettings? = None
   pub smart_subtitle_source_settings: SmartSubtitleSourceSettings? = None
+  pub webvtt_source_settings: WebvttSourceSettings? = None
 }
 
 /// Controls how MediaLive synchronizes Elemental Inference generated
@@ -1523,6 +1524,8 @@ pub struct Channel {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: DescribeInferenceSettings? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }
 
 /// An alert on a channel
@@ -1665,6 +1668,8 @@ pub struct ChannelSummary {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: DescribeInferenceSettings? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }
 
 /// A request to claim an AWS Elemental device that you have purchased from
@@ -2205,6 +2210,8 @@ pub struct CreateChannelRequest {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: InferenceSettings? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }
 
 /// Placeholder documentation for CreateChannelResponse
@@ -2880,6 +2887,8 @@ pub struct DeleteChannelResponse {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: DescribeInferenceSettings? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }
 
 /// Placeholder documentation for DeleteCloudWatchAlarmTemplateGroupRequest
@@ -3301,6 +3310,8 @@ pub struct DescribeChannelResponse {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: DescribeInferenceSettings? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }
 
 /// Placeholder documentation for DescribeClusterRequest
@@ -4482,6 +4493,21 @@ pub struct EmbeddedDestinationSettings {
   /// carried over. - "manual": Applies the specified styling and positioning.
   /// All other styling and positioning is given default values.
   pub style_control: EmbeddedDestinationStyleControl? = None
+  /// CC Channel / Service number for 608/708 encode mode. Serves as both the
+  /// 608 CC channel and the 708 service number (e.g., 1 = CC1 + Service 1).
+  /// Only takes effect when the source is non-embedded (teletext, smart
+  /// captions, etc.) — ignored in passthrough mode. Range 1-4: valid for
+  /// embedded608Only, embedded708Only, or embedded608And708. Range 5-63:
+  /// valid for embedded708Only.
+  pub caption_service_channel: Int? = None
+  /// Controls what the encoder generates when in encode mode (non-embedded
+  /// source → embedded destination). Ignored in passthrough mode (embedded
+  /// source → embedded destination). - "embedded608Only": Generate CEA-608
+  /// CC pairs only (channel must be 1-4) - "embedded708Only": Generate
+  /// CEA-708 service blocks only (channel 1-63) - "embedded608And708":
+  /// Generate both 608 CC pairs and 708 service blocks (channel 1-4 gets
+  /// both, 5-63 gets 708 only)
+  pub embedded_mode: EmbeddedModeType? = None
 }
 
 /// Controls the source of position and style information for embedded
@@ -4494,6 +4520,16 @@ pub struct EmbeddedDestinationSettings {
 pub enum EmbeddedDestinationStyleControl: Str {
   Manual = "MANUAL"
   Passthrough = "PASSTHROUGH"
+  Unknown(value: Str)
+}
+
+/// Controls what the embedded encoder generates. - "embedded_608_only":
+/// CEA-608 CC pairs only - "embedded_708_only": CEA-708 service blocks only
+/// - "embedded_608_and_708": Both 608 and 708
+pub enum EmbeddedModeType: Str {
+  Embedded608And708 = "EMBEDDED_608_AND_708"
+  Embedded608Only = "EMBEDDED_608_ONLY"
+  Embedded708Only = "EMBEDDED_708_ONLY"
   Unknown(value: Str)
 }
 
@@ -6639,6 +6675,7 @@ pub enum InputCodec: Str {
   Mpeg2 = "MPEG2"
   Avc = "AVC"
   Hevc = "HEVC"
+  Jpegxs = "JPEGXS"
   Unknown(value: Str)
 }
 
@@ -7453,6 +7490,30 @@ pub struct IpPoolCreateRequest {
 pub struct IpPoolUpdateRequest {
   /// A CIDR block of IP addresses to reserve for MediaLive Anywhere.
   pub cidr: Str? = None
+}
+
+/// Maximum JPEG XS input bitrate in megabits per second
+pub enum JpegXsInputMaximumBitrate: Str {
+  Max500Mbps = "MAX_500_MBPS"
+  Unknown(value: Str)
+}
+
+/// Maximum JPEG XS input resolution; HD is 720 to 1080 lines of vertical
+/// resolution
+pub enum JpegXsInputResolution: Str {
+  Hd = "HD"
+  Unknown(value: Str)
+}
+
+/// Specification of the JPEG XS input for this channel. Use instead of
+/// inputSpecification when the input codec is JPEG XS.
+pub struct JpegXsInputSpecification {
+  /// Input codec. Must be JPEGXS.
+  pub codec: InputCodec? = None
+  /// Maximum JPEG XS input bitrate
+  pub maximum_bitrate: JpegXsInputMaximumBitrate? = None
+  /// Maximum JPEG XS input resolution
+  pub resolution: JpegXsInputResolution? = None
 }
 
 /// Key Provider Settings
@@ -8581,6 +8642,13 @@ pub struct MediaPackageV2AbWatermarkerIrdetoSettings {
   pub watermark_id_length: AbWatermarkerIdLength? = None
 }
 
+/// Media Package V2 Caption Language Setting
+pub enum MediaPackageV2CaptionLanguageSetting: Str {
+  Auto = "AUTO"
+  None = "NONE"
+  Unknown(value: Str)
+}
+
 /// Media Package V2 Destination Settings
 pub struct MediaPackageV2DestinationSettings {
   /// Applies only to an output that contains audio. If you want to put
@@ -8676,6 +8744,17 @@ pub struct MediaPackageV2GroupSettings {
   pub additional_destinations: List[MediaPackageAdditionalDestinations]? = None
   /// Specifies the type of watermarking technology to use.
   pub watermarking_settings: MediaPackageV2WatermarkingSettings? = None
+  /// Applies only to 608 Embedded output captions. Controls the
+  /// CLOSED-CAPTIONS signaling that MediaPackage v2 writes into the HLS
+  /// manifest it delivers. auto: The default. If captionLanguageMappings is
+  /// non-empty, the HLS manifest includes a CLOSED-CAPTIONS line for each
+  /// mapped caption channel. If captionLanguageMappings is empty, the HLS
+  /// manifest omits any CLOSED-CAPTIONS line. none: The HLS manifest carries
+  /// CLOSED-CAPTIONS=NONE on each EXT-X-STREAM-INF tag, which signals to
+  /// players that the stream has no closed captions, so they stop offering a
+  /// CC track. The API rejects none combined with a non-empty
+  /// captionLanguageMappings.
+  pub caption_language_setting: MediaPackageV2CaptionLanguageSetting? = None
 }
 
 /// A/B Watermarker settings for MediaPackage V2 output groups.
@@ -10022,6 +10101,7 @@ pub enum ReservationCodec: Str {
   Audio = "AUDIO"
   Link = "LINK"
   Av1 = "AV1"
+  Jpegxs = "JPEGXS"
   Unknown(value: Str)
 }
 
@@ -10030,6 +10110,7 @@ pub enum ReservationMaximumBitrate: Str {
   Max10Mbps = "MAX_10_MBPS"
   Max20Mbps = "MAX_20_MBPS"
   Max50Mbps = "MAX_50_MBPS"
+  Max500Mbps = "MAX_500_MBPS"
   Unknown(value: Str)
 }
 
@@ -10169,6 +10250,8 @@ pub struct RestartChannelPipelinesResponse {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: DescribeInferenceSettings? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }
 
 /// Used in DescribeNetworkResult, DescribeNetworkSummary,
@@ -11221,103 +11304,6 @@ pub struct StartChannelResponse {
   /// Include this setting to include Elemental Inference features in this
   /// channel.
   pub inference_settings: DescribeInferenceSettings? = None
-}
-
-/// Placeholder documentation for StartDeleteMonitorDeploymentRequest
-pub struct StartDeleteMonitorDeploymentRequest {
-  /// A signal map's identifier. Can be either be its id or current name.
-  pub identifier: Str? = None
-}
-
-/// Placeholder documentation for StartDeleteMonitorDeploymentResponse
-pub struct StartDeleteMonitorDeploymentResponse {
-  /// A signal map's ARN (Amazon Resource Name)
-  pub arn: Str? = None
-  pub cloud_watch_alarm_template_group_ids: List[Str]? = None
-  pub created_at: Time? = None
-  /// A resource's optional description.
-  pub description: Str? = None
-  /// A top-level supported AWS resource ARN to discovery a signal map from.
-  pub discovery_entry_point_arn: Str? = None
-  /// Error message associated with a failed creation or failed update attempt
-  /// of a signal map.
-  pub error_message: Str? = None
-  pub event_bridge_rule_template_group_ids: List[Str]? = None
-  pub failed_media_resource_map: Map[Str, MediaResource]? = None
-  /// A signal map's id.
-  pub id: Str? = None
-  pub last_discovered_at: Time? = None
-  pub last_successful_monitor_deployment: SuccessfulMonitorDeployment? = None
-  pub media_resource_map: Map[Str, MediaResource]? = None
-  pub modified_at: Time? = None
-  /// If true, there are pending monitor changes for this signal map that can
-  /// be deployed.
-  pub monitor_changes_pending_deployment: Bool? = None
-  pub monitor_deployment: MonitorDeployment? = None
-  /// A resource's name. Names must be unique within the scope of a resource
-  /// type in a specific region.
-  pub name: Str? = None
-  pub status: SignalMapStatus? = None
-  pub tags: Map[Str, Str]? = None
-}
-
-/// Placeholder documentation for StartInputDeviceMaintenanceWindowRequest
-pub struct StartInputDeviceMaintenanceWindowRequest {
-  /// The unique ID of the input device to start a maintenance window for. For
-  /// example, hd-123456789abcdef.
-  pub input_device_id: Str? = None
-}
-
-/// Placeholder documentation for StartInputDeviceMaintenanceWindowResponse
-pub struct StartInputDeviceMaintenanceWindowResponse {
-}
-
-/// Placeholder documentation for StartInputDeviceRequest
-pub struct StartInputDeviceRequest {
-  /// The unique ID of the input device to start. For example,
-  /// hd-123456789abcdef.
-  pub input_device_id: Str? = None
-}
-
-/// Placeholder documentation for StartInputDeviceResponse
-pub struct StartInputDeviceResponse {
-}
-
-/// Placeholder documentation for StartMonitorDeploymentRequest
-pub struct StartMonitorDeploymentRequest {
-  pub dry_run: Bool? = None
-  /// A signal map's identifier. Can be either be its id or current name.
-  pub identifier: Str? = None
-}
-
-/// Placeholder documentation for StartMonitorDeploymentResponse
-pub struct StartMonitorDeploymentResponse {
-  /// A signal map's ARN (Amazon Resource Name)
-  pub arn: Str? = None
-  pub cloud_watch_alarm_template_group_ids: List[Str]? = None
-  pub created_at: Time? = None
-  /// A resource's optional description.
-  pub description: Str? = None
-  /// A top-level supported AWS resource ARN to discovery a signal map from.
-  pub discovery_entry_point_arn: Str? = None
-  /// Error message associated with a failed creation or failed update attempt
-  /// of a signal map.
-  pub error_message: Str? = None
-  pub event_bridge_rule_template_group_ids: List[Str]? = None
-  pub failed_media_resource_map: Map[Str, MediaResource]? = None
-  /// A signal map's id.
-  pub id: Str? = None
-  pub last_discovered_at: Time? = None
-  pub last_successful_monitor_deployment: SuccessfulMonitorDeployment? = None
-  pub media_resource_map: Map[Str, MediaResource]? = None
-  pub modified_at: Time? = None
-  /// If true, there are pending monitor changes for this signal map that can
-  /// be deployed.
-  pub monitor_changes_pending_deployment: Bool? = None
-  pub monitor_deployment: MonitorDeployment? = None
-  /// A resource's name. Names must be unique within the scope of a resource
-  /// type in a specific region.
-  pub name: Str? = None
-  pub status: SignalMapStatus? = None
-  pub tags: Map[Str, Str]? = None
+  /// Specification of JPEG XS inputs for this channel
+  pub jpeg_xs_input_specification: JpegXsInputSpecification? = None
 }

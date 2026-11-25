@@ -321,6 +321,59 @@ pub enum ContextKeyTypeEnum: Str {
   Unknown(value: Str)
 }
 
+/// Contains the trusted identity propagation context provider configuration
+/// for a SAML or OpenID Connect (OIDC) identity provider. The context
+/// provider defines how the subject is derived and how keys from the
+/// external identity provider's assertion or token are mapped into trusted
+/// context keys. This data type is used as a request parameter in the
+/// CreateOpenIDConnectProvider , UpdateOpenIDConnectProvider ,
+/// CreateSAMLProvider , and UpdateSAMLProvider operations, and as a
+/// response element in the GetOpenIDConnectProvider and GetSAMLProvider
+/// operations.
+pub struct ContextProvider {
+  /// A list of source-to-target key mappings that define how keys from the
+  /// external identity provider's assertion or token are mapped into trusted
+  /// context keys. You can specify from 0 to 10 mappings.
+  pub key_definition_list: List[ContextProviderKeyDefinition]? = None
+  /// The source key that is used to derive the subject for the injected
+  /// trusted context. This value identifies the claim or attribute in the
+  /// external identity provider's assertion or token that supplies the
+  /// subject. The key can contain only ASCII letters (A-Z, a-z), numbers
+  /// (0-9), single spaces, and the following characters: _ . : / = + - @ # .
+  /// It can't start or end with a space or contain two spaces in a row.
+  pub subject_source_key: Str? = None
+  /// A static value for the subject type, such as user or workload . This
+  /// parameter is optional and is mutually exclusive with
+  /// SubjectTypeSourceKey . Specify either SubjectTypeValue or
+  /// SubjectTypeSourceKey , but not both.
+  pub subject_type_value: Str? = None
+  /// The source key that supplies the subject type from the external identity
+  /// provider's assertion or token. The key can contain only ASCII letters
+  /// (A-Z, a-z), numbers (0-9), single spaces, and the following characters:
+  /// _ . : / = + - @ # . It can't start or end with a space or contain two
+  /// spaces in a row. This parameter is mutually exclusive with
+  /// SubjectTypeValue . Specify either SubjectTypeSourceKey or
+  /// SubjectTypeValue , but not both.
+  pub subject_type_source_key: Str? = None
+}
+
+/// Defines a single mapping from a source key in the external identity
+/// provider's assertion or token to a target trusted context key. This data
+/// type is used as a member of the ContextProvider data type.
+pub struct ContextProviderKeyDefinition {
+  /// The key in the external identity provider's assertion or token to read
+  /// the value from. The key can contain only ASCII letters (A-Z, a-z),
+  /// numbers (0-9), single spaces, and the following characters: _ . : / = +
+  /// - @ # . It can't start or end with a space or contain two spaces in a
+  /// row.
+  pub source_key: Str? = None
+  /// The trusted context key to map the source value into. The key can
+  /// contain only ASCII letters (A-Z, a-z), numbers (0-9), single spaces, and
+  /// the following characters: _ . : / = + - @ # . It can't start or end with
+  /// a space or contain two spaces in a row.
+  pub target_key: Str? = None
+}
+
 pub struct CreateAccessKeyRequest {
   /// The name of the IAM user that the new key will belong to. This parameter
   /// allows (through its regex pattern ) a string of characters consisting of
@@ -482,6 +535,13 @@ pub struct CreateLoginProfileRequest {
   /// Specifies whether the user is required to set a new password on next
   /// sign-in.
   pub password_reset_required: Bool? = None
+  /// The maximum duration (in seconds) of an Amazon Web Services Sign-In
+  /// session for this IAM user. This setting can have a value from 1 hour
+  /// (3600 seconds) to 90 days (7776000 seconds), inclusive. If you do not
+  /// specify a value, the setting remains unset and the existing sign-in
+  /// session behavior applies. This setting is not supported for the root
+  /// user.
+  pub max_signin_session_duration: Int? = None
 }
 
 /// Contains the response to a successful CreateLoginProfile request.
@@ -539,6 +599,18 @@ pub struct CreateOpenIDConnectProviderRequest {
   /// the allowed maximum number of tags, then the entire request fails and
   /// the resource is not created.
   pub tags: List[Tag]? = None
+  /// The trusted identity propagation context provider configuration to
+  /// associate with the OpenID Connect (OIDC) provider. The context provider
+  /// defines how the subject is derived and how keys from the provider's
+  /// token are mapped into trusted context keys. Specifying a context
+  /// provider enables trusted identity propagation for the provider. For more
+  /// information, see ContextProvider .
+  pub context_provider: ContextProvider? = None
+  /// The Amazon Resource Name (ARN) of the IAM Identity Center instance to
+  /// associate with the OpenID Connect (OIDC) provider. If you specify this
+  /// parameter, you must also specify ContextProvider . For the format, see
+  /// InstanceMetadata in the IAM Identity Center API Reference .
+  pub identity_center_instance_arn: Str? = None
 }
 
 /// Contains the response to a successful CreateOpenIDConnectProvider
@@ -691,6 +763,13 @@ pub struct CreateRoleRequest {
   /// you use those operations to create a console URL. For more information,
   /// see Using IAM roles in the IAM User Guide .
   pub max_session_duration: Int? = None
+  /// The maximum duration (in seconds) of an Amazon Web Services Sign-In
+  /// session for users who sign in with this role. This setting can have a
+  /// value from 1 hour (3600 seconds) to 90 days (7776000 seconds),
+  /// inclusive. If you do not specify a value, the setting remains unset and
+  /// the existing sign-in session behavior applies. This setting is
+  /// independent of MaxSessionDuration .
+  pub max_signin_session_duration: Int? = None
   /// The ARN of the managed policy that is used to set the permissions
   /// boundary for the role. A permissions boundary policy defines the maximum
   /// permissions that identity-based policies can grant to an entity, but
@@ -741,6 +820,18 @@ pub struct CreateSAMLProviderRequest {
   /// private key must be a .pem file that uses AES-GCM or AES-CBC encryption
   /// algorithm to decrypt SAML assertions.
   pub add_private_key: Str? = None
+  /// The trusted identity propagation context provider configuration to
+  /// associate with the SAML provider. The context provider defines how the
+  /// subject is derived and how keys from the provider's SAML assertion are
+  /// mapped into trusted context keys. Specifying a context provider enables
+  /// trusted identity propagation for the provider. For more information, see
+  /// ContextProvider .
+  pub context_provider: ContextProvider? = None
+  /// The Amazon Resource Name (ARN) of the IAM Identity Center instance to
+  /// associate with the SAML provider. If you specify this parameter, you
+  /// must also specify ContextProvider . For the format, see InstanceMetadata
+  /// in the IAM Identity Center API Reference .
+  pub identity_center_instance_arn: Str? = None
 }
 
 /// Contains the response to a successful CreateSAMLProvider request.
@@ -1150,7 +1241,8 @@ pub struct DeleteServiceLinkedRoleRequest {
 pub struct DeleteServiceLinkedRoleResponse {
   /// The deletion task identifier that you can use to check the status of the
   /// deletion. This identifier is returned in the format
-  /// task/aws-service-role/ / / .
+  /// task/aws-service-role/&lt;service-principal-name&gt;/&lt;role-name&gt;/&lt;task-uuid&gt;
+  /// .
   pub deletion_task_id: Str? = None
 }
 
@@ -1953,6 +2045,24 @@ pub struct GetOpenIDConnectProviderResponse {
   /// returned list of tags is sorted by tag key. For more information about
   /// tagging, see Tagging IAM resources in the IAM User Guide .
   pub tags: List[Tag]? = None
+  /// The trusted identity propagation context provider configuration
+  /// associated with the IAM OIDC provider resource object. For more
+  /// information, see ContextProvider . This element is returned only when a
+  /// trusted identity propagation context provider is configured for the OIDC
+  /// provider.
+  pub context_provider: ContextProvider? = None
+  /// The Amazon Resource Name (ARN) of the IAM Identity Center instance
+  /// associated with the IAM OIDC provider resource object. For the format,
+  /// see InstanceMetadata in the IAM Identity Center API Reference . This
+  /// element is returned only when an IAM Identity Center instance is
+  /// associated with the OIDC provider.
+  pub identity_center_instance_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the identity store that is resolved
+  /// from the associated IAM Identity Center instance. For the format, see
+  /// InstanceMetadata in the IAM Identity Center API Reference . This element
+  /// is returned only when an IAM Identity Center instance is associated with
+  /// the OIDC provider.
+  pub identity_store_arn: Str? = None
 }
 
 pub struct GetOrganizationsAccessReportRequest {
@@ -2129,6 +2239,14 @@ pub struct GetSAMLProviderResponse {
   /// The XML metadata document that includes information about an identity
   /// provider.
   pub saml_metadata_document: Str? = None
+  /// The trusted identity propagation context provider configuration
+  /// associated with the SAML provider. For more information, see
+  /// ContextProvider . This element is returned only when a trusted identity
+  /// propagation context provider is configured for the SAML provider.
+  pub context_provider: ContextProvider? = None
+  /// The key hashes associated with the SAML provider, grouped by identity
+  /// provider issuer. For more information, see SAMLKeyHashEntry .
+  pub saml_key_hashes: List[SAMLKeyHashEntry]? = None
   /// The date and time when the SAML provider was created.
   pub create_date: Time? = None
   /// The expiration date and time for the SAML provider.
@@ -2141,6 +2259,18 @@ pub struct GetSAMLProviderResponse {
   pub assertion_encryption_mode: AssertionEncryptionModeType? = None
   /// The private key metadata for the SAML provider.
   pub private_key_list: List[SAMLPrivateKey]? = None
+  /// The Amazon Resource Name (ARN) of the IAM Identity Center instance
+  /// associated with the SAML provider. For the format, see InstanceMetadata
+  /// in the IAM Identity Center API Reference . This element is returned only
+  /// when an IAM Identity Center instance is associated with the SAML
+  /// provider.
+  pub identity_center_instance_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the identity store that is resolved
+  /// from the associated IAM Identity Center instance. For the format, see
+  /// InstanceMetadata in the IAM Identity Center API Reference . This element
+  /// is returned only when an IAM Identity Center instance is associated with
+  /// the SAML provider.
+  pub identity_store_arn: Str? = None
 }
 
 pub struct GetSSHPublicKeyRequest {
@@ -2296,8 +2426,9 @@ pub struct GetServiceLastAccessedDetailsWithEntitiesResponse {
 
 pub struct GetServiceLinkedRoleDeletionStatusRequest {
   /// The deletion task identifier. This identifier is returned by the
-  /// DeleteServiceLinkedRole operation in the format task/aws-service-role/ /
-  /// / .
+  /// DeleteServiceLinkedRole operation in the format
+  /// task/aws-service-role/&lt;service-principal-name&gt;/&lt;role-name&gt;/&lt;task-uuid&gt;
+  /// .
   pub deletion_task_id: Str? = None
 }
 
@@ -3972,6 +4103,11 @@ pub struct LoginProfile {
   /// Specifies whether the user is required to set a new password on next
   /// sign-in.
   pub password_reset_required: Bool? = None
+  /// The maximum duration (in seconds) of an Amazon Web Services Sign-In
+  /// session for the user. This member is omitted when the setting is unset.
+  /// In that case, no default value is returned and the existing sign-in
+  /// session behavior applies.
+  pub max_signin_session_duration: Int? = None
 }
 
 /// Contains information about an MFA device. This data type is used as a
@@ -4060,6 +4196,10 @@ pub struct NoSuchEntityException {
 /// provider.
 pub struct OpenIDConnectProviderListEntry {
   pub arn: Str? = None
+  /// Specifies whether trusted identity propagation is enabled for the OpenID
+  /// Connect (OIDC) provider. This is true when an IAM Identity Center
+  /// instance is associated with the provider.
+  pub is_trusted_identity_propagation_enabled: Bool? = None
 }
 
 /// The request failed because IAM cannot connect to the OpenID Connect
@@ -4133,7 +4273,7 @@ pub struct PasswordPolicy {
   /// Minimum length to require for IAM user passwords.
   pub minimum_password_length: Int? = None
   /// Specifies whether IAM user passwords must contain at least one of the
-  /// following symbols: ! @ # $ % ^ & * ( ) _ + - = [ ] { } | '
+  /// following symbols: ! @ # $ % ^ &amp; * ( ) _ + - = [ ] { } | '
   pub require_symbols: Bool? = None
   /// Specifies whether IAM user passwords must contain at least one numeric
   /// character (0 to 9).
@@ -4723,6 +4863,12 @@ pub struct Role {
   /// using the optional DurationSeconds API parameter or duration-seconds CLI
   /// parameter.
   pub max_session_duration: Int? = None
+  /// The maximum duration (in seconds) of an Amazon Web Services Sign-In
+  /// session for users who sign in with this role. This value is independent
+  /// of MaxSessionDuration . This member is omitted when the setting is
+  /// unset. In that case, no default value is returned and the existing
+  /// sign-in session behavior applies.
+  pub max_signin_session_duration: Int? = None
   /// The ARN of the policy used to set the permissions boundary for the role.
   /// For more information about permissions boundaries, see Permissions
   /// boundaries for IAM identities in the IAM User Guide .
@@ -4908,6 +5054,17 @@ pub struct RoleUsageType {
   pub resources: List[Str]? = None
 }
 
+/// Contains the key hashes that are associated with a SAML identity
+/// provider issuer. This data type is used as a response element in the
+/// GetSAMLProvider operation.
+pub struct SAMLKeyHashEntry {
+  /// The issuer URL of the SAML identity provider that the key hashes are
+  /// associated with.
+  pub issuer_url: Str? = None
+  /// The list of key hashes for the SAML identity provider issuer.
+  pub key_hashes: List[Str]? = None
+}
+
 /// Contains the private keys for the SAML provider. This data type is used
 /// as a response element in the GetSAMLProvider operation.
 pub struct SAMLPrivateKey {
@@ -4926,6 +5083,10 @@ pub struct SAMLProviderListEntry {
   pub valid_until: Time? = None
   /// The date and time when the SAML provider was created.
   pub create_date: Time? = None
+  /// Specifies whether trusted identity propagation is enabled for the SAML
+  /// provider. This is true when an IAM Identity Center instance is
+  /// associated with the provider.
+  pub is_trusted_identity_propagation_enabled: Bool? = None
 }
 
 /// Contains information about an SSH public key. This data type is used as
@@ -5791,8 +5952,8 @@ pub struct UpdateAccountPasswordPolicyRequest {
   /// default value of 6 .
   pub minimum_password_length: Int? = None
   /// Specifies whether IAM user passwords must contain at least one of the
-  /// following non-alphanumeric characters: ! @ # $ % ^ & * ( ) _ + - = [ ] {
-  /// } | ' If you do not specify a value for this parameter, then the
+  /// following non-alphanumeric characters: ! @ # $ % ^ &amp; * ( ) _ + - = [
+  /// ] { } | ' If you do not specify a value for this parameter, then the
   /// operation uses the default value of false . The result is that passwords
   /// do not require at least one symbol character.
   pub require_symbols: Bool? = None
@@ -5917,6 +6078,64 @@ pub struct UpdateLoginProfileRequest {
   /// Allows this new password to be used only once by requiring the specified
   /// IAM user to set a new password on next sign-in.
   pub password_reset_required: Bool? = None
+  /// The maximum duration (in seconds) of an Amazon Web Services Sign-In
+  /// session for the specified IAM user. This setting can have a value from 1
+  /// hour (3600 seconds) to 90 days (7776000 seconds), inclusive, and
+  /// replaces any value currently configured for the user. If you omit both
+  /// this parameter and ResetMaxSigninSessionDuration , the current setting
+  /// is unchanged. You cannot specify this parameter and set
+  /// ResetMaxSigninSessionDuration to true in the same request. If you update
+  /// only the sign-in session duration, the user's password and
+  /// PasswordResetRequired setting do not change. Changes to this setting
+  /// apply to new sign-in sessions. Sessions that are already established are
+  /// not affected. This setting is not supported for the root user.
+  pub max_signin_session_duration: Int? = None
+  /// Specifies whether to clear the maximum sign-in session duration for the
+  /// specified IAM user. Set this value to true to return the setting to its
+  /// unset state, so that the existing sign-in session behavior applies. When
+  /// the setting is unset, the user's MaxSigninSessionDuration is omitted
+  /// from responses. If you set this value to false or omit it, the current
+  /// setting is not cleared. You cannot set this value to true and specify
+  /// MaxSigninSessionDuration in the same request. Clearing a setting that is
+  /// already unset has no effect.
+  pub reset_max_signin_session_duration: Bool? = None
+}
+
+pub struct UpdateOpenIDConnectProviderRequest {
+  /// The Amazon Resource Name (ARN) of the IAM OIDC provider resource object
+  /// to update. You can get a list of OIDC provider resource ARNs by using
+  /// the ListOpenIDConnectProviders operation. For more information about
+  /// ARNs, see Amazon Resource Names (ARNs) in the Amazon Web Services
+  /// General Reference .
+  pub open_id_connect_provider_arn: Str? = None
+  /// The trusted identity propagation context provider configuration to set
+  /// on the OIDC provider. This configuration defines the subject mapping and
+  /// the source-to-target key mappings that are used when trusted context is
+  /// injected. For more information, see ContextProvider . To remove the
+  /// existing context provider instead of replacing it, use
+  /// RemoveContextProvider . Do not specify both ContextProvider and
+  /// RemoveContextProvider in the same request.
+  pub context_provider: ContextProvider? = None
+  /// The Amazon Resource Name (ARN) of the IAM Identity Center instance to
+  /// associate with the OIDC provider. For the format, see InstanceMetadata
+  /// in the IAM Identity Center API Reference . To disassociate the currently
+  /// associated instance instead of changing it, use
+  /// RemoveIdentityCenterInstance . Do not specify both
+  /// IdentityCenterInstanceArn and RemoveIdentityCenterInstance in the same
+  /// request.
+  pub identity_center_instance_arn: Str? = None
+  /// Specifies whether to remove the existing context provider configuration
+  /// from the OIDC provider. Set this value to true to remove the context
+  /// provider. This parameter is mutually exclusive with ContextProvider . In
+  /// a single request, specify either a new ContextProvider value or
+  /// RemoveContextProvider , but not both.
+  pub remove_context_provider: Bool? = None
+  /// Specifies whether to disassociate the IAM Identity Center instance from
+  /// the OIDC provider. Set this value to true to remove the association.
+  /// This parameter is mutually exclusive with IdentityCenterInstanceArn . In
+  /// a single request, specify either a new IdentityCenterInstanceArn value
+  /// or RemoveIdentityCenterInstance , but not both.
+  pub remove_identity_center_instance: Bool? = None
 }
 
 pub struct UpdateOpenIDConnectProviderThumbprintRequest {
@@ -5965,6 +6184,28 @@ pub struct UpdateRoleRequest {
   /// provided by Amazon EC2 instances assigned to the role are not subject to
   /// the specified maximum session duration.
   pub max_session_duration: Int? = None
+  /// The maximum duration (in seconds) of an Amazon Web Services Sign-In
+  /// session for users who sign in with the specified role. This setting can
+  /// have a value from 1 hour (3600 seconds) to 90 days (7776000 seconds),
+  /// inclusive, and replaces any value currently configured for the role.
+  /// This setting is independent of MaxSessionDuration . If you omit both
+  /// this parameter and ResetMaxSigninSessionDuration , the current setting
+  /// is unchanged. You cannot specify this parameter and set
+  /// ResetMaxSigninSessionDuration to true in the same request. Changes to
+  /// this setting apply to new sign-in sessions. Sessions that are already
+  /// established are not affected. You cannot set this value on a
+  /// service-linked role.
+  pub max_signin_session_duration: Int? = None
+  /// Specifies whether to clear the role's maximum sign-in session duration.
+  /// Set this value to true to return the setting to its unset state, so that
+  /// the existing sign-in session behavior applies. When the setting is
+  /// unset, the role's MaxSigninSessionDuration is omitted from responses. If
+  /// you set this value to false or omit it, the current setting is not
+  /// cleared. You cannot set this value to true and specify
+  /// MaxSigninSessionDuration in the same request. Clearing a setting that is
+  /// already unset has no effect. You cannot reset this value on a
+  /// service-linked role.
+  pub reset_max_signin_session_duration: Bool? = None
 }
 
 pub struct UpdateRoleResponse {
@@ -5990,6 +6231,23 @@ pub struct UpdateSAMLProviderRequest {
   pub add_private_key: Str? = None
   /// The Key ID of the private key to remove.
   pub remove_private_key: Str? = None
+  /// The trusted identity propagation context provider configuration to
+  /// associate with the SAML provider. This replaces the existing context
+  /// provider configuration. For more information, see ContextProvider .
+  pub context_provider: ContextProvider? = None
+  /// The Amazon Resource Name (ARN) of the IAM Identity Center instance to
+  /// associate with the SAML provider. For the format, see InstanceMetadata
+  /// in the IAM Identity Center API Reference .
+  pub identity_center_instance_arn: Str? = None
+  /// Specifies whether to remove the existing trusted identity propagation
+  /// context provider configuration from the SAML provider. When set to true
+  /// , the context provider is removed. This parameter is mutually exclusive
+  /// with ContextProvider .
+  pub remove_context_provider: Bool? = None
+  /// Specifies whether to disassociate the IAM Identity Center instance from
+  /// the SAML provider. When set to true , the instance is disassociated.
+  /// This parameter is mutually exclusive with IdentityCenterInstanceArn .
+  pub remove_identity_center_instance: Bool? = None
 }
 
 /// Contains the response to a successful UpdateSAMLProvider request.

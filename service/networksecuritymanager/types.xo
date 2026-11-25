@@ -201,6 +201,12 @@ pub struct ConflictException {
   pub resource_type: Str? = None
 }
 
+pub enum CoverageStatus: Str {
+  InEffect = "IN_EFFECT"
+  Superseded = "SUPERSEDED"
+  Unknown(value: Str)
+}
+
 pub struct CreateDeploymentInput {
   /// A unique, case-sensitive token that you provide to ensure that the
   /// operation completes no more than one time. If you retry a request with
@@ -559,6 +565,13 @@ pub struct CreateScopeInput {
   /// The configuration that defines which accounts and resources are in
   /// scope.
   pub scope_configuration: ScopeConfiguration? = None
+  /// The specialized type of the scope. Omit this value to create a standard
+  /// scope that you can associate with a deployment. Set it to create a scope
+  /// that is built for one specific purpose: a specialized scope can be used
+  /// only for the purpose that its type defines, is validated against that
+  /// use, and can't be associated with a deployment. This value is set when
+  /// the scope is created and can't be changed.
+  pub specialized_scope_type: SpecializedScopeType? = None
   /// Specifies whether to publish the resource. When true , the resource is
   /// saved in published ( ACTIVE ) state. When false , it is saved as a draft
   /// ( DRAFT ). Default: true .
@@ -579,6 +592,13 @@ pub struct CreateScopeOutput {
   /// The configuration that defines which accounts and resources are in
   /// scope.
   pub scope_configuration: ScopeConfiguration? = None
+  /// The specialized type of the scope, if the scope is built for one
+  /// specific purpose. A scope with no specializedScopeType is a standard
+  /// scope that you can associate with a deployment. A specialized scope can
+  /// be used only for the purpose that its type defines and can't be
+  /// associated with a deployment. This value is set when the scope is
+  /// created and can't be changed.
+  pub specialized_scope_type: SpecializedScopeType? = None
   /// The current status of the resource: DRAFT (unpublished, editable) or
   /// ACTIVE (published, in use).
   pub status: EntityStatus? = None
@@ -621,6 +641,13 @@ pub struct CreateScopeSnapshotOutput {
   /// The configuration that defines which accounts and resources are in
   /// scope.
   pub scope_configuration: ScopeConfiguration? = None
+  /// The specialized type of the scope, if the scope is built for one
+  /// specific purpose. A scope with no specializedScopeType is a standard
+  /// scope that you can associate with a deployment. A specialized scope can
+  /// be used only for the purpose that its type defines and can't be
+  /// associated with a deployment. This value is set when the scope is
+  /// created and can't be changed.
+  pub specialized_scope_type: SpecializedScopeType? = None
   /// The current status of the resource: DRAFT (unpublished, editable) or
   /// ACTIVE (published, in use).
   pub status: EntityStatus? = None
@@ -731,6 +758,13 @@ pub struct CreateTemplateSnapshotOutput {
   pub firewall_type: TemplateFirewallType? = None
   /// The time when the snapshot was created.
   pub updated_at: Time? = None
+}
+
+pub enum DefaultSubnetConnectivity: Str {
+  Flexible = "flexible"
+  Bidirectional = "bidirectional"
+  OutboundOnly = "outbound-only"
+  Unknown(value: Str)
 }
 
 pub struct DeleteAdminAccountRequest {
@@ -845,10 +879,11 @@ pub enum ExistingCustomerWebACLResolution: Str {
 }
 
 /// Describes why a firewall is out of sync. Exactly one of missingFirewall
-/// or invalidFirewall is set.
+/// , invalidFirewall , or invalidResource contains a value.
 pub enum FirewallSyncReason {
   MissingFirewall(value: Str)
   InvalidFirewall(value: InvalidFirewallReasons)
+  InvalidResource(value: Map[Str, List[InvalidResourceIssue]])
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -1046,6 +1081,13 @@ pub struct GetScopeOutput {
   /// The configuration that defines which accounts and resources are in
   /// scope.
   pub scope_configuration: ScopeConfiguration? = None
+  /// The specialized type of the scope, if the scope is built for one
+  /// specific purpose. A scope with no specializedScopeType is a standard
+  /// scope that you can associate with a deployment. A specialized scope can
+  /// be used only for the purpose that its type defines and can't be
+  /// associated with a deployment. This value is set when the scope is
+  /// created and can't be changed.
+  pub specialized_scope_type: SpecializedScopeType? = None
   /// The current status of the resource: DRAFT (unpublished, editable),
   /// ACTIVE (published, in use), or DISABLED (deactivated; changes cannot be
   /// published until the resource is re-enabled).
@@ -1100,6 +1142,35 @@ pub struct GetTemplateOutput {
   pub updated_at: Time? = None
 }
 
+/// Policy configuration settings for Network Firewall automated internet
+/// firewall policies.
+pub struct IgwFirewallConfig {
+  /// The default internet connectivity treatment that AWS Network Security
+  /// Manager applies to subnets in scope, unless a subnet connectivity
+  /// override applies. Required for Network Firewall automated internet
+  /// firewall policies. Valid values: flexible – Sets the connectivity for
+  /// each network interface in the subnet based on whether it is associated
+  /// with a public IP address. A network interface with a public IP address
+  /// gets bidirectional internet connectivity. A network interface without a
+  /// public IP address gets outbound-only connectivity. All traffic is
+  /// inspected against your firewall rules. bidirectional – Provides
+  /// bidirectional internet connectivity to every network interface that has
+  /// a public IP association. Any network interface without a public IP
+  /// cannot communicate with the internet unless a NAT device is explicitly
+  /// inserted in the path. All inbound and outbound traffic is inspected
+  /// against your firewall rules. outbound-only – Provides egress-only
+  /// connectivity for all network interfaces in the subnet. All outbound
+  /// traffic and inbound responses are inspected against your firewall rules.
+  /// Unsolicited inbound connections are dropped. For IPv4 traffic, the
+  /// Network Firewall automated internet firewall performs NAT.
+  pub default_subnet_connectivity: DefaultSubnetConnectivity? = None
+  /// An ordered list of overrides that apply a different connectivity
+  /// treatment to the subnets that a scope selects. When a subnet matches
+  /// more than one override, the first matching override in the list applies.
+  /// You can specify at most one override for each connectivity type.
+  pub subnet_connectivity_overrides: List[SubnetConnectivityOverride]? = None
+}
+
 /// The request processing failed because of an internal error in the
 /// service. This is a retryable error.
 pub struct InternalServerException {
@@ -1122,6 +1193,18 @@ pub struct InvalidFirewallReasons {
   pub missing_mergeable_configuration_values: List[ConfigurationIssue]? = None
   /// Mergeable configuration values that are present but not expected.
   pub unexpected_mergeable_configuration_values: List[ConfigurationIssue]? = None
+}
+
+/// Describes a single related resource whose configuration does not match
+/// the intended configuration.
+pub struct InvalidResourceIssue {
+  /// The identifier of the resource, such as a subnet ARN.
+  pub resource_id: Str? = None
+  /// The attribute value that the policy configuration requires, such as the
+  /// connectivity type for a subnet.
+  pub expected_value: Str? = None
+  /// The current attribute value on the resource.
+  pub actual_value: Str? = None
 }
 
 pub enum IpAddressType: Str {
@@ -1219,6 +1302,32 @@ pub struct ListDeploymentsOutput {
   pub deployments: List[DeploymentSummary]? = None
 }
 
+pub struct ListEntityCoveragesInput {
+  /// The Amazon Resource Name (ARN) of the Network Security Manager entity to
+  /// list covered resources for. The ARN must not include a :DRAFT qualifier.
+  pub entity_arn: Str? = None
+  /// Filters the results to the protected resources owned by the specified
+  /// AWS account.
+  pub resource_owner_account_id: Str? = None
+  /// The maximum number of results to return in a single call. Valid range:
+  /// 1–100. The default value is 100. To retrieve the remaining results,
+  /// use the returned nextToken value in a subsequent call.
+  pub max_results: Int? = None
+  /// The token for the next page of results. To retrieve the next page, call
+  /// the operation again and provide this value. When there are no more
+  /// results, this value is null.
+  pub next_token: Str? = None
+}
+
+pub struct ListEntityCoveragesOutput {
+  /// The token for the next page of results. To retrieve the next page, call
+  /// the operation again and provide this value. When there are no more
+  /// results, this value is null.
+  pub next_token: Str? = None
+  /// The list of resource coverages for the Network Security Manager entity.
+  pub resource_coverages: List[ResourceCoverageSummary]? = None
+}
+
 pub struct ListPoliciesInput {
   /// The maximum number of results to return in a single call. Valid range:
   /// 1-100. To retrieve the remaining results, use the returned nextToken
@@ -1262,6 +1371,32 @@ pub struct ListPolicySnapshotsOutput {
   pub next_token: Str? = None
   /// The snapshots of the policy.
   pub snapshots: List[PolicySummary]? = None
+}
+
+pub struct ListProtectedResourceCoveragesInput {
+  /// The Amazon Resource Name (ARN) of the protected resource to list
+  /// coverage for. You must own the resource.
+  pub resource_arn: Str? = None
+  /// Filters the results by the type of the entity that covers the resource.
+  /// The only supported value is Policy .
+  pub entity_type: ServiceResourceType? = None
+  /// The maximum number of results to return in a single call. Valid range:
+  /// 1–100. The default value is 100. To retrieve the remaining results,
+  /// use the returned nextToken value in a subsequent call.
+  pub max_results: Int? = None
+  /// The token for the next page of results. To retrieve the next page, call
+  /// the operation again and provide this value. When there are no more
+  /// results, this value is null.
+  pub next_token: Str? = None
+}
+
+pub struct ListProtectedResourceCoveragesOutput {
+  /// The token for the next page of results. To retrieve the next page, call
+  /// the operation again and provide this value. When there are no more
+  /// results, this value is null.
+  pub next_token: Str? = None
+  /// The list of resource coverages for the protected resource.
+  pub resource_coverages: List[ResourceCoverageSummary]? = None
 }
 
 pub struct ListResourceAssociationsInput {
@@ -1448,6 +1583,10 @@ pub struct ListTemplatesInput {
   pub next_token: Str? = None
   /// Filters the results by status, either ACTIVE or DRAFT .
   pub status: EntityStatusFilter? = None
+  /// Specifies which templates to list. The default is CUSTOMER . Valid
+  /// values: CUSTOMER – Lists the templates in your account. AWS – Lists
+  /// the AWS managed templates.
+  pub template_owner: TemplateOwner? = None
 }
 
 pub struct ListTemplatesOutput {
@@ -1490,16 +1629,21 @@ pub struct PolicyConfiguration {
   /// noncompliant resources. Default: false .
   pub remediation_enabled: Bool? = None
   /// Specifies whether AWS Network Security Manager automatically removes the
-  /// resources it created when they are no longer needed. Default: false .
+  /// resources it created when they are no longer needed. This member is
+  /// required, and the only supported value is true .
   pub resources_clean_up: Bool? = None
   /// AWS WAF-specific policy settings. This is populated only for AWS WAF
   /// policies.
   pub waf_config: WafConfig? = None
+  /// Policy settings for Network Firewall automated internet firewall
+  /// policies. Specify these settings only for this policy type.
+  pub igw_firewall_config: IgwFirewallConfig? = None
 }
 
 pub enum PolicyFirewallType: Str {
   Waf = "WAF"
   ShieldAdvanced = "SHIELD_ADVANCED"
+  IgwFirewall = "IGW_FIREWALL"
   Unknown(value: Str)
 }
 
@@ -1577,6 +1721,37 @@ pub struct ResourceAssociation {
   /// The type of the associated resource, such as Policy , Template , or
   /// Deployment .
   pub resource_type: ServiceResourceType? = None
+}
+
+/// Describes how an AWS Network Security Manager entity covers a protected
+/// resource.
+pub struct ResourceCoverageSummary {
+  /// The Amazon Resource Name (ARN) of the protected resource.
+  pub resource_arn: Str? = None
+  /// The type of the entity that covers the resource, such as Policy .
+  pub entity_type: ServiceResourceType? = None
+  /// The Amazon Resource Name (ARN) of the entity that covers the resource.
+  pub entity_arn: Str? = None
+  /// The AWS account ID that owns the protected resource. This can differ
+  /// from the account that owns the entity.
+  pub resource_owner_account_id: Str? = None
+  /// The type of the protected resource, in AWS CloudFormation format.
+  pub resource_type: ScopeResourceType? = None
+  /// The firewall type of the policy that covers the resource. This is
+  /// present when entityType is Policy .
+  pub firewall_type: PolicyFirewallType? = None
+  /// Specifies whether the entity contributes to the effective configuration
+  /// of the resource for its firewall type. For firewall types that combine
+  /// policies, such as AWS WAF and AWS Shield Advanced, every policy that
+  /// covers the resource is IN_EFFECT . For firewall types that apply a
+  /// single policy, only the highest-priority policy is IN_EFFECT and the
+  /// others are SUPERSEDED .
+  pub coverage_status: CoverageStatus? = None
+  /// The Amazon Resource Names (ARNs) of the deployments through which the
+  /// entity covers the resource.
+  pub deployment_arns: List[Str]? = None
+  /// The time when AWS Network Security Manager last evaluated the coverage.
+  pub updated_at: Time? = None
 }
 
 /// A leaf condition that matches resources by tag or by
@@ -1668,11 +1843,13 @@ pub enum ResourceType: Str {
   WafV2Webacl = "AWS::WAFv2::WebACL"
   ShieldProtection = "AWS::Shield::Protection"
   ShieldregionalProtection = "AWS::ShieldRegional::Protection"
+  Vpc = "AWS::EC2::VPC"
   Unknown(value: Str)
 }
 
 pub enum RuleFirewallType: Str {
   Waf = "WAF"
+  IgwFirewall = "IGW_FIREWALL"
   Unknown(value: Str)
 }
 
@@ -1750,6 +1927,8 @@ pub enum ScopeResourceType: Str {
   Eip = "AWS::EC2::EIP"
   Alb = "AWS::ElasticLoadBalancingV2::LoadBalancer::application"
   Clb = "AWS::ElasticLoadBalancing::LoadBalancer"
+  Vpc = "AWS::EC2::VPC"
+  Subnet = "AWS::EC2::Subnet"
   Unknown(value: Str)
 }
 
@@ -1761,6 +1940,13 @@ pub struct ScopeSummary {
   pub scope_arn: Str? = None
   /// The name of the scope.
   pub scope_name: Str? = None
+  /// The specialized type of the scope, if the scope is built for one
+  /// specific purpose. A scope with no specializedScopeType is a standard
+  /// scope that you can associate with a deployment. A specialized scope can
+  /// be used only for the purpose that its type defines and can't be
+  /// associated with a deployment. This value is set when the scope is
+  /// created and can't be changed.
+  pub specialized_scope_type: SpecializedScopeType? = None
   /// The current status of the resource: DRAFT (unpublished, editable),
   /// ACTIVE (published, in use), or DISABLED (deactivated; changes cannot be
   /// published until the resource is re-enabled).
@@ -1803,6 +1989,54 @@ pub struct ServiceUnavailableException {
   pub retry_after_seconds: Int? = None
 }
 
+pub enum SpecializedScopeType: Str {
+  IgwFirewallSubnetConnectivityOverride = "IGW_FIREWALL_SUBNET_CONNECTIVITY_OVERRIDE"
+  Unknown(value: Str)
+}
+
+pub enum SubnetConnectivity: Str {
+  Flexible = "flexible"
+  Bidirectional = "bidirectional"
+  OutboundOnly = "outbound-only"
+  Exclude = "exclude"
+  Unknown(value: Str)
+}
+
+/// An override that applies a connectivity treatment to the subnets that a
+/// scope selects, instead of the policy's defaultSubnetConnectivity .
+pub struct SubnetConnectivityOverride {
+  /// The connectivity treatment to apply to the selected subnets. You select
+  /// both the override value as well as the subnets they apply to. The
+  /// Network Firewall automated internet firewall applies the override value
+  /// to the specified subnets, and applies the default connectivity to the
+  /// rest of the subnets. Valid values: flexible – Sets the connectivity
+  /// for each network interface in the subnet based on whether it is
+  /// associated with a public IP address. A network interface with a public
+  /// IP address gets bidirectional internet connectivity. A network interface
+  /// without a public IP address gets outbound-only connectivity. All traffic
+  /// is inspected against your firewall rules. bidirectional – Provides
+  /// bidirectional internet connectivity to every network interface that has
+  /// a public IP association. Any network interface without a public IP
+  /// cannot communicate with the internet unless a NAT device is explicitly
+  /// inserted in the path. All inbound and outbound traffic is inspected
+  /// against your firewall rules. outbound-only – Provides egress-only
+  /// connectivity for all network interfaces in the subnet. All outbound
+  /// traffic and inbound responses are inspected against your firewall rules.
+  /// Unsolicited inbound connections are dropped. For IPv4 traffic, the
+  /// Network Firewall automated internet firewall performs NAT. exclude –
+  /// The Network Firewall automated internet firewall doesn't inspect traffic
+  /// for the selected subnets. The subnets bypass the firewall entirely, and
+  /// their traffic passes directly through the internet gateway. You can
+  /// specify this value only in an override, not as the
+  /// defaultSubnetConnectivity .
+  pub connectivity_type: SubnetConnectivity? = None
+  /// A list that contains the Amazon Resource Name (ARN) of the scope that
+  /// selects the subnets to override. The list must contain exactly one scope
+  /// ARN. The deployment determines which accounts are in scope, and the
+  /// referenced scope selects subnets within those accounts.
+  pub scopes: List[Str]? = None
+}
+
 pub enum SynchronizationStatus: Str {
   InSync = "IN_SYNC"
   OutOfSync = "OUT_OF_SYNC"
@@ -1829,6 +2063,7 @@ pub struct TagResourceOutput {
 
 pub enum TemplateFirewallType: Str {
   Waf = "WAF"
+  IgwFirewall = "IGW_FIREWALL"
   Unknown(value: Str)
 }
 
@@ -1841,6 +2076,12 @@ pub enum TemplateOrRuleReference {
   Unknown(tag: Str)
 }
 
+pub enum TemplateOwner: Str {
+  Customer = "CUSTOMER"
+  Aws = "AWS"
+  Unknown(value: Str)
+}
+
 /// Summary information about a template.
 pub struct TemplateSummary {
   /// The service-generated id of the template.
@@ -1849,6 +2090,9 @@ pub struct TemplateSummary {
   pub template_arn: Str? = None
   /// The name of the template.
   pub template_name: Str? = None
+  /// The owner of the template. Valid values: CUSTOMER – The template is in
+  /// your account. AWS – The template is an AWS managed template.
+  pub template_owner: TemplateOwner? = None
   /// The current status of the resource: DRAFT (unpublished, editable) or
   /// ACTIVE (published, in use).
   pub status: EntityStatus? = None
@@ -2127,6 +2371,13 @@ pub struct UpdateScopeOutput {
   /// The configuration that defines which accounts and resources are in
   /// scope.
   pub scope_configuration: ScopeConfiguration? = None
+  /// The specialized type of the scope, if the scope is built for one
+  /// specific purpose. A scope with no specializedScopeType is a standard
+  /// scope that you can associate with a deployment. A specialized scope can
+  /// be used only for the purpose that its type defines and can't be
+  /// associated with a deployment. This value is set when the scope is
+  /// created and can't be changed.
+  pub specialized_scope_type: SpecializedScopeType? = None
   /// The current status of the resource: DRAFT (unpublished, editable) or
   /// ACTIVE (published, in use).
   pub status: EntityStatus? = None

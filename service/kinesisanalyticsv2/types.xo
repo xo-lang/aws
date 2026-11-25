@@ -387,6 +387,14 @@ pub enum ApplicationMode: Str {
   Unknown(value: Str)
 }
 
+/// Describes the application operation that initiated a snapshot operation.
+/// To get information about the application operation, use
+/// DescribeApplicationOperation .
+pub struct ApplicationOperationDescription {
+  pub application_operation_id: Str? = None
+  pub application_name: Str? = None
+}
+
 /// A description of the aplication operation that provides information
 /// about the updates that were made to the application.
 pub struct ApplicationOperationInfo {
@@ -422,6 +430,11 @@ pub struct ApplicationRestoreConfiguration {
   /// RESTORE_FROM_CUSTOM_SNAPSHOT is specified for the ApplicationRestoreType
   /// .
   pub snapshot_name: Str? = None
+  /// The identifier of an existing enhanced snapshot of application state to
+  /// use to restart an application. The application uses this value if
+  /// RESTORE_FROM_CUSTOM_SNAPSHOT is specified for the ApplicationRestoreType
+  /// and SnapshotMode is ENHANCED_SNAPSHOTS .
+  pub snapshot_arn: Str? = None
 }
 
 pub enum ApplicationRestoreType: Str {
@@ -437,6 +450,13 @@ pub struct ApplicationSnapshotConfiguration {
   /// Describes whether snapshots are enabled for a Managed Service for Apache
   /// Flink application.
   pub snapshots_enabled: Bool? = None
+  /// Specifies the snapshot mode for a Managed Service for Apache Flink
+  /// application. To use enhanced snapshots, specify ENHANCED_SNAPSHOTS . If
+  /// you don't specify this parameter, the application uses
+  /// APPLICATION_SNAPSHOTS_LEGACY . For more information, see Enhanced
+  /// Snapshots . To use ENHANCED_SNAPSHOTS , the application must use Apache
+  /// Flink version 1.20 or later.
+  pub snapshot_mode: SnapshotMode? = None
 }
 
 /// Describes whether snapshots are enabled for a Managed Service for Apache
@@ -445,6 +465,9 @@ pub struct ApplicationSnapshotConfigurationDescription {
   /// Describes whether snapshots are enabled for a Managed Service for Apache
   /// Flink application.
   pub snapshots_enabled: Bool? = None
+  /// Describes the snapshot mode of a Managed Service for Apache Flink
+  /// application.
+  pub snapshot_mode: SnapshotMode? = None
 }
 
 /// Describes updates to whether snapshots are enabled for a Managed Service
@@ -452,6 +475,16 @@ pub struct ApplicationSnapshotConfigurationDescription {
 pub struct ApplicationSnapshotConfigurationUpdate {
   /// Describes updates to whether snapshots are enabled for an application.
   pub snapshots_enabled_update: Bool? = None
+  /// Describes updates to the snapshot mode of a Managed Service for Apache
+  /// Flink application. You can update the snapshot mode from
+  /// APPLICATION_SNAPSHOTS_LEGACY to ENHANCED_SNAPSHOTS . You can't use
+  /// UpdateApplication to change the snapshot mode back to
+  /// APPLICATION_SNAPSHOTS_LEGACY . To return to APPLICATION_SNAPSHOTS_LEGACY
+  /// , use RollbackApplication . After you update an application that uses
+  /// ENHANCED_SNAPSHOTS , you can't roll it back to
+  /// APPLICATION_SNAPSHOTS_LEGACY . To use ENHANCED_SNAPSHOTS , the
+  /// application must use Apache Flink version 1.20 or later.
+  pub snapshot_mode_update: SnapshotMode? = None
 }
 
 pub enum ApplicationStatus: Str {
@@ -757,8 +790,8 @@ pub struct CodeValidationException {
 }
 
 /// Exception thrown as a result of concurrent modifications to an
-/// application. This error can be the result of attempting to modify an
-/// application without using the current application ID.
+/// application or snapshot. This error can be the result of attempting to
+/// modify an application without using the current application ID.
 pub struct ConcurrentModificationException {
   pub message: Str? = None
 }
@@ -827,6 +860,34 @@ pub struct CreateApplicationSnapshotRequest {
 }
 
 pub struct CreateApplicationSnapshotResponse {
+}
+
+pub struct CreateSnapshotRequest {
+  pub application_name: Str? = None
+  /// The name of the enhanced snapshot. The name must be unique among the
+  /// snapshots in your account and Region. You can't reuse the name of an
+  /// existing snapshot, including a snapshot in the FAILED status, until you
+  /// delete that snapshot. Names that begin with SYSTEMSNAPSHOT are reserved.
+  pub snapshot_name: Str? = None
+  /// A summary description of the snapshot.
+  pub snapshot_description: Str? = None
+  /// A list of one or more tags to assign to the snapshot. A tag is a
+  /// key-value pair that identifies a snapshot. For more information, see
+  /// Using Tagging .
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateSnapshotResponse {
+  /// The ARN of the enhanced snapshot.
+  pub snapshot_arn: Str? = None
+  /// The status of the snapshot. When Managed Service for Apache Flink
+  /// accepts the request, the status is CREATING .
+  pub snapshot_status: SnapshotStatus? = None
+  /// The ID of the snapshot operation. You can use this value with
+  /// DescribeSnapshotOperation to track the progress of the operation.
+  pub snapshot_operation_id: Str? = None
+  /// The status of the snapshot operation.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
 }
 
 /// Specifies dependency JARs, as well as JAR files that contain
@@ -1001,6 +1062,30 @@ pub struct DeleteApplicationVpcConfigurationResponse {
   pub operation_id: Str? = None
 }
 
+pub struct DeleteSnapshotRequest {
+  /// The name of the enhanced snapshot to delete.
+  pub snapshot_name: Str? = None
+  /// The creation timestamp of the enhanced snapshot to delete. Use the
+  /// DescribeSnapshot operation to get this value.
+  pub snapshot_creation_timestamp: Time? = None
+}
+
+pub struct DeleteSnapshotResponse {
+  /// The ARN of the enhanced snapshot.
+  pub snapshot_arn: Str? = None
+  /// The status of the snapshot. When Managed Service for Apache Flink
+  /// accepts the request, the status is DELETING . If a snapshot operation,
+  /// such as an export, uses the snapshot, the status stays DELETING until
+  /// that operation finishes and Managed Service for Apache Flink deletes the
+  /// snapshot.
+  pub snapshot_status: SnapshotStatus? = None
+  /// The ID of the snapshot operation. You can use this value with
+  /// DescribeSnapshotOperation to track the progress of the operation.
+  pub snapshot_operation_id: Str? = None
+  /// The status of the snapshot operation.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
+}
+
 /// The information required to deploy a Managed Service for Apache Flink
 /// Studio notebook as an application with durable state.
 pub struct DeployAsApplicationConfiguration {
@@ -1080,6 +1165,30 @@ pub struct DescribeApplicationVersionResponse {
   pub application_version_detail: ApplicationDetail? = None
 }
 
+pub struct DescribeSnapshotOperationRequest {
+  /// The name of the enhanced snapshot.
+  pub snapshot_name: Str? = None
+  /// The ID of the snapshot operation. You can retrieve this value using
+  /// ListSnapshotOperations .
+  pub snapshot_operation_id: Str? = None
+}
+
+pub struct DescribeSnapshotOperationResponse {
+  /// An object containing information about the snapshot operation.
+  pub snapshot_operation_info_details: SnapshotOperationInfoDetails? = None
+}
+
+pub struct DescribeSnapshotRequest {
+  /// The name of the enhanced snapshot. You can retrieve this value using
+  /// ListSnapshots .
+  pub snapshot_name: Str? = None
+}
+
+pub struct DescribeSnapshotResponse {
+  /// An object containing information about the enhanced snapshot.
+  pub snapshot_info_details: SnapshotInfoDetails? = None
+}
+
 /// Describes the data format when records are written to the destination in
 /// a SQL-based Kinesis Data Analytics application.
 pub struct DestinationSchema {
@@ -1118,6 +1227,15 @@ pub struct DiscoverInputSchemaResponse {
   pub raw_input_records: List[Str]? = None
 }
 
+/// Describes the encryption configuration of snapshot data for a snapshot
+/// operation.
+pub struct EncryptionConfigurationDescription {
+  /// The KMS key used for encryption.
+  pub key_id: Str? = None
+  /// Specifies the type of key used for encryption.
+  pub key_type: KeyType? = None
+}
+
 /// Describes execution properties for a Managed Service for Apache Flink
 /// application.
 pub struct EnvironmentProperties {
@@ -1141,6 +1259,44 @@ pub struct EnvironmentPropertyUpdates {
 /// A description of the error that caused an operation to fail.
 pub struct ErrorInfo {
   pub error_string: Str? = None
+}
+
+/// Describes the destination of the exported snapshot data.
+pub struct ExportDestinationConfiguration {
+  /// The type of the destination location. The only supported value is S3 .
+  pub destination_type: StorageLocationType? = None
+  /// The ARN of the IAM role that Managed Service for Apache Flink assumes to
+  /// write the snapshot data to the destination location. For information
+  /// about the permissions that this role requires, see Import and export .
+  pub export_role_arn: Str? = None
+  /// The encryption configuration of the exported snapshot data. If you don't
+  /// specify this parameter, Managed Service for Apache Flink uses a key of
+  /// type AWS_OWNED_KEY . If you specify a KMS key, you must specify the key
+  /// ARN.
+  pub destination_encryption_configuration: SnapshotEncryptionConfiguration? = None
+  /// The Amazon S3 bucket and key prefix to export the snapshot data to.
+  /// Managed Service for Apache Flink writes the data under a unique prefix
+  /// that it appends to the key prefix that you specify. After the export
+  /// completes, use DescribeSnapshotOperation to get the full prefix. The
+  /// bucket must be owned by your account and must be in the same Region as
+  /// the request.
+  pub destination_s3_prefix_location: S3PrefixLocation? = None
+}
+
+pub struct ExportSnapshotRequest {
+  /// The name of the enhanced snapshot to export.
+  pub snapshot_name: Str? = None
+  /// Describes the location, IAM role, and encryption configuration of the
+  /// export destination.
+  pub export_destination_configuration: ExportDestinationConfiguration? = None
+}
+
+pub struct ExportSnapshotResponse {
+  /// The ID of the snapshot operation. You can use this value with
+  /// DescribeSnapshotOperation to track the progress of the export.
+  pub snapshot_operation_id: Str? = None
+  /// The status of the snapshot operation.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
 }
 
 /// Describes configuration parameters for a Managed Service for Apache
@@ -1229,6 +1385,61 @@ pub struct GlueDataCatalogConfigurationDescription {
 pub struct GlueDataCatalogConfigurationUpdate {
   /// The updated Amazon Resource Name (ARN) of the database.
   pub database_arn_update: Str? = None
+}
+
+pub struct ImportSnapshotRequest {
+  /// The name of the enhanced snapshot. The name must be unique among the
+  /// snapshots in your account and Region. You can't reuse the name of an
+  /// existing snapshot, including a snapshot in the FAILED status, until you
+  /// delete that snapshot. Names that begin with SYSTEMSNAPSHOT are reserved.
+  pub snapshot_name: Str? = None
+  /// Describes the location, IAM role, and encryption configuration of the
+  /// savepoint data to import.
+  pub import_source_configuration: ImportSourceConfiguration? = None
+  /// The encryption configuration of the imported snapshot. If you don't
+  /// specify this parameter, the snapshot is encrypted using a key of type
+  /// AWS_OWNED_KEY . If you specify a KMS key, you must specify the key ARN.
+  pub destination_encryption_configuration: SnapshotEncryptionConfiguration? = None
+  /// A summary description of the snapshot.
+  pub snapshot_description: Str? = None
+  /// The format of the snapshot being imported.
+  pub snapshot_format: SnapshotFormat? = None
+  /// A list of one or more tags to assign to the snapshot. A tag is a
+  /// key-value pair that identifies a snapshot. For more information, see
+  /// Using Tagging .
+  pub tags: List[Tag]? = None
+}
+
+pub struct ImportSnapshotResponse {
+  /// The ARN of the enhanced snapshot.
+  pub snapshot_arn: Str? = None
+  /// The status of the snapshot. When Managed Service for Apache Flink
+  /// accepts the request, the status is CREATING .
+  pub snapshot_status: SnapshotStatus? = None
+  /// The ID of the snapshot operation. You can use this value with
+  /// DescribeSnapshotOperation to track the progress of the import.
+  pub snapshot_operation_id: Str? = None
+  /// The status of the snapshot operation.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
+}
+
+/// Describes the source of the savepoint data to import.
+pub struct ImportSourceConfiguration {
+  /// The type of the source location. The only supported value is S3 .
+  pub source_type: StorageLocationType? = None
+  /// The ARN of the IAM role that Managed Service for Apache Flink assumes to
+  /// read the savepoint data from the source location. For information about
+  /// the permissions that this role requires, see Import and export .
+  pub import_role_arn: Str? = None
+  /// The encryption configuration of the savepoint data at the source
+  /// location. If you don't specify this parameter, Managed Service for
+  /// Apache Flink uses a key of type AWS_OWNED_KEY . If you specify a KMS
+  /// key, you must specify the key ARN.
+  pub source_encryption_configuration: SnapshotEncryptionConfiguration? = None
+  /// The Amazon S3 bucket and key prefix that contain the savepoint data to
+  /// import. The bucket must be owned by your account and must be in the same
+  /// Region as the request.
+  pub source_s3_prefix_location: S3PrefixLocation? = None
 }
 
 /// When you configure the application input for a SQL-based Kinesis Data
@@ -1707,6 +1918,46 @@ pub struct ListApplicationsResponse {
   pub next_token: Str? = None
 }
 
+pub struct ListSnapshotOperationsRequest {
+  /// The name of the enhanced snapshot.
+  pub snapshot_name: Str? = None
+  /// Use this parameter to list only the operations of the specified type.
+  pub snapshot_operation: SnapshotOperation? = None
+  /// Use this parameter to list only the operations with the specified
+  /// status.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
+  /// The maximum number of snapshot operations to list.
+  pub limit: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct ListSnapshotOperationsResponse {
+  /// A list of SnapshotOperationInfo objects.
+  pub snapshot_operation_info_list: List[SnapshotOperationInfo]? = None
+  pub next_token: Str? = None
+}
+
+pub struct ListSnapshotsRequest {
+  pub source_application_name: Str? = None
+  /// Use this parameter to list only the snapshots with the specified
+  /// initiator.
+  pub snapshot_initiator: SnapshotInitiator? = None
+  /// Use this parameter to list only the snapshots that were created by the
+  /// specified operation.
+  pub snapshot_initiator_operation: SnapshotInitiatorOperation? = None
+  /// Use this parameter to list only the snapshots with the specified status.
+  pub snapshot_status: SnapshotStatus? = None
+  /// The maximum number of snapshots to list.
+  pub limit: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct ListSnapshotsResponse {
+  /// A list of SnapshotInfo objects.
+  pub snapshot_info_list: List[SnapshotInfo]? = None
+  pub next_token: Str? = None
+}
+
 pub struct ListTagsForResourceRequest {
   /// The ARN of the application for which to retrieve tags.
   pub resource_arn: Str? = None
@@ -2080,12 +2331,13 @@ pub struct ReferenceDataSourceUpdate {
   pub reference_schema_update: SourceSchema? = None
 }
 
-/// The application is not available for this operation.
+/// The application or snapshot is not available for this operation.
 pub struct ResourceInUseException {
   pub message: Str? = None
 }
 
-/// Specified application can't be found.
+/// The specified application, snapshot, or snapshot operation can't be
+/// found.
 pub struct ResourceNotFoundException {
   pub message: Str? = None
 }
@@ -2234,6 +2486,14 @@ pub struct S3ContentLocationUpdate {
   pub object_version_update: Str? = None
 }
 
+/// Specifies an Amazon S3 bucket and key prefix.
+pub struct S3PrefixLocation {
+  /// The ARN of the Amazon S3 bucket.
+  pub bucket_arn: Str? = None
+  /// The key prefix in the Amazon S3 bucket.
+  pub key_prefix: Str? = None
+}
+
 /// For a SQL-based Kinesis Data Analytics application, identifies the
 /// Amazon S3 bucket and object that contains the reference data. A
 /// SQL-based Kinesis Data Analytics application loads reference data only
@@ -2293,12 +2553,226 @@ pub struct SnapshotDetails {
   pub application_encryption_configuration_description: ApplicationEncryptionConfigurationDescription? = None
 }
 
+/// Specifies the encryption configuration of snapshot data.
+pub struct SnapshotEncryptionConfiguration {
+  /// The KMS key used for encryption. KeyId is used only when KeyType is
+  /// CUSTOMER_MANAGED_KEY .
+  pub key_id: Str? = None
+  /// Specifies the type of key used for encryption.
+  pub key_type: KeyType? = None
+}
+
+/// A description of the error that caused a snapshot operation to fail.
+pub struct SnapshotErrorInfo {
+  /// The error code that identifies the cause of the failure.
+  pub error_code: Str? = None
+  /// An error message that is returned when an operation fails.
+  pub error_string: Str? = None
+}
+
+pub enum SnapshotFormat: Str {
+  Canonical = "CANONICAL"
+  Unknown(value: Str)
+}
+
+/// Provides summary information about an enhanced snapshot.
+pub struct SnapshotInfo {
+  /// The name of the enhanced snapshot.
+  pub snapshot_name: Str? = None
+  /// The ARN of the enhanced snapshot.
+  pub snapshot_arn: Str? = None
+  /// The status of the enhanced snapshot.
+  pub snapshot_status: SnapshotStatus? = None
+  /// The timestamp that indicates when the snapshot was created.
+  pub snapshot_creation_timestamp: Time? = None
+  /// Indicates who initiated the snapshot. USER indicates a snapshot that you
+  /// created or imported. SYSTEM indicates a snapshot that Managed Service
+  /// for Apache Flink created.
+  pub snapshot_initiator: SnapshotInitiator? = None
+  /// The operation that created the snapshot.
+  pub snapshot_initiator_operation: SnapshotInitiatorOperation? = None
+  pub source_application_name: Str? = None
+  /// The format of the snapshot.
+  pub snapshot_format: SnapshotFormat? = None
+}
+
+/// Provides details about an enhanced snapshot.
+pub struct SnapshotInfoDetails {
+  /// The name of the enhanced snapshot.
+  pub snapshot_name: Str? = None
+  /// The ARN of the enhanced snapshot.
+  pub snapshot_arn: Str? = None
+  /// The summary description of the snapshot.
+  pub snapshot_description: Str? = None
+  /// The status of the enhanced snapshot.
+  pub snapshot_status: SnapshotStatus? = None
+  /// The timestamp that indicates when the snapshot was created.
+  pub snapshot_creation_timestamp: Time? = None
+  /// The Flink runtime of the application that the snapshot was created from.
+  /// This field is not present for imported snapshots.
+  pub runtime_environment: RuntimeEnvironment? = None
+  /// The size of the snapshot, in bytes. The value is 0 until the snapshot
+  /// status is READY .
+  pub snapshot_size_in_bytes: Int? = None
+  /// Describes the encryption settings of data at rest for the snapshot.
+  pub snapshot_encryption_configuration_description: SnapshotEncryptionConfiguration? = None
+  /// Indicates who initiated the snapshot. USER indicates a snapshot that you
+  /// created or imported. SYSTEM indicates a snapshot that Managed Service
+  /// for Apache Flink created.
+  pub snapshot_initiator: SnapshotInitiator? = None
+  /// The operation that created the snapshot.
+  pub snapshot_initiator_operation: SnapshotInitiatorOperation? = None
+  /// Describes the source of the snapshot.
+  pub snapshot_source_description: SnapshotSourceDescription? = None
+  /// The format of the snapshot.
+  pub snapshot_format: SnapshotFormat? = None
+}
+
+pub enum SnapshotInitiator: Str {
+  User = "USER"
+  System = "SYSTEM"
+  Unknown(value: Str)
+}
+
+pub enum SnapshotInitiatorOperation: Str {
+  CreateSnapshot = "CreateSnapshot"
+  ImportSnapshot = "ImportSnapshot"
+  SystemCreateSnapshot = "SystemCreateSnapshot"
+  Unknown(value: Str)
+}
+
+pub enum SnapshotMode: Str {
+  ApplicationSnapshotsLegacy = "APPLICATION_SNAPSHOTS_LEGACY"
+  EnhancedSnapshots = "ENHANCED_SNAPSHOTS"
+  Unknown(value: Str)
+}
+
+pub enum SnapshotOperation: Str {
+  CreateSnapshot = "CreateSnapshot"
+  DeleteSnapshot = "DeleteSnapshot"
+  ImportSnapshot = "ImportSnapshot"
+  ExportSnapshot = "ExportSnapshot"
+  SystemCreateSnapshot = "SystemCreateSnapshot"
+  Unknown(value: Str)
+}
+
+/// Provides a description of the snapshot operation failure.
+pub struct SnapshotOperationFailureDetails {
+  /// A description of the error that caused the snapshot operation to fail.
+  pub error_info: SnapshotErrorInfo? = None
+}
+
+/// Provides summary information about an operation that was performed on an
+/// enhanced snapshot.
+pub struct SnapshotOperationInfo {
+  /// The ID of the snapshot operation.
+  pub snapshot_operation_id: Str? = None
+  /// The type of operation that was performed on the snapshot.
+  pub snapshot_operation: SnapshotOperation? = None
+  /// The status of the snapshot operation.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
+  /// The timestamp that indicates when the operation was created.
+  pub start_time: Time? = None
+  /// The timestamp that indicates when the operation finished. This field is
+  /// present only after the operation completes.
+  pub end_time: Time? = None
+}
+
+/// A description of a snapshot operation that provides information about
+/// the operation that was performed on an enhanced snapshot.
+pub struct SnapshotOperationInfoDetails {
+  /// The ID of the snapshot operation.
+  pub snapshot_operation_id: Str? = None
+  /// The type of operation that was performed on the snapshot.
+  pub snapshot_operation: SnapshotOperation? = None
+  /// The status of the snapshot operation.
+  pub snapshot_operation_status: SnapshotOperationStatus? = None
+  /// The ARN of the enhanced snapshot.
+  pub snapshot_arn: Str? = None
+  /// Describes the encryption configuration of the source data. This field is
+  /// present only for ImportSnapshot operation.
+  pub source_encryption_configuration_description: EncryptionConfigurationDescription? = None
+  /// Describes the encryption configuration of the destination data. This
+  /// field is present only for ImportSnapshot and ExportSnapshot operations.
+  pub destination_encryption_configuration_description: EncryptionConfigurationDescription? = None
+  /// Describes the location that the snapshot data was read from. This field
+  /// is present only for ImportSnapshot operations.
+  pub snapshot_source_location_description: SnapshotOperationLocationDescription? = None
+  /// Describes the location that the snapshot data was written to. This field
+  /// is present only for ExportSnapshot operations, after the operation
+  /// completes.
+  pub snapshot_destination_location_description: SnapshotOperationLocationDescription? = None
+  /// Describes the application operation that initiated the snapshot
+  /// operation. This field is present only for SystemCreateSnapshot
+  /// operations.
+  pub application_operation_description: ApplicationOperationDescription? = None
+  /// The timestamp that indicates when the operation was created.
+  pub start_time: Time? = None
+  /// The timestamp that indicates when the operation finished. This field is
+  /// present only after the operation completes.
+  pub end_time: Time? = None
+  /// Provides a description of the operation failure. This field is present
+  /// only if SnapshotOperationStatus is FAILED .
+  pub snapshot_operation_failure_details: SnapshotOperationFailureDetails? = None
+}
+
+/// Describes the location of snapshot data for a snapshot operation.
+pub struct SnapshotOperationLocationDescription {
+  /// The type of the location. The only supported value is S3 .
+  pub location_type: StorageLocationType? = None
+  /// Describes the Amazon S3 bucket and key prefix of the location.
+  pub s3_prefix_location: SnapshotOperationS3PrefixLocation? = None
+}
+
+/// Describes an Amazon S3 bucket and key prefix for a snapshot operation.
+pub struct SnapshotOperationS3PrefixLocation {
+  /// The ARN of the Amazon S3 bucket.
+  pub bucket_arn: Str? = None
+  /// The key prefix in the Amazon S3 bucket that you specified in the
+  /// request.
+  pub key_prefix: Str? = None
+  /// The full key prefix that the exported snapshot data was written to. This
+  /// value includes the unique prefix that Managed Service for Apache Flink
+  /// appends to KeyPrefix . This field is present only after an
+  /// ExportSnapshot operation completes successfully.
+  pub exported_prefix: Str? = None
+}
+
+pub enum SnapshotOperationStatus: Str {
+  InProgress = "IN_PROGRESS"
+  Successful = "SUCCESSFUL"
+  Failed = "FAILED"
+  Cancelled = "CANCELLED"
+  Unknown(value: Str)
+}
+
+/// Describes the source of an enhanced snapshot. For a snapshot that was
+/// created from an application, SourceApplicationDescription is present.
+/// For an imported snapshot, S3PrefixLocation is present.
+pub struct SnapshotSourceDescription {
+  /// The Amazon S3 location that the snapshot was imported from. This field
+  /// is present only if SnapshotInitiatorOperation is ImportSnapshot .
+  pub s3_prefix_location: S3PrefixLocation? = None
+  /// Describes the application that the snapshot was created from. This field
+  /// is not present for imported snapshots.
+  pub source_application_description: SourceApplicationDescription? = None
+}
+
 pub enum SnapshotStatus: Str {
   Creating = "CREATING"
   Ready = "READY"
   Deleting = "DELETING"
   Failed = "FAILED"
   Unknown(value: Str)
+}
+
+/// Describes the application that an enhanced snapshot was created from.
+pub struct SourceApplicationDescription {
+  pub application_name: Str? = None
+  /// The timestamp that indicates when the source application was created.
+  pub application_creation_timestamp: Time? = None
+  /// The version ID of the source application when the snapshot was created.
+  pub application_version_id: Int? = None
 }
 
 /// For a SQL-based Kinesis Data Analytics application, describes the format
@@ -2399,6 +2873,11 @@ pub struct StopApplicationRequest {
 pub struct StopApplicationResponse {
   /// The operation ID that can be used to track the request.
   pub operation_id: Str? = None
+}
+
+pub enum StorageLocationType: Str {
+  S3 = "S3"
+  Unknown(value: Str)
 }
 
 /// A key-value pair (the value is optional) that you can define and assign

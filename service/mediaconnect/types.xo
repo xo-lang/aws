@@ -285,6 +285,10 @@ pub struct AddOutputRequest {
   /// full scale (dBFS). Common values are -20 (NDI and SMPTE) and -18 (EBU).
   /// If you don't specify this field, MediaConnect uses -20 .
   pub ndi_audio_reference_level: Int? = None
+  /// The settings for an output that pushes a stream to a destination using
+  /// the RTMP (Real-Time Messaging Protocol) protocol, or RTMPS (RTMP over
+  /// TLS) when TLS encryption is specified.
+  pub rtmp_push_settings: RtmpPushOutputSettings? = None
 }
 
 pub enum Algorithm: Str {
@@ -300,6 +304,16 @@ pub struct AudioMonitoringSetting {
   pub silent_audio: SilentAudio? = None
 }
 
+/// The configuration settings for automatic Packet ID (PID) assignment.
+/// These settings apply to any PID mapping rule that uses the auto action,
+/// including the default action.
+pub struct AutoPidMapConfiguration {
+  /// The first PID in the range for automatic PID assignment.
+  pub start_pid: Int? = None
+  /// The number of PIDs in the range for automatic PID assignment.
+  pub pids_per_program: Int? = None
+}
+
 /// Configuration settings for automatic encryption key management, where
 /// MediaConnect handles key creation and rotation.
 pub struct AutomaticEncryptionKeyConfiguration {
@@ -309,6 +323,12 @@ pub struct AutomaticEncryptionKeyConfiguration {
 /// MediaConnect determines the encryption key when the endpoint connects.
 /// This type does not require any additional settings.
 pub struct AutomaticEndpointEncryptionConfiguration {
+}
+
+/// The automatic RTMP naming configuration, where MediaConnect generates
+/// the application and stream names. This type does not require any
+/// additional settings.
+pub struct AutomaticRtmpPushNamingConfiguration {
 }
 
 /// This exception is thrown if the request contains a semantic error. The
@@ -880,6 +900,8 @@ pub struct CreateRouterOutputRequest {
   pub fabric_configuration: FabricConfiguration? = None
   /// A unique identifier for the request to ensure idempotency.
   pub client_token: Str? = None
+  /// The processor settings for the router output.
+  pub processors: RouterOutputProcessors? = None
 }
 
 pub struct CreateRouterOutputResponse {
@@ -1069,6 +1091,10 @@ pub struct DescribeFlowSourceMetadataResponse {
   /// associated media streams for the active NDI sender, and any relevant
   /// status messages.
   pub ndi_info: NdiSourceMetadataInfo? = None
+  /// The RTMP (Real-Time Messaging Protocol) specific information about the
+  /// flow's source. This includes the application name, the stream name, and
+  /// the associated audio and video streams.
+  pub rtmp_info: RtmpSourceMetadataInfo? = None
 }
 
 pub struct DescribeFlowSourceThumbnailRequest {
@@ -1575,11 +1601,33 @@ pub struct FabricConfiguration {
   /// quality. LOW_LATENCY – Reduces latency at the potential cost of stream
   /// quality under adverse network conditions.
   pub recovery_latency_mode: FabricLatencyMode? = None
+  /// The switching mode that the router output uses when it switches to a new
+  /// router input. Valid values include the following: IMMEDIATE (default)
+  /// – Switches to the new router input immediately. KEY_FRAME – Waits
+  /// for a key frame on the new router input before it switches. If you
+  /// specify it, it must match the switching configuration.
+  pub switching_mode: FabricSwitchingMode? = None
+  /// The configuration settings for the switching mode.
+  pub switching_configuration: FabricSwitchingConfiguration? = None
 }
 
 pub enum FabricLatencyMode: Str {
   Balanced = "BALANCED"
   LowLatency = "LOW_LATENCY"
+  Unknown(value: Str)
+}
+
+/// The configuration settings for switching between router inputs.
+pub enum FabricSwitchingConfiguration {
+  Immediate(value: ImmediateFabricSwitchingConfiguration)
+  KeyFrame(value: KeyFrameFabricSwitchingConfiguration)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+pub enum FabricSwitchingMode: Str {
+  Immediate = "IMMEDIATE"
+  KeyFrame = "KEY_FRAME"
   Unknown(value: Str)
 }
 
@@ -1637,12 +1685,16 @@ pub struct FailoverRouterInputIndexedStreamDetails {
   pub source_index: Int? = None
   /// The IP address of the source for this indexed stream.
   pub source_ip_address: Str? = None
+  /// The RTMP stream details for this indexed stream, including the
+  /// application and stream names.
+  pub rtmp_push: RtmpPushStreamDetails? = None
 }
 
 /// Protocol configuration settings for failover router inputs.
 pub enum FailoverRouterInputProtocolConfiguration {
   Rist(value: RistRouterInputConfiguration)
   SrtListener(value: SrtListenerRouterInputConfiguration)
+  RtmpPush(value: RtmpPushRouterInputConfiguration)
   SrtCaller(value: SrtCallerRouterInputConfiguration)
   Rtp(value: RtpRouterInputConfiguration)
   /// A member this client does not know (a newer service's).
@@ -2033,6 +2085,12 @@ pub struct GrantFlowEntitlementsResponse {
   pub flow_arn: Str? = None
 }
 
+/// The switching configuration where the router output switches to the new
+/// router input immediately. This type does not require any additional
+/// settings.
+pub struct ImmediateFabricSwitchingConfiguration {
+}
+
 /// Create a bridge with the ingress bridge type. An ingress bridge is a
 /// ground-to-cloud bridge. The content originates at your premises and is
 /// delivered to the cloud.
@@ -2095,6 +2153,18 @@ pub struct InterfaceRequest {
 /// request.
 pub struct InternalServerErrorException {
   pub message: Str? = None
+}
+
+/// The switching configuration where the router output waits for a key
+/// frame on the new router input before it switches.
+pub struct KeyFrameFabricSwitchingConfiguration {
+  /// The maximum time, in milliseconds, that the router output waits for a
+  /// key frame on the new input before it switches. Set this value to at
+  /// least the GOP (Group of Pictures) duration of your content, which your
+  /// upstream encoder determines. If the wait time is shorter than the GOP
+  /// duration, MediaConnect makes a best effort to switch without a key
+  /// frame. The default is 3000.
+  pub key_frame_wait_milliseconds: Int? = None
 }
 
 pub enum KeyType: Str {
@@ -2783,6 +2853,18 @@ pub enum MaintenanceType: Str {
   Unknown(value: Str)
 }
 
+/// The manual RTMP naming configuration, where you specify the application
+/// and stream names.
+pub struct ManualRtmpPushNamingConfiguration {
+  /// The name of the RTMP application. Together with the stream name, the
+  /// application name forms the RTMP URL path, in the pattern
+  /// rtmp://ingestAddress/applicationName/streamName .
+  pub application_name: Str? = None
+  /// The name of the RTMP stream. The stream name forms the final segment of
+  /// the RTMP URL path.
+  pub stream_name: Str? = None
+}
+
 /// Configuration settings for connecting a router input to a flow output.
 /// To connect the router input to the flow output, provide both flowArn and
 /// flowOutputArn . To disconnect it, call the update operation and omit
@@ -3051,6 +3133,8 @@ pub struct MergeRouterInputIndexedStreamDetails {
 pub enum MergeRouterInputProtocolConfiguration {
   Rtp(value: RtpRouterInputConfiguration)
   Rist(value: RistRouterInputConfiguration)
+  SrtListener(value: SrtListenerRouterInputConfiguration)
+  SrtCaller(value: SrtCallerRouterInputConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -3341,6 +3425,21 @@ pub struct OwnedResourceShareDetails {
   pub share_state: ResourceShareState? = None
 }
 
+/// The configuration that passes through the value from the source. This
+/// type does not require any additional settings.
+pub struct Passthrough {
+}
+
+/// A rule that selects elementary streams and specifies the action to apply
+/// to them.
+pub struct PidMapRule {
+  /// An expression that selects the elementary streams that this rule applies
+  /// to.
+  pub match_expression: Str? = None
+  /// The action to apply to the elementary streams that match this rule.
+  pub action: Str? = None
+}
+
 /// Configuration for preferred day and time maintenance settings.
 pub struct PreferredDayTimeMaintenanceConfiguration {
   /// The preferred day for maintenance operations.
@@ -3352,6 +3451,32 @@ pub struct PreferredDayTimeMaintenanceConfiguration {
 pub enum PriceUnits: Str {
   Hourly = "HOURLY"
   Unknown(value: Str)
+}
+
+/// The configuration settings for the Program Clock Reference (PCR) Packet
+/// ID (PID).
+pub enum ProgramClockReferencePidConfiguration {
+  Passthrough(value: Passthrough)
+  Set(value: Int)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// The configuration settings for the Program Map Table (PMT) Packet ID
+/// (PID).
+pub enum ProgramMapTablePidConfiguration {
+  Passthrough(value: Passthrough)
+  Set(value: Int)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// The configuration settings for the program number.
+pub enum ProgramNumberConfiguration {
+  Passthrough(value: Passthrough)
+  Set(value: Int)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 pub enum Protocol: Str {
@@ -3367,6 +3492,7 @@ pub enum Protocol: Str {
   FujitsuQos = "fujitsu-qos"
   Udp = "udp"
   NdiSpeedHq = "ndi-speed-hq"
+  RtmpPush = "rtmp-push"
   Unknown(value: Str)
 }
 
@@ -3917,6 +4043,7 @@ pub struct RouterInputMessage {
 /// details and connection state.
 pub enum RouterInputMetadata {
   TransportStreamMediaInfo(value: TransportMediaInfo)
+  RtmpInfo(value: RtmpSourceMetadataInfo)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -3926,6 +4053,7 @@ pub enum RouterInputProtocol: Str {
   Rist = "RIST"
   SrtCaller = "SRT_CALLER"
   SrtListener = "SRT_LISTENER"
+  RtmpPush = "RTMP_PUSH"
   Unknown(value: Str)
 }
 
@@ -3933,6 +4061,7 @@ pub enum RouterInputProtocol: Str {
 pub enum RouterInputProtocolConfiguration {
   Rist(value: RistRouterInputConfiguration)
   SrtListener(value: SrtListenerRouterInputConfiguration)
+  RtmpPush(value: RtmpPushRouterInputConfiguration)
   SrtCaller(value: SrtCallerRouterInputConfiguration)
   Rtp(value: RtpRouterInputConfiguration)
   /// A member this client does not know (a newer service's).
@@ -4168,6 +4297,8 @@ pub struct RouterOutput {
   pub maintenance_schedule: MaintenanceSchedule? = None
   /// The fabric configuration settings for the router output.
   pub fabric_configuration: FabricConfiguration? = None
+  /// The processor settings for the router output.
+  pub processors: RouterOutputProcessors? = None
   /// The Amazon Resource Names (ARNs) of one or more source endpoints that
   /// are associated with this router output.
   pub associated_source_endpoint_arns: List[Str]? = None
@@ -4201,6 +4332,14 @@ pub struct RouterOutputMessage {
   pub code: Str? = None
   /// The message text associated with the router output message.
   pub message: Str? = None
+}
+
+/// The processor settings for a router output.
+pub struct RouterOutputProcessors {
+  /// The configuration settings for remapping the identification numbers of
+  /// elementary streams and program identifiers of a single-program transport
+  /// stream.
+  pub single_program_transport_stream_pid_map: SingleProgramTransportStreamPidMapConfiguration? = None
 }
 
 pub enum RouterOutputProtocol: Str {
@@ -4316,6 +4455,96 @@ pub enum RoutingScope: Str {
   Unknown(value: Str)
 }
 
+/// Metadata about the audio and video media that is part of the RTMP source
+/// content. This includes details about the individual streams.
+pub struct RtmpMediaInfo {
+  /// A list of the individual audio and video streams that make up the RTMP
+  /// source. This includes details about each stream's codec, resolution,
+  /// frame rate, audio channels, and other parameters.
+  pub streams: List[RtmpMediaStreamInfo]? = None
+}
+
+/// Information about a single audio or video stream that is part of an RTMP
+/// source. This includes details about the stream type, codec, resolution,
+/// frame rate, audio channels, and sample rate.
+pub struct RtmpMediaStreamInfo {
+  /// A unique identifier for the stream.
+  pub stream_id: Int? = None
+  /// The type of stream (for example, VIDEO or AUDIO ).
+  pub stream_type: SourceMediaStreamType? = None
+  /// The codec used for the stream.
+  pub codec: Str? = None
+  /// The number of video frames displayed per second. Used when the
+  /// streamType is VIDEO .
+  pub frame_rate: Str? = None
+  /// The width and height dimensions of the video frame in pixels. Used when
+  /// the streamType is VIDEO .
+  pub frame_resolution: FrameResolution? = None
+  /// The method used to display video frames. Used when the streamType is
+  /// VIDEO .
+  pub scan_mode: ScanMode? = None
+  /// The color signaling of the video stream. Used when the streamType is
+  /// VIDEO .
+  pub color: ColorInformation? = None
+  /// The number of audio channels in the stream. Used when the streamType is
+  /// AUDIO .
+  pub channels: Int? = None
+  /// The number of audio samples captured per second. Used when the
+  /// streamType is AUDIO .
+  pub sample_rate: Int? = None
+  /// The sample bit size used by the audio stream. Used when the streamType
+  /// is AUDIO .
+  pub sample_size: Int? = None
+  /// The language of the audio stream. Used when the streamType is AUDIO .
+  pub language: Str? = None
+}
+
+/// The configuration settings for the RTMP (Real-Time Messaging Protocol)
+/// application and stream names.
+pub enum RtmpPushNamingConfiguration {
+  Manual(value: ManualRtmpPushNamingConfiguration)
+  Automatic(value: AutomaticRtmpPushNamingConfiguration)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+pub enum RtmpPushNamingType: Str {
+  Manual = "MANUAL"
+  Automatic = "AUTOMATIC"
+  Unknown(value: Str)
+}
+
+/// The settings for an output that pushes a stream to a destination using
+/// the RTMP (Real-Time Messaging Protocol) protocol, or RTMPS (RTMP over
+/// TLS) when TLS encryption is specified. These settings include the
+/// application and stream names, and optional TLS encryption configuration.
+pub struct RtmpPushOutputSettings {
+  /// The name of the RTMP application on the destination server. Together
+  /// with the stream name, the application name forms the RTMP URL path, in
+  /// the pattern rtmp://destinationAddress/applicationName/streamName .
+  pub application_name: Str? = None
+  /// The name of the RTMP stream that the output publishes to the destination
+  /// application. The stream name forms the final segment of the RTMP URL
+  /// path.
+  pub stream_name: Str? = None
+  /// The TLS encryption settings for the output. When you specify these
+  /// settings, the output uses RTMPS (RTMP over TLS) to establish a secure,
+  /// encrypted connection to the destination server.
+  pub tls_encryption: TlsEncryption? = None
+}
+
+/// The configuration settings for a router input using the RTMP (Real-Time
+/// Messaging Protocol) protocol.
+pub struct RtmpPushRouterInputConfiguration {
+  /// The port number for the RTMP protocol. The only valid value is 1935 .
+  pub port: Int? = None
+  /// The naming type. If you specify it, it must match the naming
+  /// configuration.
+  pub naming_type: RtmpPushNamingType? = None
+  /// The configuration settings for the application and stream names.
+  pub naming_configuration: RtmpPushNamingConfiguration? = None
+}
+
 /// The configuration settings for a router output that pushes a stream to a
 /// destination using the RTMP (Real-Time Messaging Protocol) protocol, or
 /// RTMPS (RTMP over TLS) when TLS encryption is specified. These settings
@@ -4343,6 +4572,42 @@ pub struct RtmpPushRouterOutputConfiguration {
   /// settings, the output uses RTMPS (RTMP over TLS) to establish a secure,
   /// encrypted connection to the destination server.
   pub tls_encryption: TlsEncryption? = None
+}
+
+/// The settings for the RTMP (Real-Time Messaging Protocol) source.
+pub struct RtmpPushSourceSettings {
+  /// The name of the RTMP application. Together with the stream name, the
+  /// application name forms the RTMP URL path, in the pattern
+  /// rtmp://ingestAddress/applicationName/streamName .
+  pub application_name: Str? = None
+  /// The name of the RTMP stream. The stream name forms the final segment of
+  /// the RTMP URL path.
+  pub stream_name: Str? = None
+  /// The naming type that the source uses. With AUTOMATIC naming,
+  /// MediaConnect generates the application and stream names.
+  pub naming_type: RtmpPushNamingType? = None
+}
+
+/// Configuration details for an RTMP (Real-Time Messaging Protocol) router
+/// input stream, including the application and stream names.
+pub struct RtmpPushStreamDetails {
+  /// The name of the RTMP application.
+  pub application_name: Str? = None
+  /// The name of the RTMP stream.
+  pub stream_name: Str? = None
+}
+
+/// Information about the RTMP (Real-Time Messaging Protocol) source. This
+/// includes the application name, the stream name, and metadata about the
+/// audio and video streams.
+pub struct RtmpSourceMetadataInfo {
+  /// The name of the RTMP application.
+  pub application_name: Str? = None
+  /// The name of the RTMP stream.
+  pub stream_name: Str? = None
+  /// Information about the audio and video streams that are part of the RTMP
+  /// source.
+  pub media_info: RtmpMediaInfo? = None
 }
 
 /// The configuration settings for a Router Input using the RTP (Real-Time
@@ -4440,6 +4705,12 @@ pub struct SetGatewayBridgeSourceRequest {
   pub vpc_interface_attachment: VpcInterfaceAttachment? = None
 }
 
+/// The settings for the RTMP (Real-Time Messaging Protocol) source.
+pub struct SetRtmpPushSourceSettings {
+  /// The configuration settings for the application and stream names.
+  pub naming_configuration: RtmpPushNamingConfiguration? = None
+}
+
 /// The settings for the source of the flow.
 pub struct SetSourceRequest {
   /// The type of encryption that is used on the content ingested from this
@@ -4512,6 +4783,8 @@ pub struct SetSourceRequest {
   /// is enabled. Specifies how the source content should be decrypted when
   /// router integration is used.
   pub router_integration_transit_decryption: FlowTransitEncryption? = None
+  /// The settings for the RTMP (Real-Time Messaging Protocol) source.
+  pub rtmp_push_settings: SetRtmpPushSourceSettings? = None
 }
 
 /// Configures settings for the SilentAudio metric.
@@ -4532,6 +4805,32 @@ pub struct SilentAudioConfiguration {
   /// The number of consecutive seconds of silence that MediaConnect must
   /// detect before it reports an issue.
   pub threshold_seconds: Int? = None
+}
+
+/// The configuration settings for remapping the identification numbers of
+/// elementary streams and program identifiers of a single-program transport
+/// stream.
+pub struct SingleProgramTransportStreamPidMapConfiguration {
+  /// The ordered list of up to 32 rules that determine the action for each
+  /// elementary stream. MediaConnect applies the first rule that matches.
+  pub rules: List[PidMapRule]? = None
+  /// The action to apply to an elementary stream that doesn't match any rule.
+  pub default_action: Str? = None
+  /// The transport stream ID (TSID) settings for the router output. By
+  /// default, the router output passes through the TSID from the source.
+  pub transport_stream_id: TransportStreamIdConfiguration? = None
+  /// The program number settings for the router output. By default, the
+  /// router output passes through the program number from the source.
+  pub program_number: ProgramNumberConfiguration? = None
+  /// The Program Map Table (PMT) PID settings for the router output. By
+  /// default, the router output passes through the PMT PID from the source.
+  pub program_map_table_pid: ProgramMapTablePidConfiguration? = None
+  /// The Program Clock Reference (PCR) PID settings for the router output. By
+  /// default, the router output passes through the PCR PID from the source.
+  pub program_clock_reference_pid: ProgramClockReferencePidConfiguration? = None
+  /// The settings for automatic Packet ID (PID) assignment. The default start
+  /// PID is 512, with 32 PIDs per program.
+  pub auto: AutoPidMapConfiguration? = None
 }
 
 /// The settings for the source of the flow.
@@ -4779,6 +5078,14 @@ pub enum SourceEndpointType: Str {
   Unknown(value: Str)
 }
 
+pub enum SourceMediaStreamType: Str {
+  Video = "VIDEO"
+  Audio = "AUDIO"
+  Data = "DATA"
+  Unknown = "UNKNOWN"
+  UnknownValue(value: Str)
+}
+
 /// The priority you want to assign to a source. You can have a primary
 /// stream and a backup stream or two equally prioritized streams.
 pub struct SourcePriority {
@@ -5013,6 +5320,9 @@ pub struct StandardRouterInputConfiguration {
 pub struct StandardRouterInputStreamDetails {
   /// The source IP address for the standard router input stream.
   pub source_ip_address: Str? = None
+  /// The RTMP stream details for the standard router input stream, including
+  /// the application and stream names.
+  pub rtmp_push: RtmpPushStreamDetails? = None
 }
 
 /// The configuration settings for a standard router output, including the
@@ -5372,6 +5682,12 @@ pub struct Transport {
   /// full scale (dBFS). Common values are -20 (NDI and SMPTE) and -18 (EBU).
   /// For NDI outputs, this field is always present and defaults to -20 .
   pub ndi_audio_reference_level: Int? = None
+  /// The settings for the RTMP (Real-Time Messaging Protocol) source.
+  pub rtmp_push_source_settings: RtmpPushSourceSettings? = None
+  /// The settings for an output that pushes a stream to a destination using
+  /// the RTMP (Real-Time Messaging Protocol) protocol, or RTMPS (RTMP over
+  /// TLS) when TLS encryption is specified.
+  pub rtmp_push_output_settings: RtmpPushOutputSettings? = None
 }
 
 /// The metadata of the transport stream in the current flow's source.
@@ -5401,8 +5717,20 @@ pub struct TransportStream {
   pub sample_rate: Int? = None
   /// The sample bit size used by the audio stream.
   pub sample_size: Int? = None
+  /// The scan mode used by the video stream.
+  pub scan_mode: ScanMode? = None
   /// The Stream Type as it is reported in the Program Map Table.
   pub stream_type: Str? = None
+  /// The language of the elementary stream.
+  pub language: Str? = None
+}
+
+/// The configuration settings for the transport stream ID (TSID).
+pub enum TransportStreamIdConfiguration {
+  Passthrough(value: Passthrough)
+  Set(value: Int)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// The metadata of a single transport stream program.
@@ -5759,6 +6087,10 @@ pub struct UpdateFlowOutputRequest {
   /// If you don't specify this field, MediaConnect leaves the value
   /// unchanged.
   pub ndi_audio_reference_level: Int? = None
+  /// The settings for an output that pushes a stream to a destination using
+  /// the RTMP (Real-Time Messaging Protocol) protocol, or RTMPS (RTMP over
+  /// TLS) when TLS encryption is specified.
+  pub rtmp_push_settings: RtmpPushOutputSettings? = None
 }
 
 pub struct UpdateFlowOutputResponse {
@@ -5861,6 +6193,8 @@ pub struct UpdateFlowSourceRequest {
   /// The encryption configuration for the flow source when router integration
   /// is enabled.
   pub router_integration_transit_decryption: FlowTransitEncryption? = None
+  /// The settings for the RTMP (Real-Time Messaging Protocol) source.
+  pub rtmp_push_settings: SetRtmpPushSourceSettings? = None
 }
 
 pub struct UpdateFlowSourceResponse {
@@ -5996,6 +6330,11 @@ pub struct UpdateRouterOutputRequest {
   /// route. You must unroute the output before updating the fabric
   /// configuration.
   pub fabric_configuration: FabricConfiguration? = None
+  /// The updated processor settings for the router output. When you update
+  /// the processors, include every setting that you want to keep.
+  /// MediaConnect resets the settings that you don't specify to their
+  /// defaults.
+  pub processors: RouterOutputProcessors? = None
 }
 
 pub struct UpdateRouterOutputResponse {

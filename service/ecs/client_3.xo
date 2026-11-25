@@ -8,6 +8,39 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_list_services_by_namespace(resp: http.Response) -> ListServicesByNamespaceResponse ! Str {
+  var out = ListServicesByNamespaceResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "serviceArns" => out.service_arns = from_json_string_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListServicesByNamespace.
+pub enum ListServicesByNamespaceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ClientException(e: ClientException)
+  InvalidParameterException(e: InvalidParameterException)
+  NamespaceNotFoundException(e: NamespaceNotFoundException)
+  ServerException(e: ServerException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: ListServicesByNamespaceErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"

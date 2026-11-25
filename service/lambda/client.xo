@@ -98,6 +98,28 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
+fn json_of_accelerator_config(v: AcceleratorConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.accelerator_memory_size {
+    fs.push(("AcceleratorMemorySize", json.Value.Int(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_accelerator_config(v: json.Value) -> AcceleratorConfig ! Str {
+  var out = AcceleratorConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AcceleratorMemorySize" => out.accelerator_memory_size = AcceleratorMemoryGB.from(jsonv.read_int(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_account_limit(v: AccountLimit) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.total_code_size {
@@ -2107,6 +2129,12 @@ fn json_of_create_function_request(v: CreateFunctionRequest) -> json.Value {
   if let Some(x) = v.durable_config {
     fs.push(("DurableConfig", json_of_durable_config(x)))
   }
+  if let Some(x) = v.runtime_config {
+    fs.push(("RuntimeConfig", json_of_function_runtime_config(x)))
+  }
+  if let Some(x) = v.accelerator_config {
+    fs.push(("AcceleratorConfig", json_of_accelerator_config(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2145,6 +2173,8 @@ fn from_json_create_function_request(v: json.Value) -> CreateFunctionRequest ! S
       "TenancyConfig" => out.tenancy_config = from_json_tenancy_config(fv)?
       "CapacityProviderConfig" => out.capacity_provider_config = from_json_capacity_provider_config(fv)?
       "DurableConfig" => out.durable_config = from_json_durable_config(fv)?
+      "RuntimeConfig" => out.runtime_config = from_json_function_runtime_config(fv)?
+      "AcceleratorConfig" => out.accelerator_config = from_json_accelerator_config(fv)?
       _ => {}
     }
   }
@@ -2353,6 +2383,50 @@ fn json_of_delete_code_signing_config_response(v: DeleteCodeSigningConfigRespons
 fn from_json_delete_code_signing_config_response(v: json.Value) -> DeleteCodeSigningConfigResponse ! Str {
   var out = DeleteCodeSigningConfigResponse{}
   let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_delete_durable_execution_request(v: DeleteDurableExecutionRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.durable_execution_arn {
+    fs.push(("DurableExecutionArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_durable_execution_request(v: json.Value) -> DeleteDurableExecutionRequest ! Str {
+  var out = DeleteDurableExecutionRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DurableExecutionArn" => out.durable_execution_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_durable_execution_response(v: DeleteDurableExecutionResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.deletion_request_timestamp {
+    fs.push(("DeletionRequestTimestamp", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_durable_execution_response(v: json.Value) -> DeleteDurableExecutionResponse ! Str {
+  var out = DeleteDurableExecutionResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DeletionRequestTimestamp" => out.deletion_request_timestamp = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
   Ok(out)
 }
 
@@ -3239,6 +3313,12 @@ fn json_of_event(v: Event) -> json.Value {
   if let Some(x) = v.invocation_completed_details {
     fs.push(("InvocationCompletedDetails", json_of_invocation_completed_details(x)))
   }
+  if let Some(x) = v.execution_paused_details {
+    fs.push(("ExecutionPausedDetails", json_of_execution_paused_details(x)))
+  }
+  if let Some(x) = v.execution_resumed_details {
+    fs.push(("ExecutionResumedDetails", json_of_execution_resumed_details(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3280,6 +3360,8 @@ fn from_json_event(v: json.Value) -> Event ! Str {
       "CallbackFailedDetails" => out.callback_failed_details = from_json_callback_failed_details(fv)?
       "CallbackTimedOutDetails" => out.callback_timed_out_details = from_json_callback_timed_out_details(fv)?
       "InvocationCompletedDetails" => out.invocation_completed_details = from_json_invocation_completed_details(fv)?
+      "ExecutionPausedDetails" => out.execution_paused_details = from_json_execution_paused_details(fv)?
+      "ExecutionResumedDetails" => out.execution_resumed_details = from_json_execution_resumed_details(fv)?
       _ => {}
     }
   }
@@ -3338,6 +3420,32 @@ fn from_json_event_input(v: json.Value) -> EventInput ! Str {
   Ok(out)
 }
 
+fn json_of_event_pause_reason(v: EventPauseReason) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.payload {
+    fs.push(("Payload", json.Value.Str(x)))
+  }
+  if let Some(x) = v.truncated {
+    fs.push(("Truncated", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_event_pause_reason(v: json.Value) -> EventPauseReason ! Str {
+  var out = EventPauseReason{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Payload" => out.payload = jsonv.read_str(fv)?
+      "Truncated" => out.truncated = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_event_result(v: EventResult) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.payload {
@@ -3351,6 +3459,32 @@ fn json_of_event_result(v: EventResult) -> json.Value {
 
 fn from_json_event_result(v: json.Value) -> EventResult ! Str {
   var out = EventResult{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Payload" => out.payload = jsonv.read_str(fv)?
+      "Truncated" => out.truncated = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_event_resume_reason(v: EventResumeReason) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.payload {
+    fs.push(("Payload", json.Value.Str(x)))
+  }
+  if let Some(x) = v.truncated {
+    fs.push(("Truncated", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_event_resume_reason(v: json.Value) -> EventResumeReason ! Str {
+  var out = EventResumeReason{}
   for (k, fv) in jsonv.fields(v)? {
     if fv == json.Value.Null {
       continue
@@ -3690,6 +3824,62 @@ fn from_json_execution_failed_details(v: json.Value) -> ExecutionFailedDetails !
     }
     match k {
       "Error" => out.error = from_json_event_error(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_execution_paused_details(v: ExecutionPausedDetails) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.pause_request_timestamp {
+    fs.push(("PauseRequestTimestamp", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("Reason", json_of_event_pause_reason(x)))
+  }
+  if let Some(x) = v.execution_timeout_paused {
+    fs.push(("ExecutionTimeoutPaused", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_execution_paused_details(v: json.Value) -> ExecutionPausedDetails ! Str {
+  var out = ExecutionPausedDetails{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "PauseRequestTimestamp" => out.pause_request_timestamp = jsonv.read_time(fv, "epoch-seconds")?
+      "Reason" => out.reason = from_json_event_pause_reason(fv)?
+      "ExecutionTimeoutPaused" => out.execution_timeout_paused = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_execution_resumed_details(v: ExecutionResumedDetails) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resume_request_timestamp {
+    fs.push(("ResumeRequestTimestamp", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("Reason", json_of_event_resume_reason(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_execution_resumed_details(v: json.Value) -> ExecutionResumedDetails ! Str {
+  var out = ExecutionResumedDetails{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ResumeRequestTimestamp" => out.resume_request_timestamp = jsonv.read_time(fv, "epoch-seconds")?
+      "Reason" => out.reason = from_json_event_resume_reason(fv)?
       _ => {}
     }
   }
@@ -4192,6 +4382,12 @@ fn json_of_function_configuration(v: FunctionConfiguration) -> json.Value {
   if let Some(x) = v.durable_config {
     fs.push(("DurableConfig", json_of_durable_config(x)))
   }
+  if let Some(x) = v.runtime_config {
+    fs.push(("RuntimeConfig", json_of_function_runtime_config(x)))
+  }
+  if let Some(x) = v.accelerator_config {
+    fs.push(("AcceleratorConfig", json_of_accelerator_config(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -4242,6 +4438,8 @@ fn from_json_function_configuration(v: json.Value) -> FunctionConfiguration ! St
       "CapacityProviderConfig" => out.capacity_provider_config = from_json_capacity_provider_config(fv)?
       "ConfigSha256" => out.config_sha256 = jsonv.read_str(fv)?
       "DurableConfig" => out.durable_config = from_json_durable_config(fv)?
+      "RuntimeConfig" => out.runtime_config = from_json_function_runtime_config(fv)?
+      "AcceleratorConfig" => out.accelerator_config = from_json_accelerator_config(fv)?
       _ => {}
     }
   }
@@ -4330,6 +4528,32 @@ fn from_json_function_response_type_list(v: json.Value) -> List[FunctionResponse
       continue
     }
     out.push(FunctionResponseType.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_function_runtime_config(v: FunctionRuntimeConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.runtime_arn {
+    fs.push(("RuntimeArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.runtime_alias {
+    fs.push(("RuntimeAlias", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_function_runtime_config(v: json.Value) -> FunctionRuntimeConfig ! Str {
+  var out = FunctionRuntimeConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "RuntimeArn" => out.runtime_arn = jsonv.read_str(fv)?
+      "RuntimeAlias" => out.runtime_alias = jsonv.read_str(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -4772,6 +4996,12 @@ fn json_of_get_durable_execution_response(v: GetDurableExecutionResponse) -> jso
   if let Some(x) = v.durable_config {
     fs.push(("DurableConfig", json_of_durable_config(x)))
   }
+  if let Some(x) = v.pause_details {
+    fs.push(("PauseDetails", json_of_pause_details(x)))
+  }
+  if let Some(x) = v.expected_execution_timeout_timestamp {
+    fs.push(("ExpectedExecutionTimeoutTimestamp", jsonv.time(x, "epoch-seconds")))
+  }
   json.Value.Object(fs)
 }
 
@@ -4795,6 +5025,8 @@ fn from_json_get_durable_execution_response(v: json.Value) -> GetDurableExecutio
       "TraceHeader" => out.trace_header = from_json_trace_header(fv)?
       "ExecutionDataIncluded" => out.execution_data_included = jsonv.read_bool(fv)?
       "DurableConfig" => out.durable_config = from_json_durable_config(fv)?
+      "PauseDetails" => out.pause_details = from_json_pause_details(fv)?
+      "ExpectedExecutionTimeoutTimestamp" => out.expected_execution_timeout_timestamp = jsonv.read_time(fv, "epoch-seconds")?
       _ => {}
     }
   }
@@ -7979,6 +8211,81 @@ fn from_json_operations(v: json.Value) -> List[Operation] ! Str {
   Ok(out)
 }
 
+fn json_of_pause_details(v: PauseDetails) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.pause_request_timestamp {
+    fs.push(("PauseRequestTimestamp", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("Reason", json.Value.Str(x)))
+  }
+  if let Some(x) = v.execution_timeout_paused {
+    fs.push(("ExecutionTimeoutPaused", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_pause_details(v: json.Value) -> PauseDetails ! Str {
+  var out = PauseDetails{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "PauseRequestTimestamp" => out.pause_request_timestamp = jsonv.read_time(fv, "epoch-seconds")?
+      "Reason" => out.reason = jsonv.read_str(fv)?
+      "ExecutionTimeoutPaused" => out.execution_timeout_paused = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_pause_durable_execution_request(v: PauseDurableExecutionRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.durable_execution_arn {
+    fs.push(("DurableExecutionArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("Reason", json.Value.Str(x)))
+  }
+  if let Some(x) = v.execution_timeout_paused {
+    fs.push(("ExecutionTimeoutPaused", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_pause_durable_execution_request(v: json.Value) -> PauseDurableExecutionRequest ! Str {
+  var out = PauseDurableExecutionRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DurableExecutionArn" => out.durable_execution_arn = jsonv.read_str(fv)?
+      "ClientToken" => out.client_token = jsonv.read_str(fv)?
+      "Reason" => out.reason = jsonv.read_str(fv)?
+      "ExecutionTimeoutPaused" => out.execution_timeout_paused = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_pause_durable_execution_response(v: PauseDurableExecutionResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_pause_durable_execution_response(v: json.Value) -> PauseDurableExecutionResponse ! Str {
+  var out = PauseDurableExecutionResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_policy_length_exceeded_exception(v: PolicyLengthExceededException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.type_value {
@@ -9013,6 +9320,47 @@ fn from_json_resource_not_ready_exception(v: json.Value) -> ResourceNotReadyExce
   Ok(out)
 }
 
+fn json_of_resume_durable_execution_request(v: ResumeDurableExecutionRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.durable_execution_arn {
+    fs.push(("DurableExecutionArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("Reason", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resume_durable_execution_request(v: json.Value) -> ResumeDurableExecutionRequest ! Str {
+  var out = ResumeDurableExecutionRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DurableExecutionArn" => out.durable_execution_arn = jsonv.read_str(fv)?
+      "ClientToken" => out.client_token = jsonv.read_str(fv)?
+      "Reason" => out.reason = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_resume_durable_execution_response(v: ResumeDurableExecutionResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_resume_durable_execution_response(v: json.Value) -> ResumeDurableExecutionResponse ! Str {
+  var out = ResumeDurableExecutionResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_retry_details(v: RetryDetails) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.current_attempt {
@@ -9039,6 +9387,32 @@ fn from_json_retry_details(v: json.Value) -> RetryDetails ! Str {
   Ok(out)
 }
 
+fn json_of_runtime_alias_deleted_exception(v: RuntimeAliasDeletedException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x)))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_runtime_alias_deleted_exception(v: json.Value) -> RuntimeAliasDeletedException ! Str {
+  var out = RuntimeAliasDeletedException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Type" => out.type_value = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_runtime_version_config(v: RuntimeVersionConfig) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.runtime_version_arn {
@@ -9059,6 +9433,32 @@ fn from_json_runtime_version_config(v: json.Value) -> RuntimeVersionConfig ! Str
     match k {
       "RuntimeVersionArn" => out.runtime_version_arn = jsonv.read_str(fv)?
       "Error" => out.error = from_json_runtime_version_error(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_runtime_version_deleted_exception(v: RuntimeVersionDeletedException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x)))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_runtime_version_deleted_exception(v: json.Value) -> RuntimeVersionDeletedException ! Str {
+  var out = RuntimeVersionDeletedException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Type" => out.type_value = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -10612,6 +11012,12 @@ fn json_of_update_function_configuration_request(v: UpdateFunctionConfigurationR
   if let Some(x) = v.durable_config {
     fs.push(("DurableConfig", json_of_durable_config(x)))
   }
+  if let Some(x) = v.runtime_config {
+    fs.push(("RuntimeConfig", json_of_function_runtime_config(x)))
+  }
+  if let Some(x) = v.accelerator_config {
+    fs.push(("AcceleratorConfig", json_of_accelerator_config(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -10643,6 +11049,8 @@ fn from_json_update_function_configuration_request(v: json.Value) -> UpdateFunct
       "LoggingConfig" => out.logging_config = from_json_logging_config(fv)?
       "CapacityProviderConfig" => out.capacity_provider_config = from_json_capacity_provider_config(fv)?
       "DurableConfig" => out.durable_config = from_json_durable_config(fv)?
+      "RuntimeConfig" => out.runtime_config = from_json_function_runtime_config(fv)?
+      "AcceleratorConfig" => out.accelerator_config = from_json_accelerator_config(fv)?
       _ => {}
     }
   }
@@ -11625,6 +12033,38 @@ fn read_error_resource_not_found_exception(resp: http.Response, body: json.Value
 fn read_error_resource_not_ready_exception(resp: http.Response, body: json.Value) -> ResourceNotReadyException ! Str {
   let _ = (resp, body)
   var out = ResourceNotReadyException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Type" => out.type_value = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_runtime_alias_deleted_exception(resp: http.Response, body: json.Value) -> RuntimeAliasDeletedException ! Str {
+  let _ = (resp, body)
+  var out = RuntimeAliasDeletedException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Type" => out.type_value = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_runtime_version_deleted_exception(resp: http.Response, body: json.Value) -> RuntimeVersionDeletedException ! Str {
+  let _ = (resp, body)
+  var out = RuntimeVersionDeletedException{}
   for (k, fv) in jsonv.fields(body)? {
     if fv == json.Value.Null {
       continue
@@ -13224,6 +13664,12 @@ pub fn serialize_create_function(ep: rest.Endpoint, input: CreateFunctionRequest
   if let Some(x) = input.durable_config {
     fs.push(("DurableConfig", json_of_durable_config(x)))
   }
+  if let Some(x) = input.runtime_config {
+    fs.push(("RuntimeConfig", json_of_function_runtime_config(x)))
+  }
+  if let Some(x) = input.accelerator_config {
+    fs.push(("AcceleratorConfig", json_of_accelerator_config(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -13289,6 +13735,8 @@ pub fn deserialize_create_function(resp: http.Response) -> FunctionConfiguration
       "CapacityProviderConfig" => out.capacity_provider_config = from_json_capacity_provider_config(fv)?
       "ConfigSha256" => out.config_sha256 = jsonv.read_str(fv)?
       "DurableConfig" => out.durable_config = from_json_durable_config(fv)?
+      "RuntimeConfig" => out.runtime_config = from_json_function_runtime_config(fv)?
+      "AcceleratorConfig" => out.accelerator_config = from_json_accelerator_config(fv)?
       _ => {}
     }
   }
@@ -13592,345 +14040,4 @@ pub fn (c: Client) create_function_url_config(input: CreateFunctionUrlConfigRequ
 pub fn endpoint_params_delete_alias(base: EndpointParameters, input: DeleteAliasRequest) -> EndpointParameters {
   let _ = input
   base
-}
-
-/// The HTTP request of DeleteAlias.
-pub fn serialize_delete_alias(ep: rest.Endpoint, input: DeleteAliasRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_function_name = match input.function_name {
-    Some(v) => v
-    None => return Err("input member FunctionName is required")
-  }
-  if label_function_name == "" {
-    return Err("input member FunctionName must not be empty")
-  }
-  let label_name = match input.name {
-    Some(v) => v
-    None => return Err("input member Name is required")
-  }
-  if label_name == "" {
-    return Err("input member Name must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2015-03-31/functions/${rest.escape(label_function_name, false)}/aliases/${rest.escape(label_name, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_alias(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of DeleteAlias.
-pub enum DeleteAliasErr {
-  InvalidParameterValueException(e: InvalidParameterValueException)
-  ResourceConflictException(e: ResourceConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceException(e: ServiceException)
-  TooManyRequestsException(e: TooManyRequestsException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteAliasErr) display() -> Str {
-  match e {
-    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
-    ResourceConflictException(x) => "ResourceConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_alias_error(resp: http.Response) -> DeleteAliasErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
-      Ok(x) => return DeleteAliasErr.InvalidParameterValueException(x)
-      Err(msg) => return DeleteAliasErr.Deserialize(msg)
-    }
-    "ResourceConflictException" => match read_error_resource_conflict_exception(resp, body) {
-      Ok(x) => return DeleteAliasErr.ResourceConflictException(x)
-      Err(msg) => return DeleteAliasErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteAliasErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteAliasErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return DeleteAliasErr.ServiceException(x)
-      Err(msg) => return DeleteAliasErr.Deserialize(msg)
-    }
-    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
-      Ok(x) => return DeleteAliasErr.TooManyRequestsException(x)
-      Err(msg) => return DeleteAliasErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteAliasErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a Lambda Event Function alias .
-pub fn (c: Client) delete_alias(input: DeleteAliasRequest) -> () ! DeleteAliasErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_alias(c.params, input)) ?? e => return Err(DeleteAliasErr.InvalidInput(e))
-  var req = serialize_delete_alias(ep, input, "") ?? e => return Err(DeleteAliasErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteAliasErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_alias_error(resp))
-  }
-  deserialize_delete_alias(resp) ?? e => Err(DeleteAliasErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_capacity_provider(base: EndpointParameters, input: DeleteCapacityProviderRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteCapacityProvider.
-pub fn serialize_delete_capacity_provider(ep: rest.Endpoint, input: DeleteCapacityProviderRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_capacity_provider_name = match input.capacity_provider_name {
-    Some(v) => v
-    None => return Err("input member CapacityProviderName is required")
-  }
-  if label_capacity_provider_name == "" {
-    return Err("input member CapacityProviderName must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2025-11-30/capacity-providers/${rest.escape(label_capacity_provider_name, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_capacity_provider(resp: http.Response) -> DeleteCapacityProviderResponse ! Str {
-  var out = DeleteCapacityProviderResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "CapacityProvider" => out.capacity_provider = from_json_capacity_provider(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DeleteCapacityProvider.
-pub enum DeleteCapacityProviderErr {
-  InvalidParameterValueException(e: InvalidParameterValueException)
-  ResourceConflictException(e: ResourceConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceException(e: ServiceException)
-  TooManyRequestsException(e: TooManyRequestsException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteCapacityProviderErr) display() -> Str {
-  match e {
-    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
-    ResourceConflictException(x) => "ResourceConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_capacity_provider_error(resp: http.Response) -> DeleteCapacityProviderErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
-      Ok(x) => return DeleteCapacityProviderErr.InvalidParameterValueException(x)
-      Err(msg) => return DeleteCapacityProviderErr.Deserialize(msg)
-    }
-    "ResourceConflictException" => match read_error_resource_conflict_exception(resp, body) {
-      Ok(x) => return DeleteCapacityProviderErr.ResourceConflictException(x)
-      Err(msg) => return DeleteCapacityProviderErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteCapacityProviderErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteCapacityProviderErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return DeleteCapacityProviderErr.ServiceException(x)
-      Err(msg) => return DeleteCapacityProviderErr.Deserialize(msg)
-    }
-    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
-      Ok(x) => return DeleteCapacityProviderErr.TooManyRequestsException(x)
-      Err(msg) => return DeleteCapacityProviderErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteCapacityProviderErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a capacity provider. You cannot delete a capacity provider that
-/// is currently being used by Lambda functions.
-pub fn (c: Client) delete_capacity_provider(input: DeleteCapacityProviderRequest) -> DeleteCapacityProviderResponse ! DeleteCapacityProviderErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_capacity_provider(c.params, input)) ?? e => return Err(DeleteCapacityProviderErr.InvalidInput(e))
-  var req = serialize_delete_capacity_provider(ep, input, "") ?? e => return Err(DeleteCapacityProviderErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteCapacityProviderErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_capacity_provider_error(resp))
-  }
-  deserialize_delete_capacity_provider(resp) ?? e => Err(DeleteCapacityProviderErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_code_signing_config(base: EndpointParameters, input: DeleteCodeSigningConfigRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteCodeSigningConfig.
-pub fn serialize_delete_code_signing_config(ep: rest.Endpoint, input: DeleteCodeSigningConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_code_signing_config_arn = match input.code_signing_config_arn {
-    Some(v) => v
-    None => return Err("input member CodeSigningConfigArn is required")
-  }
-  if label_code_signing_config_arn == "" {
-    return Err("input member CodeSigningConfigArn must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2020-04-22/code-signing-configs/${rest.escape(label_code_signing_config_arn, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_code_signing_config(resp: http.Response) -> DeleteCodeSigningConfigResponse ! Str {
-  var out = DeleteCodeSigningConfigResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteCodeSigningConfig.
-pub enum DeleteCodeSigningConfigErr {
-  InvalidParameterValueException(e: InvalidParameterValueException)
-  ResourceConflictException(e: ResourceConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceException(e: ServiceException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteCodeSigningConfigErr) display() -> Str {
-  match e {
-    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
-    ResourceConflictException(x) => "ResourceConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_code_signing_config_error(resp: http.Response) -> DeleteCodeSigningConfigErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
-      Ok(x) => return DeleteCodeSigningConfigErr.InvalidParameterValueException(x)
-      Err(msg) => return DeleteCodeSigningConfigErr.Deserialize(msg)
-    }
-    "ResourceConflictException" => match read_error_resource_conflict_exception(resp, body) {
-      Ok(x) => return DeleteCodeSigningConfigErr.ResourceConflictException(x)
-      Err(msg) => return DeleteCodeSigningConfigErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteCodeSigningConfigErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteCodeSigningConfigErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return DeleteCodeSigningConfigErr.ServiceException(x)
-      Err(msg) => return DeleteCodeSigningConfigErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteCodeSigningConfigErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes the code signing configuration. You can delete the code signing
-/// configuration only if no function is using it.
-pub fn (c: Client) delete_code_signing_config(input: DeleteCodeSigningConfigRequest) -> DeleteCodeSigningConfigResponse ! DeleteCodeSigningConfigErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_code_signing_config(c.params, input)) ?? e => return Err(DeleteCodeSigningConfigErr.InvalidInput(e))
-  var req = serialize_delete_code_signing_config(ep, input, "") ?? e => return Err(DeleteCodeSigningConfigErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteCodeSigningConfigErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_code_signing_config_error(resp))
-  }
-  deserialize_delete_code_signing_config(resp) ?? e => Err(DeleteCodeSigningConfigErr.Deserialize(e))
 }

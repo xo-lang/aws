@@ -3,6 +3,68 @@
 use std/json
 use github.com/xo-lang/aws/protocol/jsonv
 
+fn from_json_describe_prompt_response(v: json.Value) -> DescribePromptResponse ! Str {
+  var out = DescribePromptResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Prompt" => out.prompt = from_json_prompt(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_queue_request(v: DescribeQueueRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.instance_id {
+    fs.push(("InstanceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.queue_id {
+    fs.push(("QueueId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_queue_request(v: json.Value) -> DescribeQueueRequest ! Str {
+  var out = DescribeQueueRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "InstanceId" => out.instance_id = jsonv.read_str(fv)?
+      "QueueId" => out.queue_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_queue_response(v: DescribeQueueResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.queue {
+    fs.push(("Queue", json_of_queue(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_queue_response(v: json.Value) -> DescribeQueueResponse ! Str {
+  var out = DescribeQueueResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Queue" => out.queue = from_json_queue(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_describe_quick_connect_request(v: DescribeQuickConnectRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.instance_id {
@@ -2283,6 +2345,15 @@ fn json_of_evaluation(v: Evaluation) -> json.Value {
   if let Some(x) = v.tags {
     fs.push(("Tags", json_of_tag_map(x)))
   }
+  if let Some(x) = v.item_enablement_status {
+    fs.push(("ItemEnablementStatus", json_of_evaluation_enablement_status_map(x)))
+  }
+  if let Some(x) = v.source_resolution_status {
+    fs.push(("SourceResolutionStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.source_values {
+    fs.push(("SourceValues", json_of_evaluation_resolved_source_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2304,6 +2375,9 @@ fn from_json_evaluation(v: json.Value) -> Evaluation ! Str {
       "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
       "EvaluationType" => out.evaluation_type = EvaluationType.from(jsonv.read_str(fv)?)
       "Tags" => out.tags = from_json_tag_map(fv)?
+      "ItemEnablementStatus" => out.item_enablement_status = from_json_evaluation_enablement_status_map(fv)?
+      "SourceResolutionStatus" => out.source_resolution_status = EvaluationItemResolutionStatus.from(jsonv.read_str(fv)?)
+      "SourceValues" => out.source_values = from_json_evaluation_resolved_source_list(fv)?
       _ => {}
     }
   }
@@ -2588,6 +2662,22 @@ fn from_json_evaluation_contact_participant(v: json.Value) -> EvaluationContactP
       "ContactParticipantId" => out.contact_participant_id = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_evaluation_enablement_status_map(v: Map[Str, EvaluationEnablementStatus]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, EvaluationEnablementStatus)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1.value())) }))
+}
+
+fn from_json_evaluation_enablement_status_map(v: json.Value) -> Map[Str, EvaluationEnablementStatus] ! Str {
+  var out: Map[Str, EvaluationEnablementStatus] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, EvaluationEnablementStatus.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -3008,6 +3098,21 @@ fn json_of_evaluation_form_item_enablement_source(v: EvaluationFormItemEnablemen
   if let Some(x) = v.ref_id {
     fs.push(("RefId", json.Value.Str(x)))
   }
+  if let Some(x) = v.contact_field {
+    fs.push(("ContactField", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.contact_attribute_key {
+    fs.push(("ContactAttributeKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.segment_attribute_key {
+    fs.push(("SegmentAttributeKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.evaluation_metadata_field {
+    fs.push(("EvaluationMetadataField", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.ai_metrics_field {
+    fs.push(("AiMetricsField", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -3020,6 +3125,11 @@ fn from_json_evaluation_form_item_enablement_source(v: json.Value) -> Evaluation
     match k {
       "Type" => out.type_value = EvaluationFormItemEnablementSourceType.from(jsonv.read_str(fv)?)
       "RefId" => out.ref_id = jsonv.read_str(fv)?
+      "ContactField" => out.contact_field = EvaluationFormContactField.from(jsonv.read_str(fv)?)
+      "ContactAttributeKey" => out.contact_attribute_key = jsonv.read_str(fv)?
+      "SegmentAttributeKey" => out.segment_attribute_key = jsonv.read_str(fv)?
+      "EvaluationMetadataField" => out.evaluation_metadata_field = EvaluationFormEvaluationMetadataField.from(jsonv.read_str(fv)?)
+      "AiMetricsField" => out.ai_metrics_field = EvaluationFormAiMetricsField.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -3034,6 +3144,18 @@ fn json_of_evaluation_form_item_enablement_source_value(v: EvaluationFormItemEna
   if let Some(x) = v.ref_id {
     fs.push(("RefId", json.Value.Str(x)))
   }
+  if let Some(x) = v.string_value {
+    fs.push(("StringValue", json.Value.Str(x)))
+  }
+  if let Some(x) = v.numeric_value {
+    fs.push(("NumericValue", jsonv.float(x)))
+  }
+  if let Some(x) = v.boolean_value {
+    fs.push(("BooleanValue", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.date_time_value {
+    fs.push(("DateTimeValue", jsonv.time(x, "epoch-seconds")))
+  }
   json.Value.Object(fs)
 }
 
@@ -3046,6 +3168,10 @@ fn from_json_evaluation_form_item_enablement_source_value(v: json.Value) -> Eval
     match k {
       "Type" => out.type_value = EvaluationFormItemEnablementSourceValueType.from(jsonv.read_str(fv)?)
       "RefId" => out.ref_id = jsonv.read_str(fv)?
+      "StringValue" => out.string_value = jsonv.read_str(fv)?
+      "NumericValue" => out.numeric_value = jsonv.read_float(fv)?
+      "BooleanValue" => out.boolean_value = jsonv.read_bool(fv)?
+      "DateTimeValue" => out.date_time_value = jsonv.read_time(fv, "epoch-seconds")?
       _ => {}
     }
   }
@@ -3821,6 +3947,9 @@ fn json_of_evaluation_form_section(v: EvaluationFormSection) -> json.Value {
   if let Some(x) = v.score_thresholds {
     fs.push(("ScoreThresholds", json_of_evaluation_form_score_threshold_list(x)))
   }
+  if let Some(x) = v.enablement {
+    fs.push(("Enablement", json_of_evaluation_form_item_enablement_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3838,6 +3967,7 @@ fn from_json_evaluation_form_section(v: json.Value) -> EvaluationFormSection ! S
       "Weight" => out.weight = jsonv.read_float(fv)?
       "IsExcludedFromScoring" => out.is_excluded_from_scoring = jsonv.read_bool(fv)?
       "ScoreThresholds" => out.score_thresholds = from_json_evaluation_form_score_threshold_list(fv)?
+      "Enablement" => out.enablement = from_json_evaluation_form_item_enablement_configuration(fv)?
       _ => {}
     }
   }
@@ -3877,6 +4007,7 @@ fn from_json_evaluation_form_single_select_question_automation(v: json.Value) ->
 fn json_of_evaluation_form_single_select_question_automation_option(v: EvaluationFormSingleSelectQuestionAutomationOption) -> json.Value {
   match v {
     RuleCategory(x) => json.Value.Object([("RuleCategory", json_of_single_select_question_rule_category_automation(x))])
+    AutomationRule(x) => json.Value.Object([("AutomationRule", json_of_single_select_question_automation_rule(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -3888,6 +4019,7 @@ fn from_json_evaluation_form_single_select_question_automation_option(v: json.Va
     }
     return match k {
       "RuleCategory" => Ok(EvaluationFormSingleSelectQuestionAutomationOption.RuleCategory(from_json_single_select_question_rule_category_automation(fv)?))
+      "AutomationRule" => Ok(EvaluationFormSingleSelectQuestionAutomationOption.AutomationRule(from_json_single_select_question_automation_rule(fv)?))
       _ => Ok(EvaluationFormSingleSelectQuestionAutomationOption.Unknown(k))
     }
   }
@@ -4470,6 +4602,68 @@ fn from_json_evaluation_question_input_details(v: json.Value) -> EvaluationQuest
       "TranscriptType" => out.transcript_type = EvaluationTranscriptType.from(jsonv.read_str(fv)?)
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_evaluation_resolved_source(v: EvaluationResolvedSource) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source {
+    fs.push(("Source", json_of_evaluation_form_item_enablement_source(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("Status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.values {
+    fs.push(("Values", json_of_evaluation_resolved_source_value_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_evaluation_resolved_source(v: json.Value) -> EvaluationResolvedSource ! Str {
+  var out = EvaluationResolvedSource{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Source" => out.source = from_json_evaluation_form_item_enablement_source(fv)?
+      "Status" => out.status = EvaluationItemResolutionStatus.from(jsonv.read_str(fv)?)
+      "Values" => out.values = from_json_evaluation_resolved_source_value_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_evaluation_resolved_source_list(v: List[EvaluationResolvedSource]) -> json.Value {
+  json.Value.List(v.map(fn(x: EvaluationResolvedSource) -> json.Value { json_of_evaluation_resolved_source(x) }))
+}
+
+fn from_json_evaluation_resolved_source_list(v: json.Value) -> List[EvaluationResolvedSource] ! Str {
+  var out: List[EvaluationResolvedSource] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_evaluation_resolved_source(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_evaluation_resolved_source_value_list(v: List[EvaluationFormItemEnablementSourceValue]) -> json.Value {
+  json.Value.List(v.map(fn(x: EvaluationFormItemEnablementSourceValue) -> json.Value { json_of_evaluation_form_item_enablement_source_value(x) }))
+}
+
+fn from_json_evaluation_resolved_source_value_list(v: json.Value) -> List[EvaluationFormItemEnablementSourceValue] ! Str {
+  var out: List[EvaluationFormItemEnablementSourceValue] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_evaluation_form_item_enablement_source_value(fv)?)
   }
   Ok(out)
 }
@@ -8799,6 +8993,12 @@ fn json_of_integration_association_summary(v: IntegrationAssociationSummary) -> 
   if let Some(x) = v.source_type {
     fs.push(("SourceType", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.last_modified_time {
+    fs.push(("LastModifiedTime", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.last_modified_region {
+    fs.push(("LastModifiedRegion", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -8817,6 +9017,8 @@ fn from_json_integration_association_summary(v: json.Value) -> IntegrationAssoci
       "SourceApplicationUrl" => out.source_application_url = jsonv.read_str(fv)?
       "SourceApplicationName" => out.source_application_name = jsonv.read_str(fv)?
       "SourceType" => out.source_type = SourceType.from(jsonv.read_str(fv)?)
+      "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
+      "LastModifiedRegion" => out.last_modified_region = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -14055,340 +14257,4 @@ fn from_json_maximum_result_returned_exception(v: json.Value) -> MaximumResultRe
 
 fn json_of_media_concurrencies(v: List[MediaConcurrency]) -> json.Value {
   json.Value.List(v.map(fn(x: MediaConcurrency) -> json.Value { json_of_media_concurrency(x) }))
-}
-
-fn from_json_media_concurrencies(v: json.Value) -> List[MediaConcurrency] ! Str {
-  var out: List[MediaConcurrency] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_media_concurrency(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_media_concurrency(v: MediaConcurrency) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.channel {
-    fs.push(("Channel", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.concurrency {
-    fs.push(("Concurrency", json.Value.Int(x)))
-  }
-  if let Some(x) = v.cross_channel_behavior {
-    fs.push(("CrossChannelBehavior", json_of_cross_channel_behavior(x)))
-  }
-  if let Some(x) = v.workload_type_concurrencies {
-    fs.push(("WorkloadTypeConcurrencies", json_of_workload_type_concurrencies(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_media_concurrency(v: json.Value) -> MediaConcurrency ! Str {
-  var out = MediaConcurrency{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Channel" => out.channel = Channel.from(jsonv.read_str(fv)?)
-      "Concurrency" => out.concurrency = jsonv.read_int(fv)?
-      "CrossChannelBehavior" => out.cross_channel_behavior = from_json_cross_channel_behavior(fv)?
-      "WorkloadTypeConcurrencies" => out.workload_type_concurrencies = from_json_workload_type_concurrencies(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_media_item(v: MediaItem) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.type_value {
-    fs.push(("Type", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.source {
-    fs.push(("Source", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_media_item(v: json.Value) -> MediaItem ! Str {
-  var out = MediaItem{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Type" => out.type_value = MediaType.from(jsonv.read_str(fv)?)
-      "Source" => out.source = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_media_list(v: List[MediaItem]) -> json.Value {
-  json.Value.List(v.map(fn(x: MediaItem) -> json.Value { json_of_media_item(x) }))
-}
-
-fn from_json_media_list(v: json.Value) -> List[MediaItem] ! Str {
-  var out: List[MediaItem] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_media_item(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_media_placement(v: MediaPlacement) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.audio_host_url {
-    fs.push(("AudioHostUrl", json.Value.Str(x)))
-  }
-  if let Some(x) = v.audio_fallback_url {
-    fs.push(("AudioFallbackUrl", json.Value.Str(x)))
-  }
-  if let Some(x) = v.signaling_url {
-    fs.push(("SignalingUrl", json.Value.Str(x)))
-  }
-  if let Some(x) = v.turn_control_url {
-    fs.push(("TurnControlUrl", json.Value.Str(x)))
-  }
-  if let Some(x) = v.event_ingestion_url {
-    fs.push(("EventIngestionUrl", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_media_placement(v: json.Value) -> MediaPlacement ! Str {
-  var out = MediaPlacement{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "AudioHostUrl" => out.audio_host_url = jsonv.read_str(fv)?
-      "AudioFallbackUrl" => out.audio_fallback_url = jsonv.read_str(fv)?
-      "SignalingUrl" => out.signaling_url = jsonv.read_str(fv)?
-      "TurnControlUrl" => out.turn_control_url = jsonv.read_str(fv)?
-      "EventIngestionUrl" => out.event_ingestion_url = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_meeting(v: Meeting) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.media_region {
-    fs.push(("MediaRegion", json.Value.Str(x)))
-  }
-  if let Some(x) = v.media_placement {
-    fs.push(("MediaPlacement", json_of_media_placement(x)))
-  }
-  if let Some(x) = v.meeting_features {
-    fs.push(("MeetingFeatures", json_of_meeting_features_configuration(x)))
-  }
-  if let Some(x) = v.meeting_id {
-    fs.push(("MeetingId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_meeting(v: json.Value) -> Meeting ! Str {
-  var out = Meeting{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "MediaRegion" => out.media_region = jsonv.read_str(fv)?
-      "MediaPlacement" => out.media_placement = from_json_media_placement(fv)?
-      "MeetingFeatures" => out.meeting_features = from_json_meeting_features_configuration(fv)?
-      "MeetingId" => out.meeting_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_meeting_features_configuration(v: MeetingFeaturesConfiguration) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.audio {
-    fs.push(("Audio", json_of_audio_features(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_meeting_features_configuration(v: json.Value) -> MeetingFeaturesConfiguration ! Str {
-  var out = MeetingFeaturesConfiguration{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Audio" => out.audio = from_json_audio_features(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_metric_calculation(v: MetricCalculation) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.calculation_components {
-    fs.push(("CalculationComponents", json_of_calculation_component_list(x)))
-  }
-  if let Some(x) = v.calculation {
-    fs.push(("Calculation", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_metric_calculation(v: json.Value) -> MetricCalculation ! Str {
-  var out = MetricCalculation{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "CalculationComponents" => out.calculation_components = from_json_calculation_component_list(fv)?
-      "Calculation" => out.calculation = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_metric_data_collections_v2(v: List[MetricDataV2]) -> json.Value {
-  json.Value.List(v.map(fn(x: MetricDataV2) -> json.Value { json_of_metric_data_v2(x) }))
-}
-
-fn from_json_metric_data_collections_v2(v: json.Value) -> List[MetricDataV2] ! Str {
-  var out: List[MetricDataV2] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_metric_data_v2(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_metric_data_v2(v: MetricDataV2) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.metric {
-    fs.push(("Metric", json_of_metric_v2(x)))
-  }
-  if let Some(x) = v.value {
-    fs.push(("Value", jsonv.float(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_metric_data_v2(v: json.Value) -> MetricDataV2 ! Str {
-  var out = MetricDataV2{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Metric" => out.metric = from_json_metric_v2(fv)?
-      "Value" => out.value = jsonv.read_float(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_metric_definition(v: MetricDefinition) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.id {
-    fs.push(("Id", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = v.metric_calculation {
-    fs.push(("MetricCalculation", json_of_metric_calculation(x)))
-  }
-  if let Some(x) = v.creation_method {
-    fs.push(("CreationMethod", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.status {
-    fs.push(("Status", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.type_value {
-    fs.push(("Type", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.unit {
-    fs.push(("Unit", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.positive_trend_indicator {
-    fs.push(("PositiveTrendIndicator", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.groupings {
-    fs.push(("Groupings", json_of_metric_grouping_list(x)))
-  }
-  if let Some(x) = v.filters {
-    fs.push(("Filters", json_of_available_filter_list(x)))
-  }
-  if let Some(x) = v.effective_time {
-    fs.push(("EffectiveTime", jsonv.time(x, "epoch-seconds")))
-  }
-  if let Some(x) = v.refresh_rate {
-    fs.push(("RefreshRate", json.Value.Int(x)))
-  }
-  if let Some(x) = v.category {
-    fs.push(("Category", json.Value.Str(x)))
-  }
-  if let Some(x) = v.supported_stats {
-    fs.push(("SupportedStats", json_of_supported_stats_list(x)))
-  }
-  if let Some(x) = v.default_stat {
-    fs.push(("DefaultStat", json.Value.Str(x)))
-  }
-  if let Some(x) = v.supports_preaggregate_calculation {
-    fs.push(("SupportsPreaggregateCalculation", json.Value.Bool(x)))
-  }
-  if let Some(x) = v.supports_custom_calculation {
-    fs.push(("SupportsCustomCalculation", json.Value.Bool(x)))
-  }
-  if let Some(x) = v.primary_event_source {
-    fs.push(("PrimaryEventSource", json.Value.Str(x)))
-  }
-  if let Some(x) = v.primary_event_source_effective_timestamp_type {
-    fs.push(("PrimaryEventSourceEffectiveTimestampType", json.Value.Str(x)))
-  }
-  if let Some(x) = v.created_time {
-    fs.push(("CreatedTime", jsonv.time(x, "epoch-seconds")))
-  }
-  if let Some(x) = v.created_user {
-    fs.push(("CreatedUser", json_of_created_by_info(x)))
-  }
-  if let Some(x) = v.last_modified_region {
-    fs.push(("LastModifiedRegion", json.Value.Str(x)))
-  }
-  if let Some(x) = v.last_modified_time {
-    fs.push(("LastModifiedTime", jsonv.time(x, "epoch-seconds")))
-  }
-  if let Some(x) = v.last_modified_user {
-    fs.push(("LastModifiedUser", json_of_created_by_info(x)))
-  }
-  if let Some(x) = v.tags {
-    fs.push(("Tags", json_of_tag_map(x)))
-  }
-  json.Value.Object(fs)
 }

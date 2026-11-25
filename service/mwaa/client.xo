@@ -260,6 +260,12 @@ fn json_of_create_environment_input(v: CreateEnvironmentInput) -> json.Value {
   if let Some(x) = v.max_webservers {
     fs.push(("MaxWebservers", json.Value.Int(x)))
   }
+  if let Some(x) = v.identity_center_configuration {
+    fs.push(("IdentityCenterConfiguration", json_of_identity_center_configuration(x)))
+  }
+  if let Some(x) = v.teams {
+    fs.push(("Teams", json_of_team_map(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -295,6 +301,8 @@ fn from_json_create_environment_input(v: json.Value) -> CreateEnvironmentInput !
       "EndpointManagement" => out.endpoint_management = jsonv.read_str(fv)?
       "MinWebservers" => out.min_webservers = jsonv.read_int(fv)?
       "MaxWebservers" => out.max_webservers = jsonv.read_int(fv)?
+      "IdentityCenterConfiguration" => out.identity_center_configuration = from_json_identity_center_configuration(fv)?
+      "Teams" => out.teams = from_json_team_map(fv)?
       _ => {}
     }
   }
@@ -558,6 +566,12 @@ fn json_of_environment(v: Environment) -> json.Value {
   if let Some(x) = v.max_webservers {
     fs.push(("MaxWebservers", json.Value.Int(x)))
   }
+  if let Some(x) = v.identity_center_configuration {
+    fs.push(("IdentityCenterConfiguration", json_of_identity_center_configuration(x)))
+  }
+  if let Some(x) = v.teams {
+    fs.push(("Teams", json_of_team_map(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -602,6 +616,8 @@ fn from_json_environment(v: json.Value) -> Environment ! Str {
       "EndpointManagement" => out.endpoint_management = jsonv.read_str(fv)?
       "MinWebservers" => out.min_webservers = jsonv.read_int(fv)?
       "MaxWebservers" => out.max_webservers = jsonv.read_int(fv)?
+      "IdentityCenterConfiguration" => out.identity_center_configuration = from_json_identity_center_configuration(fv)?
+      "Teams" => out.teams = from_json_team_map(fv)?
       _ => {}
     }
   }
@@ -662,6 +678,32 @@ fn from_json_get_environment_output(v: json.Value) -> GetEnvironmentOutput ! Str
     }
     match k {
       "Environment" => out.environment = from_json_environment(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_identity_center_configuration(v: IdentityCenterConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.start_url {
+    fs.push(("StartUrl", json.Value.Str(x)))
+  }
+  if let Some(x) = v.identity_store_id {
+    fs.push(("IdentityStoreId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_identity_center_configuration(v: json.Value) -> IdentityCenterConfiguration ! Str {
+  var out = IdentityCenterConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "StartUrl" => out.start_url = jsonv.read_str(fv)?
+      "IdentityStoreId" => out.identity_store_id = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1372,6 +1414,64 @@ fn from_json_tag_resource_output(v: json.Value) -> TagResourceOutput ! Str {
   Ok(out)
 }
 
+fn json_of_team_config(v: TeamConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_bucket_arn {
+    fs.push(("SourceBucketArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dag_s3_path {
+    fs.push(("DagS3Path", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_team_config(v: json.Value) -> TeamConfig ! Str {
+  var out = TeamConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SourceBucketArn" => out.source_bucket_arn = jsonv.read_str(fv)?
+      "DagS3Path" => out.dag_s3_path = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_team_map(v: Map[Str, TeamConfig]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, TeamConfig)) -> (Str, json.Value) { (e.0, json_of_team_config(e.1)) }))
+}
+
+fn from_json_team_map(v: json.Value) -> Map[Str, TeamConfig] ! Str {
+  var out: Map[Str, TeamConfig] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_team_config(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_team_name_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_team_name_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_untag_resource_input(v: UntagResourceInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.resource_arn {
@@ -1480,6 +1580,12 @@ fn json_of_update_environment_input(v: UpdateEnvironmentInput) -> json.Value {
   if let Some(x) = v.weekly_maintenance_window_start {
     fs.push(("WeeklyMaintenanceWindowStart", json.Value.Str(x)))
   }
+  if let Some(x) = v.identity_center_configuration {
+    fs.push(("IdentityCenterConfiguration", json_of_identity_center_configuration(x)))
+  }
+  if let Some(x) = v.teams {
+    fs.push(("Teams", json_of_update_teams_input(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1513,6 +1619,8 @@ fn from_json_update_environment_input(v: json.Value) -> UpdateEnvironmentInput !
       "StartupScriptS3ObjectVersion" => out.startup_script_s3_object_version = jsonv.read_str(fv)?
       "WebserverAccessMode" => out.webserver_access_mode = jsonv.read_str(fv)?
       "WeeklyMaintenanceWindowStart" => out.weekly_maintenance_window_start = jsonv.read_str(fv)?
+      "IdentityCenterConfiguration" => out.identity_center_configuration = from_json_identity_center_configuration(fv)?
+      "Teams" => out.teams = from_json_update_teams_input(fv)?
       _ => {}
     }
   }
@@ -1583,6 +1691,32 @@ fn from_json_update_network_configuration_input(v: json.Value) -> UpdateNetworkC
     }
     match k {
       "SecurityGroupIds" => out.security_group_ids = from_json_security_group_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_teams_input(v: UpdateTeamsInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.add_or_update {
+    fs.push(("AddOrUpdate", json_of_team_map(x)))
+  }
+  if let Some(x) = v.remove {
+    fs.push(("Remove", json_of_team_name_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_teams_input(v: json.Value) -> UpdateTeamsInput ! Str {
+  var out = UpdateTeamsInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AddOrUpdate" => out.add_or_update = from_json_team_map(fv)?
+      "Remove" => out.remove = from_json_team_name_list(fv)?
       _ => {}
     }
   }
@@ -1907,6 +2041,12 @@ pub fn serialize_create_environment(ep: rest.Endpoint, input: CreateEnvironmentI
   }
   if let Some(x) = input.max_webservers {
     fs.push(("MaxWebservers", json.Value.Int(x)))
+  }
+  if let Some(x) = input.identity_center_configuration {
+    fs.push(("IdentityCenterConfiguration", json_of_identity_center_configuration(x)))
+  }
+  if let Some(x) = input.teams {
+    fs.push(("Teams", json_of_team_map(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -3092,6 +3232,12 @@ pub fn serialize_update_environment(ep: rest.Endpoint, input: UpdateEnvironmentI
   }
   if let Some(x) = input.weekly_maintenance_window_start {
     fs.push(("WeeklyMaintenanceWindowStart", json.Value.Str(x)))
+  }
+  if let Some(x) = input.identity_center_configuration {
+    fs.push(("IdentityCenterConfiguration", json_of_identity_center_configuration(x)))
+  }
+  if let Some(x) = input.teams {
+    fs.push(("Teams", json_of_update_teams_input(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))

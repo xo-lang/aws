@@ -20,6 +20,42 @@ pub struct AccessToken {
   pub session_token: Str? = None
 }
 
+/// A session that could not be revoked
+pub struct BatchRevokeSessionError {
+  /// The session ARN
+  pub session_arn: Str? = None
+  /// The error code
+  pub code: Str? = None
+  /// The error message
+  pub message: Str? = None
+}
+
+/// Input for BatchRevokeSessions operation
+pub struct BatchRevokeSessionsInput {
+  /// The identity that owns the sessions. Omit to use the caller. Specify
+  /// arn:aws:iam::{account-id}:* to revoke any session in the account.
+  pub principal_arn: Str? = None
+  /// The ARNs of the sessions to revoke
+  pub session_arns: List[Str]? = None
+  /// The reason for revoking the sessions
+  pub reason: Str? = None
+}
+
+/// Output for BatchRevokeSessions operation
+pub struct BatchRevokeSessionsOutput {
+  /// Sessions that were revoked
+  pub revoked_sessions: List[RevokedSession]? = None
+  /// Sessions that could not be revoked
+  pub errors: List[BatchRevokeSessionError]? = None
+}
+
+/// Type of OAuth client that created a session
+pub enum ClientType: Str {
+  Cli = "CLI"
+  Mcp = "MCP"
+  Unknown(value: Str)
+}
+
 /// Error thrown when request conflicts with current state HTTP Status Code:
 /// 409 Conflict Used when the request conflicts with the current state of
 /// the resource
@@ -134,20 +170,21 @@ pub struct CreateOAuth2TokenWithIAMRequest {
 /// Output structure for CreateOAuth2TokenWithIAM operation Contains the
 /// access token, token type, and expiration as defined in RFC 6749 §5.1.
 pub struct CreateOAuth2TokenWithIAMResponse {
-  /// Access token containing principal identity, resource scope, and session
-  /// metadata.
+  /// The access token containing principal identity, resource scope, and
+  /// session metadata.
   pub access_token: Str? = None
   /// The token type. Always "Bearer" as defined in RFC 6749.
   pub token_type: Str? = None
-  /// Token lifetime in seconds. Value is the minimum of the caller's session
-  /// validity and 1 hour (3600 seconds).
+  /// The token lifetime in seconds. Value is the minimum of the caller's
+  /// session validity and 1 hour (3600 seconds).
   pub expires_in: Int? = None
 }
 
 /// Input structure for CreateOAuth2TokenWithTokenExchange operation
 pub struct CreateOAuth2TokenWithTokenExchangeRequest {
-  /// The OAuth 2.0 grant type. Currently only supports
-  /// "urn:ietf:params:oauth:grant-type:token-exchange".
+  /// The OAuth 2.0 grant type. Currently supports
+  /// "urn:ietf:params:oauth:grant-type:token-exchange" and
+  /// "urn:ietf:params:oauth:grant-type:jwt-bearer".
   pub grant_type: Str? = None
   /// The subject token that represents the identity of the party on whose
   /// behalf the request is made. Required when
@@ -157,33 +194,54 @@ pub struct CreateOAuth2TokenWithTokenExchangeRequest {
   /// "urn:ietf:params:oauth:token-type:jwt". Required when
   /// "grant_type=urn:ietf:params:oauth:grant-type:token-exchange".
   pub subject_token_type: Str? = None
-  /// The OAuth resource for which the access token is requested. Required
-  /// when "grant_type=urn:ietf:params:oauth:grant-type:token-exchange".
-  /// Example: "glue.amazonaws.com".
+  /// The JWT authorization grant, as defined in RFC 7523. Required when
+  /// "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer".
+  pub assertion: Str? = None
+  /// The OAuth 2.0 client identifier. If provided with
+  /// "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer", must match the
+  /// assertion's "client_id" claim.
+  pub client_id: Str? = None
+  /// The OAuth resource for which the access token is requested: -
+  /// "grant_type=urn:ietf:params:oauth:grant-type:token-exchange": Required.
+  /// Must be a service principal. Example: "glue.amazonaws.com". -
+  /// "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer": Required when
+  /// the assertion has no "resource" claim, otherwise must match it. Must be
+  /// a URI. Example: "https://aws-mcp.us-east-1.api.aws/mcp".
   pub resource: Str? = None
-  /// IAM managed policy Amazon Resource Names (ARNs) to apply as session
+  /// The IAM managed policy Amazon Resource Names (ARNs) to apply as session
   /// policies that further scope down the permissions of the issued access
   /// token, provided as a space-delimited list. Example:
-  /// "arn:aws:iam::444455556666:policy/MyPolicy".
+  /// "arn:aws:iam::444455556666:policy/MyPolicy". If provided with
+  /// "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer", must match the
+  /// assertion's "scope" claim.
   pub scope: Str? = None
 }
 
 /// Output structure for CreateOAuth2TokenWithTokenExchange operation.
-/// Contains the access token, issued token type, token type, and expiration
-/// as defined in RFC 6749 §5.1 and RFC 8693 §2.2.1.
+/// Contains the access token, token type, and expiration as defined in RFC
+/// 6749 §5.1, plus fields specific to the grant type.
 pub struct CreateOAuth2TokenWithTokenExchangeResponse {
-  /// Access token containing principal identity, resource scope, and session
-  /// metadata.
+  /// The access token containing principal identity, resource scope, and
+  /// session metadata.
   pub access_token: Str? = None
-  /// The token type of the issued token. Always
+  /// The token type of the issued token. Returned when
+  /// "grant_type=urn:ietf:params:oauth:grant-type:token-exchange". Value is
   /// "urn:ietf:params:oauth:token-type:access_token" as defined in RFC 8693
   /// §2.2.1.
   pub issued_token_type: Str? = None
   /// The token type. Currently only supports "Bearer" as defined in RFC 6749.
   pub token_type: Str? = None
-  /// Token lifetime in seconds. Value is the minimum of the subject token's
-  /// validity and 1 hour (3600 seconds).
+  /// The token lifetime in seconds. Value is the minimum of the provided
+  /// token's validity and 1 hour (3600 seconds).
   pub expires_in: Int? = None
+  /// The resource the access token is scoped to. Returned when
+  /// "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer".
+  pub resource: Str? = None
+  /// The IAM managed policy ARNs applied as session policies, as a
+  /// space-delimited list. Returned when
+  /// "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" and the
+  /// assertion has a scope.
+  pub scope: Str? = None
 }
 
 /// Input for DeleteConsoleAuthorizationConfiguration operation
@@ -238,6 +296,45 @@ pub struct GetResourcePolicyInput {
 pub struct GetResourcePolicyOutput {
   /// The account's SignIn resource-based policy
   pub signin_resource_based_policy: SigninResourceBasedPolicy? = None
+}
+
+/// Input for GetSession operation
+pub struct GetSessionInput {
+  /// The ARN of the session to retrieve
+  pub session_arn: Str? = None
+  /// The identity that owns the session. Omit to use the caller. Specify
+  /// arn:aws:iam::{account-id}:* to retrieve any session in the account.
+  pub principal_arn: Str? = None
+}
+
+/// Output for GetSession operation
+pub struct GetSessionOutput {
+  /// The session ARN
+  pub session_arn: Str? = None
+  /// The IAM identity that owns the session
+  pub principal_arn: Str? = None
+  /// The IAM role for the session, when the owner is a role
+  pub role: Str? = None
+  /// The session status
+  pub status: SessionStatus? = None
+  /// The OAuth client that created the session
+  pub client_id: Str? = None
+  /// The type of OAuth client that created the session
+  pub client_type: ClientType? = None
+  /// The resource that the session's tokens are bound to
+  pub resource: Str? = None
+  /// The time the session was created, in Unix epoch seconds
+  pub issued_at: Int? = None
+  /// The time the session expires, in Unix epoch seconds
+  pub expires_at: Int? = None
+  /// The time the session was last refreshed, in Unix epoch seconds
+  pub last_used_at: Int? = None
+  /// The AWS Region where the session was created
+  pub issued_in_region: Str? = None
+  /// The ARN of the session this session originated from
+  pub origin_session_arn: Str? = None
+  /// The user agent captured when the session was created or last refreshed
+  pub user_agent: Str? = None
 }
 
 /// The request failed because of an internal server error.
@@ -334,6 +431,35 @@ pub struct ListResourcePermissionStatementsOutput {
   pub next_token: Str? = None
 }
 
+/// Input for ListSessions operation
+pub struct ListSessionsInput {
+  /// The identity whose sessions to list. Omit to list the caller's own
+  /// sessions. Specify arn:aws:iam::{account-id}:* to list all sessions in
+  /// the account.
+  pub principal_arn: Str? = None
+  /// Maximum number of results to return
+  pub max_results: Int? = None
+  /// Token for pagination
+  pub next_token: Str? = None
+  /// Returns only sessions with this status
+  pub status: SessionStatus? = None
+  /// Returns only sessions created by this OAuth client
+  pub client_id: Str? = None
+  /// Returns only sessions created at or after this time, in Unix epoch
+  /// seconds
+  pub issued_after: Int? = None
+  /// Returns only sessions created before this time, in Unix epoch seconds
+  pub issued_before: Int? = None
+}
+
+/// Output for ListSessions operation
+pub struct ListSessionsOutput {
+  /// List of session summaries
+  pub items: List[Session]? = None
+  /// Token for next page of results
+  pub next_token: Str? = None
+}
+
 /// OAuth 2.0 error codes returned by the server Standard OAuth 2.0 error
 /// codes used in error responses to indicate the specific type of error
 /// that occurred during token operations.
@@ -352,6 +478,7 @@ pub enum OAuth2ErrorCode: Str {
   OauthInvalidGrant = "invalid_grant"
   OauthInvalidScope = "invalid_scope"
   OauthInvalidTarget = "invalid_target"
+  OauthInvalidClient = "invalid_client"
   OauthRateExceeded = "rate_exceeded"
   OauthServiceUnavailable = "service_unavailable"
   Unknown(value: Str)
@@ -447,6 +574,12 @@ pub struct RevokeOAuth2TokenWithIAMRequest {
 pub struct RevokeOAuth2TokenWithIAMResponse {
 }
 
+/// A session that was revoked
+pub struct RevokedSession {
+  /// The revoked session ARN
+  pub session_arn: Str? = None
+}
+
 /// Error thrown when service quota is exceeded HTTP Status Code: 402
 /// Payment Required (used as quota exceeded indicator) Used when the
 /// request would cause a service quota to be exceeded
@@ -465,6 +598,35 @@ pub struct ServiceUnavailableException {
   /// Will be service_unavailable.
   pub error: OAuth2ErrorCode? = None
   pub message: Str? = None
+}
+
+/// Summary of a sign-in session
+pub struct Session {
+  /// The session ARN
+  pub session_arn: Str? = None
+  /// The IAM identity that owns the session
+  pub principal_arn: Str? = None
+  /// The IAM role for the session, when the owner is a role
+  pub role: Str? = None
+  /// The session status
+  pub status: SessionStatus? = None
+  /// The time the session was created, in Unix epoch seconds
+  pub issued_at: Int? = None
+  /// The time the session expires, in Unix epoch seconds
+  pub expires_at: Int? = None
+  /// The OAuth client that created the session
+  pub client_id: Str? = None
+  /// The type of OAuth client that created the session
+  pub client_type: ClientType? = None
+  /// The resource that the session's tokens are bound to
+  pub resource: Str? = None
+}
+
+/// Status of a sign-in session
+pub enum SessionStatus: Str {
+  Active = "ACTIVE"
+  Revoked = "REVOKED"
+  Unknown(value: Str)
 }
 
 /// SignIn resource-based policy document

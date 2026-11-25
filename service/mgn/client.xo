@@ -429,6 +429,54 @@ fn from_json_associate_source_servers_response(v: json.Value) -> AssociateSource
   Ok(out)
 }
 
+fn json_of_association_cidr_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_association_cidr_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_association_user_provided_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_association_user_provided_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_association_vm_uuid_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_association_vm_uuid_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_cpu(v: CPU) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.cores {
@@ -906,6 +954,9 @@ fn json_of_create_launch_configuration_template_request(v: CreateLaunchConfigura
   if let Some(x) = v.map_auto_tagging_mpe_id {
     fs.push(("mapAutoTaggingMpeID", json.Value.Str(x)))
   }
+  if let Some(x) = v.map_auto_tagging_key {
+    fs.push(("mapAutoTaggingKey", json.Value.Str(x)))
+  }
   if let Some(x) = v.tags {
     fs.push(("tags", json_of_tags_map(x)))
   }
@@ -958,6 +1009,7 @@ fn from_json_create_launch_configuration_template_request(v: json.Value) -> Crea
       "postLaunchActions" => out.post_launch_actions = from_json_post_launch_actions(fv)?
       "enableMapAutoTagging" => out.enable_map_auto_tagging = jsonv.read_bool(fv)?
       "mapAutoTaggingMpeID" => out.map_auto_tagging_mpe_id = jsonv.read_str(fv)?
+      "mapAutoTaggingKey" => out.map_auto_tagging_key = jsonv.read_str(fv)?
       "tags" => out.tags = from_json_tags_map(fv)?
       "launchDisposition" => out.launch_disposition = jsonv.read_str(fv)?
       "targetInstanceTypeRightSizingMethod" => out.target_instance_type_right_sizing_method = jsonv.read_str(fv)?
@@ -990,6 +1042,9 @@ fn json_of_create_network_migration_definition_request(v: CreateNetworkMigration
   }
   if let Some(x) = v.source_configurations {
     fs.push(("sourceConfigurations", json_of_source_configuration_list(x)))
+  }
+  if let Some(x) = v.definition_type {
+    fs.push(("definitionType", json.Value.Str(x)))
   }
   if let Some(x) = v.target_s3_configuration {
     fs.push(("targetS3Configuration", json_of_target_s3_configuration(x)))
@@ -1026,6 +1081,7 @@ fn from_json_create_network_migration_definition_request(v: json.Value) -> Creat
       "name" => out.name = jsonv.read_str(fv)?
       "description" => out.description = jsonv.read_str(fv)?
       "sourceConfigurations" => out.source_configurations = from_json_source_configuration_list(fv)?
+      "definitionType" => out.definition_type = jsonv.read_str(fv)?
       "targetS3Configuration" => out.target_s3_configuration = from_json_target_s3_configuration(fv)?
       "targetNetwork" => out.target_network = from_json_target_network(fv)?
       "targetDeployment" => out.target_deployment = jsonv.read_str(fv)?
@@ -1033,6 +1089,136 @@ fn from_json_create_network_migration_definition_request(v: json.Value) -> Creat
       "cidrMappings" => out.cidr_mappings = from_json_cidr_mappings_list(fv)?
       "tags" => out.tags = from_json_tags_map(fv)?
       "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_operation(v: CreateOperation) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.excluded {
+    fs.push(("excluded", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.properties {
+    fs.push(("properties", json_of_enriched_properties(x)))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_operation_configuration_union(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_operation(v: json.Value) -> CreateOperation ! Str {
+  var out = CreateOperation{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "excluded" => out.excluded = jsonv.read_bool(fv)?
+      "properties" => out.properties = from_json_enriched_properties(fv)?
+      "configuration" => out.configuration = from_json_operation_configuration_union(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_remote_source_action_request(v: CreateRemoteSourceActionRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ssm_parameter_name {
+    fs.push(("ssmParameterName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.timeout_seconds {
+    fs.push(("timeoutSeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.operating_system {
+    fs.push(("operatingSystem", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_remote_source_action_request(v: json.Value) -> CreateRemoteSourceActionRequest ! Str {
+  var out = CreateRemoteSourceActionRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "ssmParameterName" => out.ssm_parameter_name = jsonv.read_str(fv)?
+      "timeoutSeconds" => out.timeout_seconds = jsonv.read_int(fv)?
+      "operatingSystem" => out.operating_system = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_remote_source_action_response(v: CreateRemoteSourceActionResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_id {
+    fs.push(("remoteSourceActionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ssm_parameter_name {
+    fs.push(("ssmParameterName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.timeout_seconds {
+    fs.push(("timeoutSeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.operating_system {
+    fs.push(("operatingSystem", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_remote_source_action_response(v: json.Value) -> CreateRemoteSourceActionResponse ! Str {
+  var out = CreateRemoteSourceActionResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionID" => out.remote_source_action_id = jsonv.read_str(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "ssmParameterName" => out.ssm_parameter_name = jsonv.read_str(fv)?
+      "timeoutSeconds" => out.timeout_seconds = jsonv.read_int(fv)?
+      "operatingSystem" => out.operating_system = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
       _ => {}
     }
   }
@@ -1089,6 +1275,9 @@ fn json_of_create_replication_configuration_template_request(v: CreateReplicatio
   if let Some(x) = v.store_snapshot_on_local_zone {
     fs.push(("storeSnapshotOnLocalZone", json.Value.Bool(x)))
   }
+  if let Some(x) = v.outpost_snapshot_location {
+    fs.push(("outpostSnapshotLocation", json.Value.Str(x)))
+  }
   if let Some(x) = v.storage_configuration {
     fs.push(("storageConfiguration", json_of_storage_configuration(x)))
   }
@@ -1118,6 +1307,7 @@ fn from_json_create_replication_configuration_template_request(v: json.Value) ->
       "tags" => out.tags = from_json_tags_map(fv)?
       "internetProtocol" => out.internet_protocol = jsonv.read_str(fv)?
       "storeSnapshotOnLocalZone" => out.store_snapshot_on_local_zone = jsonv.read_bool(fv)?
+      "outpostSnapshotLocation" => out.outpost_snapshot_location = jsonv.read_str(fv)?
       "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
       _ => {}
     }
@@ -1211,6 +1401,9 @@ fn json_of_data_replication_info(v: DataReplicationInfo) -> json.Value {
   if let Some(x) = v.replicator_id {
     fs.push(("replicatorId", json.Value.Str(x)))
   }
+  if let Some(x) = v.staging_outpost_arn {
+    fs.push(("stagingOutpostArn", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1229,6 +1422,7 @@ fn from_json_data_replication_info(v: json.Value) -> DataReplicationInfo ! Str {
       "dataReplicationError" => out.data_replication_error = from_json_data_replication_error(fv)?
       "lastSnapshotDateTime" => out.last_snapshot_date_time = jsonv.read_str(fv)?
       "replicatorId" => out.replicator_id = jsonv.read_str(fv)?
+      "stagingOutpostArn" => out.staging_outpost_arn = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1530,6 +1724,43 @@ fn json_of_delete_operation(v: DeleteOperation) -> json.Value {
 
 fn from_json_delete_operation(v: json.Value) -> DeleteOperation ! Str {
   var out = DeleteOperation{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_delete_remote_source_action_request(v: DeleteRemoteSourceActionRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_id {
+    fs.push(("remoteSourceActionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_remote_source_action_request(v: json.Value) -> DeleteRemoteSourceActionRequest ! Str {
+  var out = DeleteRemoteSourceActionRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionID" => out.remote_source_action_id = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_remote_source_action_response(v: DeleteRemoteSourceActionResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_remote_source_action_response(v: json.Value) -> DeleteRemoteSourceActionResponse ! Str {
+  var out = DeleteRemoteSourceActionResponse{}
   let _ = jsonv.fields(v)?
   Ok(out)
 }
@@ -2289,6 +2520,22 @@ fn from_json_disks(v: json.Value) -> List[Disk] ! Str {
   Ok(out)
 }
 
+fn json_of_enriched_properties(v: Map[Str, json.Value]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, json.Value)) -> (Str, json.Value) { (e.0, e.1) }))
+}
+
+fn from_json_enriched_properties(v: json.Value) -> Map[Str, json.Value] ! Str {
+  var out: Map[Str, json.Value] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, fv)
+  }
+  Ok(out)
+}
+
 fn json_of_enrichment_source_s3_configuration(v: EnrichmentSourceS3Configuration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.s3_bucket {
@@ -2601,6 +2848,66 @@ fn from_json_fsx_ontap_configuration(v: json.Value) -> FsxOntapConfiguration ! S
     match k {
       "storageVirtualMachineId" => out.storage_virtual_machine_id = jsonv.read_str(fv)?
       "credentialsSecretArn" => out.credentials_secret_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_launch_configuration_defaults_request(v: GetLaunchConfigurationDefaultsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_id {
+    fs.push(("sourceServerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_launch_configuration_defaults_request(v: json.Value) -> GetLaunchConfigurationDefaultsRequest ! Str {
+  var out = GetLaunchConfigurationDefaultsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerID" => out.source_server_id = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_launch_configuration_defaults_response(v: GetLaunchConfigurationDefaultsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_id {
+    fs.push(("sourceServerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.small_volume_max_size {
+    fs.push(("smallVolumeMaxSize", json.Value.Int(x)))
+  }
+  if let Some(x) = v.small_volume_configuration {
+    fs.push(("smallVolumeConfiguration", json_of_source_server_volume_configuration(x)))
+  }
+  if let Some(x) = v.large_volume_configuration {
+    fs.push(("largeVolumeConfiguration", json_of_source_server_volume_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_launch_configuration_defaults_response(v: json.Value) -> GetLaunchConfigurationDefaultsResponse ! Str {
+  var out = GetLaunchConfigurationDefaultsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerID" => out.source_server_id = jsonv.read_str(fv)?
+      "smallVolumeMaxSize" => out.small_volume_max_size = jsonv.read_int(fv)?
+      "smallVolumeConfiguration" => out.small_volume_configuration = from_json_source_server_volume_configuration(fv)?
+      "largeVolumeConfiguration" => out.large_volume_configuration = from_json_source_server_volume_configuration(fv)?
       _ => {}
     }
   }
@@ -3177,6 +3484,36 @@ fn from_json_initialize_service_response(v: json.Value) -> InitializeServiceResp
   Ok(out)
 }
 
+fn json_of_insight_message(v: InsightMessage) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.code {
+    fs.push(("code", json.Value.Str(x)))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.topic {
+    fs.push(("topic", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_insight_message(v: json.Value) -> InsightMessage ! Str {
+  var out = InsightMessage{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "code" => out.code = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      "topic" => out.topic = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_internal_server_exception(v: InternalServerException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -3491,6 +3828,9 @@ fn json_of_launch_configuration(v: LaunchConfiguration) -> json.Value {
   if let Some(x) = v.map_auto_tagging_mpe_id {
     fs.push(("mapAutoTaggingMpeID", json.Value.Str(x)))
   }
+  if let Some(x) = v.map_auto_tagging_key {
+    fs.push(("mapAutoTaggingKey", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3513,6 +3853,7 @@ fn from_json_launch_configuration(v: json.Value) -> LaunchConfiguration ! Str {
       "postLaunchActions" => out.post_launch_actions = from_json_post_launch_actions(fv)?
       "enableMapAutoTagging" => out.enable_map_auto_tagging = jsonv.read_bool(fv)?
       "mapAutoTaggingMpeID" => out.map_auto_tagging_mpe_id = jsonv.read_str(fv)?
+      "mapAutoTaggingKey" => out.map_auto_tagging_key = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -3535,6 +3876,9 @@ fn json_of_launch_configuration_template(v: LaunchConfigurationTemplate) -> json
   }
   if let Some(x) = v.map_auto_tagging_mpe_id {
     fs.push(("mapAutoTaggingMpeID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.map_auto_tagging_key {
+    fs.push(("mapAutoTaggingKey", json.Value.Str(x)))
   }
   if let Some(x) = v.tags {
     fs.push(("tags", json_of_tags_map(x)))
@@ -3593,6 +3937,7 @@ fn from_json_launch_configuration_template(v: json.Value) -> LaunchConfiguration
       "postLaunchActions" => out.post_launch_actions = from_json_post_launch_actions(fv)?
       "enableMapAutoTagging" => out.enable_map_auto_tagging = jsonv.read_bool(fv)?
       "mapAutoTaggingMpeID" => out.map_auto_tagging_mpe_id = jsonv.read_str(fv)?
+      "mapAutoTaggingKey" => out.map_auto_tagging_key = jsonv.read_str(fv)?
       "tags" => out.tags = from_json_tags_map(fv)?
       "ec2LaunchTemplateID" => out.ec2_launch_template_id = jsonv.read_str(fv)?
       "launchDisposition" => out.launch_disposition = jsonv.read_str(fv)?
@@ -5305,6 +5650,120 @@ fn from_json_list_network_migration_executions_response(v: json.Value) -> ListNe
   Ok(out)
 }
 
+fn json_of_list_network_migration_insights_filters(v: ListNetworkMigrationInsightsFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.insight_types {
+    fs.push(("insightTypes", json_of_list_network_migration_insights_types_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_network_migration_insights_filters(v: json.Value) -> ListNetworkMigrationInsightsFilters ! Str {
+  var out = ListNetworkMigrationInsightsFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "insightTypes" => out.insight_types = from_json_list_network_migration_insights_types_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_network_migration_insights_request(v: ListNetworkMigrationInsightsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.network_migration_definition_id {
+    fs.push(("networkMigrationDefinitionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.network_migration_execution_id {
+    fs.push(("networkMigrationExecutionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.producer_id {
+    fs.push(("producerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.segment_id {
+    fs.push(("segmentID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.construct_id {
+    fs.push(("constructID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_list_network_migration_insights_filters(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_network_migration_insights_request(v: json.Value) -> ListNetworkMigrationInsightsRequest ! Str {
+  var out = ListNetworkMigrationInsightsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "networkMigrationDefinitionID" => out.network_migration_definition_id = jsonv.read_str(fv)?
+      "networkMigrationExecutionID" => out.network_migration_execution_id = jsonv.read_str(fv)?
+      "producerID" => out.producer_id = jsonv.read_str(fv)?
+      "segmentID" => out.segment_id = jsonv.read_str(fv)?
+      "constructID" => out.construct_id = jsonv.read_str(fv)?
+      "filters" => out.filters = from_json_list_network_migration_insights_filters(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_network_migration_insights_response(v: ListNetworkMigrationInsightsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_network_migration_insights_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_network_migration_insights_response(v: json.Value) -> ListNetworkMigrationInsightsResponse ! Str {
+  var out = ListNetworkMigrationInsightsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_network_migration_insights_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_network_migration_insights_types_filter(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_list_network_migration_insights_types_filter(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_list_network_migration_mapper_segment_construct_types_filter(v: List[Str]) -> json.Value {
   json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
@@ -5383,6 +5842,12 @@ fn json_of_list_network_migration_mapper_segment_constructs_request(v: ListNetwo
   if let Some(x) = v.next_token {
     fs.push(("nextToken", json.Value.Str(x)))
   }
+  if let Some(x) = v.include_enriched_properties {
+    fs.push(("includeEnrichedProperties", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.include_configuration {
+    fs.push(("includeConfiguration", json.Value.Bool(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -5399,6 +5864,8 @@ fn from_json_list_network_migration_mapper_segment_constructs_request(v: json.Va
       "filters" => out.filters = from_json_list_network_migration_mapper_segment_constructs_filters(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "includeEnrichedProperties" => out.include_enriched_properties = jsonv.read_bool(fv)?
+      "includeConfiguration" => out.include_configuration = jsonv.read_bool(fv)?
       _ => {}
     }
   }
@@ -5730,6 +6197,324 @@ fn from_json_list_network_migration_mappings_response(v: json.Value) -> ListNetw
     }
     match k {
       "items" => out.items = from_json_network_migration_mappings_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_invocation_results_request(v: ListRemoteSourceActionInvocationResultsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_id {
+    fs.push(("sourceServerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_invocation_results_request(v: json.Value) -> ListRemoteSourceActionInvocationResultsRequest ! Str {
+  var out = ListRemoteSourceActionInvocationResultsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerID" => out.source_server_id = jsonv.read_str(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_invocation_results_response(v: ListRemoteSourceActionInvocationResultsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_remote_source_action_invocation_results_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_invocation_results_response(v: json.Value) -> ListRemoteSourceActionInvocationResultsResponse ! Str {
+  var out = ListRemoteSourceActionInvocationResultsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_remote_source_action_invocation_results_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_invocations_request(v: ListRemoteSourceActionInvocationsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_job_id {
+    fs.push(("remoteSourceActionJobID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_list_remote_source_action_invocations_request_filters(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_invocations_request(v: json.Value) -> ListRemoteSourceActionInvocationsRequest ! Str {
+  var out = ListRemoteSourceActionInvocationsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionJobID" => out.remote_source_action_job_id = jsonv.read_str(fv)?
+      "filters" => out.filters = from_json_list_remote_source_action_invocations_request_filters(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_invocations_request_filters(v: ListRemoteSourceActionInvocationsRequestFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_arns {
+    fs.push(("sourceServerArns", json_of_source_server_arns_filter(x)))
+  }
+  if let Some(x) = v.remote_source_action_arns {
+    fs.push(("remoteSourceActionArns", json_of_remote_source_action_arns_filter(x)))
+  }
+  if let Some(x) = v.statuses {
+    fs.push(("statuses", json_of_remote_source_action_invocation_statuses_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_invocations_request_filters(v: json.Value) -> ListRemoteSourceActionInvocationsRequestFilters ! Str {
+  var out = ListRemoteSourceActionInvocationsRequestFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerArns" => out.source_server_arns = from_json_source_server_arns_filter(fv)?
+      "remoteSourceActionArns" => out.remote_source_action_arns = from_json_remote_source_action_arns_filter(fv)?
+      "statuses" => out.statuses = from_json_remote_source_action_invocation_statuses_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_invocations_response(v: ListRemoteSourceActionInvocationsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_remote_source_action_invocations_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_invocations_response(v: json.Value) -> ListRemoteSourceActionInvocationsResponse ! Str {
+  var out = ListRemoteSourceActionInvocationsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_remote_source_action_invocations_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_jobs_request(v: ListRemoteSourceActionJobsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_list_remote_source_action_jobs_request_filters(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_jobs_request(v: json.Value) -> ListRemoteSourceActionJobsRequest ! Str {
+  var out = ListRemoteSourceActionJobsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "filters" => out.filters = from_json_list_remote_source_action_jobs_request_filters(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_jobs_request_filters(v: ListRemoteSourceActionJobsRequestFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_job_ids {
+    fs.push(("remoteSourceActionJobIDs", json_of_remote_source_action_job_ids_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_jobs_request_filters(v: json.Value) -> ListRemoteSourceActionJobsRequestFilters ! Str {
+  var out = ListRemoteSourceActionJobsRequestFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionJobIDs" => out.remote_source_action_job_ids = from_json_remote_source_action_job_ids_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_action_jobs_response(v: ListRemoteSourceActionJobsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_remote_source_action_jobs_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_action_jobs_response(v: json.Value) -> ListRemoteSourceActionJobsResponse ! Str {
+  var out = ListRemoteSourceActionJobsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_remote_source_action_jobs_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_actions_request(v: ListRemoteSourceActionsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_list_remote_source_actions_request_filters(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_actions_request(v: json.Value) -> ListRemoteSourceActionsRequest ! Str {
+  var out = ListRemoteSourceActionsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "filters" => out.filters = from_json_list_remote_source_actions_request_filters(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_actions_request_filters(v: ListRemoteSourceActionsRequestFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_ids {
+    fs.push(("remoteSourceActionIDs", json_of_remote_source_action_ids_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_actions_request_filters(v: json.Value) -> ListRemoteSourceActionsRequestFilters ! Str {
+  var out = ListRemoteSourceActionsRequestFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionIDs" => out.remote_source_action_ids = from_json_remote_source_action_ids_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_remote_source_actions_response(v: ListRemoteSourceActionsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_remote_source_actions_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_remote_source_actions_response(v: json.Value) -> ListRemoteSourceActionsResponse ! Str {
+  var out = ListRemoteSourceActionsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_remote_source_actions_list(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
@@ -6564,6 +7349,9 @@ fn json_of_network_migration_definition(v: NetworkMigrationDefinition) -> json.V
   if let Some(x) = v.source_configurations {
     fs.push(("sourceConfigurations", json_of_source_configuration_list(x)))
   }
+  if let Some(x) = v.definition_type {
+    fs.push(("definitionType", json.Value.Str(x)))
+  }
   if let Some(x) = v.target_s3_configuration {
     fs.push(("targetS3Configuration", json_of_target_s3_configuration(x)))
   }
@@ -6606,6 +7394,7 @@ fn from_json_network_migration_definition(v: json.Value) -> NetworkMigrationDefi
       "name" => out.name = jsonv.read_str(fv)?
       "description" => out.description = jsonv.read_str(fv)?
       "sourceConfigurations" => out.source_configurations = from_json_source_configuration_list(fv)?
+      "definitionType" => out.definition_type = jsonv.read_str(fv)?
       "targetS3Configuration" => out.target_s3_configuration = from_json_target_s3_configuration(fv)?
       "targetNetwork" => out.target_network = from_json_target_network(fv)?
       "targetDeployment" => out.target_deployment = jsonv.read_str(fv)?
@@ -6657,6 +7446,9 @@ fn json_of_network_migration_definition_summary(v: NetworkMigrationDefinitionSum
   if let Some(x) = v.scope_tags {
     fs.push(("scopeTags", json_of_scope_tags_map(x)))
   }
+  if let Some(x) = v.definition_type {
+    fs.push(("definitionType", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -6673,6 +7465,7 @@ fn from_json_network_migration_definition_summary(v: json.Value) -> NetworkMigra
       "arn" => out.arn = jsonv.read_str(fv)?
       "tags" => out.tags = from_json_tags_map(fv)?
       "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
+      "definitionType" => out.definition_type = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -6959,6 +7752,88 @@ fn from_json_network_migration_failed_resources_list(v: json.Value) -> List[Netw
   Ok(out)
 }
 
+fn json_of_network_migration_insight(v: NetworkMigrationInsight) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.network_migration_definition_id {
+    fs.push(("networkMigrationDefinitionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.network_migration_execution_id {
+    fs.push(("networkMigrationExecutionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.producer_id {
+    fs.push(("producerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.producer_type {
+    fs.push(("producerType", json.Value.Str(x)))
+  }
+  if let Some(x) = v.producer_name {
+    fs.push(("producerName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.segment_id {
+    fs.push(("segmentID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.construct_id {
+    fs.push(("constructID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.insight_id {
+    fs.push(("insightID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.insight_level {
+    fs.push(("insightLevel", json.Value.Str(x)))
+  }
+  if let Some(x) = v.insight_type {
+    fs.push(("insightType", json.Value.Str(x)))
+  }
+  if let Some(x) = v.insight_message {
+    fs.push(("insightMessage", json_of_insight_message(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_network_migration_insight(v: json.Value) -> NetworkMigrationInsight ! Str {
+  var out = NetworkMigrationInsight{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "networkMigrationDefinitionID" => out.network_migration_definition_id = jsonv.read_str(fv)?
+      "networkMigrationExecutionID" => out.network_migration_execution_id = jsonv.read_str(fv)?
+      "producerID" => out.producer_id = jsonv.read_str(fv)?
+      "producerType" => out.producer_type = jsonv.read_str(fv)?
+      "producerName" => out.producer_name = jsonv.read_str(fv)?
+      "segmentID" => out.segment_id = jsonv.read_str(fv)?
+      "constructID" => out.construct_id = jsonv.read_str(fv)?
+      "insightID" => out.insight_id = jsonv.read_str(fv)?
+      "insightLevel" => out.insight_level = jsonv.read_str(fv)?
+      "insightType" => out.insight_type = jsonv.read_str(fv)?
+      "insightMessage" => out.insight_message = from_json_insight_message(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_network_migration_insights_list(v: List[NetworkMigrationInsight]) -> json.Value {
+  json.Value.List(v.map(fn(x: NetworkMigrationInsight) -> json.Value { json_of_network_migration_insight(x) }))
+}
+
+fn from_json_network_migration_insights_list(v: json.Value) -> List[NetworkMigrationInsight] ! Str {
+  var out: List[NetworkMigrationInsight] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_network_migration_insight(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_network_migration_mapper_segment(v: NetworkMigrationMapperSegment) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.job_id {
@@ -7066,6 +7941,12 @@ fn json_of_network_migration_mapper_segment_construct(v: NetworkMigrationMapperS
   if let Some(x) = v.properties {
     fs.push(("properties", json_of_construct_properties(x)))
   }
+  if let Some(x) = v.enriched_properties {
+    fs.push(("enrichedProperties", json_of_enriched_properties(x)))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_operation_configuration_union(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -7085,6 +7966,8 @@ fn from_json_network_migration_mapper_segment_construct(v: json.Value) -> Networ
       "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
       "properties" => out.properties = from_json_construct_properties(fv)?
+      "enrichedProperties" => out.enriched_properties = from_json_enriched_properties(fv)?
+      "configuration" => out.configuration = from_json_operation_configuration_union(fv)?
       _ => {}
     }
   }
@@ -7269,12 +8152,36 @@ fn from_json_os(v: json.Value) -> OS ! Str {
   Ok(out)
 }
 
+fn json_of_operation_configuration_union(v: OperationConfigurationUnion) -> json.Value {
+  match v {
+    SecurityGroup(x) => json.Value.Object([("securityGroup", json_of_security_group_configuration(x))])
+    SecurityGroupRule(x) => json.Value.Object([("securityGroupRule", json_of_security_group_rule_configuration(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_operation_configuration_union(v: json.Value) -> OperationConfigurationUnion ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "securityGroup" => Ok(OperationConfigurationUnion.SecurityGroup(from_json_security_group_configuration(fv)?))
+      "securityGroupRule" => Ok(OperationConfigurationUnion.SecurityGroupRule(from_json_security_group_rule_configuration(fv)?))
+      _ => Ok(OperationConfigurationUnion.Unknown(k))
+    }
+  }
+  Err("OperationConfigurationUnion: no member set")
+}
+
 fn json_of_operation_union(v: OperationUnion) -> json.Value {
   match v {
     Merge(x) => json.Value.Object([("merge", json_of_merge_operation(x))])
     Split(x) => json.Value.Object([("split", json_of_split_operation(x))])
     Delete(x) => json.Value.Object([("delete", json_of_delete_operation(x))])
     Update(x) => json.Value.Object([("update", json_of_update_operation(x))])
+    UpdateV2(x) => json.Value.Object([("updateV2", json_of_update_operation_v2(x))])
+    Create(x) => json.Value.Object([("create", json_of_create_operation(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -7289,6 +8196,8 @@ fn from_json_operation_union(v: json.Value) -> OperationUnion ! Str {
       "split" => Ok(OperationUnion.Split(from_json_split_operation(fv)?))
       "delete" => Ok(OperationUnion.Delete(from_json_delete_operation(fv)?))
       "update" => Ok(OperationUnion.Update(from_json_update_operation(fv)?))
+      "updateV2" => Ok(OperationUnion.UpdateV2(from_json_update_operation_v2(fv)?))
+      "create" => Ok(OperationUnion.Create(from_json_create_operation(fv)?))
       _ => Ok(OperationUnion.Unknown(k))
     }
   }
@@ -7451,6 +8360,22 @@ fn from_json_post_launch_actions_status(v: json.Value) -> PostLaunchActionsStatu
   Ok(out)
 }
 
+fn json_of_properties_to_delete(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_properties_to_delete(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_put_source_server_action_request(v: PutSourceServerActionRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.source_server_id {
@@ -7599,6 +8524,338 @@ fn from_json_put_template_action_request(v: json.Value) -> PutTemplateActionRequ
   Ok(out)
 }
 
+fn json_of_remote_source_action(v: RemoteSourceAction) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_id {
+    fs.push(("remoteSourceActionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ssm_parameter_name {
+    fs.push(("ssmParameterName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.timeout_seconds {
+    fs.push(("timeoutSeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.operating_system {
+    fs.push(("operatingSystem", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_remote_source_action(v: json.Value) -> RemoteSourceAction ! Str {
+  var out = RemoteSourceAction{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionID" => out.remote_source_action_id = jsonv.read_str(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "ssmParameterName" => out.ssm_parameter_name = jsonv.read_str(fv)?
+      "timeoutSeconds" => out.timeout_seconds = jsonv.read_int(fv)?
+      "operatingSystem" => out.operating_system = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_arns(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_remote_source_action_arns(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_arns_filter(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_remote_source_action_arns_filter(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_ids_filter(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_remote_source_action_ids_filter(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_invocation(v: RemoteSourceActionInvocation) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_arn {
+    fs.push(("sourceServerArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.remote_source_action_arn {
+    fs.push(("remoteSourceActionArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ssm_command_invocation_id {
+    fs.push(("ssmCommandInvocationID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x)))
+  }
+  if let Some(x) = v.started_at {
+    fs.push(("startedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.ended_at {
+    fs.push(("endedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_remote_source_action_invocation(v: json.Value) -> RemoteSourceActionInvocation ! Str {
+  var out = RemoteSourceActionInvocation{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerArn" => out.source_server_arn = jsonv.read_str(fv)?
+      "remoteSourceActionArn" => out.remote_source_action_arn = jsonv.read_str(fv)?
+      "ssmCommandInvocationID" => out.ssm_command_invocation_id = jsonv.read_str(fv)?
+      "status" => out.status = jsonv.read_str(fv)?
+      "startedAt" => out.started_at = jsonv.read_time(fv, "epoch-seconds")?
+      "endedAt" => out.ended_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_invocation_result(v: RemoteSourceActionInvocationResult) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_id {
+    fs.push(("remoteSourceActionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.connector_owner_account_id {
+    fs.push(("connectorOwnerAccountID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x)))
+  }
+  if let Some(x) = v.started_at {
+    fs.push(("startedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.ended_at {
+    fs.push(("endedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_remote_source_action_invocation_result(v: json.Value) -> RemoteSourceActionInvocationResult ! Str {
+  var out = RemoteSourceActionInvocationResult{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionID" => out.remote_source_action_id = jsonv.read_str(fv)?
+      "connectorOwnerAccountID" => out.connector_owner_account_id = jsonv.read_str(fv)?
+      "status" => out.status = jsonv.read_str(fv)?
+      "startedAt" => out.started_at = jsonv.read_time(fv, "epoch-seconds")?
+      "endedAt" => out.ended_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_invocation_results_list(v: List[RemoteSourceActionInvocationResult]) -> json.Value {
+  json.Value.List(v.map(fn(x: RemoteSourceActionInvocationResult) -> json.Value { json_of_remote_source_action_invocation_result(x) }))
+}
+
+fn from_json_remote_source_action_invocation_results_list(v: json.Value) -> List[RemoteSourceActionInvocationResult] ! Str {
+  var out: List[RemoteSourceActionInvocationResult] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_remote_source_action_invocation_result(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_invocation_statuses_filter(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_remote_source_action_invocation_statuses_filter(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_invocations_list(v: List[RemoteSourceActionInvocation]) -> json.Value {
+  json.Value.List(v.map(fn(x: RemoteSourceActionInvocation) -> json.Value { json_of_remote_source_action_invocation(x) }))
+}
+
+fn from_json_remote_source_action_invocations_list(v: json.Value) -> List[RemoteSourceActionInvocation] ! Str {
+  var out: List[RemoteSourceActionInvocation] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_remote_source_action_invocation(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_job(v: RemoteSourceActionJob) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_job_id {
+    fs.push(("remoteSourceActionJobID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x)))
+  }
+  if let Some(x) = v.source_server_arns {
+    fs.push(("sourceServerArns", json_of_source_server_arns(x)))
+  }
+  if let Some(x) = v.remote_source_action_arns {
+    fs.push(("remoteSourceActionArns", json_of_remote_source_action_arns(x)))
+  }
+  if let Some(x) = v.connector_arn {
+    fs.push(("connectorArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.started_at {
+    fs.push(("startedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.ended_at {
+    fs.push(("endedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.status_reason {
+    fs.push(("statusReason", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_remote_source_action_job(v: json.Value) -> RemoteSourceActionJob ! Str {
+  var out = RemoteSourceActionJob{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionJobID" => out.remote_source_action_job_id = jsonv.read_str(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "status" => out.status = jsonv.read_str(fv)?
+      "sourceServerArns" => out.source_server_arns = from_json_source_server_arns(fv)?
+      "remoteSourceActionArns" => out.remote_source_action_arns = from_json_remote_source_action_arns(fv)?
+      "connectorArn" => out.connector_arn = jsonv.read_str(fv)?
+      "startedAt" => out.started_at = jsonv.read_time(fv, "epoch-seconds")?
+      "endedAt" => out.ended_at = jsonv.read_time(fv, "epoch-seconds")?
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_job_ids_filter(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_remote_source_action_job_ids_filter(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_action_jobs_list(v: List[RemoteSourceActionJob]) -> json.Value {
+  json.Value.List(v.map(fn(x: RemoteSourceActionJob) -> json.Value { json_of_remote_source_action_job(x) }))
+}
+
+fn from_json_remote_source_action_jobs_list(v: json.Value) -> List[RemoteSourceActionJob] ! Str {
+  var out: List[RemoteSourceActionJob] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_remote_source_action_job(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_remote_source_actions_list(v: List[RemoteSourceAction]) -> json.Value {
+  json.Value.List(v.map(fn(x: RemoteSourceAction) -> json.Value { json_of_remote_source_action(x) }))
+}
+
+fn from_json_remote_source_actions_list(v: json.Value) -> List[RemoteSourceAction] ! Str {
+  var out: List[RemoteSourceAction] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_remote_source_action(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_remove_source_server_action_request(v: RemoveSourceServerActionRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.source_server_id {
@@ -7733,6 +8990,9 @@ fn json_of_replication_configuration(v: ReplicationConfiguration) -> json.Value 
   if let Some(x) = v.store_snapshot_on_local_zone {
     fs.push(("storeSnapshotOnLocalZone", json.Value.Bool(x)))
   }
+  if let Some(x) = v.outpost_snapshot_location {
+    fs.push(("outpostSnapshotLocation", json.Value.Str(x)))
+  }
   if let Some(x) = v.storage_configuration {
     fs.push(("storageConfiguration", json_of_storage_configuration(x)))
   }
@@ -7764,6 +9024,7 @@ fn from_json_replication_configuration(v: json.Value) -> ReplicationConfiguratio
       "useFipsEndpoint" => out.use_fips_endpoint = jsonv.read_bool(fv)?
       "internetProtocol" => out.internet_protocol = jsonv.read_str(fv)?
       "storeSnapshotOnLocalZone" => out.store_snapshot_on_local_zone = jsonv.read_bool(fv)?
+      "outpostSnapshotLocation" => out.outpost_snapshot_location = jsonv.read_str(fv)?
       "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
       _ => {}
     }
@@ -7881,6 +9142,9 @@ fn json_of_replication_configuration_template(v: ReplicationConfigurationTemplat
   if let Some(x) = v.store_snapshot_on_local_zone {
     fs.push(("storeSnapshotOnLocalZone", json.Value.Bool(x)))
   }
+  if let Some(x) = v.outpost_snapshot_location {
+    fs.push(("outpostSnapshotLocation", json.Value.Str(x)))
+  }
   if let Some(x) = v.storage_configuration {
     fs.push(("storageConfiguration", json_of_storage_configuration(x)))
   }
@@ -7912,6 +9176,7 @@ fn from_json_replication_configuration_template(v: json.Value) -> ReplicationCon
       "tags" => out.tags = from_json_tags_map(fv)?
       "internetProtocol" => out.internet_protocol = jsonv.read_str(fv)?
       "storeSnapshotOnLocalZone" => out.store_snapshot_on_local_zone = jsonv.read_bool(fv)?
+      "outpostSnapshotLocation" => out.outpost_snapshot_location = jsonv.read_str(fv)?
       "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
       _ => {}
     }
@@ -8141,6 +9406,183 @@ fn from_json_scope_tags_map(v: json.Value) -> Map[Str, Str] ! Str {
       continue
     }
     out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_security_group_associations(v: SecurityGroupAssociations) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.cidrs {
+    fs.push(("cidrs", json_of_association_cidr_list(x)))
+  }
+  if let Some(x) = v.vm_uuids {
+    fs.push(("vmUUIDs", json_of_association_vm_uuid_list(x)))
+  }
+  if let Some(x) = v.user_provided_ids {
+    fs.push(("userProvidedIDs", json_of_association_user_provided_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_security_group_associations(v: json.Value) -> SecurityGroupAssociations ! Str {
+  var out = SecurityGroupAssociations{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "cidrs" => out.cidrs = from_json_association_cidr_list(fv)?
+      "vmUUIDs" => out.vm_uuids = from_json_association_vm_uuid_list(fv)?
+      "userProvidedIDs" => out.user_provided_ids = from_json_association_user_provided_id_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_security_group_configuration(v: SecurityGroupConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.associations {
+    fs.push(("associations", json_of_security_group_associations(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_security_group_configuration(v: json.Value) -> SecurityGroupConfiguration ! Str {
+  var out = SecurityGroupConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "associations" => out.associations = from_json_security_group_associations(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_security_group_rule_configuration(v: SecurityGroupRuleConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.enable_referencing {
+    fs.push(("enableReferencing", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_security_group_rule_configuration(v: json.Value) -> SecurityGroupRuleConfiguration ! Str {
+  var out = SecurityGroupRuleConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "enableReferencing" => out.enable_referencing = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_segment_create_operation(v: SegmentCreateOperation) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.target_account {
+    fs.push(("targetAccount", json.Value.Str(x)))
+  }
+  if let Some(x) = v.scope_tags {
+    fs.push(("scopeTags", json_of_scope_tags_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_segment_create_operation(v: json.Value) -> SegmentCreateOperation ! Str {
+  var out = SegmentCreateOperation{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "targetAccount" => out.target_account = jsonv.read_str(fv)?
+      "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_segment_delete_operation(v: SegmentDeleteOperation) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_segment_delete_operation(v: json.Value) -> SegmentDeleteOperation ! Str {
+  var out = SegmentDeleteOperation{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_segment_operation(v: SegmentOperation) -> json.Value {
+  match v {
+    Create(x) => json.Value.Object([("create", json_of_segment_create_operation(x))])
+    Update(x) => json.Value.Object([("update", json_of_segment_update_operation(x))])
+    Delete(x) => json.Value.Object([("delete", json_of_segment_delete_operation(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_segment_operation(v: json.Value) -> SegmentOperation ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "create" => Ok(SegmentOperation.Create(from_json_segment_create_operation(fv)?))
+      "update" => Ok(SegmentOperation.Update(from_json_segment_update_operation(fv)?))
+      "delete" => Ok(SegmentOperation.Delete(from_json_segment_delete_operation(fv)?))
+      _ => Ok(SegmentOperation.Unknown(k))
+    }
+  }
+  Err("SegmentOperation: no member set")
+}
+
+fn json_of_segment_update_operation(v: SegmentUpdateOperation) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.target_account {
+    fs.push(("targetAccount", json.Value.Str(x)))
+  }
+  if let Some(x) = v.scope_tags {
+    fs.push(("scopeTags", json_of_scope_tags_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_segment_update_operation(v: json.Value) -> SegmentUpdateOperation ! Str {
+  var out = SegmentUpdateOperation{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "targetAccount" => out.target_account = jsonv.read_str(fv)?
+      "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -8491,6 +9933,38 @@ fn from_json_source_server_actions_request_filters(v: json.Value) -> SourceServe
   Ok(out)
 }
 
+fn json_of_source_server_arns(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_source_server_arns(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_source_server_arns_filter(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_source_server_arns_filter(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_source_server_connector_action(v: SourceServerConnectorAction) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.credentials_secret_arn {
@@ -8511,6 +9985,44 @@ fn from_json_source_server_connector_action(v: json.Value) -> SourceServerConnec
     match k {
       "credentialsSecretArn" => out.credentials_secret_arn = jsonv.read_str(fv)?
       "connectorArn" => out.connector_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_source_server_volume_configuration(v: SourceServerVolumeConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.volume_type {
+    fs.push(("volumeType", json.Value.Str(x)))
+  }
+  if let Some(x) = v.iops {
+    fs.push(("iops", json.Value.Int(x)))
+  }
+  if let Some(x) = v.throughput {
+    fs.push(("throughput", json.Value.Int(x)))
+  }
+  if let Some(x) = v.volume_initialization_rate {
+    fs.push(("volumeInitializationRate", json.Value.Int(x)))
+  }
+  if let Some(x) = v.delete_on_termination {
+    fs.push(("deleteOnTermination", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_source_server_volume_configuration(v: json.Value) -> SourceServerVolumeConfiguration ! Str {
+  var out = SourceServerVolumeConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "volumeType" => out.volume_type = jsonv.read_str(fv)?
+      "iops" => out.iops = jsonv.read_int(fv)?
+      "throughput" => out.throughput = jsonv.read_int(fv)?
+      "volumeInitializationRate" => out.volume_initialization_rate = jsonv.read_int(fv)?
+      "deleteOnTermination" => out.delete_on_termination = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -9182,11 +10694,17 @@ fn json_of_start_network_migration_mapping_update_construct(v: StartNetworkMigra
   if let Some(x) = v.segment_id {
     fs.push(("segmentID", json.Value.Str(x)))
   }
+  if let Some(x) = v.segment_logical_id {
+    fs.push(("segmentLogicalID", json.Value.Str(x)))
+  }
   if let Some(x) = v.construct_id {
     fs.push(("constructID", json.Value.Str(x)))
   }
   if let Some(x) = v.construct_type {
     fs.push(("constructType", json.Value.Str(x)))
+  }
+  if let Some(x) = v.construct_logical_id {
+    fs.push(("constructLogicalID", json.Value.Str(x)))
   }
   if let Some(x) = v.operation {
     fs.push(("operation", json_of_operation_union(x)))
@@ -9202,8 +10720,10 @@ fn from_json_start_network_migration_mapping_update_construct(v: json.Value) -> 
     }
     match k {
       "segmentID" => out.segment_id = jsonv.read_str(fv)?
+      "segmentLogicalID" => out.segment_logical_id = jsonv.read_str(fv)?
       "constructID" => out.construct_id = jsonv.read_str(fv)?
       "constructType" => out.construct_type = jsonv.read_str(fv)?
+      "constructLogicalID" => out.construct_logical_id = jsonv.read_str(fv)?
       "operation" => out.operation = from_json_operation_union(fv)?
       _ => {}
     }
@@ -9288,6 +10808,12 @@ fn json_of_start_network_migration_mapping_update_segment(v: StartNetworkMigrati
   if let Some(x) = v.segment_id {
     fs.push(("segmentID", json.Value.Str(x)))
   }
+  if let Some(x) = v.segment_logical_id {
+    fs.push(("segmentLogicalID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.operation {
+    fs.push(("operation", json_of_segment_operation(x)))
+  }
   if let Some(x) = v.target_account {
     fs.push(("targetAccount", json.Value.Str(x)))
   }
@@ -9305,6 +10831,8 @@ fn from_json_start_network_migration_mapping_update_segment(v: json.Value) -> St
     }
     match k {
       "segmentID" => out.segment_id = jsonv.read_str(fv)?
+      "segmentLogicalID" => out.segment_logical_id = jsonv.read_str(fv)?
+      "operation" => out.operation = from_json_segment_operation(fv)?
       "targetAccount" => out.target_account = jsonv.read_str(fv)?
       "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
       _ => {}
@@ -9325,6 +10853,70 @@ fn from_json_start_network_migration_mapping_update_segments(v: json.Value) -> L
       continue
     }
     out.push(from_json_start_network_migration_mapping_update_segment(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_start_remote_source_action_job_request(v: StartRemoteSourceActionJobRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_arns {
+    fs.push(("remoteSourceActionArns", json_of_remote_source_action_arns(x)))
+  }
+  if let Some(x) = v.connector_arn {
+    fs.push(("connectorArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.source_server_arns {
+    fs.push(("sourceServerArns", json_of_source_server_arns(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_remote_source_action_job_request(v: json.Value) -> StartRemoteSourceActionJobRequest ! Str {
+  var out = StartRemoteSourceActionJobRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionArns" => out.remote_source_action_arns = from_json_remote_source_action_arns(fv)?
+      "connectorArn" => out.connector_arn = jsonv.read_str(fv)?
+      "sourceServerArns" => out.source_server_arns = from_json_source_server_arns(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_start_remote_source_action_job_response(v: StartRemoteSourceActionJobResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_job {
+    fs.push(("remoteSourceActionJob", json_of_remote_source_action_job(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_remote_source_action_job_response(v: json.Value) -> StartRemoteSourceActionJobResponse ! Str {
+  var out = StartRemoteSourceActionJobResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionJob" => out.remote_source_action_job = from_json_remote_source_action_job(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -10031,6 +11623,78 @@ fn from_json_update_connector_request(v: json.Value) -> UpdateConnectorRequest !
   Ok(out)
 }
 
+fn json_of_update_launch_configuration_defaults_request(v: UpdateLaunchConfigurationDefaultsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_id {
+    fs.push(("sourceServerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.small_volume_max_size {
+    fs.push(("smallVolumeMaxSize", json.Value.Int(x)))
+  }
+  if let Some(x) = v.small_volume_configuration {
+    fs.push(("smallVolumeConfiguration", json_of_source_server_volume_configuration(x)))
+  }
+  if let Some(x) = v.large_volume_configuration {
+    fs.push(("largeVolumeConfiguration", json_of_source_server_volume_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_launch_configuration_defaults_request(v: json.Value) -> UpdateLaunchConfigurationDefaultsRequest ! Str {
+  var out = UpdateLaunchConfigurationDefaultsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerID" => out.source_server_id = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      "smallVolumeMaxSize" => out.small_volume_max_size = jsonv.read_int(fv)?
+      "smallVolumeConfiguration" => out.small_volume_configuration = from_json_source_server_volume_configuration(fv)?
+      "largeVolumeConfiguration" => out.large_volume_configuration = from_json_source_server_volume_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_launch_configuration_defaults_response(v: UpdateLaunchConfigurationDefaultsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_server_id {
+    fs.push(("sourceServerID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.small_volume_max_size {
+    fs.push(("smallVolumeMaxSize", json.Value.Int(x)))
+  }
+  if let Some(x) = v.small_volume_configuration {
+    fs.push(("smallVolumeConfiguration", json_of_source_server_volume_configuration(x)))
+  }
+  if let Some(x) = v.large_volume_configuration {
+    fs.push(("largeVolumeConfiguration", json_of_source_server_volume_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_launch_configuration_defaults_response(v: json.Value) -> UpdateLaunchConfigurationDefaultsResponse ! Str {
+  var out = UpdateLaunchConfigurationDefaultsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceServerID" => out.source_server_id = jsonv.read_str(fv)?
+      "smallVolumeMaxSize" => out.small_volume_max_size = jsonv.read_int(fv)?
+      "smallVolumeConfiguration" => out.small_volume_configuration = from_json_source_server_volume_configuration(fv)?
+      "largeVolumeConfiguration" => out.large_volume_configuration = from_json_source_server_volume_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_update_launch_configuration_request(v: UpdateLaunchConfigurationRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.source_server_id {
@@ -10066,6 +11730,9 @@ fn json_of_update_launch_configuration_request(v: UpdateLaunchConfigurationReque
   if let Some(x) = v.map_auto_tagging_mpe_id {
     fs.push(("mapAutoTaggingMpeID", json.Value.Str(x)))
   }
+  if let Some(x) = v.map_auto_tagging_key {
+    fs.push(("mapAutoTaggingKey", json.Value.Str(x)))
+  }
   if let Some(x) = v.account_id {
     fs.push(("accountID", json.Value.Str(x)))
   }
@@ -10090,6 +11757,7 @@ fn from_json_update_launch_configuration_request(v: json.Value) -> UpdateLaunchC
       "postLaunchActions" => out.post_launch_actions = from_json_post_launch_actions(fv)?
       "enableMapAutoTagging" => out.enable_map_auto_tagging = jsonv.read_bool(fv)?
       "mapAutoTaggingMpeID" => out.map_auto_tagging_mpe_id = jsonv.read_str(fv)?
+      "mapAutoTaggingKey" => out.map_auto_tagging_key = jsonv.read_str(fv)?
       "accountID" => out.account_id = jsonv.read_str(fv)?
       _ => {}
     }
@@ -10110,6 +11778,9 @@ fn json_of_update_launch_configuration_template_request(v: UpdateLaunchConfigura
   }
   if let Some(x) = v.map_auto_tagging_mpe_id {
     fs.push(("mapAutoTaggingMpeID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.map_auto_tagging_key {
+    fs.push(("mapAutoTaggingKey", json.Value.Str(x)))
   }
   if let Some(x) = v.launch_disposition {
     fs.push(("launchDisposition", json.Value.Str(x)))
@@ -10161,6 +11832,7 @@ fn from_json_update_launch_configuration_template_request(v: json.Value) -> Upda
       "postLaunchActions" => out.post_launch_actions = from_json_post_launch_actions(fv)?
       "enableMapAutoTagging" => out.enable_map_auto_tagging = jsonv.read_bool(fv)?
       "mapAutoTaggingMpeID" => out.map_auto_tagging_mpe_id = jsonv.read_str(fv)?
+      "mapAutoTaggingKey" => out.map_auto_tagging_key = jsonv.read_str(fv)?
       "launchDisposition" => out.launch_disposition = jsonv.read_str(fv)?
       "targetInstanceTypeRightSizingMethod" => out.target_instance_type_right_sizing_method = jsonv.read_str(fv)?
       "copyPrivateIp" => out.copy_private_ip = jsonv.read_bool(fv)?
@@ -10211,6 +11883,9 @@ fn json_of_update_network_migration_definition_request(v: UpdateNetworkMigration
   if let Some(x) = v.scope_tags {
     fs.push(("scopeTags", json_of_scope_tags_map(x)))
   }
+  if let Some(x) = v.definition_type {
+    fs.push(("definitionType", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -10231,6 +11906,7 @@ fn from_json_update_network_migration_definition_request(v: json.Value) -> Updat
       "vpcProvisioningStrategy" => out.vpc_provisioning_strategy = jsonv.read_str(fv)?
       "cidrMappings" => out.cidr_mappings = from_json_cidr_mappings_list(fv)?
       "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
+      "definitionType" => out.definition_type = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -10301,6 +11977,140 @@ fn from_json_update_operation(v: json.Value) -> UpdateOperation ! Str {
   Ok(out)
 }
 
+fn json_of_update_operation_v2(v: UpdateOperationV2) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.excluded {
+    fs.push(("excluded", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.properties {
+    fs.push(("properties", json_of_enriched_properties(x)))
+  }
+  if let Some(x) = v.properties_to_delete {
+    fs.push(("propertiesToDelete", json_of_properties_to_delete(x)))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_operation_configuration_union(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_operation_v2(v: json.Value) -> UpdateOperationV2 ! Str {
+  var out = UpdateOperationV2{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "excluded" => out.excluded = jsonv.read_bool(fv)?
+      "properties" => out.properties = from_json_enriched_properties(fv)?
+      "propertiesToDelete" => out.properties_to_delete = from_json_properties_to_delete(fv)?
+      "configuration" => out.configuration = from_json_operation_configuration_union(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_remote_source_action_request(v: UpdateRemoteSourceActionRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_id {
+    fs.push(("remoteSourceActionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ssm_parameter_name {
+    fs.push(("ssmParameterName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.timeout_seconds {
+    fs.push(("timeoutSeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.operating_system {
+    fs.push(("operatingSystem", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_id {
+    fs.push(("accountID", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_remote_source_action_request(v: json.Value) -> UpdateRemoteSourceActionRequest ! Str {
+  var out = UpdateRemoteSourceActionRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionID" => out.remote_source_action_id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "ssmParameterName" => out.ssm_parameter_name = jsonv.read_str(fv)?
+      "timeoutSeconds" => out.timeout_seconds = jsonv.read_int(fv)?
+      "operatingSystem" => out.operating_system = jsonv.read_str(fv)?
+      "accountID" => out.account_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_remote_source_action_response(v: UpdateRemoteSourceActionResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.remote_source_action_id {
+    fs.push(("remoteSourceActionID", json.Value.Str(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ssm_parameter_name {
+    fs.push(("ssmParameterName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.timeout_seconds {
+    fs.push(("timeoutSeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.operating_system {
+    fs.push(("operatingSystem", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_remote_source_action_response(v: json.Value) -> UpdateRemoteSourceActionResponse ! Str {
+  var out = UpdateRemoteSourceActionResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "remoteSourceActionID" => out.remote_source_action_id = jsonv.read_str(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "ssmParameterName" => out.ssm_parameter_name = jsonv.read_str(fv)?
+      "timeoutSeconds" => out.timeout_seconds = jsonv.read_int(fv)?
+      "operatingSystem" => out.operating_system = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_update_replication_configuration_request(v: UpdateReplicationConfigurationRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.source_server_id {
@@ -10360,6 +12170,9 @@ fn json_of_update_replication_configuration_request(v: UpdateReplicationConfigur
   if let Some(x) = v.store_snapshot_on_local_zone {
     fs.push(("storeSnapshotOnLocalZone", json.Value.Bool(x)))
   }
+  if let Some(x) = v.outpost_snapshot_location {
+    fs.push(("outpostSnapshotLocation", json.Value.Str(x)))
+  }
   if let Some(x) = v.storage_configuration {
     fs.push(("storageConfiguration", json_of_storage_configuration(x)))
   }
@@ -10392,6 +12205,7 @@ fn from_json_update_replication_configuration_request(v: json.Value) -> UpdateRe
       "accountID" => out.account_id = jsonv.read_str(fv)?
       "internetProtocol" => out.internet_protocol = jsonv.read_str(fv)?
       "storeSnapshotOnLocalZone" => out.store_snapshot_on_local_zone = jsonv.read_bool(fv)?
+      "outpostSnapshotLocation" => out.outpost_snapshot_location = jsonv.read_str(fv)?
       "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
       _ => {}
     }
@@ -10452,6 +12266,9 @@ fn json_of_update_replication_configuration_template_request(v: UpdateReplicatio
   if let Some(x) = v.store_snapshot_on_local_zone {
     fs.push(("storeSnapshotOnLocalZone", json.Value.Bool(x)))
   }
+  if let Some(x) = v.outpost_snapshot_location {
+    fs.push(("outpostSnapshotLocation", json.Value.Str(x)))
+  }
   if let Some(x) = v.storage_configuration {
     fs.push(("storageConfiguration", json_of_storage_configuration(x)))
   }
@@ -10482,6 +12299,7 @@ fn from_json_update_replication_configuration_template_request(v: json.Value) ->
       "useFipsEndpoint" => out.use_fips_endpoint = jsonv.read_bool(fv)?
       "internetProtocol" => out.internet_protocol = jsonv.read_str(fv)?
       "storeSnapshotOnLocalZone" => out.store_snapshot_on_local_zone = jsonv.read_bool(fv)?
+      "outpostSnapshotLocation" => out.outpost_snapshot_location = jsonv.read_str(fv)?
       "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
       _ => {}
     }
@@ -11909,6 +13727,9 @@ pub fn serialize_create_launch_configuration_template(ep: rest.Endpoint, input: 
   if let Some(x) = input.map_auto_tagging_mpe_id {
     fs.push(("mapAutoTaggingMpeID", json.Value.Str(x)))
   }
+  if let Some(x) = input.map_auto_tagging_key {
+    fs.push(("mapAutoTaggingKey", json.Value.Str(x)))
+  }
   if let Some(x) = input.tags {
     fs.push(("tags", json_of_tags_map(x)))
   }
@@ -11978,6 +13799,7 @@ pub fn deserialize_create_launch_configuration_template(resp: http.Response) -> 
       "postLaunchActions" => out.post_launch_actions = from_json_post_launch_actions(fv)?
       "enableMapAutoTagging" => out.enable_map_auto_tagging = jsonv.read_bool(fv)?
       "mapAutoTaggingMpeID" => out.map_auto_tagging_mpe_id = jsonv.read_str(fv)?
+      "mapAutoTaggingKey" => out.map_auto_tagging_key = jsonv.read_str(fv)?
       "tags" => out.tags = from_json_tags_map(fv)?
       "ec2LaunchTemplateID" => out.ec2_launch_template_id = jsonv.read_str(fv)?
       "launchDisposition" => out.launch_disposition = jsonv.read_str(fv)?
@@ -12011,1433 +13833,4 @@ pub enum CreateLaunchConfigurationTemplateErr {
   InvalidInput(msg: Str)
   /// The response is not what the protocol says.
   Deserialize(msg: Str)
-}
-
-pub fn (e: CreateLaunchConfigurationTemplateErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_launch_configuration_template_error(resp: http.Response) -> CreateLaunchConfigurationTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateLaunchConfigurationTemplateErr.AccessDeniedException(x)
-      Err(msg) => return CreateLaunchConfigurationTemplateErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return CreateLaunchConfigurationTemplateErr.UninitializedAccountException(x)
-      Err(msg) => return CreateLaunchConfigurationTemplateErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateLaunchConfigurationTemplateErr.ValidationException(x)
-      Err(msg) => return CreateLaunchConfigurationTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateLaunchConfigurationTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Creates a new Launch Configuration Template.
-pub fn (c: Client) create_launch_configuration_template(input: CreateLaunchConfigurationTemplateRequest) -> LaunchConfigurationTemplate ! CreateLaunchConfigurationTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_launch_configuration_template(c.params, input)) ?? e => return Err(CreateLaunchConfigurationTemplateErr.InvalidInput(e))
-  var req = serialize_create_launch_configuration_template(ep, input, "") ?? e => return Err(CreateLaunchConfigurationTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateLaunchConfigurationTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_launch_configuration_template_error(resp))
-  }
-  deserialize_create_launch_configuration_template(resp) ?? e => Err(CreateLaunchConfigurationTemplateErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_network_migration_definition(base: EndpointParameters, input: CreateNetworkMigrationDefinitionRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateNetworkMigrationDefinition.
-pub fn serialize_create_network_migration_definition(ep: rest.Endpoint, input: CreateNetworkMigrationDefinitionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.source_configurations {
-    fs.push(("sourceConfigurations", json_of_source_configuration_list(x)))
-  }
-  if let Some(x) = input.target_s3_configuration {
-    fs.push(("targetS3Configuration", json_of_target_s3_configuration(x)))
-  }
-  if let Some(x) = input.target_network {
-    fs.push(("targetNetwork", json_of_target_network(x)))
-  }
-  if let Some(x) = input.target_deployment {
-    fs.push(("targetDeployment", json.Value.Str(x)))
-  }
-  if let Some(x) = input.vpc_provisioning_strategy {
-    fs.push(("vpcProvisioningStrategy", json.Value.Str(x)))
-  }
-  if let Some(x) = input.cidr_mappings {
-    fs.push(("cidrMappings", json_of_cidr_mappings_list(x)))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("tags", json_of_tags_map(x)))
-  }
-  if let Some(x) = input.scope_tags {
-    fs.push(("scopeTags", json_of_scope_tags_map(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/network-migration/CreateNetworkMigrationDefinition"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_network_migration_definition(resp: http.Response) -> NetworkMigrationDefinition ! Str {
-  var out = NetworkMigrationDefinition{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "arn" => out.arn = jsonv.read_str(fv)?
-      "networkMigrationDefinitionID" => out.network_migration_definition_id = jsonv.read_str(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "description" => out.description = jsonv.read_str(fv)?
-      "sourceConfigurations" => out.source_configurations = from_json_source_configuration_list(fv)?
-      "targetS3Configuration" => out.target_s3_configuration = from_json_target_s3_configuration(fv)?
-      "targetNetwork" => out.target_network = from_json_target_network(fv)?
-      "targetDeployment" => out.target_deployment = jsonv.read_str(fv)?
-      "vpcProvisioningStrategy" => out.vpc_provisioning_strategy = jsonv.read_str(fv)?
-      "cidrMappings" => out.cidr_mappings = from_json_cidr_mappings_list(fv)?
-      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
-      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
-      "tags" => out.tags = from_json_tags_map(fv)?
-      "scopeTags" => out.scope_tags = from_json_scope_tags_map(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateNetworkMigrationDefinition.
-pub enum CreateNetworkMigrationDefinitionErr {
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateNetworkMigrationDefinitionErr) display() -> Str {
-  match e {
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_network_migration_definition_error(resp: http.Response) -> CreateNetworkMigrationDefinitionErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateNetworkMigrationDefinitionErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateNetworkMigrationDefinitionErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateNetworkMigrationDefinitionErr.ValidationException(x)
-      Err(msg) => return CreateNetworkMigrationDefinitionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateNetworkMigrationDefinitionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Creates a new network migration definition that specifies the source and
-/// target network configuration for a migration.
-pub fn (c: Client) create_network_migration_definition(input: CreateNetworkMigrationDefinitionRequest) -> NetworkMigrationDefinition ! CreateNetworkMigrationDefinitionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_network_migration_definition(c.params, input)) ?? e => return Err(CreateNetworkMigrationDefinitionErr.InvalidInput(e))
-  var req = serialize_create_network_migration_definition(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateNetworkMigrationDefinitionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateNetworkMigrationDefinitionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_network_migration_definition_error(resp))
-  }
-  deserialize_create_network_migration_definition(resp) ?? e => Err(CreateNetworkMigrationDefinitionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_replication_configuration_template(base: EndpointParameters, input: CreateReplicationConfigurationTemplateRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateReplicationConfigurationTemplate.
-pub fn serialize_create_replication_configuration_template(ep: rest.Endpoint, input: CreateReplicationConfigurationTemplateRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.staging_area_subnet_id {
-    fs.push(("stagingAreaSubnetId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.associate_default_security_group {
-    fs.push(("associateDefaultSecurityGroup", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.replication_servers_security_groups_ids {
-    fs.push(("replicationServersSecurityGroupsIDs", json_of_replication_servers_security_groups_ids(x)))
-  }
-  if let Some(x) = input.replication_server_instance_type {
-    fs.push(("replicationServerInstanceType", json.Value.Str(x)))
-  }
-  if let Some(x) = input.use_dedicated_replication_server {
-    fs.push(("useDedicatedReplicationServer", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.default_large_staging_disk_type {
-    fs.push(("defaultLargeStagingDiskType", json.Value.Str(x)))
-  }
-  if let Some(x) = input.ebs_encryption {
-    fs.push(("ebsEncryption", json.Value.Str(x)))
-  }
-  if let Some(x) = input.ebs_encryption_key_arn {
-    fs.push(("ebsEncryptionKeyArn", json.Value.Str(x)))
-  }
-  if let Some(x) = input.bandwidth_throttling {
-    fs.push(("bandwidthThrottling", json.Value.Int(x)))
-  }
-  if let Some(x) = input.data_plane_routing {
-    fs.push(("dataPlaneRouting", json.Value.Str(x)))
-  }
-  if let Some(x) = input.create_public_ip {
-    fs.push(("createPublicIP", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.staging_area_tags {
-    fs.push(("stagingAreaTags", json_of_tags_map(x)))
-  }
-  if let Some(x) = input.use_fips_endpoint {
-    fs.push(("useFipsEndpoint", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("tags", json_of_tags_map(x)))
-  }
-  if let Some(x) = input.internet_protocol {
-    fs.push(("internetProtocol", json.Value.Str(x)))
-  }
-  if let Some(x) = input.store_snapshot_on_local_zone {
-    fs.push(("storeSnapshotOnLocalZone", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.storage_configuration {
-    fs.push(("storageConfiguration", json_of_storage_configuration(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/CreateReplicationConfigurationTemplate"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_replication_configuration_template(resp: http.Response) -> ReplicationConfigurationTemplate ! Str {
-  var out = ReplicationConfigurationTemplate{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "replicationConfigurationTemplateID" => out.replication_configuration_template_id = jsonv.read_str(fv)?
-      "arn" => out.arn = jsonv.read_str(fv)?
-      "stagingAreaSubnetId" => out.staging_area_subnet_id = jsonv.read_str(fv)?
-      "associateDefaultSecurityGroup" => out.associate_default_security_group = jsonv.read_bool(fv)?
-      "replicationServersSecurityGroupsIDs" => out.replication_servers_security_groups_ids = from_json_replication_servers_security_groups_ids(fv)?
-      "replicationServerInstanceType" => out.replication_server_instance_type = jsonv.read_str(fv)?
-      "useDedicatedReplicationServer" => out.use_dedicated_replication_server = jsonv.read_bool(fv)?
-      "defaultLargeStagingDiskType" => out.default_large_staging_disk_type = jsonv.read_str(fv)?
-      "ebsEncryption" => out.ebs_encryption = jsonv.read_str(fv)?
-      "ebsEncryptionKeyArn" => out.ebs_encryption_key_arn = jsonv.read_str(fv)?
-      "bandwidthThrottling" => out.bandwidth_throttling = jsonv.read_int(fv)?
-      "dataPlaneRouting" => out.data_plane_routing = jsonv.read_str(fv)?
-      "createPublicIP" => out.create_public_ip = jsonv.read_bool(fv)?
-      "stagingAreaTags" => out.staging_area_tags = from_json_tags_map(fv)?
-      "useFipsEndpoint" => out.use_fips_endpoint = jsonv.read_bool(fv)?
-      "tags" => out.tags = from_json_tags_map(fv)?
-      "internetProtocol" => out.internet_protocol = jsonv.read_str(fv)?
-      "storeSnapshotOnLocalZone" => out.store_snapshot_on_local_zone = jsonv.read_bool(fv)?
-      "storageConfiguration" => out.storage_configuration = from_json_storage_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateReplicationConfigurationTemplate.
-pub enum CreateReplicationConfigurationTemplateErr {
-  AccessDeniedException(e: AccessDeniedException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateReplicationConfigurationTemplateErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_replication_configuration_template_error(resp: http.Response) -> CreateReplicationConfigurationTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateReplicationConfigurationTemplateErr.AccessDeniedException(x)
-      Err(msg) => return CreateReplicationConfigurationTemplateErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return CreateReplicationConfigurationTemplateErr.UninitializedAccountException(x)
-      Err(msg) => return CreateReplicationConfigurationTemplateErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateReplicationConfigurationTemplateErr.ValidationException(x)
-      Err(msg) => return CreateReplicationConfigurationTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateReplicationConfigurationTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Creates a new ReplicationConfigurationTemplate.
-pub fn (c: Client) create_replication_configuration_template(input: CreateReplicationConfigurationTemplateRequest) -> ReplicationConfigurationTemplate ! CreateReplicationConfigurationTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_replication_configuration_template(c.params, input)) ?? e => return Err(CreateReplicationConfigurationTemplateErr.InvalidInput(e))
-  var req = serialize_create_replication_configuration_template(ep, input, "") ?? e => return Err(CreateReplicationConfigurationTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateReplicationConfigurationTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_replication_configuration_template_error(resp))
-  }
-  deserialize_create_replication_configuration_template(resp) ?? e => Err(CreateReplicationConfigurationTemplateErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_wave(base: EndpointParameters, input: CreateWaveRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateWave.
-pub fn serialize_create_wave(ep: rest.Endpoint, input: CreateWaveRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("tags", json_of_tags_map(x)))
-  }
-  if let Some(x) = input.account_id {
-    fs.push(("accountID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/CreateWave"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_wave(resp: http.Response) -> Wave ! Str {
-  var out = Wave{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "waveID" => out.wave_id = jsonv.read_str(fv)?
-      "arn" => out.arn = jsonv.read_str(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "description" => out.description = jsonv.read_str(fv)?
-      "isArchived" => out.is_archived = jsonv.read_bool(fv)?
-      "waveAggregatedStatus" => out.wave_aggregated_status = from_json_wave_aggregated_status(fv)?
-      "creationDateTime" => out.creation_date_time = jsonv.read_str(fv)?
-      "lastModifiedDateTime" => out.last_modified_date_time = jsonv.read_str(fv)?
-      "tags" => out.tags = from_json_tags_map(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateWave.
-pub enum CreateWaveErr {
-  ConflictException(e: ConflictException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateWaveErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_wave_error(resp: http.Response) -> CreateWaveErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateWaveErr.ConflictException(x)
-      Err(msg) => return CreateWaveErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateWaveErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateWaveErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return CreateWaveErr.UninitializedAccountException(x)
-      Err(msg) => return CreateWaveErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateWaveErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create wave.
-pub fn (c: Client) create_wave(input: CreateWaveRequest) -> Wave ! CreateWaveErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_wave(c.params, input)) ?? e => return Err(CreateWaveErr.InvalidInput(e))
-  var req = serialize_create_wave(ep, input, "") ?? e => return Err(CreateWaveErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateWaveErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_wave_error(resp))
-  }
-  deserialize_create_wave(resp) ?? e => Err(CreateWaveErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_application(base: EndpointParameters, input: DeleteApplicationRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteApplication.
-pub fn serialize_delete_application(ep: rest.Endpoint, input: DeleteApplicationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.application_id {
-    fs.push(("applicationID", json.Value.Str(x)))
-  }
-  if let Some(x) = input.account_id {
-    fs.push(("accountID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteApplication"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_application(resp: http.Response) -> DeleteApplicationResponse ! Str {
-  var out = DeleteApplicationResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteApplication.
-pub enum DeleteApplicationErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteApplicationErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_application_error(resp: http.Response) -> DeleteApplicationErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteApplicationErr.ConflictException(x)
-      Err(msg) => return DeleteApplicationErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteApplicationErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteApplicationErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteApplicationErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteApplicationErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteApplicationErr.Api(restjson.api_error(resp, body))
-}
-
-/// Delete application.
-pub fn (c: Client) delete_application(input: DeleteApplicationRequest) -> DeleteApplicationResponse ! DeleteApplicationErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_application(c.params, input)) ?? e => return Err(DeleteApplicationErr.InvalidInput(e))
-  var req = serialize_delete_application(ep, input, "") ?? e => return Err(DeleteApplicationErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteApplicationErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_application_error(resp))
-  }
-  deserialize_delete_application(resp) ?? e => Err(DeleteApplicationErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_connector(base: EndpointParameters, input: DeleteConnectorRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteConnector.
-pub fn serialize_delete_connector(ep: rest.Endpoint, input: DeleteConnectorRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.connector_id {
-    fs.push(("connectorID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteConnector"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_connector(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of DeleteConnector.
-pub enum DeleteConnectorErr {
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteConnectorErr) display() -> Str {
-  match e {
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_connector_error(resp: http.Response) -> DeleteConnectorErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteConnectorErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteConnectorErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteConnectorErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteConnectorErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteConnectorErr.ValidationException(x)
-      Err(msg) => return DeleteConnectorErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteConnectorErr.Api(restjson.api_error(resp, body))
-}
-
-/// Delete Connector.
-pub fn (c: Client) delete_connector(input: DeleteConnectorRequest) -> () ! DeleteConnectorErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_connector(c.params, input)) ?? e => return Err(DeleteConnectorErr.InvalidInput(e))
-  var req = serialize_delete_connector(ep, input, "") ?? e => return Err(DeleteConnectorErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteConnectorErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_connector_error(resp))
-  }
-  deserialize_delete_connector(resp) ?? e => Err(DeleteConnectorErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_job(base: EndpointParameters, input: DeleteJobRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteJob.
-pub fn serialize_delete_job(ep: rest.Endpoint, input: DeleteJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.job_id {
-    fs.push(("jobID", json.Value.Str(x)))
-  }
-  if let Some(x) = input.account_id {
-    fs.push(("accountID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteJob"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_job(resp: http.Response) -> DeleteJobResponse ! Str {
-  var out = DeleteJobResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteJob.
-pub enum DeleteJobErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteJobErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_job_error(resp: http.Response) -> DeleteJobErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteJobErr.ConflictException(x)
-      Err(msg) => return DeleteJobErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteJobErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteJobErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteJobErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteJobErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteJobErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a single Job by ID.
-pub fn (c: Client) delete_job(input: DeleteJobRequest) -> DeleteJobResponse ! DeleteJobErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_job(c.params, input)) ?? e => return Err(DeleteJobErr.InvalidInput(e))
-  var req = serialize_delete_job(ep, input, "") ?? e => return Err(DeleteJobErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteJobErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_job_error(resp))
-  }
-  deserialize_delete_job(resp) ?? e => Err(DeleteJobErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_launch_configuration_template(base: EndpointParameters, input: DeleteLaunchConfigurationTemplateRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteLaunchConfigurationTemplate.
-pub fn serialize_delete_launch_configuration_template(ep: rest.Endpoint, input: DeleteLaunchConfigurationTemplateRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.launch_configuration_template_id {
-    fs.push(("launchConfigurationTemplateID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteLaunchConfigurationTemplate"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_launch_configuration_template(resp: http.Response) -> DeleteLaunchConfigurationTemplateResponse ! Str {
-  var out = DeleteLaunchConfigurationTemplateResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteLaunchConfigurationTemplate.
-pub enum DeleteLaunchConfigurationTemplateErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteLaunchConfigurationTemplateErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_launch_configuration_template_error(resp: http.Response) -> DeleteLaunchConfigurationTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteLaunchConfigurationTemplateErr.ConflictException(x)
-      Err(msg) => return DeleteLaunchConfigurationTemplateErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteLaunchConfigurationTemplateErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteLaunchConfigurationTemplateErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteLaunchConfigurationTemplateErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteLaunchConfigurationTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteLaunchConfigurationTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a single Launch Configuration Template by ID.
-pub fn (c: Client) delete_launch_configuration_template(input: DeleteLaunchConfigurationTemplateRequest) -> DeleteLaunchConfigurationTemplateResponse ! DeleteLaunchConfigurationTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_launch_configuration_template(c.params, input)) ?? e => return Err(DeleteLaunchConfigurationTemplateErr.InvalidInput(e))
-  var req = serialize_delete_launch_configuration_template(ep, input, "") ?? e => return Err(DeleteLaunchConfigurationTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteLaunchConfigurationTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_launch_configuration_template_error(resp))
-  }
-  deserialize_delete_launch_configuration_template(resp) ?? e => Err(DeleteLaunchConfigurationTemplateErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_network_migration_definition(base: EndpointParameters, input: DeleteNetworkMigrationDefinitionRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteNetworkMigrationDefinition.
-pub fn serialize_delete_network_migration_definition(ep: rest.Endpoint, input: DeleteNetworkMigrationDefinitionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.network_migration_definition_id {
-    fs.push(("networkMigrationDefinitionID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/network-migration/DeleteNetworkMigrationDefinition"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_network_migration_definition(resp: http.Response) -> DeleteNetworkMigrationDefinitionResponse ! Str {
-  var out = DeleteNetworkMigrationDefinitionResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteNetworkMigrationDefinition.
-pub enum DeleteNetworkMigrationDefinitionErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteNetworkMigrationDefinitionErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_network_migration_definition_error(resp: http.Response) -> DeleteNetworkMigrationDefinitionErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return DeleteNetworkMigrationDefinitionErr.AccessDeniedException(x)
-      Err(msg) => return DeleteNetworkMigrationDefinitionErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteNetworkMigrationDefinitionErr.ConflictException(x)
-      Err(msg) => return DeleteNetworkMigrationDefinitionErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteNetworkMigrationDefinitionErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteNetworkMigrationDefinitionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteNetworkMigrationDefinitionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a network migration definition. This operation removes the
-/// migration definition and all associated metadata.
-pub fn (c: Client) delete_network_migration_definition(input: DeleteNetworkMigrationDefinitionRequest) -> DeleteNetworkMigrationDefinitionResponse ! DeleteNetworkMigrationDefinitionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_network_migration_definition(c.params, input)) ?? e => return Err(DeleteNetworkMigrationDefinitionErr.InvalidInput(e))
-  var req = serialize_delete_network_migration_definition(ep, input, "") ?? e => return Err(DeleteNetworkMigrationDefinitionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteNetworkMigrationDefinitionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_network_migration_definition_error(resp))
-  }
-  deserialize_delete_network_migration_definition(resp) ?? e => Err(DeleteNetworkMigrationDefinitionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_replication_configuration_template(base: EndpointParameters, input: DeleteReplicationConfigurationTemplateRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteReplicationConfigurationTemplate.
-pub fn serialize_delete_replication_configuration_template(ep: rest.Endpoint, input: DeleteReplicationConfigurationTemplateRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.replication_configuration_template_id {
-    fs.push(("replicationConfigurationTemplateID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteReplicationConfigurationTemplate"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_replication_configuration_template(resp: http.Response) -> DeleteReplicationConfigurationTemplateResponse ! Str {
-  var out = DeleteReplicationConfigurationTemplateResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteReplicationConfigurationTemplate.
-pub enum DeleteReplicationConfigurationTemplateErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteReplicationConfigurationTemplateErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_replication_configuration_template_error(resp: http.Response) -> DeleteReplicationConfigurationTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteReplicationConfigurationTemplateErr.ConflictException(x)
-      Err(msg) => return DeleteReplicationConfigurationTemplateErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteReplicationConfigurationTemplateErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteReplicationConfigurationTemplateErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteReplicationConfigurationTemplateErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteReplicationConfigurationTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteReplicationConfigurationTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a single Replication Configuration Template by ID
-pub fn (c: Client) delete_replication_configuration_template(input: DeleteReplicationConfigurationTemplateRequest) -> DeleteReplicationConfigurationTemplateResponse ! DeleteReplicationConfigurationTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_replication_configuration_template(c.params, input)) ?? e => return Err(DeleteReplicationConfigurationTemplateErr.InvalidInput(e))
-  var req = serialize_delete_replication_configuration_template(ep, input, "") ?? e => return Err(DeleteReplicationConfigurationTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteReplicationConfigurationTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_replication_configuration_template_error(resp))
-  }
-  deserialize_delete_replication_configuration_template(resp) ?? e => Err(DeleteReplicationConfigurationTemplateErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_source_server(base: EndpointParameters, input: DeleteSourceServerRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteSourceServer.
-pub fn serialize_delete_source_server(ep: rest.Endpoint, input: DeleteSourceServerRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.source_server_id {
-    fs.push(("sourceServerID", json.Value.Str(x)))
-  }
-  if let Some(x) = input.account_id {
-    fs.push(("accountID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteSourceServer"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_source_server(resp: http.Response) -> DeleteSourceServerResponse ! Str {
-  var out = DeleteSourceServerResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteSourceServer.
-pub enum DeleteSourceServerErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteSourceServerErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_source_server_error(resp: http.Response) -> DeleteSourceServerErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteSourceServerErr.ConflictException(x)
-      Err(msg) => return DeleteSourceServerErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteSourceServerErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteSourceServerErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteSourceServerErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteSourceServerErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteSourceServerErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a single source server by ID.
-pub fn (c: Client) delete_source_server(input: DeleteSourceServerRequest) -> DeleteSourceServerResponse ! DeleteSourceServerErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_source_server(c.params, input)) ?? e => return Err(DeleteSourceServerErr.InvalidInput(e))
-  var req = serialize_delete_source_server(ep, input, "") ?? e => return Err(DeleteSourceServerErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteSourceServerErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_source_server_error(resp))
-  }
-  deserialize_delete_source_server(resp) ?? e => Err(DeleteSourceServerErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_vcenter_client(base: EndpointParameters, input: DeleteVcenterClientRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteVcenterClient.
-pub fn serialize_delete_vcenter_client(ep: rest.Endpoint, input: DeleteVcenterClientRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.vcenter_client_id {
-    fs.push(("vcenterClientID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteVcenterClient"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_vcenter_client(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of DeleteVcenterClient.
-pub enum DeleteVcenterClientErr {
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteVcenterClientErr) display() -> Str {
-  match e {
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_vcenter_client_error(resp: http.Response) -> DeleteVcenterClientErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteVcenterClientErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteVcenterClientErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteVcenterClientErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteVcenterClientErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteVcenterClientErr.ValidationException(x)
-      Err(msg) => return DeleteVcenterClientErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteVcenterClientErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a given vCenter client by ID.
-pub fn (c: Client) delete_vcenter_client(input: DeleteVcenterClientRequest) -> () ! DeleteVcenterClientErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_vcenter_client(c.params, input)) ?? e => return Err(DeleteVcenterClientErr.InvalidInput(e))
-  var req = serialize_delete_vcenter_client(ep, input, "") ?? e => return Err(DeleteVcenterClientErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteVcenterClientErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_vcenter_client_error(resp))
-  }
-  deserialize_delete_vcenter_client(resp) ?? e => Err(DeleteVcenterClientErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_wave(base: EndpointParameters, input: DeleteWaveRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteWave.
-pub fn serialize_delete_wave(ep: rest.Endpoint, input: DeleteWaveRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.wave_id {
-    fs.push(("waveID", json.Value.Str(x)))
-  }
-  if let Some(x) = input.account_id {
-    fs.push(("accountID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DeleteWave"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_wave(resp: http.Response) -> DeleteWaveResponse ! Str {
-  var out = DeleteWaveResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteWave.
-pub enum DeleteWaveErr {
-  ConflictException(e: ConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  UninitializedAccountException(e: UninitializedAccountException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteWaveErr) display() -> Str {
-  match e {
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    UninitializedAccountException(x) => "UninitializedAccountException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_wave_error(resp: http.Response) -> DeleteWaveErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteWaveErr.ConflictException(x)
-      Err(msg) => return DeleteWaveErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteWaveErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteWaveErr.Deserialize(msg)
-    }
-    "UninitializedAccountException" => match read_error_uninitialized_account_exception(resp, body) {
-      Ok(x) => return DeleteWaveErr.UninitializedAccountException(x)
-      Err(msg) => return DeleteWaveErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteWaveErr.Api(restjson.api_error(resp, body))
-}
-
-/// Delete wave.
-pub fn (c: Client) delete_wave(input: DeleteWaveRequest) -> DeleteWaveResponse ! DeleteWaveErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_wave(c.params, input)) ?? e => return Err(DeleteWaveErr.InvalidInput(e))
-  var req = serialize_delete_wave(ep, input, "") ?? e => return Err(DeleteWaveErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteWaveErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_wave_error(resp))
-  }
-  deserialize_delete_wave(resp) ?? e => Err(DeleteWaveErr.Deserialize(e))
-}
-
-pub fn endpoint_params_describe_job_log_items(base: EndpointParameters, input: DescribeJobLogItemsRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DescribeJobLogItems.
-pub fn serialize_describe_job_log_items(ep: rest.Endpoint, input: DescribeJobLogItemsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.job_id {
-    fs.push(("jobID", json.Value.Str(x)))
-  }
-  if let Some(x) = input.max_results {
-    fs.push(("maxResults", json.Value.Int(x)))
-  }
-  if let Some(x) = input.next_token {
-    fs.push(("nextToken", json.Value.Str(x)))
-  }
-  if let Some(x) = input.account_id {
-    fs.push(("accountID", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/DescribeJobLogItems"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

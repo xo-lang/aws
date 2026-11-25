@@ -2567,6 +2567,28 @@ fn from_json_deliverability_test_reports(v: json.Value) -> List[DeliverabilityTe
   Ok(out)
 }
 
+fn json_of_delivery_attributes(v: DeliveryAttributes) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.shared_pool_delivery_mode {
+    fs.push(("SharedPoolDeliveryMode", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delivery_attributes(v: json.Value) -> DeliveryAttributes ! Str {
+  var out = DeliveryAttributes{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SharedPoolDeliveryMode" => out.shared_pool_delivery_mode = AccountSharedPoolDeliveryMode.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_delivery_options(v: DeliveryOptions) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.tls_policy {
@@ -2577,6 +2599,9 @@ fn json_of_delivery_options(v: DeliveryOptions) -> json.Value {
   }
   if let Some(x) = v.max_delivery_seconds {
     fs.push(("MaxDeliverySeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = v.shared_pool_delivery_mode {
+    fs.push(("SharedPoolDeliveryMode", json.Value.Str(x.value())))
   }
   json.Value.Object(fs)
 }
@@ -2591,6 +2616,7 @@ fn from_json_delivery_options(v: json.Value) -> DeliveryOptions ! Str {
       "TlsPolicy" => out.tls_policy = TlsPolicy.from(jsonv.read_str(fv)?)
       "SendingPoolName" => out.sending_pool_name = jsonv.read_str(fv)?
       "MaxDeliverySeconds" => out.max_delivery_seconds = jsonv.read_int(fv)?
+      "SharedPoolDeliveryMode" => out.shared_pool_delivery_mode = SharedPoolDeliveryMode.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -3716,6 +3742,9 @@ fn json_of_get_account_response(v: GetAccountResponse) -> json.Value {
   if let Some(x) = v.pricing_attributes {
     fs.push(("PricingAttributes", json_of_pricing_attributes(x)))
   }
+  if let Some(x) = v.delivery_attributes {
+    fs.push(("DeliveryAttributes", json_of_delivery_attributes(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3735,6 +3764,7 @@ fn from_json_get_account_response(v: json.Value) -> GetAccountResponse ! Str {
       "Details" => out.details = from_json_account_details(fv)?
       "VdmAttributes" => out.vdm_attributes = from_json_vdm_attributes(fv)?
       "PricingAttributes" => out.pricing_attributes = from_json_pricing_attributes(fv)?
+      "DeliveryAttributes" => out.delivery_attributes = from_json_delivery_attributes(fv)?
       _ => {}
     }
   }
@@ -7641,6 +7671,39 @@ fn from_json_put_account_dedicated_ip_warmup_attributes_response(v: json.Value) 
   Ok(out)
 }
 
+fn json_of_put_account_delivery_attributes_request(v: PutAccountDeliveryAttributesRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.shared_pool_delivery_mode {
+    fs.push(("SharedPoolDeliveryMode", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_put_account_delivery_attributes_request(v: json.Value) -> PutAccountDeliveryAttributesRequest ! Str {
+  var out = PutAccountDeliveryAttributesRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SharedPoolDeliveryMode" => out.shared_pool_delivery_mode = AccountSharedPoolDeliveryMode.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_put_account_delivery_attributes_response(v: PutAccountDeliveryAttributesResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_put_account_delivery_attributes_response(v: json.Value) -> PutAccountDeliveryAttributesResponse ! Str {
+  var out = PutAccountDeliveryAttributesResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_put_account_details_request(v: PutAccountDetailsRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.mail_type {
@@ -7881,6 +7944,9 @@ fn json_of_put_configuration_set_delivery_options_request(v: PutConfigurationSet
   if let Some(x) = v.max_delivery_seconds {
     fs.push(("MaxDeliverySeconds", json.Value.Int(x)))
   }
+  if let Some(x) = v.shared_pool_delivery_mode {
+    fs.push(("SharedPoolDeliveryMode", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -7895,6 +7961,7 @@ fn from_json_put_configuration_set_delivery_options_request(v: json.Value) -> Pu
       "TlsPolicy" => out.tls_policy = TlsPolicy.from(jsonv.read_str(fv)?)
       "SendingPoolName" => out.sending_pool_name = jsonv.read_str(fv)?
       "MaxDeliverySeconds" => out.max_delivery_seconds = jsonv.read_int(fv)?
+      "SharedPoolDeliveryMode" => out.shared_pool_delivery_mode = SharedPoolDeliveryMode.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -13633,57 +13700,4 @@ pub fn serialize_delete_contact_list(ep: rest.Endpoint, input: DeleteContactList
 pub fn deserialize_delete_contact_list(resp: http.Response) -> DeleteContactListResponse ! Str {
   var out = DeleteContactListResponse{}
   Ok(out)
-}
-
-/// The errors of DeleteContactList.
-pub enum DeleteContactListErr {
-  BadRequestException(e: BadRequestException)
-  ConcurrentModificationException(e: ConcurrentModificationException)
-  NotFoundException(e: NotFoundException)
-  TooManyRequestsException(e: TooManyRequestsException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteContactListErr) display() -> Str {
-  match e {
-    BadRequestException(x) => "BadRequestException: ${x:?}"
-    ConcurrentModificationException(x) => "ConcurrentModificationException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_contact_list_error(resp: http.Response) -> DeleteContactListErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
-      Ok(x) => return DeleteContactListErr.BadRequestException(x)
-      Err(msg) => return DeleteContactListErr.Deserialize(msg)
-    }
-    "ConcurrentModificationException" => match read_error_concurrent_modification_exception(resp, body) {
-      Ok(x) => return DeleteContactListErr.ConcurrentModificationException(x)
-      Err(msg) => return DeleteContactListErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return DeleteContactListErr.NotFoundException(x)
-      Err(msg) => return DeleteContactListErr.Deserialize(msg)
-    }
-    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
-      Ok(x) => return DeleteContactListErr.TooManyRequestsException(x)
-      Err(msg) => return DeleteContactListErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteContactListErr.Api(restjson.api_error(resp, body))
 }

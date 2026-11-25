@@ -111,6 +111,32 @@ pub enum ApplicationType: Str {
   Unknown(value: Str)
 }
 
+/// Identifies the project to archive.
+pub struct ArchiveProjectRequest {
+  /// The id or ARN of the project to archive.
+  pub project_identifier: Str? = None
+}
+
+/// The project after the archive operation.
+pub struct ArchiveProjectResponse {
+  /// The project ID. The account's default project uses default ; a named
+  /// project's generated ID starts with proj_ .
+  pub id: Str? = None
+  /// The Amazon Resource Name (ARN) of the project.
+  pub arn: Str? = None
+  /// The project's display name. Project names do not have to be unique.
+  pub name: Str? = None
+  /// The project's lifecycle status.
+  pub status: ProjectStatus? = None
+  /// The time the project was created.
+  pub created_at: Time? = None
+  /// The time the project was archived.
+  pub archived_at: Time? = None
+  /// The project's data retention setting. A mode of inherit defers to the
+  /// account setting or model default.
+  pub data_retention: ProjectDataRetention? = None
+}
+
 pub enum AttributeType: Str {
   String = "STRING"
   Number = "NUMBER"
@@ -2002,6 +2028,40 @@ pub struct CreateModelInvocationJobResponse {
   pub job_arn: Str? = None
 }
 
+/// The display name, optional tags, and optional data retention setting for
+/// the new project.
+pub struct CreateProjectRequest {
+  /// The display name for the project. Project names do not have to be
+  /// unique.
+  pub name: Str? = None
+  /// The tags to associate with the project.
+  pub tags: List[Tag]? = None
+  /// The project's data-retention mode. If you omit this field, Amazon
+  /// Bedrock sets the mode to inherit . The project then uses the account
+  /// setting or the model default.
+  pub data_retention: ProjectDataRetention? = None
+}
+
+/// The newly created project.
+pub struct CreateProjectResponse {
+  /// The project ID. The account's default project uses default ; a named
+  /// project's generated ID starts with proj_ .
+  pub id: Str? = None
+  /// The Amazon Resource Name (ARN) of the project.
+  pub arn: Str? = None
+  /// The project's display name. Project names do not have to be unique.
+  pub name: Str? = None
+  /// The project's lifecycle status.
+  pub status: ProjectStatus? = None
+  /// The time the project was created.
+  pub created_at: Time? = None
+  /// The time the project was archived.
+  pub archived_at: Time? = None
+  /// The project's data retention setting. A mode of inherit defers to the
+  /// account setting or model default.
+  pub data_retention: ProjectDataRetention? = None
+}
+
 pub struct CreatePromptRouterRequest {
   /// A unique, case-sensitive identifier that you provide to ensure
   /// idempotency of your requests. If not specified, the Amazon Web Services
@@ -2253,6 +2313,87 @@ pub enum DataRetentionMode: Str {
   Unknown(value: Str)
 }
 
+/// You provide the Amazon S3 destination and AWS Key Management Service
+/// (AWS KMS) key for retained data. Before saving a customer-managed
+/// destination, Amazon Bedrock validates that you can use the bucket and
+/// key and that their resource policies permit the required Amazon Bedrock
+/// access. If validation fails, Amazon Bedrock rejects the configuration
+/// without saving it. You need s3:PutObject , s3:GetObject ,
+/// kms:GenerateDataKey , and kms:Decrypt permissions. The Amazon S3 bucket
+/// policy must allow the Amazon Bedrock service principal,
+/// bedrock.amazonaws.com , to put, get, and delete objects with conditions
+/// appropriate to the configuration scope. Use aws:SourceAccount for
+/// account scope, aws:SourceOrgID for organization scope, and both
+/// aws:SourceAccount and the project's aws:SourceArn for project scope.
+/// Validation rejects resource policies that allow the service principal to
+/// access the destination without the required scope conditions. The key
+/// policy must permit kms:GenerateDataKey and kms:Decrypt for both uses of
+/// the key: direct use by Amazon Bedrock with the scope conditions, and use
+/// through Amazon S3 with a kms:ViaService condition for the bucket's
+/// Region and kms:EncryptionContext:aws:s3:arn scoped to the bucket.
+pub struct DataRetentionStorageConfiguration {
+  /// The Amazon Resource Name (ARN) of the customer managed AWS Key
+  /// Management Service (AWS KMS) key you use to encrypt retained data.
+  /// Specify an enabled symmetric encryption key in the AWS Region where you
+  /// register the configuration. You cannot specify a key alias.
+  pub kms_key_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the Amazon S3 bucket that receives
+  /// retained data. The bucket must be in the AWS Region where you register
+  /// the configuration.
+  pub s3_bucket_arn: Str? = None
+  /// The AWS account ID of the destination bucket's owner. You must specify
+  /// the owner, even when the bucket belongs to another account. Amazon
+  /// Bedrock uses this ID to verify bucket ownership for each delivery
+  /// request.
+  pub s3_bucket_owner: Str? = None
+}
+
+/// Where a scope's retained data is delivered. Clients must tolerate
+/// unknown values.
+pub enum DataRetentionStorageDestination: Str {
+  CustomerManaged = "customer_managed"
+  AmazonManaged = "amazon_managed"
+  Unknown(value: Str)
+}
+
+/// Model provider owning a retention storage configuration. Clients must
+/// tolerate unknown values.
+pub enum DataRetentionStorageModelProvider: Str {
+  Anthropic = "anthropic"
+  Openai = "openai"
+  Unknown(value: Str)
+}
+
+/// Validation state of a configured destination resource. Clients must
+/// tolerate unknown values.
+pub enum DataRetentionStorageResourceStatus: Str {
+  Pending = "pending"
+  Active = "active"
+  AccessDenied = "access_denied"
+  Unknown(value: Str)
+}
+
+/// Scope addressed by a retention storage operation. Clients must tolerate
+/// unknown values.
+pub enum DataRetentionStorageScope: Str {
+  Account = "account"
+  Organization = "organization"
+  Project = "project"
+  Unknown(value: Str)
+}
+
+/// Identifies the model provider whose account retention storage
+/// configuration to delete.
+pub struct DeleteAccountDataRetentionStorageRequest {
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+}
+
+/// A successful deletion returns no response fields.
+pub struct DeleteAccountDataRetentionStorageResponse {
+}
+
 pub struct DeleteAutomatedReasoningPolicyBuildWorkflowRequest {
   /// The Amazon Resource Name (ARN) of the Automated Reasoning policy whose
   /// build workflow you want to delete.
@@ -2370,6 +2511,34 @@ pub struct DeleteModelInvocationLoggingConfigurationRequest {
 }
 
 pub struct DeleteModelInvocationLoggingConfigurationResponse {
+}
+
+/// Identifies the model provider whose organization retention storage
+/// configuration to delete.
+pub struct DeleteOrganizationDataRetentionStorageRequest {
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+}
+
+/// A successful deletion returns no response fields.
+pub struct DeleteOrganizationDataRetentionStorageResponse {
+}
+
+/// Identifies the project and model provider whose retention storage
+/// configuration to delete.
+pub struct DeleteProjectDataRetentionStorageRequest {
+  /// The ID or ARN of a named project owned by the calling account in this
+  /// AWS Region. The default project is not supported; use the account-level
+  /// retention storage operations instead.
+  pub project_identifier: Str? = None
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+}
+
+/// A successful deletion returns no response fields.
+pub struct DeleteProjectDataRetentionStorageResponse {
 }
 
 pub struct DeletePromptRouterRequest {
@@ -2881,6 +3050,36 @@ pub struct GetAccountDataRetentionResponse {
   pub updated_at: Time? = None
 }
 
+/// Identifies the model provider whose account retention storage
+/// configuration to retrieve.
+pub struct GetAccountDataRetentionStorageRequest {
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+}
+
+/// The calling account's stored retention storage configuration for the
+/// requested model provider.
+pub struct GetAccountDataRetentionStorageResponse {
+  /// Scope addressed by the operation that returned this record.
+  pub scope: DataRetentionStorageScope? = None
+  /// Model provider this configuration applies to.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where this record delivers retained data.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// The stored destination and key. Present only when storageDestination is
+  /// customer_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+  /// Time the stored record last changed.
+  pub updated_at: Time? = None
+  /// Validation state of the KMS key. Present only when storageDestination is
+  /// customer_managed.
+  pub kms_key_status: DataRetentionStorageResourceStatus? = None
+  /// Validation state of the bucket. Present only when storageDestination is
+  /// customer_managed.
+  pub s3_bucket_status: DataRetentionStorageResourceStatus? = None
+}
+
 /// Get Advanced Prompt Optimization Job Request
 pub struct GetAdvancedPromptOptimizationJobRequest {
   /// The ARN or ID of the advanced prompt optimization job.
@@ -3230,6 +3429,16 @@ pub struct GetFoundationModelAvailabilityResponse {
 pub struct GetFoundationModelRequest {
   /// The model identifier.
   pub model_identifier: Str? = None
+  /// The ID or Amazon Resource Name (ARN) of a project. Amazon Bedrock uses
+  /// the project's trusted access program participation when determining
+  /// whether to return the model. The project must belong to your account in
+  /// the same AWS Region and partition as the request. If you omit this
+  /// parameter or specify default , Amazon Bedrock uses your account's
+  /// participation, including organization inheritance. A project that
+  /// doesn't exist or is archived causes a ValidationException . A model
+  /// outside the project's available model catalog causes a
+  /// ResourceNotFoundException .
+  pub project_identifier: Str? = None
 }
 
 pub struct GetFoundationModelResponse {
@@ -3326,6 +3535,16 @@ pub struct GetImportedModelResponse {
 pub struct GetInferenceProfileRequest {
   /// The ID or Amazon Resource Name (ARN) of the inference profile.
   pub inference_profile_identifier: Str? = None
+  /// The ID or Amazon Resource Name (ARN) of a project. Amazon Bedrock uses
+  /// the project's trusted access program participation when determining
+  /// whether to return a system-defined inference profile. The project must
+  /// belong to your account in the same AWS Region and partition as the
+  /// request. If you omit this parameter or specify default , Amazon Bedrock
+  /// uses your account's participation, including organization inheritance. A
+  /// project that doesn't exist or is archived causes a ValidationException .
+  /// Specifying a project other than default for an application inference
+  /// profile also causes a ValidationException .
+  pub project_identifier: Str? = None
 }
 
 pub struct GetInferenceProfileResponse {
@@ -3583,6 +3802,98 @@ pub struct GetModelInvocationLoggingConfigurationResponse {
   pub logging_config: LoggingConfig? = None
 }
 
+/// Identifies the model provider whose organization retention storage
+/// configuration to retrieve.
+pub struct GetOrganizationDataRetentionStorageRequest {
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+}
+
+/// The organization's stored retention storage configuration for the
+/// requested model provider.
+pub struct GetOrganizationDataRetentionStorageResponse {
+  /// Scope addressed by the operation that returned this record.
+  pub scope: DataRetentionStorageScope? = None
+  /// Model provider this configuration applies to.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where this record delivers retained data.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// The stored destination and key. Present only when storageDestination is
+  /// customer_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+  /// Time the stored record last changed.
+  pub updated_at: Time? = None
+  /// Validation state of the KMS key. Present only when storageDestination is
+  /// customer_managed.
+  pub kms_key_status: DataRetentionStorageResourceStatus? = None
+  /// Validation state of the bucket. Present only when storageDestination is
+  /// customer_managed.
+  pub s3_bucket_status: DataRetentionStorageResourceStatus? = None
+}
+
+/// Identifies the project and model provider whose retention storage
+/// configuration to retrieve.
+pub struct GetProjectDataRetentionStorageRequest {
+  /// The ID or ARN of a named project owned by the calling account in this
+  /// AWS Region. The default project is not supported; use the account-level
+  /// retention storage operations instead.
+  pub project_identifier: Str? = None
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+}
+
+/// The project's stored retention storage configuration for the requested
+/// model provider.
+pub struct GetProjectDataRetentionStorageResponse {
+  /// Scope addressed by the operation that returned this record.
+  pub scope: DataRetentionStorageScope? = None
+  /// Model provider this configuration applies to.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where this record delivers retained data.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// The stored destination and key. Present only when storageDestination is
+  /// customer_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+  /// Time the stored record last changed.
+  pub updated_at: Time? = None
+  /// Validation state of the KMS key. Present only when storageDestination is
+  /// customer_managed.
+  pub kms_key_status: DataRetentionStorageResourceStatus? = None
+  /// Validation state of the bucket. Present only when storageDestination is
+  /// customer_managed.
+  pub s3_bucket_status: DataRetentionStorageResourceStatus? = None
+  /// ARN of the configured project.
+  pub project_arn: Str? = None
+}
+
+/// Identifies the project to retrieve.
+pub struct GetProjectRequest {
+  /// The id or ARN of the project to retrieve.
+  pub project_identifier: Str? = None
+}
+
+/// The requested project's details and data retention setting.
+pub struct GetProjectResponse {
+  /// The project ID. The account's default project uses default ; a named
+  /// project's generated ID starts with proj_ .
+  pub id: Str? = None
+  /// The Amazon Resource Name (ARN) of the project.
+  pub arn: Str? = None
+  /// The project's display name. Project names do not have to be unique.
+  pub name: Str? = None
+  /// The project's lifecycle status.
+  pub status: ProjectStatus? = None
+  /// The time the project was created.
+  pub created_at: Time? = None
+  /// The time the project was archived.
+  pub archived_at: Time? = None
+  /// The project's data retention setting. A mode of inherit defers to the
+  /// account setting or model default.
+  pub data_retention: ProjectDataRetention? = None
+}
+
 pub struct GetPromptRouterRequest {
   /// The prompt router's ARN
   pub prompt_router_arn: Str? = None
@@ -3662,6 +3973,123 @@ pub struct GetResourcePolicyRequest {
 pub struct GetResourcePolicyResponse {
   /// The JSON string representing the Bedrock resource policy.
   pub resource_policy: Str? = None
+}
+
+/// Identifies the trusted access program whose saved account enrollment
+/// preference to retrieve.
+pub struct GetTrustedAccessProgramAccountEnrollmentRequest {
+  /// The identifier of the trusted access program.
+  pub program_identifier: Str? = None
+}
+
+/// The account's stored enrollment. updatedAt is present whenever a row
+/// exists, including an explicit inherit setting.
+pub struct GetTrustedAccessProgramAccountEnrollmentResponse {
+  /// Stored preference at the addressed scope. A missing enrollment returns
+  /// inherit without updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// Last change to the stored enrollment. Present whenever a row exists,
+  /// including an explicitly stored inherit setting.
+  pub updated_at: Time? = None
+}
+
+/// Identifies the trusted access program whose saved organization
+/// enrollment preference to retrieve.
+pub struct GetTrustedAccessProgramOrganizationEnrollmentRequest {
+  /// The identifier of the trusted access program.
+  pub program_identifier: Str? = None
+}
+
+/// The organization's stored enrollment. updatedAt is present whenever a
+/// row exists, including an explicit inherit setting.
+pub struct GetTrustedAccessProgramOrganizationEnrollmentResponse {
+  /// Stored preference at the addressed scope. A missing enrollment returns
+  /// inherit without updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// Last change to the stored enrollment. Present whenever a row exists,
+  /// including an explicitly stored inherit setting.
+  pub updated_at: Time? = None
+}
+
+/// Identifies the trusted access program and named project whose saved
+/// enrollment preference to retrieve.
+pub struct GetTrustedAccessProgramProjectEnrollmentRequest {
+  /// The identifier of the trusted access program.
+  pub program_identifier: Str? = None
+  /// The id or ARN of the named Bedrock project. The default project is not
+  /// supported; use GetTrustedAccessProgramAccountEnrollment for
+  /// account-level enrollment. An ARN from another account, Region, or
+  /// partition returns ValidationException. A project that does not exist in
+  /// the calling account returns ResourceNotFoundException.
+  pub project_identifier: Str? = None
+}
+
+/// The project's stored enrollment. updatedAt is present whenever a row
+/// exists, including an explicit inherit setting.
+pub struct GetTrustedAccessProgramProjectEnrollmentResponse {
+  /// Stored preference at the addressed scope. A missing enrollment returns
+  /// inherit without updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// Last change to the stored enrollment. Present whenever a row exists,
+  /// including an explicitly stored inherit setting.
+  pub updated_at: Time? = None
+}
+
+/// Identifies the trusted access program and optional named project for
+/// which to resolve participation.
+pub struct GetTrustedAccessProgramRequest {
+  /// Identifier of the trusted access program.
+  pub program_identifier: Str? = None
+  /// The ID or ARN of a named Bedrock project owned by the calling account in
+  /// this Region. When omitted, resolves participation for the calling
+  /// account, including participation inherited from its current
+  /// organization. When specified, resolves participation for the project,
+  /// including participation inherited from the account and its current
+  /// organization. You cannot specify the default project. Omit this field to
+  /// resolve its inherited participation. An ARN from another account,
+  /// Region, or partition returns ValidationException. A project that does
+  /// not exist in the calling account returns ResourceNotFoundException.
+  pub project_identifier: Str? = None
+}
+
+/// The program's details and participation resolved for the calling account
+/// or requested project.
+pub struct GetTrustedAccessProgramResponse {
+  /// Identifier of the trusted access program.
+  pub program_id: Str? = None
+  /// Display name of the program.
+  pub name: Str? = None
+  /// Description of the program and its effects on model access or data
+  /// handling.
+  pub description: Str? = None
+  /// Name of the model provider offering the program.
+  pub provider_name: Str? = None
+  /// URL with program details, terms, and instructions for obtaining access.
+  pub details_url: Str? = None
+  /// Provider application intake URL. Omitted when the program has no
+  /// customer-facing intake URL.
+  pub enrollment_url: Str? = None
+  /// Participation status resolved for the account and optional project
+  /// context.
+  pub status: TrustedAccessProgramStatus? = None
+  /// Nonempty explanation for requestable or revoked status. Omitted for
+  /// other statuses.
+  pub status_reason: Str? = None
+  /// Scope deciding the status. This can differ from the scope supplying the
+  /// resolved opt-in preference and enrollment timestamps.
+  pub source: TrustedAccessProgramScope? = None
+  /// Scope supplying the applicable approval or most-specific revocation.
+  /// Omitted when no approval or revocation applies.
+  pub eligibility_scope: TrustedAccessProgramScope? = None
+  /// Account and optional project context for which participation was
+  /// resolved.
+  pub resolved_for: TrustedAccessResolutionContext? = None
+  /// Resolved customer preference, preserved independently of eligibility,
+  /// including while revoked.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// Last change to the enrollment supplying the resolved opt-in. Present for
+  /// enabled or disabled, including while revoked; omitted for inherit.
+  pub updated_at: Time? = None
 }
 
 pub struct GetUseCaseForModelAccessRequest {
@@ -5131,6 +5559,14 @@ pub struct ListFoundationModelsRequest {
   /// information, see Provisioned Throughput in the Amazon Bedrock User Guide
   /// .
   pub by_inference_type: InferenceType? = None
+  /// The ID or Amazon Resource Name (ARN) of a project. Amazon Bedrock uses
+  /// the project's trusted access program participation when determining
+  /// which models to return. The project must belong to your account in the
+  /// same AWS Region and partition as the request. If you omit this parameter
+  /// or specify default , Amazon Bedrock uses your account's participation,
+  /// including organization inheritance. A project that doesn't exist or is
+  /// archived causes a ValidationException .
+  pub project_identifier: Str? = None
 }
 
 pub struct ListFoundationModelsResponse {
@@ -5207,6 +5643,18 @@ pub struct ListInferenceProfilesRequest {
   /// the model in it. The inference profile may route requests to one or
   /// multiple regions.
   pub type_equals: InferenceProfileType? = None
+  /// The ID or Amazon Resource Name (ARN) of a project. Amazon Bedrock uses
+  /// the project's trusted access program participation when determining
+  /// which system-defined inference profiles to return. The project must
+  /// belong to your account in the same AWS Region and partition as the
+  /// request. If you omit this parameter or specify default , Amazon Bedrock
+  /// uses your account's participation, including organization inheritance. A
+  /// project that doesn't exist or is archived causes a ValidationException .
+  /// Specifying a project other than default with typeEquals set to
+  /// APPLICATION also causes a ValidationException . Omit typeEquals or set
+  /// it to SYSTEM_DEFINED to list system-defined inference profiles for the
+  /// project.
+  pub project_identifier: Str? = None
 }
 
 pub struct ListInferenceProfilesResponse {
@@ -5406,6 +5854,32 @@ pub struct ListModelInvocationJobsResponse {
   pub invocation_job_summaries: List[ModelInvocationJobSummary]? = None
 }
 
+/// The page size, continuation token, and optional lifecycle status filter
+/// for listing projects.
+pub struct ListProjectsRequest {
+  /// Continuation token from a previous ListProjects response.
+  pub next_token: Str? = None
+  /// The maximum number of projects to return in one response, from 1 to 100.
+  /// The default is 20.
+  pub max_results: Int? = None
+  /// Returns only the projects in this lifecycle status. When absent, no
+  /// status filtering is applied and every project is returned. New lifecycle
+  /// states extend the ProjectStatus enum, and with it this filter,
+  /// compatibly.
+  pub status_filter: ProjectStatus? = None
+}
+
+/// A page of projects and a continuation token when more results are
+/// available.
+pub struct ListProjectsResponse {
+  /// The projects returned for this page, including their details and data
+  /// retention settings.
+  pub project_summaries: List[ProjectSummary]? = None
+  /// Continuation token; present only when more results exist. Pass it in the
+  /// next request to fetch the following page.
+  pub next_token: Str? = None
+}
+
 pub struct ListPromptRoutersRequest {
   /// The maximum number of prompt routers to return in one page of results.
   pub max_results: Int? = None
@@ -5474,6 +5948,37 @@ pub struct ListTagsForResourceRequest {
 pub struct ListTagsForResourceResponse {
   /// An array of the tags associated with this resource.
   pub tags: List[Tag]? = None
+}
+
+/// The optional named project for which to resolve participation in visible
+/// trusted access programs.
+pub struct ListTrustedAccessProgramsRequest {
+  /// The ID or ARN of a named Bedrock project owned by the calling account in
+  /// this Region. When omitted, resolves participation for the calling
+  /// account, including participation inherited from its current
+  /// organization. When specified, resolves participation for the project,
+  /// including participation inherited from the account and its current
+  /// organization. You cannot specify the default project. Omit this field to
+  /// resolve its inherited participation. An ARN from another account,
+  /// Region, or partition returns ValidationException. A project that does
+  /// not exist in the calling account returns ResourceNotFoundException.
+  pub project_identifier: Str? = None
+  /// Reserved for future pagination support. Currently ignored; the response
+  /// includes all visible programs.
+  pub max_results: Int? = None
+  /// Reserved for future pagination support. Omit this field.
+  pub next_token: Str? = None
+}
+
+/// The visible trusted access programs and their resolved participation
+/// statuses.
+pub struct ListTrustedAccessProgramsResponse {
+  /// All visible programs with resolved participation, ordered by program ID.
+  /// Always present, including an empty array when no programs are visible.
+  pub program_summaries: List[TrustedAccessProgramSummary]? = None
+  /// Reserved for future pagination support. Currently omitted because the
+  /// response contains the complete list.
+  pub next_token: Str? = None
 }
 
 /// Configuration fields for invocation logging.
@@ -5921,6 +6426,48 @@ pub struct PricingTerm {
   pub rate_card: List[DimensionalPriceRate]? = None
 }
 
+/// A project's data-retention setting: the project-scope mode, which may be
+/// inherit to defer to the account scope or the model default. Uses the
+/// same mode space as the account-level data-retention operations; the
+/// effective mode for a request resolves project, then account, then model
+/// default.
+pub struct ProjectDataRetention {
+  /// The project's data retention mode. Use inherit to defer to the account
+  /// setting or model default.
+  pub mode: DataRetentionMode? = None
+}
+
+/// The lifecycle status of a project. An archived project rejects new
+/// inference requests and mutations; its stored data remains readable until
+/// it expires. There is no delete: archive is the terminal state.
+pub enum ProjectStatus: Str {
+  Active = "active"
+  Archived = "archived"
+  Unknown(value: Str)
+}
+
+/// A project. The same field set every project-returning operation uses:
+/// create, get, update, and archive all return the full project, and list
+/// returns one per project.
+pub struct ProjectSummary {
+  /// The project ID. The account's default project uses default ; a named
+  /// project's generated ID starts with proj_ .
+  pub id: Str? = None
+  /// The Amazon Resource Name (ARN) of the project.
+  pub arn: Str? = None
+  /// The project's display name. Project names do not have to be unique.
+  pub name: Str? = None
+  /// The project's lifecycle status.
+  pub status: ProjectStatus? = None
+  /// The time the project was created.
+  pub created_at: Time? = None
+  /// The time the project was archived.
+  pub archived_at: Time? = None
+  /// The project's data retention setting. A mode of inherit defers to the
+  /// account setting or model default.
+  pub data_retention: ProjectDataRetention? = None
+}
+
 pub enum PromptRouterStatus: Str {
   Available = "AVAILABLE"
   Unknown(value: Str)
@@ -6032,6 +6579,41 @@ pub struct PutAccountDataRetentionResponse {
   pub updated_at: Time? = None
 }
 
+/// The model provider and retention storage destination to configure for
+/// the calling account.
+pub struct PutAccountDataRetentionStorageRequest {
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where retained data is delivered for this scope. customer_managed
+  /// requires storageConfiguration; amazon_managed forbids it.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// Destination bucket and key. Required when storageDestination is
+  /// customer_managed; rejected with ValidationException when amazon_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+}
+
+/// The stored configuration after the write.
+pub struct PutAccountDataRetentionStorageResponse {
+  /// Scope addressed by the operation that returned this record.
+  pub scope: DataRetentionStorageScope? = None
+  /// Model provider this configuration applies to.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where this record delivers retained data.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// The stored destination and key. Present only when storageDestination is
+  /// customer_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+  /// Time the stored record last changed.
+  pub updated_at: Time? = None
+  /// Validation state of the KMS key. Present only when storageDestination is
+  /// customer_managed.
+  pub kms_key_status: DataRetentionStorageResourceStatus? = None
+  /// Validation state of the bucket. Present only when storageDestination is
+  /// customer_managed.
+  pub s3_bucket_status: DataRetentionStorageResourceStatus? = None
+}
+
 pub struct PutEnforcedGuardrailConfigurationRequest {
   /// Unique ID for the account enforced configuration.
   pub config_id: Str? = None
@@ -6056,6 +6638,83 @@ pub struct PutModelInvocationLoggingConfigurationRequest {
 pub struct PutModelInvocationLoggingConfigurationResponse {
 }
 
+/// The model provider and retention storage destination to configure for
+/// the organization.
+pub struct PutOrganizationDataRetentionStorageRequest {
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where retained data is delivered for this scope. customer_managed
+  /// requires storageConfiguration; amazon_managed forbids it.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// Destination bucket and key. Required when storageDestination is
+  /// customer_managed; rejected with ValidationException when amazon_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+}
+
+/// The organization's stored retention storage configuration after the
+/// write.
+pub struct PutOrganizationDataRetentionStorageResponse {
+  /// Scope addressed by the operation that returned this record.
+  pub scope: DataRetentionStorageScope? = None
+  /// Model provider this configuration applies to.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where this record delivers retained data.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// The stored destination and key. Present only when storageDestination is
+  /// customer_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+  /// Time the stored record last changed.
+  pub updated_at: Time? = None
+  /// Validation state of the KMS key. Present only when storageDestination is
+  /// customer_managed.
+  pub kms_key_status: DataRetentionStorageResourceStatus? = None
+  /// Validation state of the bucket. Present only when storageDestination is
+  /// customer_managed.
+  pub s3_bucket_status: DataRetentionStorageResourceStatus? = None
+}
+
+/// The project, model provider, and retention storage destination to
+/// configure.
+pub struct PutProjectDataRetentionStorageRequest {
+  /// The ID or ARN of a named project owned by the calling account in this
+  /// AWS Region. The default project is not supported; use the account-level
+  /// retention storage operations instead.
+  pub project_identifier: Str? = None
+  /// The model provider whose retention storage configuration is addressed by
+  /// this request.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where retained data is delivered for this scope. customer_managed
+  /// requires storageConfiguration; amazon_managed forbids it.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// Destination bucket and key. Required when storageDestination is
+  /// customer_managed; rejected with ValidationException when amazon_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+}
+
+/// The project's stored retention storage configuration after the write.
+pub struct PutProjectDataRetentionStorageResponse {
+  /// Scope addressed by the operation that returned this record.
+  pub scope: DataRetentionStorageScope? = None
+  /// Model provider this configuration applies to.
+  pub model_provider: DataRetentionStorageModelProvider? = None
+  /// Where this record delivers retained data.
+  pub storage_destination: DataRetentionStorageDestination? = None
+  /// The stored destination and key. Present only when storageDestination is
+  /// customer_managed.
+  pub storage_configuration: DataRetentionStorageConfiguration? = None
+  /// Time the stored record last changed.
+  pub updated_at: Time? = None
+  /// Validation state of the KMS key. Present only when storageDestination is
+  /// customer_managed.
+  pub kms_key_status: DataRetentionStorageResourceStatus? = None
+  /// Validation state of the bucket. Present only when storageDestination is
+  /// customer_managed.
+  pub s3_bucket_status: DataRetentionStorageResourceStatus? = None
+  /// ARN of the configured project.
+  pub project_arn: Str? = None
+}
+
 pub struct PutResourcePolicyRequest {
   /// The ARN of the Bedrock resource to which this resource policy applies.
   pub resource_arn: Str? = None
@@ -6066,6 +6725,75 @@ pub struct PutResourcePolicyRequest {
 pub struct PutResourcePolicyResponse {
   /// The ARN of the Bedrock resource to which this resource policy applies.
   pub resource_arn: Str? = None
+}
+
+/// The trusted access program and enrollment preference to save for the
+/// calling account.
+pub struct PutTrustedAccessProgramAccountEnrollmentRequest {
+  /// The identifier of the trusted access program.
+  pub program_identifier: Str? = None
+  /// The enrollment preference to store. A transition to enabled accepts the
+  /// program's terms. Changing the preference records a new updatedAt.
+  /// Repeating the same stored preference preserves updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+}
+
+/// The account's resulting stored enrollment setting. An initial inherit
+/// write creates a stored setting with updatedAt.
+pub struct PutTrustedAccessProgramAccountEnrollmentResponse {
+  /// Stored preference at the addressed scope. A missing enrollment returns
+  /// inherit without updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// The time the stored enrollment setting last changed.
+  pub updated_at: Time? = None
+}
+
+/// The trusted access program and enrollment preference to save for the
+/// organization.
+pub struct PutTrustedAccessProgramOrganizationEnrollmentRequest {
+  /// The identifier of the trusted access program.
+  pub program_identifier: Str? = None
+  /// The enrollment preference to store for the organization. A transition to
+  /// enabled accepts the program's terms. Changing the preference records a
+  /// new updatedAt. Repeating the same stored preference preserves updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+}
+
+/// The organization's resulting stored enrollment setting. An initial
+/// inherit write creates a stored setting with updatedAt.
+pub struct PutTrustedAccessProgramOrganizationEnrollmentResponse {
+  /// Stored preference at the addressed scope. A missing enrollment returns
+  /// inherit without updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// The time the stored enrollment setting last changed.
+  pub updated_at: Time? = None
+}
+
+/// The trusted access program, named project, and enrollment preference to
+/// save.
+pub struct PutTrustedAccessProgramProjectEnrollmentRequest {
+  /// The identifier of the trusted access program.
+  pub program_identifier: Str? = None
+  /// The id or ARN of the named Bedrock project. The default project is not
+  /// supported; use PutTrustedAccessProgramAccountEnrollment for
+  /// account-level enrollment. An ARN from another account, Region, or
+  /// partition returns ValidationException. A project that does not exist in
+  /// the calling account returns ResourceNotFoundException.
+  pub project_identifier: Str? = None
+  /// The enrollment preference to store. A transition to enabled accepts the
+  /// program's terms. Changing the preference records a new updatedAt.
+  /// Repeating the same stored preference preserves updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+}
+
+/// The project's resulting stored enrollment setting. An initial inherit
+/// write creates a stored setting with updatedAt.
+pub struct PutTrustedAccessProgramProjectEnrollmentResponse {
+  /// Stored preference at the addressed scope. A missing enrollment returns
+  /// inherit without updatedAt.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// The time the stored enrollment setting last changed.
+  pub updated_at: Time? = None
 }
 
 pub struct PutUseCaseForModelAccessRequest {
@@ -6432,6 +7160,54 @@ pub struct StartAutomatedReasoningPolicyTestWorkflowResponse {
   pub policy_arn: Str? = None
 }
 
+/// Identifies the trusted access program for which to prepare an account
+/// application handoff.
+pub struct StartTrustedAccessProgramAccountApplicationRequest {
+  /// Identifier of the trusted access program.
+  pub program_identifier: Str? = None
+}
+
+/// The information needed to continue the account's application with the
+/// provider.
+pub struct StartTrustedAccessProgramAccountApplicationResponse {
+  /// Provider handoff for the calling account.
+  pub result: TrustedAccessProgramApplicationResult? = None
+}
+
+/// Identifies the trusted access program for which to prepare an
+/// organization application handoff.
+pub struct StartTrustedAccessProgramOrganizationApplicationRequest {
+  /// Identifier of the trusted access program.
+  pub program_identifier: Str? = None
+}
+
+/// The information needed to continue the organization's application with
+/// the provider.
+pub struct StartTrustedAccessProgramOrganizationApplicationResponse {
+  /// Provider handoff for the calling account's current organization.
+  pub result: TrustedAccessProgramApplicationResult? = None
+}
+
+/// Identifies the trusted access program and named project for which to
+/// prepare an application handoff.
+pub struct StartTrustedAccessProgramProjectApplicationRequest {
+  /// Identifier of the trusted access program.
+  pub program_identifier: Str? = None
+  /// The id or ARN of the named Bedrock project. The default project is not
+  /// supported; use StartTrustedAccessProgramAccountApplication for an
+  /// account-level application. An ARN from another account, Region, or
+  /// partition returns ValidationException. A project that does not exist in
+  /// the calling account returns ResourceNotFoundException.
+  pub project_identifier: Str? = None
+}
+
+/// The information needed to continue the project's application with the
+/// provider.
+pub struct StartTrustedAccessProgramProjectApplicationResponse {
+  /// Provider handoff for the named project.
+  pub result: TrustedAccessProgramApplicationResult? = None
+}
+
 pub enum Status: Str {
   Registered = "REGISTERED"
   IncompatibleEndpoint = "INCOMPATIBLE_ENDPOINT"
@@ -6593,6 +7369,111 @@ pub struct TrainingDetails {
 pub struct TrainingMetrics {
   /// Loss metric associated with the custom job.
   pub training_loss: Float32? = None
+}
+
+/// Result of preparing an application. A provider handoff does not submit
+/// an application, grant eligibility, or change enrollment. Clients must
+/// tolerate unknown union members.
+pub enum TrustedAccessProgramApplicationResult {
+  ProviderHandoff(value: TrustedAccessProgramProviderHandoff)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// Customer preference for a trusted access program. Clients must tolerate
+/// unknown values.
+pub enum TrustedAccessProgramOptIn: Str {
+  Inherit = "inherit"
+  Enabled = "enabled"
+  Disabled = "disabled"
+  Unknown(value: Str)
+}
+
+/// Information needed to continue an application with the provider.
+pub struct TrustedAccessProgramProviderHandoff {
+  /// Provider intake URL. When present, open it and paste the complete
+  /// application token into the provider's token field. Omitted when the
+  /// provider receives the application token through a separate integration.
+  pub enrollment_url: Str? = None
+  /// Opaque token binding the application to the authenticated customer,
+  /// requested program, and scope.
+  pub application_token: Str? = None
+  /// Deadline for the provider to accept the application context. Start
+  /// another application handoff if the token expires before acceptance.
+  pub application_token_expires_at: Time? = None
+}
+
+/// Scope supplying a trusted access decision. Clients must tolerate unknown
+/// values.
+pub enum TrustedAccessProgramScope: Str {
+  Organization = "organization"
+  Account = "account"
+  Project = "project"
+  ProgramDefault = "program_default"
+  Unknown(value: Str)
+}
+
+/// Resolved participation status for a trusted access program. Clients must
+/// tolerate unknown values.
+pub enum TrustedAccessProgramStatus: Str {
+  Requestable = "requestable"
+  Eligible = "eligible"
+  Enabled = "enabled"
+  Disabled = "disabled"
+  Revoked = "revoked"
+  Unknown(value: Str)
+}
+
+/// Program details and participation resolved for the calling account and
+/// optional named project.
+pub struct TrustedAccessProgramSummary {
+  /// Identifier of the trusted access program.
+  pub program_id: Str? = None
+  /// Display name of the program.
+  pub name: Str? = None
+  /// Description of the program and its effects on model access or data
+  /// handling.
+  pub description: Str? = None
+  /// Name of the model provider offering the program.
+  pub provider_name: Str? = None
+  /// URL with program details, terms, and instructions for obtaining access.
+  pub details_url: Str? = None
+  /// Provider application intake URL. Omitted when the program has no
+  /// customer-facing intake URL.
+  pub enrollment_url: Str? = None
+  /// Participation status resolved for the account and optional project
+  /// context.
+  pub status: TrustedAccessProgramStatus? = None
+  /// Nonempty explanation for requestable or revoked status. Omitted for
+  /// other statuses.
+  pub status_reason: Str? = None
+  /// Scope deciding the status. This can differ from the scope supplying the
+  /// resolved opt-in preference and enrollment timestamps.
+  pub source: TrustedAccessProgramScope? = None
+  /// Scope supplying the applicable approval or most-specific revocation.
+  /// Omitted when no approval or revocation applies.
+  pub eligibility_scope: TrustedAccessProgramScope? = None
+  /// Account and optional project context for which participation was
+  /// resolved.
+  pub resolved_for: TrustedAccessResolutionContext? = None
+  /// Resolved customer preference, preserved independently of eligibility,
+  /// including while revoked.
+  pub opt_in: TrustedAccessProgramOptIn? = None
+  /// Last change to the enrollment supplying the resolved opt-in. Present for
+  /// enabled or disabled, including while revoked; omitted for inherit.
+  pub updated_at: Time? = None
+}
+
+/// Account and optional project context evaluated when resolving a trusted
+/// access program's status.
+pub struct TrustedAccessResolutionContext {
+  /// AWS account for which the program status was resolved, including
+  /// applicable organization settings.
+  pub account_id: Str? = None
+  /// The canonical ARN of the authorized named project for which
+  /// participation was resolved. Omitted when the request has no project
+  /// context.
+  pub project_arn: Str? = None
 }
 
 pub struct UntagResourceRequest {
@@ -6764,6 +7645,38 @@ pub struct UpdateMarketplaceModelEndpointRequest {
 pub struct UpdateMarketplaceModelEndpointResponse {
   /// Details about the updated endpoint.
   pub marketplace_model_endpoint: MarketplaceModelEndpoint? = None
+}
+
+/// Identifies the project and the field to update. Specify exactly one of
+/// name or dataRetention .
+pub struct UpdateProjectRequest {
+  /// The id or ARN of the project to update.
+  pub project_identifier: Str? = None
+  /// The project's new display name. Specify this field only when
+  /// dataRetention is omitted. Project names do not have to be unique.
+  pub name: Str? = None
+  /// The project's new data-retention mode. Must be set on its own.
+  pub data_retention: ProjectDataRetention? = None
+}
+
+/// The project after the update.
+pub struct UpdateProjectResponse {
+  /// The project ID. The account's default project uses default ; a named
+  /// project's generated ID starts with proj_ .
+  pub id: Str? = None
+  /// The Amazon Resource Name (ARN) of the project.
+  pub arn: Str? = None
+  /// The project's display name. Project names do not have to be unique.
+  pub name: Str? = None
+  /// The project's lifecycle status.
+  pub status: ProjectStatus? = None
+  /// The time the project was created.
+  pub created_at: Time? = None
+  /// The time the project was archived.
+  pub archived_at: Time? = None
+  /// The project's data retention setting. A mode of inherit defers to the
+  /// account setting or model default.
+  pub data_retention: ProjectDataRetention? = None
 }
 
 pub struct UpdateProvisionedModelThroughputRequest {

@@ -35,6 +35,9 @@ pub struct AcceptLinkResponse {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The unique identifier of the link.
   pub link_id: Str? = None
 }
@@ -90,6 +93,39 @@ pub struct AutoScalingGroupsConfiguration {
   pub health_check_config: HealthCheckConfig? = None
 }
 
+/// A module that you can attach, as ListAvailableModules returns it.
+/// ListAvailableModules and GetAvailableModule never return how a module is
+/// implemented.
+pub struct AvailableModuleSummary {
+  /// The module's ID.
+  pub module_id: Str? = None
+  /// The module's ARN.
+  pub module_arn: Str? = None
+  /// A label, not unique: modules can share a name.
+  pub module_name: Str? = None
+  /// The type of access that you have to the module.
+  pub subscription_type: SubscriptionType? = None
+  /// Specifies whether your access to the module is current.
+  pub subscription_status: SubscriptionStatus? = None
+  /// The Marketplace product the module is sold under. Present only when
+  /// subscriptionType is MARKETPLACE.
+  pub marketplace_product_id: Str? = None
+}
+
+/// A version of a module that you can attach, as
+/// ListAvailableModuleVersions returns it. ListAvailableModuleVersions and
+/// GetAvailableModuleVersion never return how a version is implemented.
+pub struct AvailableModuleVersionSummary {
+  /// The version.
+  pub version: Str? = None
+  /// The version's ARN.
+  pub module_version_arn: Str? = None
+  /// ACTIVE or DEPRECATED.
+  pub status: ModuleVersionStatus? = None
+  /// The time when the version was created.
+  pub created_at: Time? = None
+}
+
 /// The status of a certificate association with a gateway.
 pub enum CertificateAssociationStatus: Str {
   PendingAssociation = "PENDING_ASSOCIATION"
@@ -115,6 +151,16 @@ pub struct CertificateAssociationSummary {
 pub enum ClientRoutingPolicy: Str {
   AvailabilityZoneAffinity = "AVAILABILITY_ZONE_AFFINITY"
   AnyAvailabilityZone = "ANY_AVAILABILITY_ZONE"
+  Unknown(value: Str)
+}
+
+/// A capability that you can turn on when you attach a version, such as
+/// FILTER or OBSERVE. Each capability needs a minimum permission.
+pub enum ConfigurableAction: Str {
+  Filter = "FILTER"
+  EnrichRequestExt = "ENRICH_REQUEST_EXT"
+  EnrichRequestHeaders = "ENRICH_REQUEST_HEADERS"
+  Observe = "OBSERVE"
   Unknown(value: Str)
 }
 
@@ -210,6 +256,9 @@ pub struct CreateLinkResponse {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The unique identifier of the link.
   pub link_id: Str? = None
   /// The customer-provided unique identifier of the link.
@@ -508,6 +557,35 @@ pub struct EksEndpointsConfiguration {
   pub role_arn: Str? = None
 }
 
+/// Why a resource, or a change to it, failed.
+pub enum ErrorCode: Str {
+  VpcNotFound = "VPC_NOT_FOUND"
+  Ec2SubnetNotFound = "EC2_SUBNET_NOT_FOUND"
+  Ec2SecurityGroupNotFound = "EC2_SECURITY_GROUP_NOT_FOUND"
+  Ec2SubnetIpExhaustion = "EC2_SUBNET_IP_EXHAUSTION"
+  IamAssumeRoleAccessDenied = "IAM_ASSUME_ROLE_ACCESS_DENIED"
+  InternalError = "INTERNAL_ERROR"
+  Unknown(value: Str)
+}
+
+/// Describes one cause of a failure of a resource or an update, with an
+/// error code, a description, and the IDs of the resources involved.
+pub struct ErrorDetail {
+  /// The error code for what failed.
+  pub code: ErrorCode? = None
+  /// A description of the failure.
+  pub message: Str? = None
+  /// The IDs of the resources involved, such as a subnet or security group.
+  pub resource_ids: List[Str]? = None
+}
+
+/// What the flow does when the module fails or times out.
+pub enum FailureMode: Str {
+  Open = "OPEN"
+  Closed = "CLOSED"
+  Unknown(value: Str)
+}
+
 /// Describes the configuration of a filter.
 pub struct Filter {
   /// Describes the criteria for a filter.
@@ -528,11 +606,123 @@ pub enum FilterType: Str {
   Unknown(value: Str)
 }
 
+/// One flow on a link: a set of modules that runs on the link's bid
+/// requests.
+pub struct Flow {
+  /// The flow's name, unique within the link.
+  pub name: Str? = None
+  /// The pipeline that the flow's modules run in. In a sequential pipeline,
+  /// each module sees the previous module's output. In a phased pipeline, a
+  /// phase's modules see the prior phase's output, not each other's.
+  pub pipeline: FlowPipeline? = None
+}
+
+/// A version attached to a flow, with its settings.
+pub struct FlowModule {
+  /// The module's name, unique within the flow.
+  pub name: Str? = None
+  /// The version to attach. It must be ACTIVE and available to you (see
+  /// ListAvailableModuleVersions). You can keep a version that's already in
+  /// the link's flows after it's deprecated, but you can't give it a higher
+  /// share of traffic.
+  pub module_version_arn: Str? = None
+  /// The capabilities to turn on, chosen from the version's
+  /// configurableActions . If the version exposes one, it's the default. If
+  /// the version exposes more than one, this field is required. If it exposes
+  /// none, omit this field.
+  pub selected_actions: List[ConfigurableAction]? = None
+  /// Specifies what happens when the module fails – when its call fails or
+  /// times out, or when an express module's dataset is stale. The default is
+  /// OPEN.
+  pub failure_mode: FailureMode? = None
+  /// The percentage of the flow's requests that the module runs on. The flow
+  /// skips the module on the rest of the requests. The default is 100.
+  pub activation_percentage: Float32? = None
+  /// RTB Fabric validates the value against the version's configurationSchema
+  /// and rejects a value that fails with ValidationException. Omit it when
+  /// the schema is empty or fully defaulted.
+  pub configuration_values: Str? = None
+}
+
+/// One phase of a phased pipeline. Its modules run concurrently on the
+/// previous phase's output.
+pub struct FlowPhase {
+  /// At most one MUTATE_REQUEST_BODY module.
+  pub modules: List[FlowModule]? = None
+}
+
+/// How a flow's modules run. In sequential , each module sees the previous
+/// module's output; in phased , a phase's modules see the prior phase's
+/// output, not each other's. Set exactly one. New members can be added, so
+/// handle an unknown one.
+pub enum FlowPipeline {
+  Sequential(value: SequentialPipeline)
+  Phased(value: PhasedPipeline)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
 /// The type of gateway.
 pub enum GatewayType: Str {
   External = "EXTERNAL"
   Internal = "INTERNAL"
   Unknown(value: Str)
+}
+
+pub struct GetAvailableModuleRequest {
+  /// The module's ID.
+  pub module_id: Str? = None
+}
+
+pub struct GetAvailableModuleResponse {
+  /// The module's ID.
+  pub module_id: Str? = None
+  /// The module's ARN.
+  pub module_arn: Str? = None
+  /// A label, not unique: modules can share a name.
+  pub module_name: Str? = None
+  /// The module's description.
+  pub description: Str? = None
+  /// The type of access that you have to the module.
+  pub subscription_type: SubscriptionType? = None
+  /// Specifies whether your access to the module is current.
+  pub subscription_status: SubscriptionStatus? = None
+  /// The Marketplace product the module is sold under. Present only when
+  /// subscriptionType is MARKETPLACE.
+  pub marketplace_product_id: Str? = None
+  /// The time when the module was created.
+  pub created_at: Time? = None
+}
+
+pub struct GetAvailableModuleVersionRequest {
+  /// The module's ID.
+  pub module_id: Str? = None
+  /// The version.
+  pub version: Str? = None
+}
+
+pub struct GetAvailableModuleVersionResponse {
+  /// The module's ID.
+  pub module_id: Str? = None
+  /// The version.
+  pub version: Str? = None
+  /// The version's ARN.
+  pub module_version_arn: Str? = None
+  /// ACTIVE or DEPRECATED.
+  pub status: ModuleVersionStatus? = None
+  /// The data-access grants the version holds.
+  pub permissions: List[ModulePermission]? = None
+  /// The capabilities that you can turn on when you attach the version.
+  pub configurable_actions: List[ConfigurableAction]? = None
+  /// The JSON Schema for the parameters that you can set in
+  /// configurationValues when you attach the version.
+  pub configuration_schema: Str? = None
+  /// The vendor's release notes.
+  pub release_notes: Str? = None
+  /// The time when the version was created.
+  pub created_at: Time? = None
+  /// The time when the version last changed.
+  pub updated_at: Time? = None
 }
 
 pub struct GetCertificateAssociationRequest {
@@ -553,6 +743,9 @@ pub struct GetCertificateAssociationResponse {
   pub associated_at: Time? = None
   /// The timestamp of when the certificate association was last updated.
   pub updated_at: Time? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
 }
 
 pub struct GetInboundExternalLinkRequest {
@@ -588,6 +781,16 @@ pub struct GetInboundExternalLinkResponse {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
+  /// The link's concurrency token. Pass it to PutLinkFlows unchanged; it
+  /// changes whenever the link does.
+  pub lock_token: Str? = None
+  /// The link's active flows, in the form PutLinkFlows takes. Empty when the
+  /// link has no modules, and absent when its modules were set with
+  /// UpdateLinkModuleFlow.
+  pub flows: List[Flow]? = None
 }
 
 pub struct GetLinkRequest {
@@ -620,6 +823,9 @@ pub struct GetLinkResponse {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The unique identifier of the link.
   pub link_id: Str? = None
   /// A map of the key-value pairs for the tag or tags assigned to the
@@ -629,6 +835,13 @@ pub struct GetLinkResponse {
   pub http_responder_allowed: Bool? = None
   /// The timeout value in milliseconds.
   pub timeout_in_millis: Int? = None
+  /// The link's concurrency token. Pass it to PutLinkFlows unchanged; it
+  /// changes whenever the link does.
+  pub lock_token: Str? = None
+  /// The link's active flows, in the form PutLinkFlows takes. Empty when the
+  /// link has no modules, and absent when its modules were set with
+  /// UpdateLinkModuleFlow.
+  pub flows: List[Flow]? = None
 }
 
 pub struct GetLinkRoutingRuleRequest {
@@ -660,6 +873,9 @@ pub struct GetLinkRoutingRuleResponse {
   /// A map of the key-value pairs for the tag or tags assigned to the
   /// specified resource.
   pub tags: Map[Str, Str]? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
 }
 
 pub struct GetOutboundExternalLinkRequest {
@@ -694,6 +910,16 @@ pub struct GetOutboundExternalLinkResponse {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
+  /// The link's concurrency token. Pass it to PutLinkFlows unchanged; it
+  /// changes whenever the link does.
+  pub lock_token: Str? = None
+  /// The link's active flows, in the form PutLinkFlows takes. Empty when the
+  /// link has no modules, and absent when its modules were set with
+  /// UpdateLinkModuleFlow.
+  pub flows: List[Flow]? = None
 }
 
 pub struct GetRequesterGatewayRequest {
@@ -712,6 +938,9 @@ pub struct GetRequesterGatewayResponse {
   pub created_at: Time? = None
   /// The timestamp of when the requester gateway was updated.
   pub updated_at: Time? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The unique identifier of the Virtual Private Cloud (VPC).
   pub vpc_id: Str? = None
   /// The unique identifiers of the subnets.
@@ -749,6 +978,9 @@ pub struct GetResponderGatewayResponse {
   pub created_at: Time? = None
   /// The timestamp of when the responder gateway was updated.
   pub updated_at: Time? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The domain name of the responder gateway.
   pub domain_name: Str? = None
   /// The networking port.
@@ -785,6 +1017,18 @@ pub struct GetResponderGatewayResponse {
   /// information, see Configuring Availability Zone affinity in the Amazon
   /// Web Services RTB Fabric User Guide .
   pub client_routing_policy: ClientRoutingPolicy? = None
+}
+
+pub struct GetUpdateRequest {
+  /// The unique identifier of the gateway.
+  pub gateway_id: Str? = None
+  /// The unique identifier of the update.
+  pub update_id: Str? = None
+}
+
+pub struct GetUpdateResponse {
+  /// The update.
+  pub update: Update? = None
 }
 
 /// Describes the header tag for a bid action.
@@ -851,10 +1095,25 @@ pub struct LinkAttributes {
   pub customer_provided_id: Str? = None
 }
 
+/// A requested link configuration.
+pub struct LinkConfigParameters {
+  pub log_settings: LinkLogSettings? = None
+  /// The timeout value in milliseconds.
+  pub timeout_in_millis: Int? = None
+}
+
 pub enum LinkDirection: Str {
   Response = "RESPONSE"
   Request = "REQUEST"
   Unknown(value: Str)
+}
+
+/// A requested link flow.
+pub enum LinkFlowParameters {
+  Modules(value: List[ModuleConfiguration])
+  Flows(value: List[Flow])
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// Describes the settings for a link log.
@@ -877,6 +1136,9 @@ pub struct LinkRoutingRuleSummary {
   pub created_at: Time? = None
   /// The timestamp of when the routing rule was last updated.
   pub updated_at: Time? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
 }
 
 pub enum LinkStatus: Str {
@@ -893,7 +1155,66 @@ pub enum LinkStatus: Str {
   PendingIsolation = "PENDING_ISOLATION"
   Isolated = "ISOLATED"
   PendingRestoration = "PENDING_RESTORATION"
+  CreateFailed = "CREATE_FAILED"
+  DeleteFailed = "DELETE_FAILED"
   Unknown(value: Str)
+}
+
+/// The link an update targeted.
+pub struct LinkTarget {
+  /// The unique identifier of the link.
+  pub link_id: Str? = None
+}
+
+pub struct ListAvailableModuleVersionsRequest {
+  /// The module's ID.
+  pub module_id: Str? = None
+  /// Lists only versions in this status. Only ACTIVE and DEPRECATED versions
+  /// are listed, so another value returns an empty list.
+  pub status: ModuleVersionStatus? = None
+  /// The maximum number of results for each page, from 1 to 10. The default
+  /// is 10.
+  pub max_results: Int? = None
+  /// If nextToken is returned, there are more results available. Make the
+  /// call again using the returned token to retrieve the next page. Keep all
+  /// other arguments unchanged. Each pagination token expires after 24 hours;
+  /// using an expired token fails with ValidationException.
+  pub next_token: Str? = None
+}
+
+pub struct ListAvailableModuleVersionsResponse {
+  /// The module's ID.
+  pub module_id: Str? = None
+  /// The versions on this page, highest version first.
+  pub versions: List[AvailableModuleVersionSummary]? = None
+  /// If nextToken is returned, there are more results available. Make the
+  /// call again using the returned token to retrieve the next page. Keep all
+  /// other arguments unchanged. Each pagination token expires after 24 hours;
+  /// using an expired token fails with ValidationException.
+  pub next_token: Str? = None
+}
+
+pub struct ListAvailableModulesRequest {
+  /// Lists only modules that you have access to this way.
+  pub subscription_type: SubscriptionType? = None
+  /// The maximum number of results for each page, from 1 to 10. The default
+  /// is 10.
+  pub max_results: Int? = None
+  /// If nextToken is returned, there are more results available. Make the
+  /// call again using the returned token to retrieve the next page. Keep all
+  /// other arguments unchanged. Each pagination token expires after 24 hours;
+  /// using an expired token fails with ValidationException.
+  pub next_token: Str? = None
+}
+
+pub struct ListAvailableModulesResponse {
+  /// The modules on this page, newest first.
+  pub modules: List[AvailableModuleSummary]? = None
+  /// If nextToken is returned, there are more results available. Make the
+  /// call again using the returned token to retrieve the next page. Keep all
+  /// other arguments unchanged. Each pagination token expires after 24 hours;
+  /// using an expired token fails with ValidationException.
+  pub next_token: Str? = None
 }
 
 pub struct ListCertificateAssociationsRequest {
@@ -1002,6 +1323,9 @@ pub struct ListLinksResponseStructure {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The unique identifier of the link.
   pub link_id: Str? = None
   /// A map of the key-value pairs of the tag or tags to assign to the
@@ -1073,6 +1397,36 @@ pub struct ListTagsForResourceResponse {
   pub tags: Map[Str, Str]? = None
 }
 
+pub struct ListUpdatesRequest {
+  /// The unique identifier of the gateway.
+  pub gateway_id: Str? = None
+  /// The ID of a link on this gateway, to list only that link's updates. Omit
+  /// both linkId and ruleId to list the gateway's own updates.
+  pub link_id: Str? = None
+  /// The ID of a routing rule, to list only that rule's updates. Requires
+  /// linkId , because you address a rule through its link. A ruleId without
+  /// linkId fails with ValidationException.
+  pub rule_id: Str? = None
+  /// Lists only updates of this type.
+  pub type_value: UpdateType? = None
+  /// Lists only updates in this status.
+  pub status: UpdateStatus? = None
+  /// If nextToken is returned, there are more results available. Make the
+  /// call again using the returned token to retrieve the next page. Keep all
+  /// other arguments unchanged.
+  pub next_token: Str? = None
+  /// The maximum number of results to return for each call.
+  pub max_results: Int? = None
+}
+
+pub struct ListUpdatesResponse {
+  /// The updates on this page.
+  pub updates: List[UpdateSummary]? = None
+  /// If nextToken is returned, there are more results available. Make the
+  /// call again using the returned token to retrieve the next page.
+  pub next_token: Str? = None
+}
+
 /// Listener configuration for the protocols (HTTP, HTTPS, or both) accepted
 /// by the gateway.
 pub struct ListenerConfig {
@@ -1109,6 +1463,28 @@ pub enum ModuleParameters {
   Unknown(tag: Str)
 }
 
+/// A data-access grant that a version holds.
+pub enum ModulePermission: Str {
+  ReadRequestBody = "READ_REQUEST_BODY"
+  ReadRequestHeaders = "READ_REQUEST_HEADERS"
+  MutateRequestBody = "MUTATE_REQUEST_BODY"
+  EnrichRequestHeaders = "ENRICH_REQUEST_HEADERS"
+  EnrichRequestExt = "ENRICH_REQUEST_EXT"
+  Filter = "FILTER"
+  Unknown(value: Str)
+}
+
+/// A version is CREATING while it is validated, then ACTIVE or
+/// CREATE_FAILED. An ACTIVE version becomes DEPRECATED at the time its
+/// vendor schedules.
+pub enum ModuleVersionStatus: Str {
+  Creating = "CREATING"
+  CreateFailed = "CREATE_FAILED"
+  Active = "ACTIVE"
+  Deprecated = "DEPRECATED"
+  Unknown(value: Str)
+}
+
 /// Describes a no bid action.
 pub struct NoBidAction {
   /// The reason code for the no bid action.
@@ -1137,10 +1513,51 @@ pub struct OpenRtbAttributeModuleParameters {
   pub holdback_percentage: Float32? = None
 }
 
+/// Phases that run in order; each starts after the previous one completes.
+pub struct PhasedPipeline {
+  /// At most 8 modules in total across the phases; more fails with
+  /// ValidationException.
+  pub phases: List[FlowPhase]? = None
+}
+
 pub enum Protocol: Str {
   Http = "HTTP"
   Https = "HTTPS"
   Unknown(value: Str)
+}
+
+pub struct PutLinkFlowsRequest {
+  /// The unique identifier of the gateway.
+  pub gateway_id: Str? = None
+  /// The unique identifier of the link.
+  pub link_id: Str? = None
+  /// A unique, case-sensitive identifier that you provide to ensure that the
+  /// operation completes no more than one time. If you retry with the same
+  /// token and parameters, you get the original response without an error. If
+  /// you retry with the same token but different parameters, the call fails
+  /// with ValidationException. If you don't provide a token, the SDK
+  /// generates one, and RTB Fabric remembers it for 8 hours. A retry returns
+  /// the original updateId before lockToken is checked.
+  pub client_token: Str? = None
+  /// The concurrency token that you read from GetLink. If the link changed
+  /// since that read, by any operation, the call fails with
+  /// ConflictException.
+  pub lock_token: Str? = None
+  /// The link's flows, replacing the current ones. An empty list removes
+  /// every flow.
+  pub flows: List[Flow]? = None
+}
+
+pub struct PutLinkFlowsResponse {
+  /// The unique identifier of the gateway.
+  pub gateway_id: Str? = None
+  /// The unique identifier of the link.
+  pub link_id: Str? = None
+  /// The link's status. A successful call returns PENDING_UPDATE, and the
+  /// link serves its prior flows until the change completes.
+  pub status: LinkStatus? = None
+  /// The ID of the update this call started.
+  pub update_id: Str? = None
 }
 
 /// A key-value pair for query string matching in a routing rule condition.
@@ -1188,6 +1605,9 @@ pub struct RejectLinkResponse {
   pub log_settings: LinkLogSettings? = None
   /// The connectivity type of the link.
   pub connectivity_type: ConnectivityType? = None
+  /// The causes of the failure, such as a deleted subnet. Present only when
+  /// the resource has failed.
+  pub error_details: List[ErrorDetail]? = None
   /// The unique identifier of the link.
   pub link_id: Str? = None
 }
@@ -1202,6 +1622,8 @@ pub enum RequesterGatewayStatus: Str {
   Isolated = "ISOLATED"
   PendingIsolation = "PENDING_ISOLATION"
   PendingRestoration = "PENDING_RESTORATION"
+  CreateFailed = "CREATE_FAILED"
+  DeleteFailed = "DELETE_FAILED"
   Unknown(value: Str)
 }
 
@@ -1235,6 +1657,23 @@ pub enum ResponderErrorMaskingLoggingType: Str {
   Unknown(value: Str)
 }
 
+/// A requested responder gateway configuration.
+pub struct ResponderGatewayConfigParameters {
+  /// The gateway's description.
+  pub description: Str? = None
+  /// The gateway's client routing policy.
+  pub client_routing_policy: ClientRoutingPolicy? = None
+  /// The gateway's domain name.
+  pub domain_name: Str? = None
+  /// The networking port.
+  pub port: Int? = None
+  /// The networking protocol.
+  pub protocol: Protocol? = None
+  pub listener_config: ListenerConfig? = None
+  pub trust_store_configuration: TrustStoreConfiguration? = None
+  pub managed_endpoint_configuration: ManagedEndpointConfiguration? = None
+}
+
 pub enum ResponderGatewayStatus: Str {
   PendingCreation = "PENDING_CREATION"
   Active = "ACTIVE"
@@ -1245,7 +1684,22 @@ pub enum ResponderGatewayStatus: Str {
   Isolated = "ISOLATED"
   PendingIsolation = "PENDING_ISOLATION"
   PendingRestoration = "PENDING_RESTORATION"
+  CreateFailed = "CREATE_FAILED"
+  DeleteFailed = "DELETE_FAILED"
   Unknown(value: Str)
+}
+
+/// A requested routing rule.
+pub struct RoutingRuleParameters {
+  pub priority: Int? = None
+  pub conditions: RuleCondition? = None
+}
+
+/// The routing rule an update targeted.
+pub struct RoutingRuleTarget {
+  /// The unique identifier of the rule's link.
+  pub link_id: Str? = None
+  pub rule_id: Str? = None
 }
 
 /// The conditions for a routing rule. All specified fields must match for
@@ -1276,12 +1730,37 @@ pub enum RuleStatus: Str {
   DeletionInProgress = "DELETION_IN_PROGRESS"
   Deleted = "DELETED"
   Failed = "FAILED"
+  CreateFailed = "CREATE_FAILED"
+  DeleteFailed = "DELETE_FAILED"
   Unknown(value: Str)
+}
+
+/// Modules that run one after another, each on the previous module's
+/// output.
+pub struct SequentialPipeline {
+  /// In execution order.
+  pub modules: List[FlowModule]? = None
 }
 
 /// The request could not be completed because you exceeded a service quota.
 pub struct ServiceQuotaExceededException {
   pub message: Str? = None
+}
+
+/// Specifies whether your access to the module is current.
+pub enum SubscriptionStatus: Str {
+  Active = "ACTIVE"
+  Expired = "EXPIRED"
+  Unknown(value: Str)
+}
+
+/// Indicates the type of access that you have to a module, such as a
+/// subscription, a private share, or a built-in.
+pub enum SubscriptionType: Str {
+  Marketplace = "MARKETPLACE"
+  Private = "PRIVATE"
+  AwsBuiltIn = "AWS_BUILT_IN"
+  Unknown(value: Str)
 }
 
 pub struct TagResourceRequest {
@@ -1317,6 +1796,24 @@ pub struct UntagResourceRequest {
 pub struct UntagResourceResponse {
 }
 
+/// An accepted configuration change and its status.
+pub struct Update {
+  /// The unique identifier of the update.
+  pub update_id: Str? = None
+  /// The type of change.
+  pub type_value: UpdateType? = None
+  /// The status of the update.
+  pub status: UpdateStatus? = None
+  /// The resource that the update targeted.
+  pub target_value: UpdateTarget? = None
+  /// The timestamp of when the update was created.
+  pub created_at: Time? = None
+  /// The changes that the update requested.
+  pub parameters: UpdateParameters? = None
+  /// The causes of the failure. Present only when the update has failed.
+  pub error_details: List[ErrorDetail]? = None
+}
+
 pub struct UpdateLinkModuleFlowRequest {
   /// Specifies a unique, case-sensitive identifier that you provide to ensure
   /// the idempotency of the request. This lets you safely retry the request
@@ -1343,6 +1840,8 @@ pub struct UpdateLinkModuleFlowResponse {
   pub link_id: Str? = None
   /// The status of the request.
   pub status: LinkStatus? = None
+  /// The ID of the update this call started.
+  pub update_id: Str? = None
 }
 
 pub struct UpdateLinkRequest {
@@ -1354,6 +1853,9 @@ pub struct UpdateLinkRequest {
   pub log_settings: LinkLogSettings? = None
   /// The timeout value in milliseconds.
   pub timeout_in_millis: Int? = None
+  /// A unique, case-sensitive identifier for the request. The SDK generates
+  /// one when you don't.
+  pub client_token: Str? = None
 }
 
 pub struct UpdateLinkResponse {
@@ -1361,6 +1863,8 @@ pub struct UpdateLinkResponse {
   pub link_id: Str? = None
   /// The status of the request.
   pub status: LinkStatus? = None
+  /// The ID of the update this call started.
+  pub update_id: Str? = None
 }
 
 pub struct UpdateLinkRoutingRuleRequest {
@@ -1377,6 +1881,9 @@ pub struct UpdateLinkRoutingRuleRequest {
   /// The updated conditions for the routing rule. All specified fields must
   /// match for the rule to apply. At least one condition field must be set.
   pub conditions: RuleCondition? = None
+  /// A unique, case-sensitive identifier for the request. The SDK generates
+  /// one when you don't.
+  pub client_token: Str? = None
 }
 
 pub struct UpdateLinkRoutingRuleResponse {
@@ -1386,6 +1893,18 @@ pub struct UpdateLinkRoutingRuleResponse {
   pub status: RuleStatus? = None
   /// The timestamp of when the routing rule was last updated.
   pub updated_at: Time? = None
+  /// The ID of the update this call started.
+  pub update_id: Str? = None
+}
+
+/// What an update requested.
+pub enum UpdateParameters {
+  ResponderGatewayConfig(value: ResponderGatewayConfigParameters)
+  LinkConfig(value: LinkConfigParameters)
+  LinkFlow(value: LinkFlowParameters)
+  RoutingRule(value: RoutingRuleParameters)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 pub struct UpdateRequesterGatewayRequest {
@@ -1475,6 +1994,44 @@ pub struct UpdateResponderGatewayResponse {
   /// ACTIVE . For more information, see Configuring Availability Zone
   /// affinity in the Amazon Web Services RTB Fabric User Guide .
   pub client_routing_policy: ClientRoutingPolicy? = None
+  /// The ID of the update this call started.
+  pub update_id: Str? = None
+}
+
+pub enum UpdateStatus: Str {
+  InProgress = "IN_PROGRESS"
+  Successful = "SUCCESSFUL"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// A summary of an update.
+pub struct UpdateSummary {
+  /// The unique identifier of the update.
+  pub update_id: Str? = None
+  /// The type of change.
+  pub type_value: UpdateType? = None
+  /// The status of the update.
+  pub status: UpdateStatus? = None
+  /// The timestamp of when the update was created.
+  pub created_at: Time? = None
+}
+
+/// What an update targeted.
+pub enum UpdateTarget {
+  Gateway
+  Link(value: LinkTarget)
+  RoutingRule(value: RoutingRuleTarget)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+pub enum UpdateType: Str {
+  GatewayConfigUpdate = "GATEWAY_CONFIG_UPDATE"
+  LinkConfigUpdate = "LINK_CONFIG_UPDATE"
+  LinkFlowUpdate = "LINK_FLOW_UPDATE"
+  RoutingRuleUpdate = "ROUTING_RULE_UPDATE"
+  Unknown(value: Str)
 }
 
 /// The request could not be completed because it fails satisfy the

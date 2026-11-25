@@ -250,10 +250,22 @@ pub struct AssetFormEntry {
   pub content: Str? = None
 }
 
-/// A reference to a form type that is included in an asset type.
-pub struct AssetTypeFormReference {
-  /// The identifier of the referenced form type.
+/// A form to set on an asset, consisting of the form type identifier and
+/// its JSON content.
+pub struct AssetFormInput {
+  /// The identifier of the form type that defines this form's schema. This
+  /// field is required.
   pub form_type_identifier: Str? = None
+  /// The JSON content of the form, conforming to the schema of the specified
+  /// form type.
+  pub content: Str? = None
+}
+
+/// A form that is included in an asset type, identified by the form type
+/// that defines its schema.
+pub struct AssetTypeFormOutput {
+  /// The identifier of the form type that defines the form's schema.
+  pub form_type_id: Str? = None
 }
 
 /// A summary of an asset type.
@@ -262,6 +274,22 @@ pub struct AssetTypeItem {
   pub id: Str? = None
   /// The name of the asset type.
   pub name: Str? = None
+}
+
+/// The export setting for asset metadata.
+pub struct AssetsExport {
+  /// Whether asset metadata is exported to S3 Tables. Valid values are
+  /// ENABLED and DISABLED .
+  pub s3_tables_export: ExportSetting? = None
+}
+
+/// The export setting and current export state for asset metadata.
+pub struct AssetsExportResult {
+  /// Whether asset metadata is exported to S3 Tables. Valid values are
+  /// ENABLED and DISABLED .
+  pub s3_tables_export: ExportSetting? = None
+  /// The current state of the asset metadata export to S3 Tables.
+  pub s3_tables_export_state: S3TablesExportState? = None
 }
 
 pub struct AssociateGlossaryTermsRequest {
@@ -283,11 +311,11 @@ pub struct AssociateGlossaryTermsRequest {
 
 pub struct AssociateGlossaryTermsResponse {
   /// The unique identifier of the asset.
-  pub asset_identifier: Str? = None
+  pub asset_id: Str? = None
   /// The name of the iterable form, if the association targets an item.
   pub iterable_form_name: Str? = None
   /// The identifier of the item within the iterable form, if applicable.
-  pub item_identifier: Str? = None
+  pub item_id: Str? = None
   /// The glossary terms now associated with the asset.
   pub glossary_terms: List[Str]? = None
 }
@@ -3615,7 +3643,10 @@ pub struct CreateJobRequest {
   /// Runtime parameter of the Job command. For more information about the
   /// available Glue versions and corresponding Spark and Python versions, see
   /// Glue version in the developer guide. Jobs that are created without
-  /// specifying a Glue version default to Glue 5.1.
+  /// specifying a Glue version default to Glue 6.0. Set GlueVersion to auto
+  /// to turn on automatic version upgrades for the job. For more information,
+  /// see Automatic version upgrades for Glue jobs in the developer guide. For
+  /// the job requirements, see Before you start .
   pub glue_version: Str? = None
   /// The number of workers of a defined workerType that are allocated when a
   /// job runs.
@@ -5345,14 +5376,6 @@ pub struct DeleteAssetRequest {
 pub struct DeleteAssetResponse {
 }
 
-pub struct DeleteAssetTypeRequest {
-  /// The identifier of the asset type to delete.
-  pub identifier: Str? = None
-}
-
-pub struct DeleteAssetTypeResponse {
-}
-
 pub struct DeleteAttachmentRequest {
   /// The unique identifier of the asset from which to delete the attachment.
   pub asset_identifier: Str? = None
@@ -5369,11 +5392,11 @@ pub struct DeleteAttachmentRequest {
 
 pub struct DeleteAttachmentResponse {
   /// The unique identifier of the asset.
-  pub asset_identifier: Str? = None
+  pub asset_id: Str? = None
   /// The name of the iterable form, if the deletion targets an item.
   pub iterable_form_name: Str? = None
   /// The identifier of the item within the iterable form, if applicable.
-  pub item_identifier: Str? = None
+  pub item_id: Str? = None
 }
 
 pub enum DeleteBehavior: Str {
@@ -6160,11 +6183,11 @@ pub struct DisassociateGlossaryTermsRequest {
 
 pub struct DisassociateGlossaryTermsResponse {
   /// The unique identifier of the asset.
-  pub asset_identifier: Str? = None
+  pub asset_id: Str? = None
   /// The name of the iterable form, if the disassociation targets an item.
   pub iterable_form_name: Str? = None
   /// The identifier of the item within the iterable form, if applicable.
-  pub item_identifier: Str? = None
+  pub item_id: Str? = None
   /// The remaining glossary terms associated with the asset.
   pub glossary_terms: List[Str]? = None
 }
@@ -7040,7 +7063,7 @@ pub struct GetAssetTypeResponse {
   /// The name of the asset type.
   pub name: Str? = None
   /// The forms that make up the asset type, keyed by form name.
-  pub forms: Map[Str, AssetTypeFormReference]? = None
+  pub forms: Map[Str, AssetTypeFormOutput]? = None
 }
 
 pub struct GetBlueprintRequest {
@@ -7410,20 +7433,16 @@ pub struct GetDataCatalogExportConfigurationInput {
 /// The export configuration returned by the
 /// GetDataCatalogExportConfiguration operation.
 pub struct GetDataCatalogExportConfigurationOutput {
-  /// The export setting for the data catalog. Valid values are ENABLED and
-  /// DISABLED .
-  pub export_setting: ExportSetting? = None
-  /// The current status of the export. Valid values are ENABLING , ENABLED ,
-  /// DISABLING , DISABLED , and FAILED .
-  pub status: ExportStatus? = None
-  /// The encryption configuration for the exported data.
-  pub encryption_configuration: ExportEncryptionConfiguration? = None
-  /// The ARN of the S3 Tables bucket where catalog metadata is exported.
-  pub s3_table_bucket_arn: Str? = None
   /// The timestamp at which the export configuration was created.
   pub created_at: Time? = None
   /// The timestamp at which the export configuration was last updated.
   pub updated_at: Time? = None
+  /// The S3 Tables configuration for the export, including the table bucket
+  /// that holds the exported catalog metadata and its encryption
+  /// configuration.
+  pub s3_tables_configuration: S3TablesConfigurationResult? = None
+  /// The export setting and current export state for asset metadata.
+  pub assets: AssetsExportResult? = None
 }
 
 pub struct GetDataQualityEvaluationConfigRequest {
@@ -8055,14 +8074,18 @@ pub struct GetJobUpgradeAnalysisResponse {
   /// The type of upgrade analysis. For auto-upgrade jobs, this value is
   /// AUTO_UPGRADE .
   pub analysis_type: AnalysisType? = None
-  /// The Amazon S3 URI of the terminal-state evaluation summary, available
-  /// once the analysis reaches a terminal status ( SUCCEEDED or FAILED ).
+  /// A presigned URL for downloading the auto upgrade evaluation summary for
+  /// the analysis. Available once the analysis reaches a terminal status (
+  /// SUCCEEDED or FAILED ). The URL expires after 1 hour. Calling
+  /// GetJobUpgradeAnalysis again returns a new URL.
   pub auto_upgrade_evaluation_summary: Str? = None
   /// The reason the analysis did not complete.
   pub error_message: Str? = None
-  /// The Amazon S3 URI of the consent report summarizing upgrade assessment
-  /// findings. Populated when the analysis reaches WAITING_FOR_CONSENT and
-  /// remains available in all subsequent states.
+  /// A presigned URL for downloading the auto upgrade eligibility summary,
+  /// which lists the compatibility results for the job. Available once the
+  /// analysis reaches WAITING_FOR_CONSENT and in all subsequent states. The
+  /// URL expires after 1 hour. Calling GetJobUpgradeAnalysis again returns a
+  /// new URL.
   pub auto_upgrade_eligibility_summary: Str? = None
 }
 
@@ -10417,7 +10440,10 @@ pub struct Job {
   /// Runtime parameter of the Job command. For more information about the
   /// available Glue versions and corresponding Spark and Python versions, see
   /// Glue version in the developer guide. Jobs that are created without
-  /// specifying a Glue version default to Glue 5.1.
+  /// specifying a Glue version default to Glue 6.0. Set GlueVersion to auto
+  /// to turn on automatic version upgrades for the job. For more information,
+  /// see Automatic version upgrades for Glue jobs in the developer guide. For
+  /// the job requirements, see Before you start .
   pub glue_version: Str? = None
   /// The representation of a directed acyclic graph on which both the Glue
   /// Studio visual component and Glue Studio code generation is based.

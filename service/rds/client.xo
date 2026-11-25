@@ -1337,6 +1337,12 @@ fn xml_write_cluster_pending_modified_values(var w: xmlv.Writer, v: ClusterPendi
   if let Some(x) = v.certificate_details {
     xml_write_certificate_details(w, x, "CertificateDetails", [])
   }
+  if let Some(x) = v.vpc_networking_enabled {
+    xmlv.elem(w, "VPCNetworkingEnabled", "${x}", [])
+  }
+  if let Some(x) = v.internet_access_gateway_enabled {
+    xmlv.elem(w, "InternetAccessGatewayEnabled", "${x}", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1355,6 +1361,8 @@ fn xml_read_cluster_pending_modified_values(e: xml.Element) -> ClusterPendingMod
       "RdsCustomClusterConfiguration" => out.rds_custom_cluster_configuration = xml_read_rds_custom_cluster_configuration(c)?
       "Iops" => out.iops = xmlv.read_int(c.text())?
       "CertificateDetails" => out.certificate_details = xml_read_certificate_details(c)?
+      "VPCNetworkingEnabled" => out.vpc_networking_enabled = xmlv.read_bool(c.text())?
+      "InternetAccessGatewayEnabled" => out.internet_access_gateway_enabled = xmlv.read_bool(c.text())?
       _ => {}
     }
   }
@@ -2239,8 +2247,14 @@ fn xml_write_create_db_cluster_message(var w: xmlv.Writer, v: CreateDBClusterMes
   if let Some(x) = v.master_user_authentication_type {
     xmlv.elem(w, "MasterUserAuthenticationType", x.value(), [])
   }
+  if let Some(x) = v.enable_vpc_networking {
+    xmlv.elem(w, "EnableVPCNetworking", "${x}", [])
+  }
   if let Some(x) = v.with_express_configuration {
     xmlv.elem(w, "WithExpressConfiguration", "${x}", [])
+  }
+  if let Some(x) = v.enable_internet_access_gateway {
+    xmlv.elem(w, "EnableInternetAccessGateway", "${x}", [])
   }
   if let Some(x) = v.associated_roles {
     xml_write_db_cluster_associated_roles(w, x, "AssociatedRoles", [])
@@ -2310,7 +2324,9 @@ fn xml_read_create_db_cluster_message(e: xml.Element) -> CreateDBClusterMessage 
       "EngineLifecycleSupport" => out.engine_lifecycle_support = c.text()
       "TagSpecifications" => out.tag_specifications = xml_read_tag_specification_list(c)?
       "MasterUserAuthenticationType" => out.master_user_authentication_type = MasterUserAuthenticationType.from(c.text())
+      "EnableVPCNetworking" => out.enable_vpc_networking = xmlv.read_bool(c.text())?
       "WithExpressConfiguration" => out.with_express_configuration = xmlv.read_bool(c.text())?
+      "EnableInternetAccessGateway" => out.enable_internet_access_gateway = xmlv.read_bool(c.text())?
       "AssociatedRoles" => out.associated_roles = xml_read_db_cluster_associated_roles(c)?
       _ => {}
     }
@@ -5868,6 +5884,9 @@ fn xml_write_db_instance(var w: xmlv.Writer, v: DBInstance, name: Str, ns: List[
   if let Some(x) = v.endpoint {
     xml_write_endpoint(w, x, "Endpoint", [])
   }
+  if let Some(x) = v.primary_endpoint {
+    xml_write_primary_endpoint(w, x, "PrimaryEndpoint", [])
+  }
   if let Some(x) = v.allocated_storage {
     xmlv.elem(w, "AllocatedStorage", "${x}", [])
   }
@@ -6129,6 +6148,9 @@ fn xml_write_db_instance(var w: xmlv.Writer, v: DBInstance, name: Str, ns: List[
   if let Some(x) = v.db_capacity_reservation_identifier {
     xmlv.elem(w, "DBCapacityReservationIdentifier", x, [])
   }
+  if let Some(x) = v.vpc_networking_enabled {
+    xmlv.elem(w, "VPCNetworkingEnabled", "${x}", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -6143,6 +6165,7 @@ fn xml_read_db_instance(e: xml.Element) -> DBInstance ! Str {
       "MasterUsername" => out.master_username = c.text()
       "DBName" => out.db_name = c.text()
       "Endpoint" => out.endpoint = xml_read_endpoint(c)?
+      "PrimaryEndpoint" => out.primary_endpoint = xml_read_primary_endpoint(c)?
       "AllocatedStorage" => out.allocated_storage = xmlv.read_int(c.text())?
       "InstanceCreateTime" => out.instance_create_time = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
       "PreferredBackupWindow" => out.preferred_backup_window = c.text()
@@ -6230,6 +6253,7 @@ fn xml_read_db_instance(e: xml.Element) -> DBInstance ! Str {
       "StorageOperationStatus" => out.storage_operation_status = c.text()
       "StorageOperationPercentProgress" => out.storage_operation_percent_progress = xmlv.read_int(c.text())?
       "DBCapacityReservationIdentifier" => out.db_capacity_reservation_identifier = c.text()
+      "VPCNetworkingEnabled" => out.vpc_networking_enabled = xmlv.read_bool(c.text())?
       _ => {}
     }
   }
@@ -13626,46 +13650,6 @@ fn xml_write_invalid_db_subnet_group_fault(var w: xmlv.Writer, v: InvalidDBSubne
 
 fn xml_read_invalid_db_subnet_group_fault(e: xml.Element) -> InvalidDBSubnetGroupFault ! Str {
   var out = InvalidDBSubnetGroupFault{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "message" => out.message = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_invalid_db_subnet_group_state_fault(var w: xmlv.Writer, v: InvalidDBSubnetGroupStateFault, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.message {
-    xmlv.elem(w, "message", x, [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_invalid_db_subnet_group_state_fault(e: xml.Element) -> InvalidDBSubnetGroupStateFault ! Str {
-  var out = InvalidDBSubnetGroupStateFault{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "message" => out.message = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_invalid_db_subnet_state_fault(var w: xmlv.Writer, v: InvalidDBSubnetStateFault, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.message {
-    xmlv.elem(w, "message", x, [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_invalid_db_subnet_state_fault(e: xml.Element) -> InvalidDBSubnetStateFault ! Str {
-  var out = InvalidDBSubnetStateFault{}
   for c in xmlv.elements(e) {
     match c.name.local {
       "message" => out.message = c.text()

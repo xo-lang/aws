@@ -1109,6 +1109,9 @@ fn json_of_converse_request(v: ConverseRequest) -> json.Value {
   if let Some(x) = v.guardrail_config {
     fs.push(("guardrailConfig", json_of_guardrail_configuration(x)))
   }
+  if let Some(x) = v.project_identifier {
+    fs.push(("projectIdentifier", json.Value.Str(x)))
+  }
   if let Some(x) = v.additional_model_request_fields {
     fs.push(("additionalModelRequestFields", x))
   }
@@ -1146,6 +1149,7 @@ fn from_json_converse_request(v: json.Value) -> ConverseRequest ! Str {
       "inferenceConfig" => out.inference_config = from_json_inference_configuration(fv)?
       "toolConfig" => out.tool_config = from_json_tool_configuration(fv)?
       "guardrailConfig" => out.guardrail_config = from_json_guardrail_configuration(fv)?
+      "projectIdentifier" => out.project_identifier = jsonv.read_str(fv)?
       "additionalModelRequestFields" => out.additional_model_request_fields = fv
       "promptVariables" => out.prompt_variables = from_json_prompt_variable_map(fv)?
       "additionalModelResponseFieldPaths" => out.additional_model_response_field_paths = from_json_additional_model_response_field_paths(fv)?
@@ -1329,6 +1333,9 @@ fn json_of_converse_stream_request(v: ConverseStreamRequest) -> json.Value {
   if let Some(x) = v.guardrail_config {
     fs.push(("guardrailConfig", json_of_guardrail_stream_configuration(x)))
   }
+  if let Some(x) = v.project_identifier {
+    fs.push(("projectIdentifier", json.Value.Str(x)))
+  }
   if let Some(x) = v.additional_model_request_fields {
     fs.push(("additionalModelRequestFields", x))
   }
@@ -1366,6 +1373,7 @@ fn from_json_converse_stream_request(v: json.Value) -> ConverseStreamRequest ! S
       "inferenceConfig" => out.inference_config = from_json_inference_configuration(fv)?
       "toolConfig" => out.tool_config = from_json_tool_configuration(fv)?
       "guardrailConfig" => out.guardrail_config = from_json_guardrail_stream_configuration(fv)?
+      "projectIdentifier" => out.project_identifier = jsonv.read_str(fv)?
       "additionalModelRequestFields" => out.additional_model_request_fields = fv
       "promptVariables" => out.prompt_variables = from_json_prompt_variable_map(fv)?
       "additionalModelResponseFieldPaths" => out.additional_model_response_field_paths = from_json_additional_model_response_field_paths(fv)?
@@ -4363,6 +4371,9 @@ fn json_of_invoke_model_request(v: InvokeModelRequest) -> json.Value {
   if let Some(x) = v.request_metadata {
     fs.push(("requestMetadata", json.Value.Str(x)))
   }
+  if let Some(x) = v.project_identifier {
+    fs.push(("projectIdentifier", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -4383,6 +4394,7 @@ fn from_json_invoke_model_request(v: json.Value) -> InvokeModelRequest ! Str {
       "performanceConfigLatency" => out.performance_config_latency = PerformanceConfigLatency.from(jsonv.read_str(fv)?)
       "serviceTier" => out.service_tier = ServiceTierType.from(jsonv.read_str(fv)?)
       "requestMetadata" => out.request_metadata = jsonv.read_str(fv)?
+      "projectIdentifier" => out.project_identifier = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -4577,6 +4589,9 @@ fn json_of_invoke_model_with_response_stream_request(v: InvokeModelWithResponseS
   if let Some(x) = v.request_metadata {
     fs.push(("requestMetadata", json.Value.Str(x)))
   }
+  if let Some(x) = v.project_identifier {
+    fs.push(("projectIdentifier", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -4597,6 +4612,7 @@ fn from_json_invoke_model_with_response_stream_request(v: json.Value) -> InvokeM
       "performanceConfigLatency" => out.performance_config_latency = PerformanceConfigLatency.from(jsonv.read_str(fv)?)
       "serviceTier" => out.service_tier = ServiceTierType.from(jsonv.read_str(fv)?)
       "requestMetadata" => out.request_metadata = jsonv.read_str(fv)?
+      "projectIdentifier" => out.project_identifier = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -7131,6 +7147,9 @@ pub fn serialize_converse(ep: rest.Endpoint, input: ConverseRequest, idempotency
   if let Some(x) = input.guardrail_config {
     fs.push(("guardrailConfig", json_of_guardrail_configuration(x)))
   }
+  if let Some(x) = input.project_identifier {
+    fs.push(("projectIdentifier", json.Value.Str(x)))
+  }
   if let Some(x) = input.additional_model_request_fields {
     fs.push(("additionalModelRequestFields", x))
   }
@@ -7278,9 +7297,9 @@ pub fn deserialize_converse_error(resp: http.Response) -> ConverseErr {
 /// a consistent interface that works with all models that support messages.
 /// This allows you to write code once and use it with different models. If
 /// a model has unique inference parameters, you can also pass those unique
-/// parameters to the model. Amazon Bedrock doesn't store any text, images,
-/// or documents that you provide as content. The data is only used to
-/// generate the response. You can submit a prompt by including it in the
+/// parameters to the model. Data retention for this request depends on the
+/// applicable account or project configuration and the model's data
+/// retention policy. You can submit a prompt by including it in the
 /// messages field, specifying the modelId of a foundation model or
 /// inference profile to run inference on it, and including any other fields
 /// that are relevant to your use case. You can also submit a prompt from
@@ -7297,15 +7316,18 @@ pub fn deserialize_converse_error(resp: http.Response) -> ConverseErr {
 /// To use a tool with a model, see Tool use (Function calling) in the
 /// Amazon Bedrock User Guide For example code, see Converse API examples in
 /// the Amazon Bedrock User Guide . This operation requires permission for
-/// the bedrock:InvokeModel action. To deny all inference access to
-/// resources that you specify in the modelId field, you need to deny access
-/// to the bedrock:InvokeModel and bedrock:InvokeModelWithResponseStream
-/// actions. Doing this also denies access to the resource through the base
-/// inference actions ( InvokeModel and InvokeModelWithResponseStream ). For
-/// more information see Deny access for inference on specific models . For
-/// troubleshooting some of the common errors you might encounter when using
-/// the Converse API, see Troubleshooting Amazon Bedrock API Error Codes in
-/// the Amazon Bedrock User Guide
+/// the bedrock:InvokeModel action on both the inference target and the
+/// project. If you omit projectIdentifier or specify default , this
+/// includes permission on the default project for your account. To deny all
+/// inference access to resources that you specify in the modelId field, you
+/// need to deny access to the bedrock:InvokeModel and
+/// bedrock:InvokeModelWithResponseStream actions. Doing this also denies
+/// access to the resource through the base inference actions ( InvokeModel
+/// and InvokeModelWithResponseStream ). For more information see Deny
+/// access for inference on specific models . For troubleshooting some of
+/// the common errors you might encounter when using the Converse API, see
+/// Troubleshooting Amazon Bedrock API Error Codes in the Amazon Bedrock
+/// User Guide
 pub fn (c: Client) converse(input: ConverseRequest) -> ConverseResponse ! ConverseErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_converse(c.params, input)) ?? e => return Err(ConverseErr.InvalidInput(e))
   var req = serialize_converse(ep, input, "") ?? e => return Err(ConverseErr.InvalidInput(e))
@@ -7352,6 +7374,9 @@ pub fn serialize_converse_stream(ep: rest.Endpoint, input: ConverseStreamRequest
   }
   if let Some(x) = input.guardrail_config {
     fs.push(("guardrailConfig", json_of_guardrail_stream_configuration(x)))
+  }
+  if let Some(x) = input.project_identifier {
+    fs.push(("projectIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = input.additional_model_request_fields {
     fs.push(("additionalModelRequestFields", x))
@@ -7491,9 +7516,9 @@ pub fn deserialize_converse_stream_error(resp: http.Response) -> ConverseStreamE
 /// parameters to the model. To find out if a model supports streaming, call
 /// GetFoundationModel and check the responseStreamingSupported field in the
 /// response. The CLI doesn't support streaming operations in Amazon
-/// Bedrock, including ConverseStream . Amazon Bedrock doesn't store any
-/// text, images, or documents that you provide as content. The data is only
-/// used to generate the response. You can submit a prompt by including it
+/// Bedrock, including ConverseStream . Data retention for this request
+/// depends on the applicable account or project configuration and the
+/// model's data retention policy. You can submit a prompt by including it
 /// in the messages field, specifying the modelId of a foundation model or
 /// inference profile to run inference on it, and including any other fields
 /// that are relevant to your use case. You can also submit a prompt from
@@ -7510,16 +7535,18 @@ pub fn deserialize_converse_stream_error(resp: http.Response) -> ConverseStreamE
 /// To use a tool with a model, see Tool use (Function calling) in the
 /// Amazon Bedrock User Guide For example code, see Conversation streaming
 /// example in the Amazon Bedrock User Guide . This operation requires
-/// permission for the bedrock:InvokeModelWithResponseStream action. To deny
-/// all inference access to resources that you specify in the modelId field,
-/// you need to deny access to the bedrock:InvokeModel and
-/// bedrock:InvokeModelWithResponseStream actions. Doing this also denies
-/// access to the resource through the base inference actions ( InvokeModel
-/// and InvokeModelWithResponseStream ). For more information see Deny
-/// access for inference on specific models . For troubleshooting some of
-/// the common errors you might encounter when using the ConverseStream API,
-/// see Troubleshooting Amazon Bedrock API Error Codes in the Amazon Bedrock
-/// User Guide
+/// permission for the bedrock:InvokeModelWithResponseStream action on both
+/// the inference target and the project. If you omit projectIdentifier or
+/// specify default , this includes permission on the default project for
+/// your account. To deny all inference access to resources that you specify
+/// in the modelId field, you need to deny access to the bedrock:InvokeModel
+/// and bedrock:InvokeModelWithResponseStream actions. Doing this also
+/// denies access to the resource through the base inference actions (
+/// InvokeModel and InvokeModelWithResponseStream ). For more information
+/// see Deny access for inference on specific models . For troubleshooting
+/// some of the common errors you might encounter when using the
+/// ConverseStream API, see Troubleshooting Amazon Bedrock API Error Codes
+/// in the Amazon Bedrock User Guide
 pub fn (c: Client) converse_stream(input: ConverseStreamRequest) -> ConverseStreamEvents ! ConverseStreamErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_converse_stream(c.params, input)) ?? e => return Err(ConverseStreamErr.InvalidInput(e))
   var req = serialize_converse_stream(ep, input, "") ?? e => return Err(ConverseStreamErr.InvalidInput(e))
@@ -7981,6 +8008,9 @@ pub fn serialize_invoke_model(ep: rest.Endpoint, input: InvokeModelRequest, idem
   if let Some(v) = input.request_metadata {
     headers.push(("X-Amzn-Bedrock-Request-Metadata", v))
   }
+  if let Some(v) = input.project_identifier {
+    headers.push(("X-Amzn-Bedrock-ProjectIdentifier", v))
+  }
   var body = b""
   if let Some(v) = input.body {
     body = v
@@ -8110,15 +8140,18 @@ pub fn deserialize_invoke_model_error(resp: http.Response) -> InvokeModelErr {
 /// prompt and inference parameters provided in the request body. You use
 /// model inference to generate text, images, and embeddings. For example
 /// code, see Invoke model code examples in the Amazon Bedrock User Guide .
-/// This operation requires permission for the bedrock:InvokeModel action.
-/// To deny all inference access to resources that you specify in the
-/// modelId field, you need to deny access to the bedrock:InvokeModel and
-/// bedrock:InvokeModelWithResponseStream actions. Doing this also denies
-/// access to the resource through the Converse API actions ( Converse and
-/// ConverseStream ). For more information see Deny access for inference on
-/// specific models . For troubleshooting some of the common errors you
-/// might encounter when using the InvokeModel API, see Troubleshooting
-/// Amazon Bedrock API Error Codes in the Amazon Bedrock User Guide
+/// This operation requires permission for the bedrock:InvokeModel action on
+/// both the inference target and the project. If you omit projectIdentifier
+/// or specify default , this includes permission on the default project for
+/// your account. To deny all inference access to resources that you specify
+/// in the modelId field, you need to deny access to the bedrock:InvokeModel
+/// and bedrock:InvokeModelWithResponseStream actions. Doing this also
+/// denies access to the resource through the Converse API actions (
+/// Converse and ConverseStream ). For more information see Deny access for
+/// inference on specific models . For troubleshooting some of the common
+/// errors you might encounter when using the InvokeModel API, see
+/// Troubleshooting Amazon Bedrock API Error Codes in the Amazon Bedrock
+/// User Guide
 pub fn (c: Client) invoke_model(input: InvokeModelRequest) -> InvokeModelResponse ! InvokeModelErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_invoke_model(c.params, input)) ?? e => return Err(InvokeModelErr.InvalidInput(e))
   var req = serialize_invoke_model(ep, input, "") ?? e => return Err(InvokeModelErr.InvalidInput(e))
@@ -8354,6 +8387,9 @@ pub fn serialize_invoke_model_with_response_stream(ep: rest.Endpoint, input: Inv
   if let Some(v) = input.request_metadata {
     headers.push(("X-Amzn-Bedrock-Request-Metadata", v))
   }
+  if let Some(v) = input.project_identifier {
+    headers.push(("X-Amzn-Bedrock-ProjectIdentifier", v))
+  }
   var body = b""
   if let Some(v) = input.body {
     body = v
@@ -8493,10 +8529,12 @@ pub fn deserialize_invoke_model_with_response_stream_error(resp: http.Response) 
 /// in the response. The CLI doesn't support streaming operations in Amazon
 /// Bedrock, including InvokeModelWithResponseStream . For example code, see
 /// Invoke model with streaming code example in the Amazon Bedrock User
-/// Guide . This operation requires permissions to perform the
-/// bedrock:InvokeModelWithResponseStream action. To deny all inference
-/// access to resources that you specify in the modelId field, you need to
-/// deny access to the bedrock:InvokeModel and
+/// Guide . This operation requires permission for the
+/// bedrock:InvokeModelWithResponseStream action on both the inference
+/// target and the project. If you omit projectIdentifier or specify default
+/// , this includes permission on the default project for your account. To
+/// deny all inference access to resources that you specify in the modelId
+/// field, you need to deny access to the bedrock:InvokeModel and
 /// bedrock:InvokeModelWithResponseStream actions. Doing this also denies
 /// access to the resource through the Converse API actions ( Converse and
 /// ConverseStream ). For more information see Deny access for inference on

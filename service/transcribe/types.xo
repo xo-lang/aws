@@ -33,11 +33,35 @@ pub struct AbsoluteTimeRange {
 }
 
 /// Your request didn't pass one or more validation tests. This can occur
-/// when the entity you're trying to delete doesn't exist or if it's in a
-/// non-terminal state (such as IN PROGRESS ). See the exception message
-/// field for more information.
+/// when a parameter has an invalid value, when you combine parameters in a
+/// way that isn't supported, when the entity you're trying to delete
+/// doesn't exist, or if it's in a non-terminal state (such as IN PROGRESS
+/// ). See the exception message field for more information.
 pub struct BadRequestException {
   pub message: Str? = None
+  /// A code that identifies why the audio in your request was rejected.
+  /// Currently, TranscribeAudio returns this field, and only for problems
+  /// with your audio. It isn't returned for other validation errors. Possible
+  /// values: audioTooLong : The audio is longer than the maximum duration of
+  /// 1 hour. audioTooShort : The audio is shorter than 0.5 seconds.
+  /// audioFileTooLarge : The audio is larger than the maximum size.
+  /// unsupportedAudioFormat : The media format isn't supported.
+  /// unsupportedChannelCount : You enabled ChannelIdentification and the
+  /// audio has more than two channels. invalidAudio : Amazon Transcribe
+  /// couldn't decode the audio. mediaDownloadFailed : Amazon Transcribe
+  /// couldn't download the audio at your MediaFileUri .
+  pub reason: BadRequestExceptionReason? = None
+}
+
+pub enum BadRequestExceptionReason: Str {
+  AudioTooLong = "audioTooLong"
+  AudioTooShort = "audioTooShort"
+  UnsupportedAudioFormat = "unsupportedAudioFormat"
+  UnsupportedChannelCount = "unsupportedChannelCount"
+  InvalidAudio = "invalidAudio"
+  AudioFileTooLarge = "audioFileTooLarge"
+  MediaDownloadFailed = "mediaDownloadFailed"
+  Unknown(value: Str)
 }
 
 pub enum BaseModelName: Str {
@@ -371,7 +395,7 @@ pub struct ConflictException {
   pub message: Str? = None
 }
 
-/// Makes it possible to redact or flag specified personally identifiable
+/// Makes it possible to redact specified personally identifiable
 /// information (PII) in your transcript. If you use ContentRedaction , you
 /// must also include the sub-parameters: RedactionOutput and RedactionType
 /// . You can optionally include PiiEntityTypes to choose which types of PII
@@ -386,7 +410,10 @@ pub struct ContentRedaction {
   /// redacted and an unredacted transcript. When you choose redacted Amazon
   /// Transcribe creates only a redacted transcript. When you choose
   /// redacted_and_unredacted Amazon Transcribe creates a redacted and an
-  /// unredacted transcript (as two separate files).
+  /// unredacted transcript. For batch jobs, Amazon Transcribe creates two
+  /// separate files. For TranscribeAudio , Amazon Transcribe returns them in
+  /// RedactedResults and Results , or writes them as two separate files if
+  /// you use OutputConfiguration .
   pub redaction_output: RedactionOutput? = None
   /// Specify which types of personally identifiable information (PII) you
   /// want to redact in your transcript. You can include as many types as
@@ -468,7 +495,7 @@ pub struct CreateLanguageModelRequest {
   pub input_data_config: InputDataConfig? = None
   /// Specifies the encryption configuration for your custom language model.
   /// Your model artifacts are encrypted with the specified KMS key or with an
-  /// AWS-owned key if a key is not supplied.
+  /// Amazon Web Services owned key if a key is not supplied.
   pub encryption_configuration: EncryptionConfiguration? = None
   /// Adds one or more custom tags, each in the form of a key:value pair, to a
   /// new custom language model at the time you create this new model. To
@@ -592,7 +619,8 @@ pub struct CreateVocabularyFilterRequest {
   pub data_access_role_arn: Str? = None
   /// Specifies the encryption configuration for your custom vocabulary
   /// filter. Your vocabulary filter artifacts are encrypted with the
-  /// specified KMS key or with an AWS-owned key if a key is not supplied.
+  /// specified KMS key or with an Amazon Web Services owned key if a key is
+  /// not supplied.
   pub encryption_configuration: EncryptionConfiguration? = None
 }
 
@@ -660,7 +688,7 @@ pub struct CreateVocabularyRequest {
   pub data_access_role_arn: Str? = None
   /// Specifies the encryption configuration for your custom vocabulary. Your
   /// vocabulary artifacts are encrypted with the specified KMS key or with an
-  /// AWS-owned key if a key is not supplied.
+  /// Amazon Web Services owned key if a key is not supplied.
   pub encryption_configuration: EncryptionConfiguration? = None
 }
 
@@ -759,7 +787,11 @@ pub struct DescribeLanguageModelResponse {
   pub language_model: LanguageModel? = None
 }
 
-/// Encryption configuration for the invocation
+/// The encryption configuration for your custom resource. Specify a
+/// customer managed KMS key, and optionally an encryption context, to
+/// encrypt your custom vocabulary, custom vocabulary filter, or custom
+/// language model artifacts at rest. If you do not provide a key, your
+/// artifacts are encrypted with an Amazon Web Services owned key.
 pub struct EncryptionConfiguration {
   /// A map of plain text, non-secret key:value pairs, known as encryption
   /// context pairs, that provide an added layer of security for your data.
@@ -1147,6 +1179,11 @@ pub struct LanguageCodeItem {
   /// Provides the total time, in seconds, each identified language is spoken
   /// in your media.
   pub duration_in_seconds: Float32? = None
+}
+
+pub enum LanguageDetectionMode: Str {
+  IdentifyLanguage = "IDENTIFY_LANGUAGE"
+  Unknown(value: Str)
 }
 
 /// If using automatic language identification in your request and you want
@@ -2655,7 +2692,7 @@ pub struct StartTranscriptionJobRequest {
   /// you include JobExecutionSettings in your request, you must also include
   /// the sub-parameters: AllowDeferredExecution and DataAccessRoleArn .
   pub job_execution_settings: JobExecutionSettings? = None
-  /// Makes it possible to redact or flag specified personally identifiable
+  /// Makes it possible to redact specified personally identifiable
   /// information (PII) in your transcript. If you use ContentRedaction , you
   /// must also include the sub-parameters: RedactionOutput and RedactionType
   /// . You can optionally include PiiEntityTypes to choose which types of PII
@@ -2813,6 +2850,127 @@ pub struct Summarization {
   pub generate_abstractive_summary: Bool? = None
 }
 
+/// A word or punctuation mark in your transcript. Labels such as
+/// SpeakerLabel and ChannelLabel are present only if you enabled the
+/// related feature.
+pub struct SyncItem {
+  /// The position of this item in the transcript, starting at 0.
+  pub id: Int? = None
+  /// The word or punctuation mark. In RedactedResults , Amazon Transcribe
+  /// replaces redacted words with [PII] .
+  pub content: Str? = None
+  /// The time, in seconds from the start of your audio, when this item
+  /// starts.
+  pub start_time: Float? = None
+  /// The time, in seconds from the start of your audio, when this item ends.
+  pub end_time: Float? = None
+  /// The language of this item, as a locale (for example, en-US ).
+  pub language_code: SyncLanguageCode? = None
+  /// The audio channel this item came from ( ch_0 or ch_1 ). Present if you
+  /// enabled ChannelIdentification . Item start and end times are measured
+  /// from the start of the audio, separately for each channel.
+  pub channel_label: Str? = None
+  /// The speaker of this item (for example, spk_0 ). Present if you enabled
+  /// ShowSpeakerLabels .
+  pub speaker_label: Str? = None
+  /// Indicates whether this item matched a word in your custom vocabulary
+  /// filter. Present if you included VocabularyFilterSettings .
+  pub vocabulary_filter_match: Bool? = None
+  /// The types of personally identifiable information (PII) that Amazon
+  /// Transcribe redacted from this item. Present only on redacted items in
+  /// RedactedResults .
+  pub redactions: List[SyncRedaction]? = None
+}
+
+pub enum SyncLanguage: Str {
+  En = "en"
+  Es = "es"
+  Fr = "fr"
+  It = "it"
+  De = "de"
+  Ja = "ja"
+  Pt = "pt"
+  Ko = "ko"
+  ZhCn = "zh-CN"
+  ZhTw = "zh-TW"
+  ZhHk = "zh-HK"
+  Unknown(value: Str)
+}
+
+pub enum SyncLanguageCode: Str {
+  EnUs = "en-US"
+  EnAb = "en-AB"
+  EnAu = "en-AU"
+  EnGb = "en-GB"
+  EnIe = "en-IE"
+  EnIn = "en-IN"
+  EnWl = "en-WL"
+  EnZa = "en-ZA"
+  EnNz = "en-NZ"
+  EsUs = "es-US"
+  EsEs = "es-ES"
+  EsMx = "es-MX"
+  FrFr = "fr-FR"
+  FrCa = "fr-CA"
+  ItIt = "it-IT"
+  DeDe = "de-DE"
+  DeCh = "de-CH"
+  JaJp = "ja-JP"
+  PtBr = "pt-BR"
+  PtPt = "pt-PT"
+  ZhCn = "zh-CN"
+  ZhTw = "zh-TW"
+  ZhHk = "zh-HK"
+  KoKr = "ko-KR"
+  Unknown(value: Str)
+}
+
+/// A language identified in your audio, and how long it's spoken.
+pub struct SyncLanguageCodeItem {
+  /// The identified language, as a locale (for example, en-US ).
+  pub language_code: SyncLanguageCode? = None
+  /// The total time, in seconds, the identified language is spoken in your
+  /// audio.
+  pub duration_in_seconds: Float32? = None
+}
+
+/// The audio to transcribe. Specify exactly one of MediaBytes or
+/// MediaFileUri . Audio sent in the request ( MediaBytes ) can be up to 25
+/// MB. Audio in Amazon S3 ( MediaFileUri ) can be up to 500 MB.
+pub enum SyncMedia {
+  MediaBytes(value: Bytes)
+  MediaFileUri(value: Str)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// The Amazon S3 location where your transcript is written.
+pub struct SyncOutputConfiguration {
+  /// The Amazon S3 location where you want your transcript written. For
+  /// example: s3://amzn-s3-demo-bucket/my-transcript.json
+  /// s3://amzn-s3-demo-bucket/transcripts/ If the location ends with an
+  /// object key, Amazon Transcribe writes the transcript to that key. If it
+  /// is a bucket or ends with a forward slash ( / ), it's treated as a
+  /// prefix, and Amazon Transcribe writes the transcript under it to a file
+  /// named with the request ID of your call and a .json extension. If you use
+  /// ContentRedaction , Amazon Transcribe writes the redacted transcript to
+  /// the same location and adds redacted- before the file name (for example,
+  /// redacted-my-transcript.json ). With redacted_and_unredacted , Amazon
+  /// Transcribe writes both files. If an object already exists at that key,
+  /// Amazon Transcribe overwrites it. In a response, this is the location
+  /// where Amazon Transcribe wrote your transcript. If you requested
+  /// redacted_and_unredacted output, this is the location of the unredacted
+  /// transcript.
+  pub output_media_file_uri: Str? = None
+}
+
+/// A type of personally identifiable information (PII) redacted from an
+/// item.
+pub struct SyncRedaction {
+  /// The type of PII that was redacted, for example NAME or SSN .
+  pub type_value: PiiEntityType? = None
+}
+
 /// Adds metadata, in the form of a key:value pair, to the specified
 /// resource. For example, you could add the tag Department:Sales to a
 /// resource to indicate that it pertains to your organization's sales
@@ -2863,6 +3021,117 @@ pub struct ToxicityDetectionSettings {
   /// also include ToxicityCategories . The only accepted value for this
   /// parameter is ALL .
   pub toxicity_categories: List[ToxicityCategory]? = None
+}
+
+/// Information about your audio.
+pub struct TranscribeAudioMetadata {
+  /// The language of your transcript, as a locale (for example, en-US ).
+  /// Present if you used LanguageDetectionMode .
+  pub language_code: SyncLanguageCode? = None
+  /// The language identified in your audio, and how long it's spoken. Present
+  /// if you used LanguageDetectionMode .
+  pub language_codes: List[SyncLanguageCodeItem]? = None
+  /// The format of your audio, as detected by Amazon Transcribe.
+  pub media_format: MediaFormat? = None
+  /// The sample rate of your audio, in hertz, as detected by Amazon
+  /// Transcribe.
+  pub media_sample_rate_hertz: Int? = None
+  /// The number of speakers identified in your audio. Present if you enabled
+  /// ShowSpeakerLabels .
+  pub speakers_count: Int? = None
+  /// The number of audio channels in your media. Present if you enabled
+  /// ChannelIdentification .
+  pub number_of_channels: Int? = None
+}
+
+pub struct TranscribeAudioRequest {
+  /// The audio to transcribe. Specify exactly one of MediaBytes or
+  /// MediaFileUri . Audio sent in the request ( MediaBytes ) can be up to 25
+  /// MB. Audio in Amazon S3 ( MediaFileUri ) can be up to 500 MB.
+  pub media: SyncMedia? = None
+  /// The language spoken in your audio, as a base language code (for example,
+  /// en or es ). Include either Language or LanguageDetectionMode in your
+  /// request, but not both.
+  pub language: SyncLanguage? = None
+  /// Enables automatic language identification. Use IDENTIFY_LANGUAGE if your
+  /// audio contains a single language that you don't know in advance. You can
+  /// optionally include LanguageOptions to limit identification to languages
+  /// you think may be present, which can improve accuracy. Amazon Transcribe
+  /// returns the identified language, as a locale (for example, en-US ), in
+  /// the response metadata. Include either Language or LanguageDetectionMode
+  /// in your request, but not both.
+  pub language_detection_mode: LanguageDetectionMode? = None
+  /// A list of two or more languages that you think may be present in your
+  /// audio, as base language codes (for example, en and es ). Each language
+  /// can appear only once. A list with only one language returns a
+  /// BadRequestException . You can use LanguageOptions only with
+  /// LanguageDetectionMode .
+  pub language_options: List[SyncLanguage]? = None
+  /// Enables channel identification in multi-channel audio. Each channel is
+  /// transcribed independently, and each item in the transcript is labeled
+  /// with its channel. Channel identification supports up to two channels.
+  pub channel_identification: Bool? = None
+  /// Enables speaker partitioning (diarization) in your transcript. Speaker
+  /// partitioning labels the speech from individual speakers in your media
+  /// file. If you set ShowSpeakerLabels to true , you must also include
+  /// MaxSpeakerLabels . For more information, see Partitioning speakers
+  /// (diarization) .
+  pub show_speaker_labels: Bool? = None
+  /// Specify the maximum number of speakers you want to partition in your
+  /// media. Note that if your media contains more speakers than the specified
+  /// number, Amazon Transcribe treats multiple speakers as a single speaker.
+  /// You can set MaxSpeakerLabels only if ShowSpeakerLabels is true .
+  pub max_speaker_labels: Int? = None
+  /// Custom vocabularies to apply to your transcript, with one entry per
+  /// language. In each entry, you can reference a custom vocabulary you
+  /// created or provide phrases inline. All entries must use the same type,
+  /// either all by name or all inline. If you specify Language , include
+  /// exactly one entry, and its Language must match. If you use
+  /// LanguageDetectionMode , you can include one entry for each language in
+  /// LanguageOptions .
+  pub vocabulary_settings: List[VocabularySettingsEntry]? = None
+  /// Custom vocabulary filters to apply to your transcript, and how to apply
+  /// them.
+  pub vocabulary_filter_settings: VocabularyFilterSettings? = None
+  /// Redacts personally identifiable information (PII) from your transcript.
+  /// Amazon Transcribe returns the redacted transcript in RedactedResults .
+  /// If you set RedactionOutput to redacted_and_unredacted , Amazon
+  /// Transcribe also returns the unredacted transcript in Results . In Sync,
+  /// content redaction has these limits: Languages: English ( en ), Spanish (
+  /// es ), French ( fr ), Italian ( it ), German ( de ), and Portuguese ( pt
+  /// ). Language identification: If you use LanguageDetectionMode , you must
+  /// also include LanguageOptions , and every language in it must be one of
+  /// the languages above. A request that has no LanguageOptions , or that
+  /// lists a language that isn't supported, returns a BadRequestException .
+  /// Regions: Content redaction isn't available in the South America (São
+  /// Paulo) Region ( sa-east-1 ). It's available in the other Amazon Web
+  /// Services Regions where Sync is available.
+  pub content_redaction: ContentRedaction? = None
+  /// Writes the transcript to an Amazon S3 location instead of returning it
+  /// in the response. If you include OutputConfiguration , the response
+  /// contains only the output location. You must have write permission for
+  /// the location you specify.
+  pub output_configuration: SyncOutputConfiguration? = None
+}
+
+pub struct TranscribeAudioResponse {
+  /// The Amazon S3 location where your transcript was written. Present only
+  /// if you included OutputConfiguration in your request. In that case,
+  /// TranscriptResponse isn't returned.
+  pub output_configuration: SyncOutputConfiguration? = None
+  /// Your transcript and information about your audio. Present only if you
+  /// didn't include OutputConfiguration in your request.
+  pub transcript_response: TranscriptResponse? = None
+}
+
+/// A transcript of your audio.
+pub struct TranscribeAudioResults {
+  /// The full text of your transcript. If you enabled ChannelIdentification ,
+  /// the text of channel ch_0 is followed by the text of channel ch_1 .
+  pub transcript: Str? = None
+  /// The words and punctuation in your transcript, with timing and any labels
+  /// you requested.
+  pub items: List[SyncItem]? = None
 }
 
 /// Provides you with the Amazon S3 URI you can use to access your
@@ -2932,6 +3201,20 @@ pub struct TranscriptFilter {
 pub enum TranscriptFilterType: Str {
   Exact = "EXACT"
   Unknown(value: Str)
+}
+
+/// Your transcript and information about your audio.
+pub struct TranscriptResponse {
+  /// Information about your audio, such as the detected language, format, and
+  /// sample rate.
+  pub metadata: TranscribeAudioMetadata? = None
+  /// Your unredacted transcript. If you set RedactionOutput to redacted ,
+  /// Amazon Transcribe doesn't return this field. Use RedactedResults
+  /// instead.
+  pub results: TranscribeAudioResults? = None
+  /// Your transcript with personally identifiable information (PII) redacted.
+  /// Present only if you included ContentRedaction in your request.
+  pub redacted_results: TranscribeAudioResults? = None
 }
 
 /// Provides detailed information about a transcription job. To view the
@@ -3180,7 +3463,8 @@ pub struct UpdateLanguageModelRequest {
   pub data_access_role_arn: Str? = None
   /// Specifies the new encryption configuration for your custom language
   /// model. The model artifacts are re-encrypted in place using the specified
-  /// KMS key or with an AWS-owned key if a key is not supplied.
+  /// KMS key or with an Amazon Web Services owned key if a key is not
+  /// supplied.
   pub encryption_configuration: EncryptionConfiguration? = None
 }
 
@@ -3260,9 +3544,10 @@ pub struct UpdateVocabularyFilterRequest {
   /// arn:aws:iam::111122223333:role/Admin . For more information, see IAM
   /// ARNs .
   pub data_access_role_arn: Str? = None
-  /// Specifies the new encryption configuration for your custom vocabulary
-  /// filter. The vocabulary filter artifacts are re-encrypted in place using
-  /// the specified KMS key or with an AWS-owned key if a key is not supplied.
+  /// Specifies the encryption configuration for your custom vocabulary
+  /// filter. Your vocabulary filter artifacts are encrypted with the
+  /// specified KMS key or with an Amazon Web Services owned key if a key is
+  /// not supplied.
   pub encryption_configuration: EncryptionConfiguration? = None
 }
 
@@ -3320,9 +3605,9 @@ pub struct UpdateVocabularyRequest {
   /// example: arn:aws:iam::111122223333:role/Admin . For more information,
   /// see IAM ARNs .
   pub data_access_role_arn: Str? = None
-  /// Specifies the new encryption configuration for your custom vocabulary.
-  /// The vocabulary artifacts are re-encrypted in place using the specified
-  /// KMS key or with an AWS-owned key if a key is not supplied.
+  /// Specifies the encryption configuration for your custom vocabulary. Your
+  /// vocabulary artifacts are encrypted with the specified KMS key or with an
+  /// Amazon Web Services owned key if a key is not supplied.
   pub encryption_configuration: EncryptionConfiguration? = None
 }
 
@@ -3339,6 +3624,24 @@ pub struct UpdateVocabularyResponse {
   /// The processing state of your custom vocabulary. If the state is READY ,
   /// you can use the custom vocabulary in a StartTranscriptionJob request.
   pub vocabulary_state: VocabularyState? = None
+}
+
+/// A custom vocabulary filter for one language. Specify exactly one of
+/// VocabularyFilterName or Words .
+pub struct VocabularyFilterEntry {
+  /// The language this custom vocabulary filter applies to, as a base
+  /// language code (for example, en ). Each language can appear in only one
+  /// entry.
+  pub language: SyncLanguage? = None
+  /// The name of a custom vocabulary filter you created. The filter's
+  /// language must match this entry's Language . Vocabulary filter names are
+  /// case sensitive. Include either VocabularyFilterName or Words in each
+  /// entry, but not both.
+  pub vocabulary_filter_name: Str? = None
+  /// The words to filter, provided inline. You don't need to create the
+  /// vocabulary filter first. Include either Words or VocabularyFilterName in
+  /// each entry, but not both.
+  pub words: List[Str]? = None
 }
 
 /// Provides information about a custom vocabulary filter, including the
@@ -3371,6 +3674,22 @@ pub enum VocabularyFilterMethod: Str {
   Unknown(value: Str)
 }
 
+/// Custom vocabulary filters to apply to your transcript, and how to apply
+/// them.
+pub struct VocabularyFilterSettings {
+  /// Specify how you want your custom vocabulary filter applied to your
+  /// transcript. To replace words with *** , choose mask . To delete words,
+  /// choose remove . To flag words without changing them, choose tag .
+  pub vocabulary_filter_method: VocabularyFilterMethod? = None
+  /// Custom vocabulary filters, with one entry per language. In each entry,
+  /// you can reference a custom vocabulary filter you created or provide
+  /// words inline. All entries must use the same type, either all by name or
+  /// all inline. If you specify Language , include exactly one entry, and its
+  /// Language must match. If you use LanguageDetectionMode , you can include
+  /// one entry for each language in LanguageOptions .
+  pub filters: List[VocabularyFilterEntry]? = None
+}
+
 /// Provides information about a custom vocabulary, including the language
 /// of the custom vocabulary, when it was last modified, its name, and the
 /// processing state.
@@ -3394,6 +3713,32 @@ pub struct VocabularyInfo {
   /// The processing state of your custom vocabulary. If the state is READY ,
   /// you can use the custom vocabulary in a StartTranscriptionJob request.
   pub vocabulary_state: VocabularyState? = None
+}
+
+/// A phrase in an inline custom vocabulary.
+pub struct VocabularyPhrase {
+  /// The phrase to recognize in your audio.
+  pub text: Str? = None
+  /// How the phrase is written in your transcript. If you don't include
+  /// DisplayAs , the phrase is written as it appears in Text .
+  pub display_as: Str? = None
+}
+
+/// A custom vocabulary for one language. Specify exactly one of
+/// VocabularyName or Phrases .
+pub struct VocabularySettingsEntry {
+  /// The language this custom vocabulary applies to, as a base language code
+  /// (for example, en ). Each language can appear in only one entry.
+  pub language: SyncLanguage? = None
+  /// The name of a custom vocabulary you created. The vocabulary must be in
+  /// the READY state, and its language must match this entry's Language .
+  /// Vocabulary names are case sensitive. Include either VocabularyName or
+  /// Phrases in each entry, but not both.
+  pub vocabulary_name: Str? = None
+  /// Up to 100 phrases to use as a custom vocabulary, provided inline. You
+  /// don't need to create the vocabulary first. Include either Phrases or
+  /// VocabularyName in each entry, but not both.
+  pub phrases: List[VocabularyPhrase]? = None
 }
 
 pub enum VocabularyState: Str {

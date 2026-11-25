@@ -8,6 +8,44 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_import_key_material(resp: http.Response) -> ImportKeyMaterialResponse ! Str {
+  var out = ImportKeyMaterialResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "KeyId" => out.key_id = jsonv.read_str(fv)?
+      "KeyMaterialId" => out.key_material_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ImportKeyMaterial.
+pub enum ImportKeyMaterialErr {
+  DependencyTimeoutException(e: DependencyTimeoutException)
+  ExpiredImportTokenException(e: ExpiredImportTokenException)
+  IncorrectKeyMaterialException(e: IncorrectKeyMaterialException)
+  InvalidArnException(e: InvalidArnException)
+  InvalidCiphertextException(e: InvalidCiphertextException)
+  InvalidImportTokenException(e: InvalidImportTokenException)
+  KMSInternalException(e: KMSInternalException)
+  KMSInvalidStateException(e: KMSInvalidStateException)
+  NotFoundException(e: NotFoundException)
+  UnsupportedOperationException(e: UnsupportedOperationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: ImportKeyMaterialErr) display() -> Str {
   match e {
     DependencyTimeoutException(x) => "DependencyTimeoutException: ${x:?}"
@@ -606,12 +644,14 @@ pub fn deserialize_list_key_policies_error(resp: http.Response) -> ListKeyPolici
 
 /// Gets the names of the key policies that are attached to a KMS key. This
 /// operation is designed to get policy names that you can use in a
-/// GetKeyPolicy operation. However, the only valid policy name is default .
-/// Cross-account use : No. You cannot perform this operation on a KMS key
-/// in a different Amazon Web Services account. Required permissions :
-/// kms:ListKeyPolicies (key policy) Related operations: GetKeyPolicy
-/// PutKeyPolicy Eventual consistency : The KMS API follows an eventual
-/// consistency model. For more information, see KMS eventual consistency .
+/// GetKeyPolicy operation. The valid policy names are default and AWS_RAM .
+/// For information about the AWS_RAM key policy, see Sharing KMS keys with
+/// RAM in the Key Management Service Developer Guide . Cross-account use :
+/// No. You cannot perform this operation on a KMS key in a different Amazon
+/// Web Services account. Required permissions : kms:ListKeyPolicies (key
+/// policy) Related operations: GetKeyPolicy PutKeyPolicy Eventual
+/// consistency : The KMS API follows an eventual consistency model. For
+/// more information, see KMS eventual consistency .
 pub fn (c: Client) list_key_policies(input: ListKeyPoliciesRequest) -> ListKeyPoliciesResponse ! ListKeyPoliciesErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_key_policies(c.params, input)) ?? e => return Err(ListKeyPoliciesErr.InvalidInput(e))
   var req = serialize_list_key_policies(ep, input, "") ?? e => return Err(ListKeyPoliciesErr.InvalidInput(e))
@@ -793,6 +833,9 @@ pub fn serialize_list_keys(ep: rest.Endpoint, input: ListKeysRequest, idempotenc
   if let Some(x) = input.marker {
     fs.push(("Marker", json.Value.Str(x)))
   }
+  if let Some(x) = input.resource_owners {
+    fs.push(("ResourceOwners", json_of_resource_owners_list(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
   headers.push(("X-Amz-Target", "TrentService.ListKeys"))
@@ -876,12 +919,34 @@ pub fn deserialize_list_keys_error(resp: http.Response) -> ListKeysErr {
 }
 
 /// Gets a list of all KMS keys in the caller's Amazon Web Services account
-/// and Region. Cross-account use : No. You cannot perform this operation on
-/// a KMS key in a different Amazon Web Services account. Required
-/// permissions : kms:ListKeys (IAM policy) Related operations: CreateKey
+/// and Region. You can also use ListKeys to list KMS keys in the Region
+/// that other Amazon Web Services accounts shared with the caller's Amazon
+/// Web Services account through Resource Access Manager (RAM). To list
+/// them, use the ResourceOwners parameter. If you omit ResourceOwners ,
+/// ListKeys lists only the KMS keys in the caller's Amazon Web Services
+/// account. When ResourceOwners includes OTHER_ACCOUNTS_VIA_RAM , ListKeys
+/// returns the KMS keys that other Amazon Web Services accounts currently
+/// share with the caller's Amazon Web Services account through RAM. For
+/// information about how and when a resource that another account shares
+/// becomes available to your Amazon Web Services account, see Access Amazon
+/// Web Services resources shared with you in the RAM User Guide .
+/// Cross-account use : No. This operation doesn't take a KMS key parameter,
+/// so you can't use it to list the KMS keys of a specific Amazon Web
+/// Services account. The only KMS keys in other Amazon Web Services
+/// accounts that ListKeys returns are the ones that other accounts shared
+/// with the caller's Amazon Web Services account through RAM. To list them,
+/// set the ResourceOwners parameter to include OTHER_ACCOUNTS_VIA_RAM .
+/// Required permissions : kms:ListKeys (IAM policy) The same kms:ListKeys
+/// permission lets you list the KMS keys that other accounts shared with
+/// you through RAM. KMS doesn't evaluate the key policies of shared KMS
+/// keys when it lists them. To use a shared KMS key, you need permission
+/// for each operation on that KMS key. Related operations: CreateKey
 /// DescribeKey ListAliases ListResourceTags Eventual consistency : The KMS
 /// API follows an eventual consistency model. For more information, see KMS
-/// eventual consistency .
+/// eventual consistency . KMS keys that other Amazon Web Services accounts
+/// share with you can take some time to appear in or disappear from
+/// ListKeys results after changes to resource shares, such as accepting an
+/// invitation or deleting a resource share.
 pub fn (c: Client) list_keys(input: ListKeysRequest) -> ListKeysResponse ! ListKeysErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_keys(c.params, input)) ?? e => return Err(ListKeysErr.InvalidInput(e))
   var req = serialize_list_keys(ep, input, "") ?? e => return Err(ListKeysErr.InvalidInput(e))
@@ -1310,18 +1375,30 @@ pub fn deserialize_put_key_policy_error(resp: http.Response) -> PutKeyPolicyErr 
   PutKeyPolicyErr.Api(restjson.api_error(resp, body))
 }
 
-/// Attaches a key policy to the specified KMS key. For more information
-/// about key policies, see Key Policies in the Key Management Service
-/// Developer Guide . For help writing and formatting a JSON policy
-/// document, see the IAM JSON Policy Reference in the Identity and Access
-/// Management User Guide . For examples of adding a key policy in multiple
-/// programming languages, see Use PutKeyPolicy with an Amazon Web Services
-/// SDK or CLI in the Key Management Service Developer Guide . Cross-account
-/// use : No. You cannot perform this operation on a KMS key in a different
-/// Amazon Web Services account. Required permissions : kms:PutKeyPolicy
-/// (key policy) Related operations : GetKeyPolicy Eventual consistency :
-/// The KMS API follows an eventual consistency model. For more information,
-/// see KMS eventual consistency .
+/// Attaches a key policy to the specified KMS key. You can use this
+/// operation to set only the default key policy. For more information about
+/// key policies, see Key Policies in the Key Management Service Developer
+/// Guide . For help writing and formatting a JSON policy document, see the
+/// IAM JSON Policy Reference in the Identity and Access Management User
+/// Guide . For examples of adding a key policy in multiple programming
+/// languages, see Use PutKeyPolicy with an Amazon Web Services SDK or CLI
+/// in the Key Management Service Developer Guide . A KMS key can also have
+/// an AWS_RAM key policy, which Resource Access Manager (RAM) manages for
+/// KMS keys that you share through RAM. You can't use PutKeyPolicy to
+/// create, change, or delete the AWS_RAM key policy. If you set PolicyName
+/// to AWS_RAM , the request fails with a ValidationException and the
+/// message The AWS_RAM policy can only be managed by the RAM service. To
+/// view the AWS_RAM key policy, use GetKeyPolicy . For information about
+/// sharing KMS keys, see Sharing KMS keys with RAM in the Key Management
+/// Service Developer Guide . Cross-account use : No. You cannot perform
+/// this operation on a KMS key in a different Amazon Web Services account.
+/// Required permissions : kms:PutKeyPolicy (key policy) You can use the
+/// kms:PolicyName condition key to control access to this operation based
+/// on the value of the PolicyName parameter in the request. If the request
+/// doesn't include PolicyName , the value of kms:PolicyName is default .
+/// Related operations : GetKeyPolicy Eventual consistency : The KMS API
+/// follows an eventual consistency model. For more information, see KMS
+/// eventual consistency .
 pub fn (c: Client) put_key_policy(input: PutKeyPolicyRequest) -> () ! PutKeyPolicyErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_put_key_policy(c.params, input)) ?? e => return Err(PutKeyPolicyErr.InvalidInput(e))
   var req = serialize_put_key_policy(ep, input, "") ?? e => return Err(PutKeyPolicyErr.InvalidInput(e))

@@ -8,6 +8,1030 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Creates a transit gateway peering connection.
+pub fn (c: Client) create_transit_gateway_peering(input: CreateTransitGatewayPeeringRequest) -> CreateTransitGatewayPeeringResponse ! CreateTransitGatewayPeeringErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_transit_gateway_peering(c.params, input)) ?? e => return Err(CreateTransitGatewayPeeringErr.InvalidInput(e))
+  var req = serialize_create_transit_gateway_peering(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateTransitGatewayPeeringErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateTransitGatewayPeeringErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_transit_gateway_peering_error(resp))
+  }
+  deserialize_create_transit_gateway_peering(resp) ?? e => Err(CreateTransitGatewayPeeringErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_transit_gateway_route_table_attachment(base: EndpointParameters, input: CreateTransitGatewayRouteTableAttachmentRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateTransitGatewayRouteTableAttachment.
+pub fn serialize_create_transit_gateway_route_table_attachment(ep: rest.Endpoint, input: CreateTransitGatewayRouteTableAttachmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.peering_id {
+    fs.push(("PeeringId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.transit_gateway_route_table_arn {
+    fs.push(("TransitGatewayRouteTableArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.routing_policy_label {
+    fs.push(("RoutingPolicyLabel", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_list(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("ClientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/transit-gateway-route-table-attachments"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_transit_gateway_route_table_attachment(resp: http.Response) -> CreateTransitGatewayRouteTableAttachmentResponse ! Str {
+  var out = CreateTransitGatewayRouteTableAttachmentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TransitGatewayRouteTableAttachment" => out.transit_gateway_route_table_attachment = from_json_transit_gateway_route_table_attachment(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateTransitGatewayRouteTableAttachment.
+pub enum CreateTransitGatewayRouteTableAttachmentErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateTransitGatewayRouteTableAttachmentErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_transit_gateway_route_table_attachment_error(resp: http.Response) -> CreateTransitGatewayRouteTableAttachmentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateTransitGatewayRouteTableAttachmentErr.AccessDeniedException(x)
+      Err(msg) => return CreateTransitGatewayRouteTableAttachmentErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateTransitGatewayRouteTableAttachmentErr.ConflictException(x)
+      Err(msg) => return CreateTransitGatewayRouteTableAttachmentErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateTransitGatewayRouteTableAttachmentErr.InternalServerException(x)
+      Err(msg) => return CreateTransitGatewayRouteTableAttachmentErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateTransitGatewayRouteTableAttachmentErr.ResourceNotFoundException(x)
+      Err(msg) => return CreateTransitGatewayRouteTableAttachmentErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateTransitGatewayRouteTableAttachmentErr.ThrottlingException(x)
+      Err(msg) => return CreateTransitGatewayRouteTableAttachmentErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateTransitGatewayRouteTableAttachmentErr.ValidationException(x)
+      Err(msg) => return CreateTransitGatewayRouteTableAttachmentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateTransitGatewayRouteTableAttachmentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates a transit gateway route table attachment.
+pub fn (c: Client) create_transit_gateway_route_table_attachment(input: CreateTransitGatewayRouteTableAttachmentRequest) -> CreateTransitGatewayRouteTableAttachmentResponse ! CreateTransitGatewayRouteTableAttachmentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_transit_gateway_route_table_attachment(c.params, input)) ?? e => return Err(CreateTransitGatewayRouteTableAttachmentErr.InvalidInput(e))
+  var req = serialize_create_transit_gateway_route_table_attachment(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateTransitGatewayRouteTableAttachmentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateTransitGatewayRouteTableAttachmentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_transit_gateway_route_table_attachment_error(resp))
+  }
+  deserialize_create_transit_gateway_route_table_attachment(resp) ?? e => Err(CreateTransitGatewayRouteTableAttachmentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_vpc_attachment(base: EndpointParameters, input: CreateVpcAttachmentRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateVpcAttachment.
+pub fn serialize_create_vpc_attachment(ep: rest.Endpoint, input: CreateVpcAttachmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.core_network_id {
+    fs.push(("CoreNetworkId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.vpc_arn {
+    fs.push(("VpcArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.subnet_arns {
+    fs.push(("SubnetArns", json_of_subnet_arn_list(x)))
+  }
+  if let Some(x) = input.options {
+    fs.push(("Options", json_of_vpc_options(x)))
+  }
+  if let Some(x) = input.routing_policy_label {
+    fs.push(("RoutingPolicyLabel", json.Value.Str(x)))
+  }
+  if let Some(x) = input.nat_gateway_support {
+    fs.push(("NatGatewaySupport", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.nat_gateway_rules {
+    fs.push(("NatGatewayRules", json_of_nat_rule_request_list(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("Tags", json_of_tag_list(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("ClientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/vpc-attachments"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_vpc_attachment(resp: http.Response) -> CreateVpcAttachmentResponse ! Str {
+  var out = CreateVpcAttachmentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "VpcAttachment" => out.vpc_attachment = from_json_vpc_attachment(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateVpcAttachment.
+pub enum CreateVpcAttachmentErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateVpcAttachmentErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_vpc_attachment_error(resp: http.Response) -> CreateVpcAttachmentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateVpcAttachmentErr.AccessDeniedException(x)
+      Err(msg) => return CreateVpcAttachmentErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateVpcAttachmentErr.ConflictException(x)
+      Err(msg) => return CreateVpcAttachmentErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateVpcAttachmentErr.InternalServerException(x)
+      Err(msg) => return CreateVpcAttachmentErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateVpcAttachmentErr.ResourceNotFoundException(x)
+      Err(msg) => return CreateVpcAttachmentErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateVpcAttachmentErr.ThrottlingException(x)
+      Err(msg) => return CreateVpcAttachmentErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateVpcAttachmentErr.ValidationException(x)
+      Err(msg) => return CreateVpcAttachmentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateVpcAttachmentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates a VPC attachment on an edge location of a core network.
+pub fn (c: Client) create_vpc_attachment(input: CreateVpcAttachmentRequest) -> CreateVpcAttachmentResponse ! CreateVpcAttachmentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_vpc_attachment(c.params, input)) ?? e => return Err(CreateVpcAttachmentErr.InvalidInput(e))
+  var req = serialize_create_vpc_attachment(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateVpcAttachmentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateVpcAttachmentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_vpc_attachment_error(resp))
+  }
+  deserialize_create_vpc_attachment(resp) ?? e => Err(CreateVpcAttachmentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_attachment(base: EndpointParameters, input: DeleteAttachmentRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteAttachment.
+pub fn serialize_delete_attachment(ep: rest.Endpoint, input: DeleteAttachmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_attachment_id = match input.attachment_id {
+    Some(v) => v
+    None => return Err("input member AttachmentId is required")
+  }
+  if label_attachment_id == "" {
+    return Err("input member AttachmentId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/attachments/${rest.escape(label_attachment_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_attachment(resp: http.Response) -> DeleteAttachmentResponse ! Str {
+  var out = DeleteAttachmentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Attachment" => out.attachment = from_json_attachment(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteAttachment.
+pub enum DeleteAttachmentErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteAttachmentErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_attachment_error(resp: http.Response) -> DeleteAttachmentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteAttachmentErr.AccessDeniedException(x)
+      Err(msg) => return DeleteAttachmentErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteAttachmentErr.ConflictException(x)
+      Err(msg) => return DeleteAttachmentErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteAttachmentErr.InternalServerException(x)
+      Err(msg) => return DeleteAttachmentErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteAttachmentErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteAttachmentErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteAttachmentErr.ThrottlingException(x)
+      Err(msg) => return DeleteAttachmentErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DeleteAttachmentErr.ValidationException(x)
+      Err(msg) => return DeleteAttachmentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteAttachmentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes an attachment. Supports all attachment types.
+pub fn (c: Client) delete_attachment(input: DeleteAttachmentRequest) -> DeleteAttachmentResponse ! DeleteAttachmentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_attachment(c.params, input)) ?? e => return Err(DeleteAttachmentErr.InvalidInput(e))
+  var req = serialize_delete_attachment(ep, input, "") ?? e => return Err(DeleteAttachmentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteAttachmentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_attachment_error(resp))
+  }
+  deserialize_delete_attachment(resp) ?? e => Err(DeleteAttachmentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_connect_peer(base: EndpointParameters, input: DeleteConnectPeerRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteConnectPeer.
+pub fn serialize_delete_connect_peer(ep: rest.Endpoint, input: DeleteConnectPeerRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_connect_peer_id = match input.connect_peer_id {
+    Some(v) => v
+    None => return Err("input member ConnectPeerId is required")
+  }
+  if label_connect_peer_id == "" {
+    return Err("input member ConnectPeerId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/connect-peers/${rest.escape(label_connect_peer_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_connect_peer(resp: http.Response) -> DeleteConnectPeerResponse ! Str {
+  var out = DeleteConnectPeerResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ConnectPeer" => out.connect_peer = from_json_connect_peer(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteConnectPeer.
+pub enum DeleteConnectPeerErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteConnectPeerErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_connect_peer_error(resp: http.Response) -> DeleteConnectPeerErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteConnectPeerErr.AccessDeniedException(x)
+      Err(msg) => return DeleteConnectPeerErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteConnectPeerErr.ConflictException(x)
+      Err(msg) => return DeleteConnectPeerErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteConnectPeerErr.InternalServerException(x)
+      Err(msg) => return DeleteConnectPeerErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteConnectPeerErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteConnectPeerErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteConnectPeerErr.ThrottlingException(x)
+      Err(msg) => return DeleteConnectPeerErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DeleteConnectPeerErr.ValidationException(x)
+      Err(msg) => return DeleteConnectPeerErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteConnectPeerErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes a Connect peer.
+pub fn (c: Client) delete_connect_peer(input: DeleteConnectPeerRequest) -> DeleteConnectPeerResponse ! DeleteConnectPeerErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_connect_peer(c.params, input)) ?? e => return Err(DeleteConnectPeerErr.InvalidInput(e))
+  var req = serialize_delete_connect_peer(ep, input, "") ?? e => return Err(DeleteConnectPeerErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteConnectPeerErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_connect_peer_error(resp))
+  }
+  deserialize_delete_connect_peer(resp) ?? e => Err(DeleteConnectPeerErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_connection(base: EndpointParameters, input: DeleteConnectionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteConnection.
+pub fn serialize_delete_connection(ep: rest.Endpoint, input: DeleteConnectionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_global_network_id = match input.global_network_id {
+    Some(v) => v
+    None => return Err("input member GlobalNetworkId is required")
+  }
+  if label_global_network_id == "" {
+    return Err("input member GlobalNetworkId must not be empty")
+  }
+  let label_connection_id = match input.connection_id {
+    Some(v) => v
+    None => return Err("input member ConnectionId is required")
+  }
+  if label_connection_id == "" {
+    return Err("input member ConnectionId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/global-networks/${rest.escape(label_global_network_id, false)}/connections/${rest.escape(label_connection_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_connection(resp: http.Response) -> DeleteConnectionResponse ! Str {
+  var out = DeleteConnectionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Connection" => out.connection = from_json_connection(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteConnection.
+pub enum DeleteConnectionErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteConnectionErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_connection_error(resp: http.Response) -> DeleteConnectionErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteConnectionErr.AccessDeniedException(x)
+      Err(msg) => return DeleteConnectionErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteConnectionErr.ConflictException(x)
+      Err(msg) => return DeleteConnectionErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteConnectionErr.InternalServerException(x)
+      Err(msg) => return DeleteConnectionErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteConnectionErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteConnectionErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteConnectionErr.ThrottlingException(x)
+      Err(msg) => return DeleteConnectionErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DeleteConnectionErr.ValidationException(x)
+      Err(msg) => return DeleteConnectionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteConnectionErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes the specified connection in your global network.
+pub fn (c: Client) delete_connection(input: DeleteConnectionRequest) -> DeleteConnectionResponse ! DeleteConnectionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_connection(c.params, input)) ?? e => return Err(DeleteConnectionErr.InvalidInput(e))
+  var req = serialize_delete_connection(ep, input, "") ?? e => return Err(DeleteConnectionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteConnectionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_connection_error(resp))
+  }
+  deserialize_delete_connection(resp) ?? e => Err(DeleteConnectionErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_context_store(base: EndpointParameters, input: DeleteContextStoreRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteContextStore.
+pub fn serialize_delete_context_store(ep: rest.Endpoint, input: DeleteContextStoreRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_context_store(resp: http.Response) -> DeleteContextStoreResponse ! Str {
+  var out = DeleteContextStoreResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextStore" => out.context_store = from_json_context_store(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteContextStore.
+pub enum DeleteContextStoreErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteContextStoreErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_context_store_error(resp: http.Response) -> DeleteContextStoreErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteContextStoreErr.AccessDeniedException(x)
+      Err(msg) => return DeleteContextStoreErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteContextStoreErr.ConflictException(x)
+      Err(msg) => return DeleteContextStoreErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteContextStoreErr.InternalServerException(x)
+      Err(msg) => return DeleteContextStoreErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteContextStoreErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteContextStoreErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteContextStoreErr.ThrottlingException(x)
+      Err(msg) => return DeleteContextStoreErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DeleteContextStoreErr.ValidationException(x)
+      Err(msg) => return DeleteContextStoreErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteContextStoreErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes a context store. The context store must be in the AVAILABLE
+/// state. You must disassociate all transit gateways from the context store
+/// before you can delete it.
+pub fn (c: Client) delete_context_store(input: DeleteContextStoreRequest) -> DeleteContextStoreResponse ! DeleteContextStoreErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_context_store(c.params, input)) ?? e => return Err(DeleteContextStoreErr.InvalidInput(e))
+  var req = serialize_delete_context_store(ep, input, "") ?? e => return Err(DeleteContextStoreErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteContextStoreErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_context_store_error(resp))
+  }
+  deserialize_delete_context_store(resp) ?? e => Err(DeleteContextStoreErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_core_network(base: EndpointParameters, input: DeleteCoreNetworkRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteCoreNetwork.
+pub fn serialize_delete_core_network(ep: rest.Endpoint, input: DeleteCoreNetworkRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_core_network_id = match input.core_network_id {
+    Some(v) => v
+    None => return Err("input member CoreNetworkId is required")
+  }
+  if label_core_network_id == "" {
+    return Err("input member CoreNetworkId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/core-networks/${rest.escape(label_core_network_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_core_network(resp: http.Response) -> DeleteCoreNetworkResponse ! Str {
+  var out = DeleteCoreNetworkResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CoreNetwork" => out.core_network = from_json_core_network(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteCoreNetwork.
+pub enum DeleteCoreNetworkErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteCoreNetworkErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_core_network_error(resp: http.Response) -> DeleteCoreNetworkErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteCoreNetworkErr.AccessDeniedException(x)
+      Err(msg) => return DeleteCoreNetworkErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteCoreNetworkErr.ConflictException(x)
+      Err(msg) => return DeleteCoreNetworkErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteCoreNetworkErr.InternalServerException(x)
+      Err(msg) => return DeleteCoreNetworkErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteCoreNetworkErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteCoreNetworkErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteCoreNetworkErr.ThrottlingException(x)
+      Err(msg) => return DeleteCoreNetworkErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DeleteCoreNetworkErr.ValidationException(x)
+      Err(msg) => return DeleteCoreNetworkErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteCoreNetworkErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes a core network along with all core network policies. This can
+/// only be done if there are no attachments on a core network.
+pub fn (c: Client) delete_core_network(input: DeleteCoreNetworkRequest) -> DeleteCoreNetworkResponse ! DeleteCoreNetworkErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_core_network(c.params, input)) ?? e => return Err(DeleteCoreNetworkErr.InvalidInput(e))
+  var req = serialize_delete_core_network(ep, input, "") ?? e => return Err(DeleteCoreNetworkErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteCoreNetworkErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_core_network_error(resp))
+  }
+  deserialize_delete_core_network(resp) ?? e => Err(DeleteCoreNetworkErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_core_network_policy_version(base: EndpointParameters, input: DeleteCoreNetworkPolicyVersionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteCoreNetworkPolicyVersion.
+pub fn serialize_delete_core_network_policy_version(ep: rest.Endpoint, input: DeleteCoreNetworkPolicyVersionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_core_network_id = match input.core_network_id {
+    Some(v) => v
+    None => return Err("input member CoreNetworkId is required")
+  }
+  if label_core_network_id == "" {
+    return Err("input member CoreNetworkId must not be empty")
+  }
+  let label_policy_version_id = match input.policy_version_id {
+    Some(v) => "${v}"
+    None => return Err("input member PolicyVersionId is required")
+  }
+  if label_policy_version_id == "" {
+    return Err("input member PolicyVersionId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/core-networks/${rest.escape(label_core_network_id, false)}/core-network-policy-versions/${rest.escape(label_policy_version_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_core_network_policy_version(resp: http.Response) -> DeleteCoreNetworkPolicyVersionResponse ! Str {
+  var out = DeleteCoreNetworkPolicyVersionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "CoreNetworkPolicy" => out.core_network_policy = from_json_core_network_policy(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteCoreNetworkPolicyVersion.
+pub enum DeleteCoreNetworkPolicyVersionErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: DeleteCoreNetworkPolicyVersionErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
@@ -1383,6 +2407,142 @@ pub fn (c: Client) disassociate_connect_peer(input: DisassociateConnectPeerReque
   deserialize_disassociate_connect_peer(resp) ?? e => Err(DisassociateConnectPeerErr.Deserialize(e))
 }
 
+pub fn endpoint_params_disassociate_context_store(base: EndpointParameters, input: DisassociateContextStoreRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DisassociateContextStore.
+pub fn serialize_disassociate_context_store(ep: rest.Endpoint, input: DisassociateContextStoreRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  let label_transit_gateway_arn = match input.transit_gateway_arn {
+    Some(v) => v
+    None => return Err("input member TransitGatewayArn is required")
+  }
+  if label_transit_gateway_arn == "" {
+    return Err("input member TransitGatewayArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}/associations/${rest.escape(label_transit_gateway_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disassociate_context_store(resp: http.Response) -> DisassociateContextStoreResponse ! Str {
+  var out = DisassociateContextStoreResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextStoreAssociation" => out.context_store_association = from_json_context_store_association(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DisassociateContextStore.
+pub enum DisassociateContextStoreErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisassociateContextStoreErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disassociate_context_store_error(resp: http.Response) -> DisassociateContextStoreErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DisassociateContextStoreErr.AccessDeniedException(x)
+      Err(msg) => return DisassociateContextStoreErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DisassociateContextStoreErr.ConflictException(x)
+      Err(msg) => return DisassociateContextStoreErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DisassociateContextStoreErr.InternalServerException(x)
+      Err(msg) => return DisassociateContextStoreErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DisassociateContextStoreErr.ResourceNotFoundException(x)
+      Err(msg) => return DisassociateContextStoreErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DisassociateContextStoreErr.ThrottlingException(x)
+      Err(msg) => return DisassociateContextStoreErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DisassociateContextStoreErr.ValidationException(x)
+      Err(msg) => return DisassociateContextStoreErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DisassociateContextStoreErr.Api(restjson.api_error(resp, body))
+}
+
+/// Disassociates a transit gateway from a context store. The association
+/// must be in the ASSOCIATED or FAILED state. The association stays in the
+/// DISASSOCIATING state until the disassociation completes.
+pub fn (c: Client) disassociate_context_store(input: DisassociateContextStoreRequest) -> DisassociateContextStoreResponse ! DisassociateContextStoreErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disassociate_context_store(c.params, input)) ?? e => return Err(DisassociateContextStoreErr.InvalidInput(e))
+  var req = serialize_disassociate_context_store(ep, input, "") ?? e => return Err(DisassociateContextStoreErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DisassociateContextStoreErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disassociate_context_store_error(resp))
+  }
+  deserialize_disassociate_context_store(resp) ?? e => Err(DisassociateContextStoreErr.Deserialize(e))
+}
+
 pub fn endpoint_params_disassociate_customer_gateway(base: EndpointParameters, input: DisassociateCustomerGatewayRequest) -> EndpointParameters {
   let _ = input
   base
@@ -2426,6 +3586,378 @@ pub fn (c: Client) get_connections(input: GetConnectionsRequest) -> GetConnectio
     return Err(deserialize_get_connections_error(resp))
   }
   deserialize_get_connections(resp) ?? e => Err(GetConnectionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_context_store(base: EndpointParameters, input: GetContextStoreRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetContextStore.
+pub fn serialize_get_context_store(ep: rest.Endpoint, input: GetContextStoreRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_context_store(resp: http.Response) -> GetContextStoreResponse ! Str {
+  var out = GetContextStoreResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextStore" => out.context_store = from_json_context_store(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetContextStore.
+pub enum GetContextStoreErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetContextStoreErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_context_store_error(resp: http.Response) -> GetContextStoreErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetContextStoreErr.AccessDeniedException(x)
+      Err(msg) => return GetContextStoreErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetContextStoreErr.InternalServerException(x)
+      Err(msg) => return GetContextStoreErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetContextStoreErr.ResourceNotFoundException(x)
+      Err(msg) => return GetContextStoreErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetContextStoreErr.ThrottlingException(x)
+      Err(msg) => return GetContextStoreErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetContextStoreErr.ValidationException(x)
+      Err(msg) => return GetContextStoreErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetContextStoreErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns information about a context store.
+pub fn (c: Client) get_context_store(input: GetContextStoreRequest) -> GetContextStoreResponse ! GetContextStoreErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_context_store(c.params, input)) ?? e => return Err(GetContextStoreErr.InvalidInput(e))
+  var req = serialize_get_context_store(ep, input, "") ?? e => return Err(GetContextStoreErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetContextStoreErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_context_store_error(resp))
+  }
+  deserialize_get_context_store(resp) ?? e => Err(GetContextStoreErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_context_store_association(base: EndpointParameters, input: GetContextStoreAssociationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetContextStoreAssociation.
+pub fn serialize_get_context_store_association(ep: rest.Endpoint, input: GetContextStoreAssociationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  let label_transit_gateway_arn = match input.transit_gateway_arn {
+    Some(v) => v
+    None => return Err("input member TransitGatewayArn is required")
+  }
+  if label_transit_gateway_arn == "" {
+    return Err("input member TransitGatewayArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}/associations/${rest.escape(label_transit_gateway_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_context_store_association(resp: http.Response) -> GetContextStoreAssociationResponse ! Str {
+  var out = GetContextStoreAssociationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextStoreAssociation" => out.context_store_association = from_json_context_store_association(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetContextStoreAssociation.
+pub enum GetContextStoreAssociationErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetContextStoreAssociationErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_context_store_association_error(resp: http.Response) -> GetContextStoreAssociationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetContextStoreAssociationErr.AccessDeniedException(x)
+      Err(msg) => return GetContextStoreAssociationErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetContextStoreAssociationErr.InternalServerException(x)
+      Err(msg) => return GetContextStoreAssociationErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetContextStoreAssociationErr.ResourceNotFoundException(x)
+      Err(msg) => return GetContextStoreAssociationErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetContextStoreAssociationErr.ThrottlingException(x)
+      Err(msg) => return GetContextStoreAssociationErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetContextStoreAssociationErr.ValidationException(x)
+      Err(msg) => return GetContextStoreAssociationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetContextStoreAssociationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns information about the association between a context store and a
+/// transit gateway.
+pub fn (c: Client) get_context_store_association(input: GetContextStoreAssociationRequest) -> GetContextStoreAssociationResponse ! GetContextStoreAssociationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_context_store_association(c.params, input)) ?? e => return Err(GetContextStoreAssociationErr.InvalidInput(e))
+  var req = serialize_get_context_store_association(ep, input, "") ?? e => return Err(GetContextStoreAssociationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetContextStoreAssociationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_context_store_association_error(resp))
+  }
+  deserialize_get_context_store_association(resp) ?? e => Err(GetContextStoreAssociationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_context_version(base: EndpointParameters, input: GetContextVersionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetContextVersion.
+pub fn serialize_get_context_version(ep: rest.Endpoint, input: GetContextVersionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}/context-version"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_context_version(resp: http.Response) -> GetContextVersionResponse ! Str {
+  var out = GetContextVersionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "VersionId" => out.version_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetContextVersion.
+pub enum GetContextVersionErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetContextVersionErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_context_version_error(resp: http.Response) -> GetContextVersionErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetContextVersionErr.AccessDeniedException(x)
+      Err(msg) => return GetContextVersionErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetContextVersionErr.InternalServerException(x)
+      Err(msg) => return GetContextVersionErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetContextVersionErr.ResourceNotFoundException(x)
+      Err(msg) => return GetContextVersionErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetContextVersionErr.ThrottlingException(x)
+      Err(msg) => return GetContextVersionErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetContextVersionErr.ValidationException(x)
+      Err(msg) => return GetContextVersionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetContextVersionErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the current version of the context entries of a context store.
+/// The context store must be in the AVAILABLE state.
+pub fn (c: Client) get_context_version(input: GetContextVersionRequest) -> GetContextVersionResponse ! GetContextVersionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_context_version(c.params, input)) ?? e => return Err(GetContextVersionErr.InvalidInput(e))
+  var req = serialize_get_context_version(ep, input, "") ?? e => return Err(GetContextVersionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetContextVersionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_context_version_error(resp))
+  }
+  deserialize_get_context_version(resp) ?? e => Err(GetContextVersionErr.Deserialize(e))
 }
 
 pub fn endpoint_params_get_core_network(base: EndpointParameters, input: GetCoreNetworkRequest) -> EndpointParameters {
@@ -6004,6 +7536,527 @@ pub fn (c: Client) list_connect_peers(input: ListConnectPeersRequest) -> ListCon
   deserialize_list_connect_peers(resp) ?? e => Err(ListConnectPeersErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_context_changes(base: EndpointParameters, input: ListContextChangesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListContextChanges.
+pub fn serialize_list_context_changes(ep: rest.Endpoint, input: ListContextChangesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  if let Some(v) = input.from_version_id {
+    qs.push(("fromVersionId", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}/context-changes"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_context_changes(resp: http.Response) -> ListContextChangesResponse ! Str {
+  var out = ListContextChangesResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextChanges" => out.context_changes = from_json_context_change_list(fv)?
+      "FromVersionId" => out.from_version_id = jsonv.read_str(fv)?
+      "ToVersionId" => out.to_version_id = jsonv.read_str(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListContextChanges.
+pub enum ListContextChangesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListContextChangesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_context_changes_error(resp: http.Response) -> ListContextChangesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListContextChangesErr.AccessDeniedException(x)
+      Err(msg) => return ListContextChangesErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListContextChangesErr.InternalServerException(x)
+      Err(msg) => return ListContextChangesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListContextChangesErr.ResourceNotFoundException(x)
+      Err(msg) => return ListContextChangesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListContextChangesErr.ThrottlingException(x)
+      Err(msg) => return ListContextChangesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListContextChangesErr.ValidationException(x)
+      Err(msg) => return ListContextChangesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListContextChangesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the context entries that were added to or removed from a context
+/// store after the specified version. The context store must be in the
+/// AVAILABLE state.
+pub fn (c: Client) list_context_changes(input: ListContextChangesRequest) -> ListContextChangesResponse ! ListContextChangesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_context_changes(c.params, input)) ?? e => return Err(ListContextChangesErr.InvalidInput(e))
+  var req = serialize_list_context_changes(ep, input, "") ?? e => return Err(ListContextChangesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListContextChangesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_context_changes_error(resp))
+  }
+  deserialize_list_context_changes(resp) ?? e => Err(ListContextChangesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_context_store_associations(base: EndpointParameters, input: ListContextStoreAssociationsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListContextStoreAssociations.
+pub fn serialize_list_context_store_associations(ep: rest.Endpoint, input: ListContextStoreAssociationsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}/associations"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_context_store_associations(resp: http.Response) -> ListContextStoreAssociationsResponse ! Str {
+  var out = ListContextStoreAssociationsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextStoreAssociations" => out.context_store_associations = from_json_context_store_association_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListContextStoreAssociations.
+pub enum ListContextStoreAssociationsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListContextStoreAssociationsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_context_store_associations_error(resp: http.Response) -> ListContextStoreAssociationsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListContextStoreAssociationsErr.AccessDeniedException(x)
+      Err(msg) => return ListContextStoreAssociationsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListContextStoreAssociationsErr.InternalServerException(x)
+      Err(msg) => return ListContextStoreAssociationsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListContextStoreAssociationsErr.ResourceNotFoundException(x)
+      Err(msg) => return ListContextStoreAssociationsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListContextStoreAssociationsErr.ThrottlingException(x)
+      Err(msg) => return ListContextStoreAssociationsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListContextStoreAssociationsErr.ValidationException(x)
+      Err(msg) => return ListContextStoreAssociationsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListContextStoreAssociationsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the transit gateway associations of a context store.
+pub fn (c: Client) list_context_store_associations(input: ListContextStoreAssociationsRequest) -> ListContextStoreAssociationsResponse ! ListContextStoreAssociationsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_context_store_associations(c.params, input)) ?? e => return Err(ListContextStoreAssociationsErr.InvalidInput(e))
+  var req = serialize_list_context_store_associations(ep, input, "") ?? e => return Err(ListContextStoreAssociationsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListContextStoreAssociationsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_context_store_associations_error(resp))
+  }
+  deserialize_list_context_store_associations(resp) ?? e => Err(ListContextStoreAssociationsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_context_stores(base: EndpointParameters, input: ListContextStoresRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListContextStores.
+pub fn serialize_list_context_stores(ep: rest.Endpoint, input: ListContextStoresRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.global_network_id {
+    qs.push(("globalNetworkId", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_context_stores(resp: http.Response) -> ListContextStoresResponse ! Str {
+  var out = ListContextStoresResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ContextStores" => out.context_stores = from_json_context_store_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListContextStores.
+pub enum ListContextStoresErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListContextStoresErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_context_stores_error(resp: http.Response) -> ListContextStoresErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListContextStoresErr.AccessDeniedException(x)
+      Err(msg) => return ListContextStoresErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListContextStoresErr.InternalServerException(x)
+      Err(msg) => return ListContextStoresErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListContextStoresErr.ResourceNotFoundException(x)
+      Err(msg) => return ListContextStoresErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListContextStoresErr.ThrottlingException(x)
+      Err(msg) => return ListContextStoresErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListContextStoresErr.ValidationException(x)
+      Err(msg) => return ListContextStoresErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListContextStoresErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the context stores in your account. You can optionally return
+/// only the context stores in a specific global network.
+pub fn (c: Client) list_context_stores(input: ListContextStoresRequest) -> ListContextStoresResponse ! ListContextStoresErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_context_stores(c.params, input)) ?? e => return Err(ListContextStoresErr.InvalidInput(e))
+  var req = serialize_list_context_stores(ep, input, "") ?? e => return Err(ListContextStoresErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListContextStoresErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_context_stores_error(resp))
+  }
+  deserialize_list_context_stores(resp) ?? e => Err(ListContextStoresErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_contexts(base: EndpointParameters, input: ListContextsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListContexts.
+pub fn serialize_list_contexts(ep: rest.Endpoint, input: ListContextsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_context_store_id = match input.context_store_id {
+    Some(v) => v
+    None => return Err("input member ContextStoreId is required")
+  }
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}/contexts"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_contexts(resp: http.Response) -> ListContextsResponse ! Str {
+  var out = ListContextsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Contexts" => out.contexts = from_json_context_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      "VersionId" => out.version_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListContexts.
+pub enum ListContextsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListContextsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_contexts_error(resp: http.Response) -> ListContextsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListContextsErr.AccessDeniedException(x)
+      Err(msg) => return ListContextsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListContextsErr.InternalServerException(x)
+      Err(msg) => return ListContextsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListContextsErr.ResourceNotFoundException(x)
+      Err(msg) => return ListContextsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListContextsErr.ThrottlingException(x)
+      Err(msg) => return ListContextsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListContextsErr.ValidationException(x)
+      Err(msg) => return ListContextsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListContextsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the context entries of a context store, and the version of the
+/// context entries. To get the context entries that were added or removed
+/// after this version, specify the returned VersionId in a
+/// ListContextChanges request. The context store must be in the AVAILABLE
+/// state.
+pub fn (c: Client) list_contexts(input: ListContextsRequest) -> ListContextsResponse ! ListContextsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_contexts(c.params, input)) ?? e => return Err(ListContextsErr.InvalidInput(e))
+  var req = serialize_list_contexts(ep, input, "") ?? e => return Err(ListContextsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListContextsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_contexts_error(resp))
+  }
+  deserialize_list_contexts(resp) ?? e => Err(ListContextsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_core_network_policy_versions(base: EndpointParameters, input: ListCoreNetworkPolicyVersionsRequest) -> EndpointParameters {
   let _ = input
   base
@@ -8678,22 +10731,22 @@ pub fn (c: Client) update_connection(input: UpdateConnectionRequest) -> UpdateCo
   deserialize_update_connection(resp) ?? e => Err(UpdateConnectionErr.Deserialize(e))
 }
 
-pub fn endpoint_params_update_core_network(base: EndpointParameters, input: UpdateCoreNetworkRequest) -> EndpointParameters {
+pub fn endpoint_params_update_context_store(base: EndpointParameters, input: UpdateContextStoreRequest) -> EndpointParameters {
   let _ = input
   base
 }
 
-/// The HTTP request of UpdateCoreNetwork.
-pub fn serialize_update_core_network(ep: rest.Endpoint, input: UpdateCoreNetworkRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+/// The HTTP request of UpdateContextStore.
+pub fn serialize_update_context_store(ep: rest.Endpoint, input: UpdateContextStoreRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
   let _ = (idempotency_token, min_compress)
   var headers: List[(Str, Str)] = []
   var qs: List[(Str, Str)] = []
-  let label_core_network_id = match input.core_network_id {
+  let label_context_store_id = match input.context_store_id {
     Some(v) => v
-    None => return Err("input member CoreNetworkId is required")
+    None => return Err("input member ContextStoreId is required")
   }
-  if label_core_network_id == "" {
-    return Err("input member CoreNetworkId must not be empty")
+  if label_context_store_id == "" {
+    return Err("input member ContextStoreId must not be empty")
   }
   var body = b""
   var fs: List[(Str, json.Value)] = []
@@ -8710,1113 +10763,9 @@ pub fn serialize_update_core_network(ep: rest.Endpoint, input: UpdateCoreNetwork
     scheme: ep.scheme,
     host: ep.host,
     port: ep.port,
-    path: rest.join_path(ep.path, "/core-networks/${rest.escape(label_core_network_id, false)}"),
+    path: rest.join_path(ep.path, "/context-stores/${rest.escape(label_context_store_id, false)}"),
     query: rest.query(qs),
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_update_core_network(resp: http.Response) -> UpdateCoreNetworkResponse ! Str {
-  var out = UpdateCoreNetworkResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "CoreNetwork" => out.core_network = from_json_core_network(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateCoreNetwork.
-pub enum UpdateCoreNetworkErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateCoreNetworkErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_core_network_error(resp: http.Response) -> UpdateCoreNetworkErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateCoreNetworkErr.AccessDeniedException(x)
-      Err(msg) => return UpdateCoreNetworkErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateCoreNetworkErr.ConflictException(x)
-      Err(msg) => return UpdateCoreNetworkErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateCoreNetworkErr.InternalServerException(x)
-      Err(msg) => return UpdateCoreNetworkErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateCoreNetworkErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateCoreNetworkErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateCoreNetworkErr.ThrottlingException(x)
-      Err(msg) => return UpdateCoreNetworkErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateCoreNetworkErr.ValidationException(x)
-      Err(msg) => return UpdateCoreNetworkErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateCoreNetworkErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the description of a core network.
-pub fn (c: Client) update_core_network(input: UpdateCoreNetworkRequest) -> UpdateCoreNetworkResponse ! UpdateCoreNetworkErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_core_network(c.params, input)) ?? e => return Err(UpdateCoreNetworkErr.InvalidInput(e))
-  var req = serialize_update_core_network(ep, input, "") ?? e => return Err(UpdateCoreNetworkErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateCoreNetworkErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_core_network_error(resp))
-  }
-  deserialize_update_core_network(resp) ?? e => Err(UpdateCoreNetworkErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_device(base: EndpointParameters, input: UpdateDeviceRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateDevice.
-pub fn serialize_update_device(ep: rest.Endpoint, input: UpdateDeviceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_global_network_id = match input.global_network_id {
-    Some(v) => v
-    None => return Err("input member GlobalNetworkId is required")
-  }
-  if label_global_network_id == "" {
-    return Err("input member GlobalNetworkId must not be empty")
-  }
-  let label_device_id = match input.device_id {
-    Some(v) => v
-    None => return Err("input member DeviceId is required")
-  }
-  if label_device_id == "" {
-    return Err("input member DeviceId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.aws_location {
-    fs.push(("AWSLocation", json_of_aws_location(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.type_value {
-    fs.push(("Type", json.Value.Str(x)))
-  }
-  if let Some(x) = input.vendor {
-    fs.push(("Vendor", json.Value.Str(x)))
-  }
-  if let Some(x) = input.model {
-    fs.push(("Model", json.Value.Str(x)))
-  }
-  if let Some(x) = input.serial_number {
-    fs.push(("SerialNumber", json.Value.Str(x)))
-  }
-  if let Some(x) = input.location {
-    fs.push(("Location", json_of_location(x)))
-  }
-  if let Some(x) = input.site_id {
-    fs.push(("SiteId", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/global-networks/${rest.escape(label_global_network_id, false)}/devices/${rest.escape(label_device_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_device(resp: http.Response) -> UpdateDeviceResponse ! Str {
-  var out = UpdateDeviceResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Device" => out.device = from_json_device(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateDevice.
-pub enum UpdateDeviceErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateDeviceErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_device_error(resp: http.Response) -> UpdateDeviceErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateDeviceErr.AccessDeniedException(x)
-      Err(msg) => return UpdateDeviceErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateDeviceErr.ConflictException(x)
-      Err(msg) => return UpdateDeviceErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateDeviceErr.InternalServerException(x)
-      Err(msg) => return UpdateDeviceErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateDeviceErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateDeviceErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateDeviceErr.ThrottlingException(x)
-      Err(msg) => return UpdateDeviceErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateDeviceErr.ValidationException(x)
-      Err(msg) => return UpdateDeviceErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateDeviceErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the details for an existing device. To remove information for
-/// any of the parameters, specify an empty string.
-pub fn (c: Client) update_device(input: UpdateDeviceRequest) -> UpdateDeviceResponse ! UpdateDeviceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_device(c.params, input)) ?? e => return Err(UpdateDeviceErr.InvalidInput(e))
-  var req = serialize_update_device(ep, input, "") ?? e => return Err(UpdateDeviceErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateDeviceErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_device_error(resp))
-  }
-  deserialize_update_device(resp) ?? e => Err(UpdateDeviceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_direct_connect_gateway_attachment(base: EndpointParameters, input: UpdateDirectConnectGatewayAttachmentRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateDirectConnectGatewayAttachment.
-pub fn serialize_update_direct_connect_gateway_attachment(ep: rest.Endpoint, input: UpdateDirectConnectGatewayAttachmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_attachment_id = match input.attachment_id {
-    Some(v) => v
-    None => return Err("input member AttachmentId is required")
-  }
-  if label_attachment_id == "" {
-    return Err("input member AttachmentId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.edge_locations {
-    fs.push(("EdgeLocations", json_of_external_region_code_list(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/direct-connect-gateway-attachments/${rest.escape(label_attachment_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_direct_connect_gateway_attachment(resp: http.Response) -> UpdateDirectConnectGatewayAttachmentResponse ! Str {
-  var out = UpdateDirectConnectGatewayAttachmentResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "DirectConnectGatewayAttachment" => out.direct_connect_gateway_attachment = from_json_direct_connect_gateway_attachment(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateDirectConnectGatewayAttachment.
-pub enum UpdateDirectConnectGatewayAttachmentErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateDirectConnectGatewayAttachmentErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_direct_connect_gateway_attachment_error(resp: http.Response) -> UpdateDirectConnectGatewayAttachmentErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateDirectConnectGatewayAttachmentErr.AccessDeniedException(x)
-      Err(msg) => return UpdateDirectConnectGatewayAttachmentErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateDirectConnectGatewayAttachmentErr.ConflictException(x)
-      Err(msg) => return UpdateDirectConnectGatewayAttachmentErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateDirectConnectGatewayAttachmentErr.InternalServerException(x)
-      Err(msg) => return UpdateDirectConnectGatewayAttachmentErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateDirectConnectGatewayAttachmentErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateDirectConnectGatewayAttachmentErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateDirectConnectGatewayAttachmentErr.ThrottlingException(x)
-      Err(msg) => return UpdateDirectConnectGatewayAttachmentErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateDirectConnectGatewayAttachmentErr.ValidationException(x)
-      Err(msg) => return UpdateDirectConnectGatewayAttachmentErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateDirectConnectGatewayAttachmentErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the edge locations associated with an Amazon Web Services Direct
-/// Connect gateway attachment.
-pub fn (c: Client) update_direct_connect_gateway_attachment(input: UpdateDirectConnectGatewayAttachmentRequest) -> UpdateDirectConnectGatewayAttachmentResponse ! UpdateDirectConnectGatewayAttachmentErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_direct_connect_gateway_attachment(c.params, input)) ?? e => return Err(UpdateDirectConnectGatewayAttachmentErr.InvalidInput(e))
-  var req = serialize_update_direct_connect_gateway_attachment(ep, input, "") ?? e => return Err(UpdateDirectConnectGatewayAttachmentErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateDirectConnectGatewayAttachmentErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_direct_connect_gateway_attachment_error(resp))
-  }
-  deserialize_update_direct_connect_gateway_attachment(resp) ?? e => Err(UpdateDirectConnectGatewayAttachmentErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_global_network(base: EndpointParameters, input: UpdateGlobalNetworkRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateGlobalNetwork.
-pub fn serialize_update_global_network(ep: rest.Endpoint, input: UpdateGlobalNetworkRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_global_network_id = match input.global_network_id {
-    Some(v) => v
-    None => return Err("input member GlobalNetworkId is required")
-  }
-  if label_global_network_id == "" {
-    return Err("input member GlobalNetworkId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/global-networks/${rest.escape(label_global_network_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_global_network(resp: http.Response) -> UpdateGlobalNetworkResponse ! Str {
-  var out = UpdateGlobalNetworkResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "GlobalNetwork" => out.global_network = from_json_global_network(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateGlobalNetwork.
-pub enum UpdateGlobalNetworkErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateGlobalNetworkErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_global_network_error(resp: http.Response) -> UpdateGlobalNetworkErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateGlobalNetworkErr.AccessDeniedException(x)
-      Err(msg) => return UpdateGlobalNetworkErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateGlobalNetworkErr.ConflictException(x)
-      Err(msg) => return UpdateGlobalNetworkErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateGlobalNetworkErr.InternalServerException(x)
-      Err(msg) => return UpdateGlobalNetworkErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateGlobalNetworkErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateGlobalNetworkErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateGlobalNetworkErr.ThrottlingException(x)
-      Err(msg) => return UpdateGlobalNetworkErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateGlobalNetworkErr.ValidationException(x)
-      Err(msg) => return UpdateGlobalNetworkErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateGlobalNetworkErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an existing global network. To remove information for any of the
-/// parameters, specify an empty string.
-pub fn (c: Client) update_global_network(input: UpdateGlobalNetworkRequest) -> UpdateGlobalNetworkResponse ! UpdateGlobalNetworkErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_global_network(c.params, input)) ?? e => return Err(UpdateGlobalNetworkErr.InvalidInput(e))
-  var req = serialize_update_global_network(ep, input, "") ?? e => return Err(UpdateGlobalNetworkErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateGlobalNetworkErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_global_network_error(resp))
-  }
-  deserialize_update_global_network(resp) ?? e => Err(UpdateGlobalNetworkErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_link(base: EndpointParameters, input: UpdateLinkRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateLink.
-pub fn serialize_update_link(ep: rest.Endpoint, input: UpdateLinkRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_global_network_id = match input.global_network_id {
-    Some(v) => v
-    None => return Err("input member GlobalNetworkId is required")
-  }
-  if label_global_network_id == "" {
-    return Err("input member GlobalNetworkId must not be empty")
-  }
-  let label_link_id = match input.link_id {
-    Some(v) => v
-    None => return Err("input member LinkId is required")
-  }
-  if label_link_id == "" {
-    return Err("input member LinkId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.type_value {
-    fs.push(("Type", json.Value.Str(x)))
-  }
-  if let Some(x) = input.bandwidth {
-    fs.push(("Bandwidth", json_of_bandwidth(x)))
-  }
-  if let Some(x) = input.provider {
-    fs.push(("Provider", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/global-networks/${rest.escape(label_global_network_id, false)}/links/${rest.escape(label_link_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_link(resp: http.Response) -> UpdateLinkResponse ! Str {
-  var out = UpdateLinkResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Link" => out.link = from_json_link(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateLink.
-pub enum UpdateLinkErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateLinkErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_link_error(resp: http.Response) -> UpdateLinkErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.AccessDeniedException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.ConflictException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.InternalServerException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.ThrottlingException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateLinkErr.ValidationException(x)
-      Err(msg) => return UpdateLinkErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateLinkErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the details for an existing link. To remove information for any
-/// of the parameters, specify an empty string.
-pub fn (c: Client) update_link(input: UpdateLinkRequest) -> UpdateLinkResponse ! UpdateLinkErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_link(c.params, input)) ?? e => return Err(UpdateLinkErr.InvalidInput(e))
-  var req = serialize_update_link(ep, input, "") ?? e => return Err(UpdateLinkErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateLinkErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_link_error(resp))
-  }
-  deserialize_update_link(resp) ?? e => Err(UpdateLinkErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_network_resource_metadata(base: EndpointParameters, input: UpdateNetworkResourceMetadataRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateNetworkResourceMetadata.
-pub fn serialize_update_network_resource_metadata(ep: rest.Endpoint, input: UpdateNetworkResourceMetadataRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_global_network_id = match input.global_network_id {
-    Some(v) => v
-    None => return Err("input member GlobalNetworkId is required")
-  }
-  if label_global_network_id == "" {
-    return Err("input member GlobalNetworkId must not be empty")
-  }
-  let label_resource_arn = match input.resource_arn {
-    Some(v) => v
-    None => return Err("input member ResourceArn is required")
-  }
-  if label_resource_arn == "" {
-    return Err("input member ResourceArn must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.metadata {
-    fs.push(("Metadata", json_of_network_resource_metadata_map(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/global-networks/${rest.escape(label_global_network_id, false)}/network-resources/${rest.escape(label_resource_arn, false)}/metadata"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_network_resource_metadata(resp: http.Response) -> UpdateNetworkResourceMetadataResponse ! Str {
-  var out = UpdateNetworkResourceMetadataResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ResourceArn" => out.resource_arn = jsonv.read_str(fv)?
-      "Metadata" => out.metadata = from_json_network_resource_metadata_map(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateNetworkResourceMetadata.
-pub enum UpdateNetworkResourceMetadataErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateNetworkResourceMetadataErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_network_resource_metadata_error(resp: http.Response) -> UpdateNetworkResourceMetadataErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateNetworkResourceMetadataErr.AccessDeniedException(x)
-      Err(msg) => return UpdateNetworkResourceMetadataErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateNetworkResourceMetadataErr.ConflictException(x)
-      Err(msg) => return UpdateNetworkResourceMetadataErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateNetworkResourceMetadataErr.InternalServerException(x)
-      Err(msg) => return UpdateNetworkResourceMetadataErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateNetworkResourceMetadataErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateNetworkResourceMetadataErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateNetworkResourceMetadataErr.ThrottlingException(x)
-      Err(msg) => return UpdateNetworkResourceMetadataErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateNetworkResourceMetadataErr.ValidationException(x)
-      Err(msg) => return UpdateNetworkResourceMetadataErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateNetworkResourceMetadataErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the resource metadata for the specified global network.
-pub fn (c: Client) update_network_resource_metadata(input: UpdateNetworkResourceMetadataRequest) -> UpdateNetworkResourceMetadataResponse ! UpdateNetworkResourceMetadataErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_network_resource_metadata(c.params, input)) ?? e => return Err(UpdateNetworkResourceMetadataErr.InvalidInput(e))
-  var req = serialize_update_network_resource_metadata(ep, input, "") ?? e => return Err(UpdateNetworkResourceMetadataErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateNetworkResourceMetadataErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_network_resource_metadata_error(resp))
-  }
-  deserialize_update_network_resource_metadata(resp) ?? e => Err(UpdateNetworkResourceMetadataErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_site(base: EndpointParameters, input: UpdateSiteRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateSite.
-pub fn serialize_update_site(ep: rest.Endpoint, input: UpdateSiteRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_global_network_id = match input.global_network_id {
-    Some(v) => v
-    None => return Err("input member GlobalNetworkId is required")
-  }
-  if label_global_network_id == "" {
-    return Err("input member GlobalNetworkId must not be empty")
-  }
-  let label_site_id = match input.site_id {
-    Some(v) => v
-    None => return Err("input member SiteId is required")
-  }
-  if label_site_id == "" {
-    return Err("input member SiteId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.location {
-    fs.push(("Location", json_of_location(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/global-networks/${rest.escape(label_global_network_id, false)}/sites/${rest.escape(label_site_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_site(resp: http.Response) -> UpdateSiteResponse ! Str {
-  var out = UpdateSiteResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Site" => out.site = from_json_site(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateSite.
-pub enum UpdateSiteErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateSiteErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_site_error(resp: http.Response) -> UpdateSiteErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateSiteErr.AccessDeniedException(x)
-      Err(msg) => return UpdateSiteErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateSiteErr.ConflictException(x)
-      Err(msg) => return UpdateSiteErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateSiteErr.InternalServerException(x)
-      Err(msg) => return UpdateSiteErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateSiteErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateSiteErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateSiteErr.ThrottlingException(x)
-      Err(msg) => return UpdateSiteErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateSiteErr.ValidationException(x)
-      Err(msg) => return UpdateSiteErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateSiteErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the information for an existing site. To remove information for
-/// any of the parameters, specify an empty string.
-pub fn (c: Client) update_site(input: UpdateSiteRequest) -> UpdateSiteResponse ! UpdateSiteErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_site(c.params, input)) ?? e => return Err(UpdateSiteErr.InvalidInput(e))
-  var req = serialize_update_site(ep, input, "") ?? e => return Err(UpdateSiteErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateSiteErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_site_error(resp))
-  }
-  deserialize_update_site(resp) ?? e => Err(UpdateSiteErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_vpc_attachment(base: EndpointParameters, input: UpdateVpcAttachmentRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateVpcAttachment.
-pub fn serialize_update_vpc_attachment(ep: rest.Endpoint, input: UpdateVpcAttachmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_attachment_id = match input.attachment_id {
-    Some(v) => v
-    None => return Err("input member AttachmentId is required")
-  }
-  if label_attachment_id == "" {
-    return Err("input member AttachmentId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.add_subnet_arns {
-    fs.push(("AddSubnetArns", json_of_subnet_arn_list(x)))
-  }
-  if let Some(x) = input.remove_subnet_arns {
-    fs.push(("RemoveSubnetArns", json_of_subnet_arn_list(x)))
-  }
-  if let Some(x) = input.options {
-    fs.push(("Options", json_of_vpc_options(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/vpc-attachments/${rest.escape(label_attachment_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_vpc_attachment(resp: http.Response) -> UpdateVpcAttachmentResponse ! Str {
-  var out = UpdateVpcAttachmentResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "VpcAttachment" => out.vpc_attachment = from_json_vpc_attachment(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateVpcAttachment.
-pub enum UpdateVpcAttachmentErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateVpcAttachmentErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_vpc_attachment_error(resp: http.Response) -> UpdateVpcAttachmentErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateVpcAttachmentErr.AccessDeniedException(x)
-      Err(msg) => return UpdateVpcAttachmentErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateVpcAttachmentErr.ConflictException(x)
-      Err(msg) => return UpdateVpcAttachmentErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateVpcAttachmentErr.InternalServerException(x)
-      Err(msg) => return UpdateVpcAttachmentErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateVpcAttachmentErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateVpcAttachmentErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateVpcAttachmentErr.ThrottlingException(x)
-      Err(msg) => return UpdateVpcAttachmentErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateVpcAttachmentErr.ValidationException(x)
-      Err(msg) => return UpdateVpcAttachmentErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateVpcAttachmentErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates a VPC attachment.
-pub fn (c: Client) update_vpc_attachment(input: UpdateVpcAttachmentRequest) -> UpdateVpcAttachmentResponse ! UpdateVpcAttachmentErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_vpc_attachment(c.params, input)) ?? e => return Err(UpdateVpcAttachmentErr.InvalidInput(e))
-  var req = serialize_update_vpc_attachment(ep, input, "") ?? e => return Err(UpdateVpcAttachmentErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateVpcAttachmentErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_vpc_attachment_error(resp))
-  }
-  deserialize_update_vpc_attachment(resp) ?? e => Err(UpdateVpcAttachmentErr.Deserialize(e))
 }

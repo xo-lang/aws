@@ -2778,6 +2778,15 @@ fn json_of_code_remediation_task_details(v: CodeRemediationTaskDetails) -> json.
   if let Some(x) = v.pull_request_link {
     fs.push(("pullRequestLink", json.Value.Str(x)))
   }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status_code {
+    fs.push(("statusCode", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status_reason {
+    fs.push(("statusReason", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2791,6 +2800,9 @@ fn from_json_code_remediation_task_details(v: json.Value) -> CodeRemediationTask
       "repoName" => out.repo_name = jsonv.read_str(fv)?
       "codeDiffLink" => out.code_diff_link = jsonv.read_str(fv)?
       "pullRequestLink" => out.pull_request_link = jsonv.read_str(fv)?
+      "status" => out.status = CodeRemediationJobStatus.from(jsonv.read_str(fv)?)
+      "statusCode" => out.status_code = jsonv.read_str(fv)?
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -3935,6 +3947,9 @@ fn json_of_create_pentest_input(v: CreatePentestInput) -> json.Value {
   if let Some(x) = v.code_remediation_strategy {
     fs.push(("codeRemediationStrategy", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.clean_up_strategy {
+    fs.push(("cleanUpStrategy", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.disable_managed_skills {
     fs.push(("disableManagedSkills", json_of_skill_type_list(x)))
   }
@@ -3972,6 +3987,7 @@ fn from_json_create_pentest_input(v: json.Value) -> CreatePentestInput ! Str {
       "vpcConfig" => out.vpc_config = from_json_vpc_config(fv)?
       "networkTrafficConfig" => out.network_traffic_config = from_json_network_traffic_config(fv)?
       "codeRemediationStrategy" => out.code_remediation_strategy = CodeRemediationStrategy.from(jsonv.read_str(fv)?)
+      "cleanUpStrategy" => out.clean_up_strategy = CleanUpStrategy.from(jsonv.read_str(fv)?)
       "disableManagedSkills" => out.disable_managed_skills = from_json_skill_type_list(fv)?
       "maxTaskHours" => out.max_task_hours = jsonv.read_float(fv)?
       "reportDestination" => out.report_destination = from_json_report_destination(fv)?
@@ -8988,6 +9004,9 @@ fn json_of_pentest_job(v: PentestJob) -> json.Value {
   if let Some(x) = v.test_scope {
     fs.push(("testScope", json_of_test_scope(x)))
   }
+  if let Some(x) = v.version {
+    fs.push(("version", json.Value.Str(x)))
+  }
   if let Some(x) = v.created_at {
     fs.push(("createdAt", jsonv.time(x, "date-time")))
   }
@@ -9038,6 +9057,7 @@ fn from_json_pentest_job(v: json.Value) -> PentestJob ! Str {
       "scopeChanges" => out.scope_changes = from_json_scope_change_list(fv)?
       "cicdConfiguration" => out.cicd_configuration = from_json_ci_cd_configuration(fv)?
       "testScope" => out.test_scope = from_json_test_scope(fv)?
+      "version" => out.version = jsonv.read_str(fv)?
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
       _ => {}
@@ -9104,6 +9124,9 @@ fn json_of_pentest_job_summary(v: PentestJobSummary) -> json.Value {
   if let Some(x) = v.report_url {
     fs.push(("reportUrl", json.Value.Str(x)))
   }
+  if let Some(x) = v.version {
+    fs.push(("version", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -9122,6 +9145,7 @@ fn from_json_pentest_job_summary(v: json.Value) -> PentestJobSummary ! Str {
       "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
       "jobType" => out.job_type = JobType.from(jsonv.read_str(fv)?)
       "reportUrl" => out.report_url = jsonv.read_str(fv)?
+      "version" => out.version = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -9540,6 +9564,98 @@ fn from_json_resource_not_found_exception(v: json.Value) -> ResourceNotFoundExce
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_resume_pentest_job_input(v: ResumePentestJobInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.agent_space_id {
+    fs.push(("agentSpaceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pentest_job_id {
+    fs.push(("pentestJobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.actors {
+    fs.push(("actors", json_of_actor_list(x)))
+  }
+  if let Some(x) = v.network_traffic_config {
+    fs.push(("networkTrafficConfig", json_of_network_traffic_config(x)))
+  }
+  if let Some(x) = v.vpc_config {
+    fs.push(("vpcConfig", json_of_vpc_config(x)))
+  }
+  if let Some(x) = v.max_task_hours {
+    fs.push(("maxTaskHours", jsonv.float(x)))
+  }
+  if let Some(x) = v.copy_config_from_pentest {
+    fs.push(("copyConfigFromPentest", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resume_pentest_job_input(v: json.Value) -> ResumePentestJobInput ! Str {
+  var out = ResumePentestJobInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "agentSpaceId" => out.agent_space_id = jsonv.read_str(fv)?
+      "pentestJobId" => out.pentest_job_id = jsonv.read_str(fv)?
+      "actors" => out.actors = from_json_actor_list(fv)?
+      "networkTrafficConfig" => out.network_traffic_config = from_json_network_traffic_config(fv)?
+      "vpcConfig" => out.vpc_config = from_json_vpc_config(fv)?
+      "maxTaskHours" => out.max_task_hours = jsonv.read_float(fv)?
+      "copyConfigFromPentest" => out.copy_config_from_pentest = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_resume_pentest_job_output(v: ResumePentestJobOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.title {
+    fs.push(("title", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.updated_at {
+    fs.push(("updatedAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.pentest_id {
+    fs.push(("pentestId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pentest_job_id {
+    fs.push(("pentestJobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.version {
+    fs.push(("version", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resume_pentest_job_output(v: json.Value) -> ResumePentestJobOutput ! Str {
+  var out = ResumePentestJobOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "title" => out.title = jsonv.read_str(fv)?
+      "status" => out.status = JobStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      "pentestId" => out.pentest_id = jsonv.read_str(fv)?
+      "pentestJobId" => out.pentest_job_id = jsonv.read_str(fv)?
+      "version" => out.version = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -10432,6 +10548,9 @@ fn json_of_stop_pentest_job_input(v: StopPentestJobInput) -> json.Value {
   if let Some(x) = v.pentest_job_id {
     fs.push(("pentestJobId", json.Value.Str(x)))
   }
+  if let Some(x) = v.pause {
+    fs.push(("pause", json.Value.Bool(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -10444,6 +10563,7 @@ fn from_json_stop_pentest_job_input(v: json.Value) -> StopPentestJobInput ! Str 
     match k {
       "agentSpaceId" => out.agent_space_id = jsonv.read_str(fv)?
       "pentestJobId" => out.pentest_job_id = jsonv.read_str(fv)?
+      "pause" => out.pause = jsonv.read_bool(fv)?
       _ => {}
     }
   }
@@ -12408,6 +12528,9 @@ fn json_of_update_pentest_input(v: UpdatePentestInput) -> json.Value {
   if let Some(x) = v.code_remediation_strategy {
     fs.push(("codeRemediationStrategy", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.clean_up_strategy {
+    fs.push(("cleanUpStrategy", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.disable_managed_skills {
     fs.push(("disableManagedSkills", json_of_skill_type_list(x)))
   }
@@ -12446,6 +12569,7 @@ fn from_json_update_pentest_input(v: json.Value) -> UpdatePentestInput ! Str {
       "vpcConfig" => out.vpc_config = from_json_vpc_config(fv)?
       "networkTrafficConfig" => out.network_traffic_config = from_json_network_traffic_config(fv)?
       "codeRemediationStrategy" => out.code_remediation_strategy = CodeRemediationStrategy.from(jsonv.read_str(fv)?)
+      "cleanUpStrategy" => out.clean_up_strategy = CleanUpStrategy.from(jsonv.read_str(fv)?)
       "disableManagedSkills" => out.disable_managed_skills = from_json_skill_type_list(fv)?
       "maxTaskHours" => out.max_task_hours = jsonv.read_float(fv)?
       "reportDestination" => out.report_destination = from_json_report_destination(fv)?
@@ -14279,90 +14403,4 @@ pub fn serialize_batch_disassociate_finding_issue(ep: rest.Endpoint, input: Batc
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_batch_disassociate_finding_issue(resp: http.Response) -> BatchDisassociateFindingIssueOutput ! Str {
-  var out = BatchDisassociateFindingIssueOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "errors" => out.errors = from_json_batch_disassociate_finding_issue_errors(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of BatchDisassociateFindingIssue.
-pub enum BatchDisassociateFindingIssueErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: BatchDisassociateFindingIssueErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_batch_disassociate_finding_issue_error(resp: http.Response) -> BatchDisassociateFindingIssueErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.AccessDeniedException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.ConflictException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.InternalServerException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.ResourceNotFoundException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.ServiceQuotaExceededException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.ThrottlingException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return BatchDisassociateFindingIssueErr.ValidationException(x)
-      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  BatchDisassociateFindingIssueErr.Api(restjson.api_error(resp, body))
 }

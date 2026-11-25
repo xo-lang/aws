@@ -97,6 +97,32 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
+fn json_of_account_entity(v: AccountEntity) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_id {
+    fs.push(("accountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_tags {
+    fs.push(("accountTags", json_of_account_tag_set(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_account_entity(v: json.Value) -> AccountEntity ! Str {
+  var out = AccountEntity{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "accountId" => out.account_id = jsonv.read_str(fv)?
+      "accountTags" => out.account_tags = from_json_account_tag_set(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_account_entity_aggregate(v: AccountEntityAggregate) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.account_id {
@@ -143,6 +169,174 @@ fn from_json_account_entity_aggregates_list(v: json.Value) -> List[AccountEntity
   Ok(out)
 }
 
+fn json_of_account_tag(v: AccountTag) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.value {
+    fs.push(("value", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_account_tag(v: json.Value) -> AccountTag ! Str {
+  var out = AccountTag{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = jsonv.read_str(fv)?
+      "value" => out.value = jsonv.read_str(fv)?
+      "type" => out.type_value = AccountTagType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_account_tag_list(v: List[AccountTag]) -> json.Value {
+  json.Value.List(v.map(fn(x: AccountTag) -> json.Value { json_of_account_tag(x) }))
+}
+
+fn from_json_account_tag_list(v: json.Value) -> List[AccountTag] ! Str {
+  var out: List[AccountTag] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_account_tag(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_account_tag_set(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_account_tag_set(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_affected_account_entity_list(v: List[AccountEntity]) -> json.Value {
+  json.Value.List(v.map(fn(x: AccountEntity) -> json.Value { json_of_account_entity(x) }))
+}
+
+fn from_json_affected_account_entity_list(v: json.Value) -> List[AccountEntity] ! Str {
+  var out: List[AccountEntity] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_account_entity(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_affected_account_filter(v: AffectedAccountFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.event_arn {
+    fs.push(("eventArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_affected_accounts_for_organization_tag_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_affected_account_filter(v: json.Value) -> AffectedAccountFilter ! Str {
+  var out = AffectedAccountFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "eventArn" => out.event_arn = jsonv.read_str(fv)?
+      "tags" => out.tags = from_json_affected_accounts_for_organization_tag_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_affected_accounts_for_organization_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_affected_accounts_for_organization_tag_value_list(e.1)) }))
+}
+
+fn from_json_affected_accounts_for_organization_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_affected_accounts_for_organization_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_affected_accounts_for_organization_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_affected_accounts_for_organization_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_affected_entities_for_organization_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_affected_entities_for_organization_tag_value_list(e.1)) }))
+}
+
+fn from_json_affected_entities_for_organization_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_affected_entities_for_organization_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_affected_entities_for_organization_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_affected_entities_for_organization_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_affected_entity(v: AffectedEntity) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.entity_arn {
@@ -166,8 +360,11 @@ fn json_of_affected_entity(v: AffectedEntity) -> json.Value {
   if let Some(x) = v.status_code {
     fs.push(("statusCode", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.tags {
-    fs.push(("tags", json_of_tag_set(x)))
+  if let Some(x) = v.resource_tags {
+    fs.push(("resourceTags", json_of_resource_tag_set(x)))
+  }
+  if let Some(x) = v.account_tags {
+    fs.push(("accountTags", json_of_account_tag_set(x)))
   }
   if let Some(x) = v.entity_metadata {
     fs.push(("entityMetadata", json_of_entity_metadata(x)))
@@ -189,7 +386,8 @@ fn from_json_affected_entity(v: json.Value) -> AffectedEntity ! Str {
       "awsAccountId" => out.aws_account_id = jsonv.read_str(fv)?
       "lastUpdatedTime" => out.last_updated_time = jsonv.read_time(fv, "epoch-seconds")?
       "statusCode" => out.status_code = EntityStatusCode.from(jsonv.read_str(fv)?)
-      "tags" => out.tags = from_json_tag_set(fv)?
+      "resourceTags" => out.resource_tags = from_json_resource_tag_set(fv)?
+      "accountTags" => out.account_tags = from_json_account_tag_set(fv)?
       "entityMetadata" => out.entity_metadata = from_json_entity_metadata(fv)?
       _ => {}
     }
@@ -213,6 +411,184 @@ fn from_json_concurrent_modification_exception(v: json.Value) -> ConcurrentModif
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_for_organization_request(v: ConfigureTagsForOrganizationRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tag_keys {
+    fs.push(("tagKeys", json_of_configure_tags_for_organization_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_configure_tags_for_organization_request(v: json.Value) -> ConfigureTagsForOrganizationRequest ! Str {
+  var out = ConfigureTagsForOrganizationRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tagKeys" => out.tag_keys = from_json_configure_tags_for_organization_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_for_organization_response(v: ConfigureTagsForOrganizationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.configured_tag_keys {
+    fs.push(("configuredTagKeys", json_of_configure_tags_for_organization_response_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_configure_tags_for_organization_response(v: json.Value) -> ConfigureTagsForOrganizationResponse ! Str {
+  var out = ConfigureTagsForOrganizationResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "configuredTagKeys" => out.configured_tag_keys = from_json_configure_tags_for_organization_response_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_for_organization_response_tag_key_list(v: List[OrganizationTagKey]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationTagKey) -> json.Value { json_of_organization_tag_key(x) }))
+}
+
+fn from_json_configure_tags_for_organization_response_tag_key_list(v: json.Value) -> List[OrganizationTagKey] ! Str {
+  var out: List[OrganizationTagKey] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organization_tag_key(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_for_organization_tag_key_list(v: List[TagKeyForOrganization]) -> json.Value {
+  json.Value.List(v.map(fn(x: TagKeyForOrganization) -> json.Value { json_of_tag_key_for_organization(x) }))
+}
+
+fn from_json_configure_tags_for_organization_tag_key_list(v: json.Value) -> List[TagKeyForOrganization] ! Str {
+  var out: List[TagKeyForOrganization] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_tag_key_for_organization(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_request(v: ConfigureTagsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tag_keys {
+    fs.push(("tagKeys", json_of_configure_tags_request_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_configure_tags_request(v: json.Value) -> ConfigureTagsRequest ! Str {
+  var out = ConfigureTagsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tagKeys" => out.tag_keys = from_json_configure_tags_request_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_request_tag_key_list(v: List[ConfigureTagsTagKey]) -> json.Value {
+  json.Value.List(v.map(fn(x: ConfigureTagsTagKey) -> json.Value { json_of_configure_tags_tag_key(x) }))
+}
+
+fn from_json_configure_tags_request_tag_key_list(v: json.Value) -> List[ConfigureTagsTagKey] ! Str {
+  var out: List[ConfigureTagsTagKey] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_configure_tags_tag_key(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_resource_tag_key_list(v: List[ResourceTagKey]) -> json.Value {
+  json.Value.List(v.map(fn(x: ResourceTagKey) -> json.Value { json_of_resource_tag_key(x) }))
+}
+
+fn from_json_configure_tags_resource_tag_key_list(v: json.Value) -> List[ResourceTagKey] ! Str {
+  var out: List[ResourceTagKey] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_resource_tag_key(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_response(v: ConfigureTagsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.configured_tag_keys {
+    fs.push(("configuredTagKeys", json_of_configure_tags_resource_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_configure_tags_response(v: json.Value) -> ConfigureTagsResponse ! Str {
+  var out = ConfigureTagsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "configuredTagKeys" => out.configured_tag_keys = from_json_configure_tags_resource_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_configure_tags_tag_key(v: ConfigureTagsTagKey) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.enabled_for_event_bridge {
+    fs.push(("enabledForEventBridge", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_configure_tags_tag_key(v: json.Value) -> ConfigureTagsTagKey ! Str {
+  var out = ConfigureTagsTagKey{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = jsonv.read_str(fv)?
+      "enabledForEventBridge" => out.enabled_for_event_bridge = jsonv.read_bool(fv)?
       _ => {}
     }
   }
@@ -256,6 +632,9 @@ fn json_of_describe_affected_accounts_for_organization_request(v: DescribeAffect
   if let Some(x) = v.max_results {
     fs.push(("maxResults", json.Value.Int(x)))
   }
+  if let Some(x) = v.filter {
+    fs.push(("filter", json_of_affected_account_filter(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -269,6 +648,7 @@ fn from_json_describe_affected_accounts_for_organization_request(v: json.Value) 
       "eventArn" => out.event_arn = jsonv.read_str(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "filter" => out.filter = from_json_affected_account_filter(fv)?
       _ => {}
     }
   }
@@ -279,6 +659,9 @@ fn json_of_describe_affected_accounts_for_organization_response(v: DescribeAffec
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.affected_accounts {
     fs.push(("affectedAccounts", json_of_affected_accounts_list(x)))
+  }
+  if let Some(x) = v.affected_account_entities {
+    fs.push(("affectedAccountEntities", json_of_affected_account_entity_list(x)))
   }
   if let Some(x) = v.event_scope_code {
     fs.push(("eventScopeCode", json.Value.Str(x.value())))
@@ -297,6 +680,7 @@ fn from_json_describe_affected_accounts_for_organization_response(v: json.Value)
     }
     match k {
       "affectedAccounts" => out.affected_accounts = from_json_affected_accounts_list(fv)?
+      "affectedAccountEntities" => out.affected_account_entities = from_json_affected_account_entity_list(fv)?
       "eventScopeCode" => out.event_scope_code = EventScopeCode.from(jsonv.read_str(fv)?)
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -449,6 +833,38 @@ fn from_json_describe_affected_entities_response(v: json.Value) -> DescribeAffec
   Ok(out)
 }
 
+fn json_of_describe_affected_entities_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_describe_affected_entities_tag_value_list(e.1)) }))
+}
+
+fn from_json_describe_affected_entities_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_describe_affected_entities_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_describe_affected_entities_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_describe_affected_entities_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_describe_entity_aggregates_for_organization_request(v: DescribeEntityAggregatesForOrganizationRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.event_arns {
@@ -456,6 +872,9 @@ fn json_of_describe_entity_aggregates_for_organization_request(v: DescribeEntity
   }
   if let Some(x) = v.aws_account_ids {
     fs.push(("awsAccountIds", json_of_organization_account_ids_list(x)))
+  }
+  if let Some(x) = v.filter {
+    fs.push(("filter", json_of_organization_entity_aggregate_filter(x)))
   }
   json.Value.Object(fs)
 }
@@ -469,6 +888,7 @@ fn from_json_describe_entity_aggregates_for_organization_request(v: json.Value) 
     match k {
       "eventArns" => out.event_arns = from_json_organization_event_arns_list(fv)?
       "awsAccountIds" => out.aws_account_ids = from_json_organization_account_ids_list(fv)?
+      "filter" => out.filter = from_json_organization_entity_aggregate_filter(fv)?
       _ => {}
     }
   }
@@ -502,6 +922,9 @@ fn json_of_describe_entity_aggregates_request(v: DescribeEntityAggregatesRequest
   if let Some(x) = v.event_arns {
     fs.push(("eventArns", json_of_event_arns_list(x)))
   }
+  if let Some(x) = v.filter {
+    fs.push(("filter", json_of_entity_aggregate_filter(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -513,6 +936,7 @@ fn from_json_describe_entity_aggregates_request(v: json.Value) -> DescribeEntity
     }
     match k {
       "eventArns" => out.event_arns = from_json_event_arns_list(fv)?
+      "filter" => out.filter = from_json_entity_aggregate_filter(fv)?
       _ => {}
     }
   }
@@ -537,6 +961,38 @@ fn from_json_describe_entity_aggregates_response(v: json.Value) -> DescribeEntit
       "entityAggregates" => out.entity_aggregates = from_json_entity_aggregate_list(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_entity_aggregates_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_describe_entity_aggregates_tag_value_list(e.1)) }))
+}
+
+fn from_json_describe_entity_aggregates_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_describe_entity_aggregates_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_describe_entity_aggregates_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_describe_entity_aggregates_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -949,6 +1405,38 @@ fn from_json_describe_events_response(v: json.Value) -> DescribeEventsResponse !
   Ok(out)
 }
 
+fn json_of_describe_events_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_describe_events_tag_value_list(e.1)) }))
+}
+
+fn from_json_describe_events_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_describe_events_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_describe_events_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_describe_events_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_describe_health_service_status_for_organization_response(v: DescribeHealthServiceStatusForOrganizationResponse) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.health_service_access_status_for_organization {
@@ -1027,6 +1515,224 @@ fn from_json_describe_service_lifecycle_response(v: json.Value) -> DescribeServi
   Ok(out)
 }
 
+fn json_of_describe_tag_keys_for_organization_response(v: DescribeTagKeysForOrganizationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.keys {
+    fs.push(("keys", json_of_organization_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tag_keys_for_organization_response(v: json.Value) -> DescribeTagKeysForOrganizationResponse ! Str {
+  var out = DescribeTagKeysForOrganizationResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "keys" => out.keys = from_json_organization_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tag_keys_response(v: DescribeTagKeysResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.keys {
+    fs.push(("keys", json_of_resource_tag_key_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tag_keys_response(v: json.Value) -> DescribeTagKeysResponse ! Str {
+  var out = DescribeTagKeysResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "keys" => out.keys = from_json_resource_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_for_organization_filter(v: DescribeTagsForOrganizationFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tag_types {
+    fs.push(("tagTypes", json_of_organization_tag_type_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_for_organization_filter(v: json.Value) -> DescribeTagsForOrganizationFilter ! Str {
+  var out = DescribeTagsForOrganizationFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tagTypes" => out.tag_types = from_json_organization_tag_type_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_for_organization_request(v: DescribeTagsForOrganizationRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.filter {
+    fs.push(("filter", json_of_describe_tags_for_organization_filter(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_for_organization_request(v: json.Value) -> DescribeTagsForOrganizationRequest ! Str {
+  var out = DescribeTagsForOrganizationRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "filter" => out.filter = from_json_describe_tags_for_organization_filter(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_for_organization_response(v: DescribeTagsForOrganizationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_organization_tag_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_for_organization_response(v: json.Value) -> DescribeTagsForOrganizationResponse ! Str {
+  var out = DescribeTagsForOrganizationResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_organization_tag_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_onboarding_status_for_organization_response(v: DescribeTagsOnboardingStatusForOrganizationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_onboarding_status_for_organization_response(v: json.Value) -> DescribeTagsOnboardingStatusForOrganizationResponse ! Str {
+  var out = DescribeTagsOnboardingStatusForOrganizationResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = TagsOnboardingStatusForOrganization.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_onboarding_status_response(v: DescribeTagsOnboardingStatusResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_onboarding_status_response(v: json.Value) -> DescribeTagsOnboardingStatusResponse ! Str {
+  var out = DescribeTagsOnboardingStatusResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = TagsOnboardingStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_request(v: DescribeTagsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_request(v: json.Value) -> DescribeTagsRequest ! Str {
+  var out = DescribeTagsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_describe_tags_response(v: DescribeTagsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_account_tag_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_tags_response(v: json.Value) -> DescribeTagsResponse ! Str {
+  var out = DescribeTagsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_account_tag_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_entity_account_filter(v: EntityAccountFilter) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.event_arn {
@@ -1037,6 +1743,9 @@ fn json_of_entity_account_filter(v: EntityAccountFilter) -> json.Value {
   }
   if let Some(x) = v.status_codes {
     fs.push(("statusCodes", json_of_entity_status_code_list(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_affected_entities_for_organization_tag_filter(x)))
   }
   json.Value.Object(fs)
 }
@@ -1051,6 +1760,7 @@ fn from_json_entity_account_filter(v: json.Value) -> EntityAccountFilter ! Str {
       "eventArn" => out.event_arn = jsonv.read_str(fv)?
       "awsAccountId" => out.aws_account_id = jsonv.read_str(fv)?
       "statusCodes" => out.status_codes = from_json_entity_status_code_list(fv)?
+      "tags" => out.tags = from_json_affected_entities_for_organization_tag_filter(fv)?
       _ => {}
     }
   }
@@ -1081,6 +1791,28 @@ fn from_json_entity_aggregate(v: json.Value) -> EntityAggregate ! Str {
       "eventArn" => out.event_arn = jsonv.read_str(fv)?
       "count" => out.count = jsonv.read_int(fv)?
       "statuses" => out.statuses = from_json_entity_statuses(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_entity_aggregate_filter(v: EntityAggregateFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_describe_entity_aggregates_tag_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_entity_aggregate_filter(v: json.Value) -> EntityAggregateFilter ! Str {
+  var out = EntityAggregateFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_describe_entity_aggregates_tag_filter(fv)?
       _ => {}
     }
   }
@@ -1118,7 +1850,7 @@ fn json_of_entity_filter(v: EntityFilter) -> json.Value {
     fs.push(("lastUpdatedTimes", json_of_date_time_range_list(x)))
   }
   if let Some(x) = v.tags {
-    fs.push(("tags", json_of_tag_filter(x)))
+    fs.push(("tags", json_of_describe_affected_entities_tag_filter(x)))
   }
   if let Some(x) = v.status_codes {
     fs.push(("statusCodes", json_of_entity_status_code_list(x)))
@@ -1137,7 +1869,7 @@ fn from_json_entity_filter(v: json.Value) -> EntityFilter ! Str {
       "entityArns" => out.entity_arns = from_json_entity_arn_list(fv)?
       "entityValues" => out.entity_values = from_json_entity_value_list(fv)?
       "lastUpdatedTimes" => out.last_updated_times = from_json_date_time_range_list(fv)?
-      "tags" => out.tags = from_json_tag_filter(fv)?
+      "tags" => out.tags = from_json_describe_affected_entities_tag_filter(fv)?
       "statusCodes" => out.status_codes = from_json_entity_status_code_list(fv)?
       _ => {}
     }
@@ -1452,7 +2184,7 @@ fn json_of_event_filter(v: EventFilter) -> json.Value {
     fs.push(("eventTypeCategories", json_of_event_type_category_list2(x)))
   }
   if let Some(x) = v.tags {
-    fs.push(("tags", json_of_tag_filter(x)))
+    fs.push(("tags", json_of_describe_events_tag_filter(x)))
   }
   if let Some(x) = v.event_status_codes {
     fs.push(("eventStatusCodes", json_of_event_status_code_list(x)))
@@ -1482,7 +2214,7 @@ fn from_json_event_filter(v: json.Value) -> EventFilter ! Str {
       "entityArns" => out.entity_arns = from_json_entity_arn_list(fv)?
       "entityValues" => out.entity_values = from_json_entity_value_list(fv)?
       "eventTypeCategories" => out.event_type_categories = from_json_event_type_category_list2(fv)?
-      "tags" => out.tags = from_json_tag_filter(fv)?
+      "tags" => out.tags = from_json_describe_events_tag_filter(fv)?
       "eventStatusCodes" => out.event_status_codes = from_json_event_status_code_list(fv)?
       "personas" => out.personas = from_json_event_persona_list(fv)?
       _ => {}
@@ -1871,6 +2603,60 @@ fn from_json_organization_entity_aggregate(v: json.Value) -> OrganizationEntityA
   Ok(out)
 }
 
+fn json_of_organization_entity_aggregate_filter(v: OrganizationEntityAggregateFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_organization_entity_aggregate_tag_filter(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organization_entity_aggregate_filter(v: json.Value) -> OrganizationEntityAggregateFilter ! Str {
+  var out = OrganizationEntityAggregateFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_organization_entity_aggregate_tag_filter(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organization_entity_aggregate_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_organization_entity_aggregate_tag_value_list(e.1)) }))
+}
+
+fn from_json_organization_entity_aggregate_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_organization_entity_aggregate_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_entity_aggregate_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_organization_entity_aggregate_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_organization_entity_aggregates_list(v: List[OrganizationEntityAggregate]) -> json.Value {
   json.Value.List(v.map(fn(x: OrganizationEntityAggregate) -> json.Value { json_of_organization_entity_aggregate(x) }))
 }
@@ -2110,6 +2896,9 @@ fn json_of_organization_event_filter(v: OrganizationEventFilter) -> json.Value {
   if let Some(x) = v.personas {
     fs.push(("personas", json_of_event_persona_list(x)))
   }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_organization_event_tag_filter(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2133,6 +2922,7 @@ fn from_json_organization_event_filter(v: json.Value) -> OrganizationEventFilter
       "eventTypeCategories" => out.event_type_categories = from_json_event_type_category_list2(fv)?
       "eventStatusCodes" => out.event_status_codes = from_json_event_status_code_list(fv)?
       "personas" => out.personas = from_json_event_persona_list(fv)?
+      "tags" => out.tags = from_json_organization_event_tag_filter(fv)?
       _ => {}
     }
   }
@@ -2151,6 +2941,208 @@ fn from_json_organization_event_list(v: json.Value) -> List[OrganizationEvent] !
       continue
     }
     out.push(from_json_organization_event(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_event_tag_filter(v: Map[Str, List[Str]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[Str])) -> (Str, json.Value) { (e.0, json_of_organization_event_tag_value_list(e.1)) }))
+}
+
+fn from_json_organization_event_tag_filter(v: json.Value) -> Map[Str, List[Str]] ! Str {
+  var out: Map[Str, List[Str]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_organization_event_tag_value_list(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_event_tag_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_organization_event_tag_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_tag(v: OrganizationTag) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.value {
+    fs.push(("value", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organization_tag(v: json.Value) -> OrganizationTag ! Str {
+  var out = OrganizationTag{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = jsonv.read_str(fv)?
+      "value" => out.value = jsonv.read_str(fv)?
+      "type" => out.type_value = OrganizationTagType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organization_tag_key(v: OrganizationTagKey) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.enabled_for_event_bridge {
+    fs.push(("enabledForEventBridge", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organization_tag_key(v: json.Value) -> OrganizationTagKey ! Str {
+  var out = OrganizationTagKey{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = jsonv.read_str(fv)?
+      "enabledForEventBridge" => out.enabled_for_event_bridge = jsonv.read_bool(fv)?
+      "status" => out.status = TagKeyStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organization_tag_key_list(v: List[OrganizationTagKey]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationTagKey) -> json.Value { json_of_organization_tag_key(x) }))
+}
+
+fn from_json_organization_tag_key_list(v: json.Value) -> List[OrganizationTagKey] ! Str {
+  var out: List[OrganizationTagKey] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organization_tag_key(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_tag_list(v: List[OrganizationTag]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationTag) -> json.Value { json_of_organization_tag(x) }))
+}
+
+fn from_json_organization_tag_list(v: json.Value) -> List[OrganizationTag] ! Str {
+  var out: List[OrganizationTag] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organization_tag(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_tag_type_filter(v: List[OrganizationTagType]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationTagType) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_organization_tag_type_filter(v: json.Value) -> List[OrganizationTagType] ! Str {
+  var out: List[OrganizationTagType] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(OrganizationTagType.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_resource_tag_key(v: ResourceTagKey) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.enabled_for_event_bridge {
+    fs.push(("enabledForEventBridge", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resource_tag_key(v: json.Value) -> ResourceTagKey ! Str {
+  var out = ResourceTagKey{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = jsonv.read_str(fv)?
+      "enabledForEventBridge" => out.enabled_for_event_bridge = jsonv.read_bool(fv)?
+      "status" => out.status = TagKeyStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_resource_tag_key_list(v: List[ResourceTagKey]) -> json.Value {
+  json.Value.List(v.map(fn(x: ResourceTagKey) -> json.Value { json_of_resource_tag_key(x) }))
+}
+
+fn from_json_resource_tag_key_list(v: json.Value) -> List[ResourceTagKey] ! Str {
+  var out: List[ResourceTagKey] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_resource_tag_key(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_resource_tag_set(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_resource_tag_set(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -2227,6 +3219,32 @@ fn from_json_service_lifecycle_list(v: json.Value) -> List[ServiceLifecycle] ! S
       continue
     }
     out.push(from_json_service_lifecycle(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_tag_key_for_organization(v: TagKeyForOrganization) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.enabled_for_event_bridge {
+    fs.push(("enabledForEventBridge", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_tag_key_for_organization(v: json.Value) -> TagKeyForOrganization ! Str {
+  var out = TagKeyForOrganization{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = jsonv.read_str(fv)?
+      "enabledForEventBridge" => out.enabled_for_event_bridge = jsonv.read_bool(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -2509,38 +3527,6 @@ fn from_json_service_list(v: json.Value) -> List[Str] ! Str {
   Ok(out)
 }
 
-fn json_of_tag_filter(v: List[Map[Str, Str]]) -> json.Value {
-  json.Value.List(v.map(fn(x: Map[Str, Str]) -> json.Value { json_of_tag_set(x) }))
-}
-
-fn from_json_tag_filter(v: json.Value) -> List[Map[Str, Str]] ! Str {
-  var out: List[Map[Str, Str]] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_tag_set(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_tag_set(v: Map[Str, Str]) -> json.Value {
-  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
-}
-
-fn from_json_tag_set(v: json.Value) -> Map[Str, Str] ! Str {
-  var out: Map[Str, Str] = {}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      // a dense map skips nulls
-      continue
-    }
-    out.put(k, jsonv.read_str(fv)?)
-  }
-  Ok(out)
-}
-
 fn read_error_concurrent_modification_exception(resp: http.Response, body: json.Value) -> ConcurrentModificationException ! Str {
   let _ = (resp, body)
   var out = ConcurrentModificationException{}
@@ -2586,6 +3572,188 @@ fn read_error_unsupported_locale(resp: http.Response, body: json.Value) -> Unsup
   Ok(out)
 }
 
+pub fn endpoint_params_configure_tags(base: EndpointParameters, input: ConfigureTagsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ConfigureTags.
+pub fn serialize_configure_tags(ep: rest.Endpoint, input: ConfigureTagsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.tag_keys {
+    fs.push(("tagKeys", json_of_configure_tags_request_tag_key_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.ConfigureTags"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_configure_tags(resp: http.Response) -> ConfigureTagsResponse ! Str {
+  var out = ConfigureTagsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "configuredTagKeys" => out.configured_tag_keys = from_json_configure_tags_resource_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ConfigureTags.
+pub enum ConfigureTagsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ConfigureTagsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_configure_tags_error(resp: http.Response) -> ConfigureTagsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ConfigureTagsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Configures which resource tag keys are tracked by Health for your
+/// account. This operation replaces the existing configuration with the
+/// specified tag keys. Only configured tag keys will appear in Health event
+/// data.
+pub fn (c: Client) configure_tags(input: ConfigureTagsRequest) -> ConfigureTagsResponse ! ConfigureTagsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_configure_tags(c.params, input)) ?? e => return Err(ConfigureTagsErr.InvalidInput(e))
+  var req = serialize_configure_tags(ep, input, "") ?? e => return Err(ConfigureTagsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ConfigureTagsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_configure_tags_error(resp))
+  }
+  deserialize_configure_tags(resp) ?? e => Err(ConfigureTagsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_configure_tags_for_organization(base: EndpointParameters, input: ConfigureTagsForOrganizationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ConfigureTagsForOrganization.
+pub fn serialize_configure_tags_for_organization(ep: rest.Endpoint, input: ConfigureTagsForOrganizationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.tag_keys {
+    fs.push(("tagKeys", json_of_configure_tags_for_organization_tag_key_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.ConfigureTagsForOrganization"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_configure_tags_for_organization(resp: http.Response) -> ConfigureTagsForOrganizationResponse ! Str {
+  var out = ConfigureTagsForOrganizationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "configuredTagKeys" => out.configured_tag_keys = from_json_configure_tags_for_organization_response_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ConfigureTagsForOrganization.
+pub enum ConfigureTagsForOrganizationErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ConfigureTagsForOrganizationErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_configure_tags_for_organization_error(resp: http.Response) -> ConfigureTagsForOrganizationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ConfigureTagsForOrganizationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Configures which tag keys are tracked by Health for all accounts in your
+/// organization. This operation replaces the existing configuration with
+/// the specified tag keys. Only configured tag keys will appear in Health
+/// event data across the organization.
+pub fn (c: Client) configure_tags_for_organization(input: ConfigureTagsForOrganizationRequest) -> ConfigureTagsForOrganizationResponse ! ConfigureTagsForOrganizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_configure_tags_for_organization(c.params, input)) ?? e => return Err(ConfigureTagsForOrganizationErr.InvalidInput(e))
+  var req = serialize_configure_tags_for_organization(ep, input, "") ?? e => return Err(ConfigureTagsForOrganizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ConfigureTagsForOrganizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_configure_tags_for_organization_error(resp))
+  }
+  deserialize_configure_tags_for_organization(resp) ?? e => Err(ConfigureTagsForOrganizationErr.Deserialize(e))
+}
+
 pub fn endpoint_params_describe_affected_accounts_for_organization(base: EndpointParameters, input: DescribeAffectedAccountsForOrganizationRequest) -> EndpointParameters {
   let _ = input
   base
@@ -2606,6 +3774,9 @@ pub fn serialize_describe_affected_accounts_for_organization(ep: rest.Endpoint, 
   }
   if let Some(x) = input.max_results {
     fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_affected_account_filter(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
@@ -2634,6 +3805,7 @@ pub fn deserialize_describe_affected_accounts_for_organization(resp: http.Respon
     }
     match k {
       "affectedAccounts" => out.affected_accounts = from_json_affected_accounts_list(fv)?
+      "affectedAccountEntities" => out.affected_account_entities = from_json_affected_account_entity_list(fv)?
       "eventScopeCode" => out.event_scope_code = EventScopeCode.from(jsonv.read_str(fv)?)
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -2967,6 +4139,9 @@ pub fn serialize_describe_entity_aggregates(ep: rest.Endpoint, input: DescribeEn
   if let Some(x) = input.event_arns {
     fs.push(("eventArns", json_of_event_arns_list(x)))
   }
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_entity_aggregate_filter(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
   headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeEntityAggregates"))
@@ -3058,6 +4233,9 @@ pub fn serialize_describe_entity_aggregates_for_organization(ep: rest.Endpoint, 
   }
   if let Some(x) = input.aws_account_ids {
     fs.push(("awsAccountIds", json_of_organization_account_ids_list(x)))
+  }
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_organization_entity_aggregate_filter(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
@@ -4049,6 +5227,554 @@ pub fn (c: Client) describe_service_lifecycle(input: DescribeServiceLifecycleReq
   deserialize_describe_service_lifecycle(resp) ?? e => Err(DescribeServiceLifecycleErr.Deserialize(e))
 }
 
+pub fn endpoint_params_describe_tag_keys(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTagKeys.
+pub fn serialize_describe_tag_keys(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeTagKeys"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_tag_keys(resp: http.Response) -> DescribeTagKeysResponse ! Str {
+  var out = DescribeTagKeysResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "keys" => out.keys = from_json_resource_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTagKeys.
+pub enum DescribeTagKeysErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTagKeysErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_tag_keys_error(resp: http.Response) -> DescribeTagKeysErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DescribeTagKeysErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the list of resource tag keys configured for Health event
+/// tracking in your account.
+pub fn (c: Client) describe_tag_keys(input: ()) -> DescribeTagKeysResponse ! DescribeTagKeysErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_tag_keys(c.params, input)) ?? e => return Err(DescribeTagKeysErr.InvalidInput(e))
+  var req = serialize_describe_tag_keys(ep, input, "") ?? e => return Err(DescribeTagKeysErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTagKeysErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_tag_keys_error(resp))
+  }
+  deserialize_describe_tag_keys(resp) ?? e => Err(DescribeTagKeysErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_tag_keys_for_organization(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTagKeysForOrganization.
+pub fn serialize_describe_tag_keys_for_organization(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeTagKeysForOrganization"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_tag_keys_for_organization(resp: http.Response) -> DescribeTagKeysForOrganizationResponse ! Str {
+  var out = DescribeTagKeysForOrganizationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "keys" => out.keys = from_json_organization_tag_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTagKeysForOrganization.
+pub enum DescribeTagKeysForOrganizationErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTagKeysForOrganizationErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_tag_keys_for_organization_error(resp: http.Response) -> DescribeTagKeysForOrganizationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DescribeTagKeysForOrganizationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the list of tag keys configured for Health event tracking across
+/// your organization.
+pub fn (c: Client) describe_tag_keys_for_organization(input: ()) -> DescribeTagKeysForOrganizationResponse ! DescribeTagKeysForOrganizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_tag_keys_for_organization(c.params, input)) ?? e => return Err(DescribeTagKeysForOrganizationErr.InvalidInput(e))
+  var req = serialize_describe_tag_keys_for_organization(ep, input, "") ?? e => return Err(DescribeTagKeysForOrganizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTagKeysForOrganizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_tag_keys_for_organization_error(resp))
+  }
+  deserialize_describe_tag_keys_for_organization(resp) ?? e => Err(DescribeTagKeysForOrganizationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_tags(base: EndpointParameters, input: DescribeTagsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTags.
+pub fn serialize_describe_tags(ep: rest.Endpoint, input: DescribeTagsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeTags"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_tags(resp: http.Response) -> DescribeTagsResponse ! Str {
+  var out = DescribeTagsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_account_tag_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTags.
+pub enum DescribeTagsErr {
+  InvalidPaginationToken(e: InvalidPaginationToken)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTagsErr) display() -> Str {
+  match e {
+    InvalidPaginationToken(x) => "InvalidPaginationToken: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_tags_error(resp: http.Response) -> DescribeTagsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidPaginationToken" => match read_error_invalid_pagination_token(resp, body) {
+      Ok(x) => return DescribeTagsErr.InvalidPaginationToken(x)
+      Err(msg) => return DescribeTagsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeTagsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the resource tags associated with Health events for your
+/// account. Use this operation to retrieve the actual tag key-value pairs
+/// attached to affected entities.
+pub fn (c: Client) describe_tags(input: DescribeTagsRequest) -> DescribeTagsResponse ! DescribeTagsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_tags(c.params, input)) ?? e => return Err(DescribeTagsErr.InvalidInput(e))
+  var req = serialize_describe_tags(ep, input, "") ?? e => return Err(DescribeTagsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTagsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_tags_error(resp))
+  }
+  deserialize_describe_tags(resp) ?? e => Err(DescribeTagsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_tags_for_organization(base: EndpointParameters, input: DescribeTagsForOrganizationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTagsForOrganization.
+pub fn serialize_describe_tags_for_organization(ep: rest.Endpoint, input: DescribeTagsForOrganizationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filter {
+    fs.push(("filter", json_of_describe_tags_for_organization_filter(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeTagsForOrganization"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_tags_for_organization(resp: http.Response) -> DescribeTagsForOrganizationResponse ! Str {
+  var out = DescribeTagsForOrganizationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_organization_tag_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTagsForOrganization.
+pub enum DescribeTagsForOrganizationErr {
+  InvalidPaginationToken(e: InvalidPaginationToken)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTagsForOrganizationErr) display() -> Str {
+  match e {
+    InvalidPaginationToken(x) => "InvalidPaginationToken: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_tags_for_organization_error(resp: http.Response) -> DescribeTagsForOrganizationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InvalidPaginationToken" => match read_error_invalid_pagination_token(resp, body) {
+      Ok(x) => return DescribeTagsForOrganizationErr.InvalidPaginationToken(x)
+      Err(msg) => return DescribeTagsForOrganizationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeTagsForOrganizationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the tags associated with Health events across all accounts in
+/// your organization.
+pub fn (c: Client) describe_tags_for_organization(input: DescribeTagsForOrganizationRequest) -> DescribeTagsForOrganizationResponse ! DescribeTagsForOrganizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_tags_for_organization(c.params, input)) ?? e => return Err(DescribeTagsForOrganizationErr.InvalidInput(e))
+  var req = serialize_describe_tags_for_organization(ep, input, "") ?? e => return Err(DescribeTagsForOrganizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTagsForOrganizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_tags_for_organization_error(resp))
+  }
+  deserialize_describe_tags_for_organization(resp) ?? e => Err(DescribeTagsForOrganizationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_tags_onboarding_status(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTagsOnboardingStatus.
+pub fn serialize_describe_tags_onboarding_status(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeTagsOnboardingStatus"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_tags_onboarding_status(resp: http.Response) -> DescribeTagsOnboardingStatusResponse ! Str {
+  var out = DescribeTagsOnboardingStatusResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = TagsOnboardingStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTagsOnboardingStatus.
+pub enum DescribeTagsOnboardingStatusErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTagsOnboardingStatusErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_tags_onboarding_status_error(resp: http.Response) -> DescribeTagsOnboardingStatusErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DescribeTagsOnboardingStatusErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the current onboarding status of the Health tags feature for
+/// your account.
+pub fn (c: Client) describe_tags_onboarding_status(input: ()) -> DescribeTagsOnboardingStatusResponse ! DescribeTagsOnboardingStatusErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_tags_onboarding_status(c.params, input)) ?? e => return Err(DescribeTagsOnboardingStatusErr.InvalidInput(e))
+  var req = serialize_describe_tags_onboarding_status(ep, input, "") ?? e => return Err(DescribeTagsOnboardingStatusErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTagsOnboardingStatusErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_tags_onboarding_status_error(resp))
+  }
+  deserialize_describe_tags_onboarding_status(resp) ?? e => Err(DescribeTagsOnboardingStatusErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_tags_onboarding_status_for_organization(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTagsOnboardingStatusForOrganization.
+pub fn serialize_describe_tags_onboarding_status_for_organization(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DescribeTagsOnboardingStatusForOrganization"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_tags_onboarding_status_for_organization(resp: http.Response) -> DescribeTagsOnboardingStatusForOrganizationResponse ! Str {
+  var out = DescribeTagsOnboardingStatusForOrganizationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = TagsOnboardingStatusForOrganization.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTagsOnboardingStatusForOrganization.
+pub enum DescribeTagsOnboardingStatusForOrganizationErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTagsOnboardingStatusForOrganizationErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_tags_onboarding_status_for_organization_error(resp: http.Response) -> DescribeTagsOnboardingStatusForOrganizationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DescribeTagsOnboardingStatusForOrganizationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the current onboarding status of the Health tags feature for
+/// your organization.
+pub fn (c: Client) describe_tags_onboarding_status_for_organization(input: ()) -> DescribeTagsOnboardingStatusForOrganizationResponse ! DescribeTagsOnboardingStatusForOrganizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_tags_onboarding_status_for_organization(c.params, input)) ?? e => return Err(DescribeTagsOnboardingStatusForOrganizationErr.InvalidInput(e))
+  var req = serialize_describe_tags_onboarding_status_for_organization(ep, input, "") ?? e => return Err(DescribeTagsOnboardingStatusForOrganizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTagsOnboardingStatusForOrganizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_tags_onboarding_status_for_organization_error(resp))
+  }
+  deserialize_describe_tags_onboarding_status_for_organization(resp) ?? e => Err(DescribeTagsOnboardingStatusForOrganizationErr.Deserialize(e))
+}
+
 pub fn endpoint_params_disable_health_service_access_for_organization(base: EndpointParameters, input: ()) -> EndpointParameters {
   let _ = input
   base
@@ -4145,6 +5871,156 @@ pub fn (c: Client) disable_health_service_access_for_organization(input: ()) -> 
   deserialize_disable_health_service_access_for_organization(resp) ?? e => Err(DisableHealthServiceAccessForOrganizationErr.Deserialize(e))
 }
 
+pub fn endpoint_params_disable_tags(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DisableTags.
+pub fn serialize_disable_tags(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DisableTags"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disable_tags(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of DisableTags.
+pub enum DisableTagsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisableTagsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disable_tags_error(resp: http.Response) -> DisableTagsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DisableTagsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Disables the Health tags feature for your account. After disabling,
+/// Health events will no longer include resource tag information.
+/// Previously configured tag keys are discarded.
+pub fn (c: Client) disable_tags(input: ()) -> () ! DisableTagsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disable_tags(c.params, input)) ?? e => return Err(DisableTagsErr.InvalidInput(e))
+  var req = serialize_disable_tags(ep, input, "") ?? e => return Err(DisableTagsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DisableTagsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disable_tags_error(resp))
+  }
+  deserialize_disable_tags(resp) ?? e => Err(DisableTagsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_disable_tags_for_organization(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DisableTagsForOrganization.
+pub fn serialize_disable_tags_for_organization(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.DisableTagsForOrganization"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disable_tags_for_organization(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of DisableTagsForOrganization.
+pub enum DisableTagsForOrganizationErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisableTagsForOrganizationErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disable_tags_for_organization_error(resp: http.Response) -> DisableTagsForOrganizationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  DisableTagsForOrganizationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Disables the Health tags feature for all accounts in your organization.
+pub fn (c: Client) disable_tags_for_organization(input: ()) -> () ! DisableTagsForOrganizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disable_tags_for_organization(c.params, input)) ?? e => return Err(DisableTagsForOrganizationErr.InvalidInput(e))
+  var req = serialize_disable_tags_for_organization(ep, input, "") ?? e => return Err(DisableTagsForOrganizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DisableTagsForOrganizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disable_tags_for_organization_error(resp))
+  }
+  deserialize_disable_tags_for_organization(resp) ?? e => Err(DisableTagsForOrganizationErr.Deserialize(e))
+}
+
 pub fn endpoint_params_enable_health_service_access_for_organization(base: EndpointParameters, input: ()) -> EndpointParameters {
   let _ = input
   base
@@ -4219,17 +6095,19 @@ pub fn deserialize_enable_health_service_access_for_organization_error(resp: htt
 /// Services accounts in your organization in a centralized location. This
 /// operation also creates a service-linked role for the management account
 /// in the organization. To call this operation, you must meet the following
-/// requirements: You must have a Business, Enterprise On-Ramp, or
-/// Enterprise Support plan from Amazon Web Services Support to use the
-/// Health API. If you call the Health API from an Amazon Web Services
-/// account that doesn't have a Business, Enterprise On-Ramp, or Enterprise
-/// Support plan, you receive a SubscriptionRequiredException error. You
-/// must have permission to call this operation from the organization's
-/// management account. For example IAM policies, see Health identity-based
-/// policy examples . If you don't have the required support plan, you can
-/// instead use the Health console to enable the organizational view
-/// feature. For more information, see Aggregating Health events in the
-/// Health User Guide .
+/// requirements: You must have a Amazon Web Services Business Support+,
+/// Amazon Web Services Enterprise Support, or Amazon Web Services Unified
+/// Operations plan from Amazon Web Services Support to use the Health API.
+/// If you call the Health API from an Amazon Web Services account that
+/// doesn't have a Amazon Web Services Business Support+, Amazon Web
+/// Services Enterprise Support, or Amazon Web Services Unified Operations
+/// plan, you receive a SubscriptionRequiredException error. You must have
+/// permission to call this operation from the organization's management
+/// account. For example IAM policies, see Health identity-based policy
+/// examples . If you don't have the required support plan, you can instead
+/// use the Health console to enable the organizational view feature. For
+/// more information, see Aggregating Health events in the Health User Guide
+/// .
 pub fn (c: Client) enable_health_service_access_for_organization(input: ()) -> () ! EnableHealthServiceAccessForOrganizationErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_enable_health_service_access_for_organization(c.params, input)) ?? e => return Err(EnableHealthServiceAccessForOrganizationErr.InvalidInput(e))
   var req = serialize_enable_health_service_access_for_organization(ep, input, "") ?? e => return Err(EnableHealthServiceAccessForOrganizationErr.InvalidInput(e))
@@ -4241,4 +6119,156 @@ pub fn (c: Client) enable_health_service_access_for_organization(input: ()) -> (
     return Err(deserialize_enable_health_service_access_for_organization_error(resp))
   }
   deserialize_enable_health_service_access_for_organization(resp) ?? e => Err(EnableHealthServiceAccessForOrganizationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_enable_tags(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of EnableTags.
+pub fn serialize_enable_tags(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.EnableTags"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_enable_tags(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of EnableTags.
+pub enum EnableTagsErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: EnableTagsErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_enable_tags_error(resp: http.Response) -> EnableTagsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  EnableTagsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Enables the Health tags feature for your account. Once enabled, Health
+/// events will include resource tag information for affected entities. If
+/// the feature is already enabled, this operation has no effect.
+pub fn (c: Client) enable_tags(input: ()) -> () ! EnableTagsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_enable_tags(c.params, input)) ?? e => return Err(EnableTagsErr.InvalidInput(e))
+  var req = serialize_enable_tags(ep, input, "") ?? e => return Err(EnableTagsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(EnableTagsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_enable_tags_error(resp))
+  }
+  deserialize_enable_tags(resp) ?? e => Err(EnableTagsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_enable_tags_for_organization(base: EndpointParameters, input: ()) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of EnableTagsForOrganization.
+pub fn serialize_enable_tags_for_organization(ep: rest.Endpoint, input: (), idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  body = b"{}"
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSHealth_20160804.EnableTagsForOrganization"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_enable_tags_for_organization(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of EnableTagsForOrganization.
+pub enum EnableTagsForOrganizationErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: EnableTagsForOrganizationErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_enable_tags_for_organization_error(resp: http.Response) -> EnableTagsForOrganizationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  EnableTagsForOrganizationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Enables the Health tags feature for all accounts in your organization.
+/// Once enabled, Health events will include resource tag information for
+/// affected entities across your organization.
+pub fn (c: Client) enable_tags_for_organization(input: ()) -> () ! EnableTagsForOrganizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_enable_tags_for_organization(c.params, input)) ?? e => return Err(EnableTagsForOrganizationErr.InvalidInput(e))
+  var req = serialize_enable_tags_for_organization(ep, input, "") ?? e => return Err(EnableTagsForOrganizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(EnableTagsForOrganizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_enable_tags_for_organization_error(resp))
+  }
+  deserialize_enable_tags_for_organization(resp) ?? e => Err(EnableTagsForOrganizationErr.Deserialize(e))
 }

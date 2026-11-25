@@ -2,6 +2,40 @@
 
 use github.com/xo-lang/aws/transport
 
+/// The pages of ListDatasets. Each `next_page` sends the input with
+/// the previous page's nextToken as its
+/// nextToken.
+pub struct ListDatasetsPaginator {
+  client: Client
+  input: ListDatasetsInput
+  first: Bool = true
+  more: Bool = true
+}
+
+pub fn new_list_datasets_paginator(c: Client, input: ListDatasetsInput) -> ListDatasetsPaginator {
+  ListDatasetsPaginator{client: c with {transport: transport.with_feature(c.transport, "C")}, input: input}
+}
+
+/// Whether `next_page` has a page to fetch: before the first page, or
+/// while the last page carried a new token.
+pub fn (p: ListDatasetsPaginator) has_more_pages() -> Bool {
+  p.first || p.more
+}
+
+pub fn (var p: ListDatasetsPaginator) next_page() -> ListDatasetsOutput ! ListDatasetsErr uses (net.dial, clock, rand) {
+  let prev = p.input.next_token
+  let out = p.client.list_datasets(p.input)?
+  p.first = false
+  var next: Str? = None
+  next = out.next_token
+  p.more = match next {
+    Some(t) => t != "" && Some(t) != prev
+    None => false
+  }
+  p.input.next_token = next
+  Ok(out)
+}
+
 /// The pages of ListDomains. Each `next_page` sends the input with
 /// the previous page's nextToken as its
 /// nextToken.

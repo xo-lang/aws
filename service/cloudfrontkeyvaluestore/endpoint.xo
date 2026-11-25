@@ -18,15 +18,96 @@ pub struct EndpointParameters {
 
 /// Resolves the endpoint for `params` from the service's endpoint rules.
 pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endpoints.RuleErr {
-  if !params.use_fips {
-    if let Some(kvs_arn) = params.kvs_arn {
-      if let Some(parsed_arn) = endpoints.parse_arn(kvs_arn) {
-        if parsed_arn.service == "cloudfront" {
-          if parsed_arn.region == "" {
-            if let Some(arn_type) = parsed_arn.resource_id.get(0) {
-              if !(arn_type == "") {
-                if arn_type == "key-value-store" {
-                  if parsed_arn.partition == "aws" {
+  if let Some(kvs_arn) = params.kvs_arn {
+    if let Some(parsed_arn) = endpoints.parse_arn(kvs_arn) {
+      if parsed_arn.service == "cloudfront" {
+        if parsed_arn.region == "" {
+          if let Some(arn_type) = parsed_arn.resource_id.get(0) {
+            if !(arn_type == "") {
+              if arn_type == "key-value-store" {
+                if parsed_arn.partition == "aws" {
+                  if let Some(region) = params.region {
+                    if let Some(partition_result) = endpoints.partition(region) {
+                      if partition_result.name == "${parsed_arn.partition}" {
+                        if let Some(endpoint) = params.endpoint {
+                          if !params.use_fips {
+                            if let Some(url) = endpoints.parse_url(endpoint) {
+                              return Ok(endpoints.Endpoint{
+                                url: "${url.scheme}://${parsed_arn.account_id}." +
+                                  "${url.authority}${url.path}",
+                                auth_schemes: [
+                                  endpoints.AuthScheme{
+                                    name: "sigv4a",
+                                    signing_name: "cloudfront-keyvaluestore",
+                                    signing_region_set: ["*"],
+                                  },
+                                ],
+                              })
+                            }
+                            return Err(endpoints.RuleErr{
+                              msg: "Provided endpoint is not a valid URL",
+                            })
+                          }
+                          return Err(endpoints.RuleErr{
+                            msg: "Invalid Configuration: FIPS and custom endpoint are not " +
+                              "supported",
+                          })
+                        }
+                        return Ok(endpoints.Endpoint{
+                          url: "https://${parsed_arn.account_id}.cloudfront-kvs.global.api.aws",
+                          auth_schemes: [
+                            endpoints.AuthScheme{
+                              name: "sigv4a",
+                              signing_name: "cloudfront-keyvaluestore",
+                              signing_region_set: ["*"],
+                            },
+                          ],
+                        })
+                      }
+                      return Err(endpoints.RuleErr{
+                        msg: "Client was configured for partition " +
+                          "`${partition_result.name}` but Kvs ARN has " +
+                          "`${parsed_arn.partition}`",
+                      })
+                    }
+                    return Err(endpoints.RuleErr{
+                      msg: "A valid partition could not be determined",
+                    })
+                  }
+                  if let Some(endpoint) = params.endpoint {
+                    if !params.use_fips {
+                      if let Some(url) = endpoints.parse_url(endpoint) {
+                        return Ok(endpoints.Endpoint{
+                          url: "${url.scheme}://${parsed_arn.account_id}." +
+                            "${url.authority}${url.path}",
+                          auth_schemes: [
+                            endpoints.AuthScheme{
+                              name: "sigv4a",
+                              signing_name: "cloudfront-keyvaluestore",
+                              signing_region_set: ["*"],
+                            },
+                          ],
+                        })
+                      }
+                      return Err(endpoints.RuleErr{msg: "Provided endpoint is not a valid URL"})
+                    }
+                    return Err(endpoints.RuleErr{
+                      msg: "Invalid Configuration: FIPS and custom endpoint are not supported",
+                    })
+                  }
+                  return Ok(endpoints.Endpoint{
+                    url: "https://${parsed_arn.account_id}.cloudfront-kvs.global.api.aws",
+                    auth_schemes: [
+                      endpoints.AuthScheme{
+                        name: "sigv4a",
+                        signing_name: "cloudfront-keyvaluestore",
+                        signing_region_set: ["*"],
+                      },
+                    ],
+                  })
+                }
+                if parsed_arn.partition == "aws-eusc" {
+                  if !params.use_fips {
                     if let Some(region) = params.region {
                       if let Some(partition_result) = endpoints.partition(region) {
                         if partition_result.name == "${parsed_arn.partition}" {
@@ -50,7 +131,7 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
                           }
                           return Ok(endpoints.Endpoint{
                             url: "https://${parsed_arn.account_id}.cloudfront-kvs.global." +
-                              "api.aws",
+                              "api.amazonwebservices.eu",
                             auth_schemes: [
                               endpoints.AuthScheme{
                                 name: "sigv4a",
@@ -67,7 +148,7 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
                         })
                       }
                       return Err(endpoints.RuleErr{
-                        msg: "rules in a matched tree rule were exhausted",
+                        msg: "A valid partition could not be determined",
                       })
                     }
                     if let Some(endpoint) = params.endpoint {
@@ -87,7 +168,8 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
                       return Err(endpoints.RuleErr{msg: "Provided endpoint is not a valid URL"})
                     }
                     return Ok(endpoints.Endpoint{
-                      url: "https://${parsed_arn.account_id}.cloudfront-kvs.global.api.aws",
+                      url: "https://${parsed_arn.account_id}.cloudfront-kvs.global.api." +
+                        "amazonwebservices.eu",
                       auth_schemes: [
                         endpoints.AuthScheme{
                           name: "sigv4a",
@@ -98,18 +180,18 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
                     })
                   }
                   return Err(endpoints.RuleErr{
-                    msg: "CloudFront-KeyValueStore is not supported in partition " +
-                      "`${parsed_arn.partition}`",
+                    msg: "Invalid Configuration: FIPS is not supported with " +
+                      "CloudFront-KeyValueStore.",
                   })
                 }
                 return Err(endpoints.RuleErr{
-                  msg: "ARN resource type is invalid. Expected `key-value-store`, found: " +
-                    "`${arn_type}`",
+                  msg: "CloudFront-KeyValueStore is not supported in partition " +
+                    "`${parsed_arn.partition}`",
                 })
               }
               return Err(endpoints.RuleErr{
-                msg: "No resource type found in the KVS ARN. Resource type must be " +
-                  "`key-value-store`.",
+                msg: "ARN resource type is invalid. Expected `key-value-store`, found: " +
+                  "`${arn_type}`",
               })
             }
             return Err(endpoints.RuleErr{
@@ -118,19 +200,20 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
             })
           }
           return Err(endpoints.RuleErr{
-            msg: "Provided ARN must be a global resource ARN. Found: `${parsed_arn.region}`",
+            msg: "No resource type found in the KVS ARN. Resource type must be " +
+              "`key-value-store`.",
           })
         }
         return Err(endpoints.RuleErr{
-          msg: "Provided ARN is not a valid CloudFront Service ARN. Found: " +
-            "`${parsed_arn.service}`",
+          msg: "Provided ARN must be a global resource ARN. Found: `${parsed_arn.region}`",
         })
       }
-      return Err(endpoints.RuleErr{msg: "KVS ARN must be a valid ARN"})
+      return Err(endpoints.RuleErr{
+        msg: "Provided ARN is not a valid CloudFront Service ARN. Found: " +
+          "`${parsed_arn.service}`",
+      })
     }
-    return Err(endpoints.RuleErr{msg: "KVS ARN must be provided to use this service"})
+    return Err(endpoints.RuleErr{msg: "KVS ARN must be a valid ARN"})
   }
-  return Err(endpoints.RuleErr{
-    msg: "Invalid Configuration: FIPS is not supported with CloudFront-KeyValueStore.",
-  })
+  return Err(endpoints.RuleErr{msg: "KVS ARN must be provided to use this service"})
 }

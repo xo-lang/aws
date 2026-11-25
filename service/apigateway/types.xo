@@ -19,7 +19,8 @@ pub struct AccessLogSettings {
   pub destination_arn: Str? = None
 }
 
-/// Represents an AWS account that is associated with API Gateway.
+/// Represents an Amazon Web Services account that is associated with API
+/// Gateway.
 pub struct Account {
   /// The ARN of an Amazon CloudWatch role for the current Account.
   pub cloudwatch_role_arn: Str? = None
@@ -120,13 +121,16 @@ pub struct Authorizer {
   pub name: Str? = None
   /// The authorizer type. Valid values are TOKEN for a Lambda function using
   /// a single authorization token submitted in a custom header, REQUEST for a
-  /// Lambda function using incoming request parameters, and
-  /// COGNITO_USER_POOLS for using an Amazon Cognito user pool.
+  /// Lambda function using incoming request parameters, COGNITO_USER_POOLS
+  /// for using an Amazon Cognito user pool, and JWT for using a native JWT
+  /// authorizer with the trusted issuers, audiences, and signing algorithms
+  /// that you declare.
   pub type_value: AuthorizerType? = None
   /// A list of the Amazon Cognito user pool ARNs for the COGNITO_USER_POOLS
   /// authorizer. Each element is of this format:
   /// arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id} . For
-  /// a TOKEN or REQUEST authorizer, this is not defined.
+  /// a TOKEN or REQUEST authorizer, this is not defined. This property is not
+  /// supported for JWT authorizers.
   pub provider_arns: List[Str]? = None
   /// Optional customer-defined field, used in OpenAPI imports and exports
   /// without functional impact.
@@ -141,11 +145,13 @@ pub struct Authorizer {
   /// that the remaining substring in the URI should be treated as the path to
   /// the resource, including the initial / . For Lambda functions, this is
   /// usually of the form /2015-03-31/functions/[FunctionARN]/invocations .
+  /// This property is not supported for JWT authorizers.
   pub authorizer_uri: Str? = None
   /// Specifies the required credentials as an IAM role for API Gateway to
   /// invoke the authorizer. To specify an IAM role for API Gateway to assume,
   /// use the role's Amazon Resource Name (ARN). To use resource-based
-  /// permissions on the Lambda function, specify null.
+  /// permissions on the Lambda function, specify null. This property is not
+  /// supported for JWT authorizers.
   pub authorizer_credentials: Str? = None
   /// The identity source for which authorization is requested. For a TOKEN or
   /// COGNITO_USER_POOLS authorizer, this is required and specifies the
@@ -166,7 +172,10 @@ pub struct Authorizer {
   /// response without calling the Lambda function. The valid value is a
   /// string of comma-separated mapping expressions of the specified request
   /// parameters. When the authorization caching is not enabled, this property
-  /// is optional.
+  /// is optional. For a JWT authorizer, this is required and must be a single
+  /// request-header mapping expression, method.request.header. , for example,
+  /// method.request.header.Authorization . Query string parameters are not
+  /// supported, and there is no default.
   pub identity_source: Str? = None
   /// A validation expression for the incoming identity token. For TOKEN
   /// authorizers, this value is a regular expression. For COGNITO_USER_POOLS
@@ -174,24 +183,31 @@ pub struct Authorizer {
   /// from the client against the specified regular expression. It will invoke
   /// the authorizer's Lambda function when there is a match. Otherwise, it
   /// will return a 401 Unauthorized response without calling the Lambda
-  /// function. The validation expression does not apply to the REQUEST
+  /// function. The validation expression does not apply to the REQUEST or JWT
   /// authorizer.
   pub identity_validation_expression: Str? = None
   /// The TTL in seconds of cached authorizer results. If it equals 0,
   /// authorization caching is disabled. If it is greater than 0, API Gateway
   /// will cache authorizer responses. If this field is not set, the default
-  /// value is 300. The maximum value is 3600, or 1 hour.
+  /// value is 300. The maximum value is 3600, or 1 hour. This property is not
+  /// supported for JWT authorizers.
   pub authorizer_result_ttl_in_seconds: Int? = None
+  /// The configuration returned for a JWT authorizer. This field is present
+  /// only when type is JWT .
+  pub jwt_configuration: JwtConfiguration? = None
 }
 
 /// The authorizer type. Valid values are TOKEN for a Lambda function using
 /// a single authorization token submitted in a custom header, REQUEST for a
-/// Lambda function using incoming request parameters, and
-/// COGNITO_USER_POOLS for using an Amazon Cognito user pool.
+/// Lambda function using incoming request parameters, COGNITO_USER_POOLS
+/// for using an Amazon Cognito user pool, and JWT for using a native JWT
+/// authorizer with the trusted issuers, audiences, and signing algorithms
+/// that you declare.
 pub enum AuthorizerType: Str {
   Token = "TOKEN"
   Request = "REQUEST"
   CognitoUserPools = "COGNITO_USER_POOLS"
+  Jwt = "JWT"
   Unknown(value: Str)
 }
 
@@ -347,13 +363,16 @@ pub struct CreateAuthorizerRequest {
   pub name: Str? = None
   /// The authorizer type. Valid values are TOKEN for a Lambda function using
   /// a single authorization token submitted in a custom header, REQUEST for a
-  /// Lambda function using incoming request parameters, and
-  /// COGNITO_USER_POOLS for using an Amazon Cognito user pool.
+  /// Lambda function using incoming request parameters, COGNITO_USER_POOLS
+  /// for using an Amazon Cognito user pool, and JWT for using a native JWT
+  /// authorizer with the trusted issuers, audiences, and signing algorithms
+  /// that you declare.
   pub type_value: AuthorizerType? = None
   /// A list of the Amazon Cognito user pool ARNs for the COGNITO_USER_POOLS
   /// authorizer. Each element is of this format:
   /// arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id} . For
-  /// a TOKEN or REQUEST authorizer, this is not defined.
+  /// a TOKEN or REQUEST authorizer, this is not defined. This property is not
+  /// supported for JWT authorizers.
   pub provider_arns: List[Str]? = None
   /// Optional customer-defined field, used in OpenAPI imports and exports
   /// without functional impact.
@@ -368,11 +387,13 @@ pub struct CreateAuthorizerRequest {
   /// that the remaining substring in the URI should be treated as the path to
   /// the resource, including the initial / . For Lambda functions, this is
   /// usually of the form /2015-03-31/functions/[FunctionARN]/invocations .
+  /// This property is not supported for JWT authorizers.
   pub authorizer_uri: Str? = None
   /// Specifies the required credentials as an IAM role for API Gateway to
   /// invoke the authorizer. To specify an IAM role for API Gateway to assume,
   /// use the role's Amazon Resource Name (ARN). To use resource-based
-  /// permissions on the Lambda function, specify null.
+  /// permissions on the Lambda function, specify null. This property is not
+  /// supported for JWT authorizers.
   pub authorizer_credentials: Str? = None
   /// The identity source for which authorization is requested. For a TOKEN or
   /// COGNITO_USER_POOLS authorizer, this is required and specifies the
@@ -393,7 +414,10 @@ pub struct CreateAuthorizerRequest {
   /// response without calling the Lambda function. The valid value is a
   /// string of comma-separated mapping expressions of the specified request
   /// parameters. When the authorization caching is not enabled, this property
-  /// is optional.
+  /// is optional. For a JWT authorizer, this is required and must be a single
+  /// request-header mapping expression, method.request.header. , for example,
+  /// method.request.header.Authorization . Query string parameters are not
+  /// supported, and there is no default.
   pub identity_source: Str? = None
   /// A validation expression for the incoming identity token. For TOKEN
   /// authorizers, this value is a regular expression. For COGNITO_USER_POOLS
@@ -401,14 +425,17 @@ pub struct CreateAuthorizerRequest {
   /// from the client against the specified regular expression. It will invoke
   /// the authorizer's Lambda function when there is a match. Otherwise, it
   /// will return a 401 Unauthorized response without calling the Lambda
-  /// function. The validation expression does not apply to the REQUEST
+  /// function. The validation expression does not apply to the REQUEST or JWT
   /// authorizer.
   pub identity_validation_expression: Str? = None
   /// The TTL in seconds of cached authorizer results. If it equals 0,
   /// authorization caching is disabled. If it is greater than 0, API Gateway
   /// will cache authorizer responses. If this field is not set, the default
-  /// value is 300. The maximum value is 3600, or 1 hour.
+  /// value is 300. The maximum value is 3600, or 1 hour. This property is not
+  /// supported for JWT authorizers.
   pub authorizer_result_ttl_in_seconds: Int? = None
+  /// The configuration for a JWT authorizer. Required for JWT authorizers.
+  pub jwt_configuration: JwtConfigurationInput? = None
 }
 
 /// Requests API Gateway to create a new BasePathMapping resource.
@@ -1097,7 +1124,7 @@ pub struct DomainName {
   pub regional_domain_name: Str? = None
   /// The region-specific Amazon Route 53 Hosted Zone ID of the regional
   /// endpoint. For more information, see Set up a Regional Custom Domain Name
-  /// and AWS Regions and Endpoints for API Gateway.
+  /// and Amazon Web Services Regions and Endpoints for API Gateway.
   pub regional_hosted_zone_id: Str? = None
   /// The name of the certificate that will be used for validating the
   /// regional domain name.
@@ -1114,8 +1141,8 @@ pub struct DomainName {
   pub distribution_domain_name: Str? = None
   /// The region-agnostic Amazon Route 53 Hosted Zone ID of the edge-optimized
   /// endpoint. The valid value is Z2FDTNDATAQYW2 for all the regions. For
-  /// more information, see Set up a Regional Custom Domain Name and AWS
-  /// Regions and Endpoints for API Gateway.
+  /// more information, see Set up a Regional Custom Domain Name and Amazon
+  /// Web Services Regions and Endpoints for API Gateway.
   pub distribution_hosted_zone_id: Str? = None
   /// The endpoint configuration of this DomainName showing the endpoint types
   /// and IP address types of the domain name.
@@ -1235,8 +1262,8 @@ pub struct EndpointConfiguration {
 
 /// The endpoint type. The valid values are EDGE for edge-optimized API
 /// setup, most suitable for mobile applications; REGIONAL for regional API
-/// endpoint setup, most suitable for calling from AWS Region; and PRIVATE
-/// for private APIs.
+/// endpoint setup, most suitable for calling from Amazon Web Services
+/// Region; and PRIVATE for private APIs.
 pub enum EndpointType: Str {
   Regional = "REGIONAL"
   Edge = "EDGE"
@@ -1522,7 +1549,8 @@ pub struct GetDomainNameAccessAssociationsRequest {
   /// The owner of the domain name access association. Use SELF to only list
   /// the domain name access associations owned by your own account. Use
   /// OTHER_ACCOUNTS to list the domain name access associations with your
-  /// private custom domain names that are owned by other AWS accounts.
+  /// private custom domain names that are owned by other Amazon Web Services
+  /// accounts.
   pub resource_owner: ResourceOwner? = None
 }
 
@@ -1983,12 +2011,13 @@ pub struct Integration {
   /// The ID of the VpcLink used for the integration when
   /// connectionType=VPC_LINK and undefined, otherwise.
   pub connection_id: Str? = None
-  /// Specifies the credentials required for the integration, if any. For AWS
-  /// integrations, three options are available. To specify an IAM Role for
-  /// API Gateway to assume, use the role's Amazon Resource Name (ARN). To
-  /// require that the caller's identity be passed through from the request,
-  /// specify the string arn:aws:iam::\*:user/\* . To use resource-based
-  /// permissions on supported Amazon Web Services services, specify null.
+  /// Specifies the credentials required for the integration, if any. For
+  /// Amazon Web Services integrations, three options are available. To
+  /// specify an IAM Role for API Gateway to assume, use the role's Amazon
+  /// Resource Name (ARN). To require that the caller's identity be passed
+  /// through from the request, specify the string arn:aws:iam::\*:user/\* .
+  /// To use resource-based permissions on supported Amazon Web Services
+  /// services, specify null.
   pub credentials: Str? = None
   /// A key-value map specifying request parameters that are passed from the
   /// method request to the back end. The key is an integration request
@@ -2050,7 +2079,7 @@ pub struct Integration {
   pub tls_config: TlsConfig? = None
   /// The response transfer mode of the integration.
   pub response_transfer_mode: ResponseTransferMode? = None
-  /// The ALB or NLB listener to send the request to.
+  /// The ALB or NLB ARN to send the request to.
   pub integration_target: Str? = None
 }
 
@@ -2114,6 +2143,90 @@ pub enum IpAddressType: Str {
   Unknown(value: Str)
 }
 
+/// An additional claim rule for an issuer.
+pub struct JwtAdditionalClaim {
+  /// The name of the claim to check. The value cannot be empty and cannot be
+  /// iss , aud , exp , nbf , iat , scope , or scp .
+  pub claim_name: Str? = None
+  /// The format of the claim value. The only valid value is SINGLE_STRING .
+  pub format: JwtClaimFormat? = None
+  /// Specifies whether the claim must be present in the token. Defaults to
+  /// false . When true , the token must contain the claim.
+  pub required: Bool? = None
+  /// The accepted value for the claim. The value cannot be empty. When a
+  /// value is specified, the claim must match it exactly, and the match is
+  /// case-sensitive. When no value is specified, the claim only has to be
+  /// present.
+  pub expected_values: List[Str]? = None
+}
+
+/// The format of an additional claim value. The only valid value is
+/// SINGLE_STRING .
+pub enum JwtClaimFormat: Str {
+  SingleString = "SINGLE_STRING"
+  Unknown(value: Str)
+}
+
+/// The JWT configuration returned for a JWT authorizer.
+pub struct JwtConfiguration {
+  /// The trusted issuers configured for the authorizer.
+  pub issuers: List[JwtIssuer]? = None
+  /// The signing algorithms configured for the authorizer.
+  pub default_algorithms: List[JwtSigningAlgorithm]? = None
+}
+
+/// The JWT configuration supplied for a JWT authorizer.
+pub struct JwtConfigurationInput {
+  /// The issuers that the authorizer trusts. Issuer URLs must be unique.
+  pub issuers: List[JwtIssuerInput]? = None
+  /// The signing algorithms that the authorizer accepts, applied to every
+  /// issuer. Valid values are RS256 , RS384 , RS512 , ES256 , ES384 , and
+  /// ES512 .
+  pub default_algorithms: List[JwtSigningAlgorithm]? = None
+}
+
+/// A trusted issuer in the returned JWT configuration.
+pub struct JwtIssuer {
+  /// The OpenID Connect (OIDC) issuer URL.
+  pub issuer: Str? = None
+  /// The audiences that the issuer can issue tokens for.
+  pub audiences: List[Str]? = None
+  /// The additional claim rules configured for this issuer.
+  pub additional_claims: List[JwtAdditionalClaim]? = None
+  /// The JSON Web Key Set (JWKS) URI that API Gateway resolved from the
+  /// issuer's OpenID Connect discovery document. This value is read-only and
+  /// cannot be set.
+  pub jwks_uri: Str? = None
+}
+
+/// A trusted issuer in the JWT configuration.
+pub struct JwtIssuerInput {
+  /// The OpenID Connect (OIDC) issuer URL. The value must be an absolute
+  /// https URL that includes a host and has no user information, query, or
+  /// fragment. It must exactly match the iss claim of the token, and the
+  /// issuer's OIDC discovery document must name this exact issuer.
+  pub issuer: Str? = None
+  /// The audiences that the issuer can issue tokens for. None can be empty.
+  /// The token's aud claim must contain at least one of these values.
+  pub audiences: List[Str]? = None
+  /// The additional claim rules for this issuer. Claim names must be unique
+  /// within the issuer.
+  pub additional_claims: List[JwtAdditionalClaim]? = None
+}
+
+/// A JSON Web Signature (JWS) signing algorithm. Valid values are RS256 ,
+/// RS384 , RS512 , ES256 , ES384 , and ES512 . HMAC ( HS256 , HS384 , HS512
+/// ) and none are not valid values.
+pub enum JwtSigningAlgorithm: Str {
+  Rs256 = "RS256"
+  Rs384 = "RS384"
+  Rs512 = "RS512"
+  Es256 = "ES256"
+  Es384 = "ES384"
+  Es512 = "ES512"
+  Unknown(value: Str)
+}
+
 /// The request exceeded the rate limit. Retry after the specified time
 /// period.
 pub struct LimitExceededException {
@@ -2142,8 +2255,9 @@ pub struct Method {
   /// The method's HTTP verb.
   pub http_method: Str? = None
   /// The method's authorization type. Valid values are NONE for open access,
-  /// AWS_IAM for using AWS IAM permissions, CUSTOM for using a custom
-  /// authorizer, or COGNITO_USER_POOLS for using a Cognito user pool.
+  /// AWS_IAM for using Amazon Web Services IAM permissions, CUSTOM for using
+  /// a custom authorizer, COGNITO_USER_POOLS for using a Cognito user pool,
+  /// or JWT for using a JWT authorizer.
   pub authorization_type: Str? = None
   /// The identifier of an Authorizer to use on this method. The
   /// authorizationType must be CUSTOM .
@@ -2185,6 +2299,9 @@ pub struct Method {
   /// claimed scope in the access token. Otherwise, the invocation is not
   /// authorized. When the method scope is configured, the client must provide
   /// an access token instead of an identity token for authorization purposes.
+  /// The scopes are also used with a JWT authorizer. When scopes are
+  /// configured, the scope (or scp ) claim of the token must contain at least
+  /// one of the configured scopes.
   pub authorization_scopes: List[Str]? = None
 }
 
@@ -2254,8 +2371,9 @@ pub struct MethodSetting {
 /// time.
 pub struct MethodSnapshot {
   /// The method's authorization type. Valid values are NONE for open access,
-  /// AWS_IAM for using AWS IAM permissions, CUSTOM for using a custom
-  /// authorizer, or COGNITO_USER_POOLS for using a Cognito user pool.
+  /// AWS_IAM for using Amazon Web Services IAM permissions, CUSTOM for using
+  /// a custom authorizer, or COGNITO_USER_POOLS for using a Cognito user
+  /// pool.
   pub authorization_type: Str? = None
   /// Specifies whether the method requires a valid ApiKey.
   pub api_key_required: Bool? = None
@@ -2364,9 +2482,9 @@ pub struct PatchOperation {
   /// it.
   pub path: Str? = None
   /// The new target value of the update operation. It is applicable for the
-  /// add or replace operation. When using AWS CLI to update a property of a
-  /// JSON value, enclose the JSON object with a pair of single quotes in a
-  /// Linux shell, e.g., '{"a": ...}'.
+  /// add or replace operation. When using CLI to update a property of a JSON
+  /// value, enclose the JSON object with a pair of single quotes in a Linux
+  /// shell, e.g., '{"a": ...}'.
   pub value: Str? = None
   /// The copy update operation's source as identified by a JSON-Pointer value
   /// referencing the location within the targeted resource to copy the value
@@ -2482,7 +2600,7 @@ pub struct PutIntegrationRequest {
   pub tls_config: TlsConfig? = None
   /// The response transfer mode of the integration.
   pub response_transfer_mode: ResponseTransferMode? = None
-  /// The ALB or NLB listener to send the request to.
+  /// The ALB or NLB ARN to send the request to.
   pub integration_target: Str? = None
 }
 
@@ -2530,8 +2648,9 @@ pub struct PutMethodRequest {
   /// Specifies the method request's HTTP method type.
   pub http_method: Str? = None
   /// The method's authorization type. Valid values are NONE for open access,
-  /// AWS_IAM for using AWS IAM permissions, CUSTOM for using a custom
-  /// authorizer, or COGNITO_USER_POOLS for using a Cognito user pool.
+  /// AWS_IAM for using Amazon Web Services IAM permissions, CUSTOM for using
+  /// a custom authorizer, COGNITO_USER_POOLS for using a Cognito user pool,
+  /// or JWT for using a JWT authorizer.
   pub authorization_type: Str? = None
   /// Specifies the identifier of an Authorizer to use on this Method, if the
   /// type is CUSTOM or COGNITO_USER_POOLS. The authorizer identifier is
@@ -2567,6 +2686,9 @@ pub struct PutMethodRequest {
   /// claimed scope in the access token. Otherwise, the invocation is not
   /// authorized. When the method scope is configured, the client must provide
   /// an access token instead of an identity token for authorization purposes.
+  /// The scopes are also used with a JWT authorizer. When scopes are
+  /// configured, the scope (or scp ) claim of the token must contain at least
+  /// one of the configured scopes.
   pub authorization_scopes: List[Str]? = None
 }
 
@@ -2620,7 +2742,7 @@ pub struct PutRestApiRequest {
   pub fail_on_warnings: Bool? = None
   /// Custom header parameters as part of the request. For example, to exclude
   /// DocumentationParts from an imported API, set ignore=documentation as a
-  /// parameters value, as in the AWS CLI command of aws apigateway
+  /// parameters value, as in the CLI command of aws apigateway
   /// import-rest-api --parameters ignore=documentation --body
   /// 'file:///path/to/imported-api-body.json' .
   pub parameters: Map[Str, Str]? = None
@@ -3412,7 +3534,8 @@ pub struct UsagePlanKeys {
   pub position: Str? = None
 }
 
-/// Represents a collection of usage plans for an AWS account.
+/// Represents a collection of usage plans for an Amazon Web Services
+/// account.
 pub struct UsagePlans {
   /// The current page of elements from this collection.
   pub items: List[UsagePlan]? = None

@@ -18,6 +18,71 @@ pub struct AttachedTo {
   pub arn: Str? = None
 }
 
+/// Represents one authorization requirement considered during an evaluation
+/// and its result.
+pub struct Check {
+  /// The type of requirement that the check evaluates. Valid values:
+  /// SERVICE_CONTROL_POLICY - The service control policies (SCPs) attached to
+  /// one organization target, such as a root, organizational unit, or
+  /// account, that apply to the principal. RESOURCE_CONTROL_POLICY - The
+  /// resource control policies (RCPs) attached to one organization target
+  /// that apply to the resource. VPC_ENDPOINT - The VPC endpoint policy for
+  /// the endpoint through which the request passes. RESOURCE - The resource
+  /// owner's resource-based policies, when the owner must allow the request
+  /// separately, such as a cross-account request or a request to an AWS KMS
+  /// key. PRINCIPAL - The principal's identity-based policies attached to the
+  /// IAM user or role. PERMISSIONS_BOUNDARY - The permissions boundary on the
+  /// IAM user or role. SESSION - The role session that made the request,
+  /// decided by its session policies.
+  pub check_type: CheckType? = None
+  /// The result of evaluating this requirement. Valid values: ALLOW - A
+  /// statement that applies to this check allows the request. EXPLICIT_DENY -
+  /// A deny statement that applies to this check matches. IMPLICIT_DENY - The
+  /// check required an allow and nothing that applies to it allows the
+  /// request. NO_IMPACT - No statement in this check matched, and no allow
+  /// was needed because another path allowed the request.
+  pub evaluated_effect: CheckEffect? = None
+  /// The ARN that distinguishes this check from other checks of the same
+  /// type. This value is absent when the check type alone identifies the
+  /// check. For SCP and RCP checks, this is the AWS Organizations ARN of the
+  /// root, organizational unit, or account that the evaluated policies are
+  /// attached to.
+  pub target_arn: Str? = None
+  /// The policy types used to satisfy this check, plus the type of every
+  /// policy with a statement that matched in it. matchedPolicies lists
+  /// matching policies in the top-level policies list.
+  pub relevant_policy_types: List[PolicyType]? = None
+  /// Policies in this list have statements that matched for this check. Each
+  /// URI corresponds to an entry in the top-level policies list. Only
+  /// policies in the top-level list are included. The check effect can
+  /// reflect a matched policy omitted from this list, so this list can be
+  /// empty even when the effect is ALLOW .
+  pub matched_policies: List[MatchedPolicy]? = None
+}
+
+/// Whether the check allowed the request, denied it explicitly or
+/// implicitly, or did not affect the outcome.
+pub enum CheckEffect: Str {
+  Allow = "ALLOW"
+  NoImpact = "NO_IMPACT"
+  ImplicitDeny = "IMPLICIT_DENY"
+  ExplicitDeny = "EXPLICIT_DENY"
+  Unknown(value: Str)
+}
+
+/// The authorization requirement that a check evaluates, such as SCPs at
+/// one organization target, principal permissions, or the session.
+pub enum CheckType: Str {
+  ServiceControlPolicy = "SERVICE_CONTROL_POLICY"
+  ResourceControlPolicy = "RESOURCE_CONTROL_POLICY"
+  VpcEndpoint = "VPC_ENDPOINT"
+  Resource = "RESOURCE"
+  Principal = "PRINCIPAL"
+  PermissionsBoundary = "PERMISSIONS_BOUNDARY"
+  Session = "SESSION"
+  Unknown(value: Str)
+}
+
 /// The result of a policy evaluation.
 pub enum EvaluatedEffect: Str {
   Allow = "ALLOW"
@@ -41,11 +106,30 @@ pub struct Evaluation {
   pub context: Map[Str, json.Value]? = None
   /// The result of the evaluation. Valid values: ALLOW - The action was
   /// allowed. EXPLICIT_DENY - The action was explicitly denied by a policy.
-  /// IMPLICIT_DENY - The action was denied because no policy allowed it.
+  /// IMPLICIT_DENY - The action was denied because at least one required
+  /// authorization check had no matching allow statement.
   pub evaluated_effect: EvaluatedEffect? = None
-  /// The policies that matched during evaluation of this action and resource.
-  /// An implicit denial produces no matched policies.
+  /// matchedPolicies is deprecated. Use checks instead. This value contains
+  /// the policies that matched during evaluation of this action and resource.
   pub matched_policies: List[MatchedPolicy]? = None
+  /// checks contains the authorization checks that explain an evaluation
+  /// result. Each check is one authorization requirement and reports its
+  /// result and policies from the top-level policies list with matching
+  /// statements. The output lists RCP checks from the organization root to
+  /// the account, then SCP checks from the organization root to the account.
+  /// It then lists VPC endpoint, resource, principal, permissions boundary,
+  /// and session checks. When checks is present, an EXPLICIT_DENY evaluation
+  /// includes an EXPLICIT_DENY check. When checks is present for an
+  /// IMPLICIT_DENY evaluation, it includes an IMPLICIT_DENY check and no
+  /// EXPLICIT_DENY check. For more information about how IAM evaluates
+  /// policies, see Policy evaluation logic . PRINCIPAL , PERMISSIONS_BOUNDARY
+  /// , and SESSION checks appear when they apply to the principal that made
+  /// the request, even if none of their policies matched. A missing allow
+  /// produces IMPLICIT_DENY , or NO_IMPACT when another path already allowed
+  /// the request. Returned when the caller is in the request principal's
+  /// account or organization. The absence of checks does not mean no
+  /// authorization checks applied.
+  pub checks: List[Check]? = None
 }
 
 pub struct GetRequestAuthorizationDetailsInput {
@@ -70,6 +154,24 @@ pub struct GetRequestAuthorizationDetailsOutput {
   /// The pagination token for retrieving the next page of evaluations. This
   /// value is absent when there are no more results.
   pub next_token: Str? = None
+}
+
+pub struct GetRequestAuthorizationPolicyInput {
+  /// The authorization ID received in the access denied error message. This
+  /// ID identifies the request whose evaluated policy you want to retrieve.
+  pub authorization_id: Str? = None
+  /// The URI of the policy to retrieve. Use the uri value from the policies
+  /// list returned by GetRequestAuthorizationDetails for the same
+  /// authorization ID.
+  pub policy_uri: Str? = None
+}
+
+pub struct GetRequestAuthorizationPolicyOutput {
+  /// The policy document evaluated for the denied request, returned as a JSON
+  /// object. For some AWS services and policy types, this document includes
+  /// all actions relevant to the service that processed the denied request,
+  /// but might omit actions for other services.
+  pub policy_document: json.Value? = None
 }
 
 /// An unexpected error occurred while processing the request. Try again.
@@ -101,13 +203,16 @@ pub struct MatchedStatement {
 
 /// Contains details about a policy evaluated during authorization. Details
 /// include the policy type, whether it is inline or managed, a URI that
-/// identifies it, and the entities it is attached to.
+/// identifies it, the entities it is attached to, and its source, if
+/// present.
 pub struct PolicyInfo {
   /// The type of policy. Valid values: IDENTITY_BASED_POLICY - An
   /// identity-based policy attached to an IAM user, group, or role.
   /// PERMISSIONS_BOUNDARY - A permissions boundary for an IAM entity.
   /// RESOURCE_BASED_POLICY - A resource-based policy attached to a resource.
-  /// RESOURCE_CONTROL_POLICY - A resource control policy (RCP) in AWS
+  /// An AWS service can evaluate and report a policy kind it defines, such as
+  /// a KMS grant, as RESOURCE_BASED_POLICY . policySource identifies the
+  /// kind. RESOURCE_CONTROL_POLICY - A resource control policy (RCP) in AWS
   /// Organizations. SERVICE_CONTROL_POLICY - A service control policy (SCP)
   /// in AWS Organizations. SESSION_POLICY - A session policy passed during
   /// role assumption or federation. VPC_ENDPOINT_POLICY - A VPC endpoint
@@ -117,15 +222,28 @@ pub struct PolicyInfo {
   /// ( false ).
   pub inline: Bool? = None
   /// A URI that identifies the policy. Use this URI to cross-reference the
-  /// policy with the matching policies in each evaluation. The value depends
-  /// on the policy type: For managed policies, this is the policy ARN. For
-  /// inline policies, which have no ARN, this is an opaque identifier.
+  /// policy with the matching policies in each evaluation. To retrieve the
+  /// policy document, pass this URI as the policyUri parameter of
+  /// GetRequestAuthorizationPolicy , together with the same authorization ID.
+  /// The value depends on the policy type: For managed policies, this is the
+  /// policy ARN. For inline policies, which have no ARN, this is an opaque
+  /// identifier.
   pub uri: Str? = None
   /// The entities that the policy is attached to. For identity, session, and
   /// resource-based policies, this is typically a single entity. For
   /// organization control policies (SCPs and RCPs), it can be multiple
   /// entities at different levels of the organization hierarchy.
   pub attached_to: List[AttachedTo]? = None
+  /// What the policy was built from, such as a KMS key policy or grant.
+  /// Absent for other policies. The type and typeName keys are always
+  /// present. type identifies the policy-source kind. typeName is its
+  /// readable name. Compare type , not typeName . A policy source can include
+  /// additional keys that depend on its type. For example, a KMS grant
+  /// includes a grantId key that identifies the grant. A grant has no ARN.
+  /// Use the grant ID with the KMS key ARN in attachedTo to find the grant
+  /// with the AWS KMS ListGrants operation. New types and keys can be added,
+  /// so clients should ignore types and keys they don't recognize.
+  pub policy_source: Map[Str, Str]? = None
 }
 
 /// The policy type.
@@ -140,11 +258,13 @@ pub enum PolicyType: Str {
   Unknown(value: Str)
 }
 
-/// The requested authorization details do not exist in this region or have
-/// expired. Verify that the authorization ID from the access denied error
-/// message is correct and the call is made in the region where the denial
-/// occurred. Ensure that the calling principal belongs to the same account
-/// or organization as the original denied request.
+/// The requested policy or authorization details do not exist in this
+/// region or have expired. Verify that the authorization ID from the access
+/// denied error message is correct and the call is made in the region where
+/// the denial occurred. Ensure that the calling principal belongs to the
+/// same account or organization as the original denied request. If you
+/// specified a policy URI, verify that it is from the policies list that
+/// GetRequestAuthorizationDetails returns for the same authorization ID.
 pub struct ResourceNotFoundException {
   pub message: Str? = None
 }

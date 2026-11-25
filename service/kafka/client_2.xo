@@ -8,6 +8,1590 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Returns a description of this MSK configuration.
+pub fn (c: Client) describe_configuration(input: DescribeConfigurationRequest) -> DescribeConfigurationResponse ! DescribeConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_configuration(c.params, input)) ?? e => return Err(DescribeConfigurationErr.InvalidInput(e))
+  var req = serialize_describe_configuration(ep, input, "") ?? e => return Err(DescribeConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_configuration_error(resp))
+  }
+  deserialize_describe_configuration(resp) ?? e => Err(DescribeConfigurationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_configuration_revision(base: EndpointParameters, input: DescribeConfigurationRevisionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeConfigurationRevision.
+pub fn serialize_describe_configuration_revision(ep: rest.Endpoint, input: DescribeConfigurationRevisionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_arn = match input.arn {
+    Some(v) => v
+    None => return Err("input member Arn is required")
+  }
+  if label_arn == "" {
+    return Err("input member Arn must not be empty")
+  }
+  let label_revision = match input.revision {
+    Some(v) => "${v}"
+    None => return Err("input member Revision is required")
+  }
+  if label_revision == "" {
+    return Err("input member Revision must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/configurations/${rest.escape(label_arn, false)}/revisions/${rest.escape(label_revision, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_configuration_revision(resp: http.Response) -> DescribeConfigurationRevisionResponse ! Str {
+  var out = DescribeConfigurationRevisionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      "description" => out.description = jsonv.read_str(fv)?
+      "revision" => out.revision = jsonv.read_int(fv)?
+      "serverProperties" => out.server_properties = jsonv.read_blob(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeConfigurationRevision.
+pub enum DescribeConfigurationRevisionErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeConfigurationRevisionErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_configuration_revision_error(resp: http.Response) -> DescribeConfigurationRevisionErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DescribeConfigurationRevisionErr.BadRequestException(x)
+      Err(msg) => return DescribeConfigurationRevisionErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DescribeConfigurationRevisionErr.ForbiddenException(x)
+      Err(msg) => return DescribeConfigurationRevisionErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return DescribeConfigurationRevisionErr.InternalServerErrorException(x)
+      Err(msg) => return DescribeConfigurationRevisionErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DescribeConfigurationRevisionErr.NotFoundException(x)
+      Err(msg) => return DescribeConfigurationRevisionErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return DescribeConfigurationRevisionErr.ServiceUnavailableException(x)
+      Err(msg) => return DescribeConfigurationRevisionErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return DescribeConfigurationRevisionErr.UnauthorizedException(x)
+      Err(msg) => return DescribeConfigurationRevisionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeConfigurationRevisionErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a description of this revision of the configuration.
+pub fn (c: Client) describe_configuration_revision(input: DescribeConfigurationRevisionRequest) -> DescribeConfigurationRevisionResponse ! DescribeConfigurationRevisionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_configuration_revision(c.params, input)) ?? e => return Err(DescribeConfigurationRevisionErr.InvalidInput(e))
+  var req = serialize_describe_configuration_revision(ep, input, "") ?? e => return Err(DescribeConfigurationRevisionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeConfigurationRevisionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_configuration_revision_error(resp))
+  }
+  deserialize_describe_configuration_revision(resp) ?? e => Err(DescribeConfigurationRevisionErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_replicator(base: EndpointParameters, input: DescribeReplicatorRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeReplicator.
+pub fn serialize_describe_replicator(ep: rest.Endpoint, input: DescribeReplicatorRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_replicator_arn = match input.replicator_arn {
+    Some(v) => v
+    None => return Err("input member ReplicatorArn is required")
+  }
+  if label_replicator_arn == "" {
+    return Err("input member ReplicatorArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/replication/v1/replicators/${rest.escape(label_replicator_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_replicator(resp: http.Response) -> DescribeReplicatorResponse ! Str {
+  var out = DescribeReplicatorResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      "currentVersion" => out.current_version = jsonv.read_str(fv)?
+      "isReplicatorReference" => out.is_replicator_reference = jsonv.read_bool(fv)?
+      "kafkaClusters" => out.kafka_clusters = from_json_list_of_kafka_cluster_description(fv)?
+      "replicationInfoList" => out.replication_info_list = from_json_list_of_replication_info_description(fv)?
+      "replicatorArn" => out.replicator_arn = jsonv.read_str(fv)?
+      "replicatorDescription" => out.replicator_description = jsonv.read_str(fv)?
+      "replicatorName" => out.replicator_name = jsonv.read_str(fv)?
+      "replicatorResourceArn" => out.replicator_resource_arn = jsonv.read_str(fv)?
+      "replicatorState" => out.replicator_state = ReplicatorState.from(jsonv.read_str(fv)?)
+      "serviceExecutionRoleArn" => out.service_execution_role_arn = jsonv.read_str(fv)?
+      "stateInfo" => out.state_info = from_json_replication_state_info(fv)?
+      "tags" => out.tags = from_json_map_of_string(fv)?
+      "logDelivery" => out.log_delivery = from_json_log_delivery(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeReplicator.
+pub enum DescribeReplicatorErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeReplicatorErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_replicator_error(resp: http.Response) -> DescribeReplicatorErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.BadRequestException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.ForbiddenException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.InternalServerErrorException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.NotFoundException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.ServiceUnavailableException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.TooManyRequestsException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return DescribeReplicatorErr.UnauthorizedException(x)
+      Err(msg) => return DescribeReplicatorErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeReplicatorErr.Api(restjson.api_error(resp, body))
+}
+
+/// Describes a replicator.
+pub fn (c: Client) describe_replicator(input: DescribeReplicatorRequest) -> DescribeReplicatorResponse ! DescribeReplicatorErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_replicator(c.params, input)) ?? e => return Err(DescribeReplicatorErr.InvalidInput(e))
+  var req = serialize_describe_replicator(ep, input, "") ?? e => return Err(DescribeReplicatorErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeReplicatorErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_replicator_error(resp))
+  }
+  deserialize_describe_replicator(resp) ?? e => Err(DescribeReplicatorErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_topic(base: EndpointParameters, input: DescribeTopicRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTopic.
+pub fn serialize_describe_topic(ep: rest.Endpoint, input: DescribeTopicRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  let label_topic_name = match input.topic_name {
+    Some(v) => v
+    None => return Err("input member TopicName is required")
+  }
+  if label_topic_name == "" {
+    return Err("input member TopicName must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/topics/${rest.escape(label_topic_name, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_topic(resp: http.Response) -> DescribeTopicResponse ! Str {
+  var out = DescribeTopicResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "topicArn" => out.topic_arn = jsonv.read_str(fv)?
+      "topicName" => out.topic_name = jsonv.read_str(fv)?
+      "replicationFactor" => out.replication_factor = jsonv.read_int(fv)?
+      "partitionCount" => out.partition_count = jsonv.read_int(fv)?
+      "configs" => out.configs = jsonv.read_str(fv)?
+      "status" => out.status = TopicState.from(jsonv.read_str(fv)?)
+      "replicaIds" => out.replica_ids = from_json_list_of_integer(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTopic.
+pub enum DescribeTopicErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTopicErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_topic_error(resp: http.Response) -> DescribeTopicErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DescribeTopicErr.BadRequestException(x)
+      Err(msg) => return DescribeTopicErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DescribeTopicErr.ForbiddenException(x)
+      Err(msg) => return DescribeTopicErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return DescribeTopicErr.InternalServerErrorException(x)
+      Err(msg) => return DescribeTopicErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DescribeTopicErr.NotFoundException(x)
+      Err(msg) => return DescribeTopicErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return DescribeTopicErr.UnauthorizedException(x)
+      Err(msg) => return DescribeTopicErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeTopicErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns topic details of this topic on a MSK cluster.
+pub fn (c: Client) describe_topic(input: DescribeTopicRequest) -> DescribeTopicResponse ! DescribeTopicErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_topic(c.params, input)) ?? e => return Err(DescribeTopicErr.InvalidInput(e))
+  var req = serialize_describe_topic(ep, input, "") ?? e => return Err(DescribeTopicErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTopicErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_topic_error(resp))
+  }
+  deserialize_describe_topic(resp) ?? e => Err(DescribeTopicErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_topic_partitions(base: EndpointParameters, input: DescribeTopicPartitionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTopicPartitions.
+pub fn serialize_describe_topic_partitions(ep: rest.Endpoint, input: DescribeTopicPartitionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  let label_topic_name = match input.topic_name {
+    Some(v) => v
+    None => return Err("input member TopicName is required")
+  }
+  if label_topic_name == "" {
+    return Err("input member TopicName must not be empty")
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/topics/${rest.escape(label_topic_name, false)}/partitions"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_topic_partitions(resp: http.Response) -> DescribeTopicPartitionsResponse ! Str {
+  var out = DescribeTopicPartitionsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "partitions" => out.partitions = from_json_list_of_topic_partition_info(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTopicPartitions.
+pub enum DescribeTopicPartitionsErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTopicPartitionsErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_topic_partitions_error(resp: http.Response) -> DescribeTopicPartitionsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DescribeTopicPartitionsErr.BadRequestException(x)
+      Err(msg) => return DescribeTopicPartitionsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DescribeTopicPartitionsErr.ForbiddenException(x)
+      Err(msg) => return DescribeTopicPartitionsErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return DescribeTopicPartitionsErr.InternalServerErrorException(x)
+      Err(msg) => return DescribeTopicPartitionsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DescribeTopicPartitionsErr.NotFoundException(x)
+      Err(msg) => return DescribeTopicPartitionsErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return DescribeTopicPartitionsErr.UnauthorizedException(x)
+      Err(msg) => return DescribeTopicPartitionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeTopicPartitionsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns partition details of this topic on a MSK cluster.
+pub fn (c: Client) describe_topic_partitions(input: DescribeTopicPartitionsRequest) -> DescribeTopicPartitionsResponse ! DescribeTopicPartitionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_topic_partitions(c.params, input)) ?? e => return Err(DescribeTopicPartitionsErr.InvalidInput(e))
+  var req = serialize_describe_topic_partitions(ep, input, "") ?? e => return Err(DescribeTopicPartitionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTopicPartitionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_topic_partitions_error(resp))
+  }
+  deserialize_describe_topic_partitions(resp) ?? e => Err(DescribeTopicPartitionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_topic_reassignment(base: EndpointParameters, input: DescribeTopicReassignmentRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeTopicReassignment.
+pub fn serialize_describe_topic_reassignment(ep: rest.Endpoint, input: DescribeTopicReassignmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  let label_topic_reassignment_operation_arn = match input.topic_reassignment_operation_arn {
+    Some(v) => v
+    None => return Err("input member TopicReassignmentOperationArn is required")
+  }
+  if label_topic_reassignment_operation_arn == "" {
+    return Err("input member TopicReassignmentOperationArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/topic-reassignments/${rest.escape(label_topic_reassignment_operation_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_topic_reassignment(resp: http.Response) -> DescribeTopicReassignmentResponse ! Str {
+  var out = DescribeTopicReassignmentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "clusterArn" => out.cluster_arn = jsonv.read_str(fv)?
+      "completedTopics" => out.completed_topics = jsonv.read_int(fv)?
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      "errorInfo" => out.error_info = from_json_error_info(fv)?
+      "lastUpdateTime" => out.last_update_time = jsonv.read_time(fv, "date-time")?
+      "migratedPartitions" => out.migrated_partitions = jsonv.read_int(fv)?
+      "status" => out.status = TopicReassignmentStatus.from(jsonv.read_str(fv)?)
+      "targetInstanceType" => out.target_instance_type = jsonv.read_str(fv)?
+      "topicReassignmentOperationArn" => out.topic_reassignment_operation_arn = jsonv.read_str(fv)?
+      "topicsToExclude" => out.topics_to_exclude = from_json_list_of_string(fv)?
+      "topicsToInclude" => out.topics_to_include = from_json_list_of_string(fv)?
+      "totalPartitions" => out.total_partitions = jsonv.read_int(fv)?
+      "totalTopics" => out.total_topics = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeTopicReassignment.
+pub enum DescribeTopicReassignmentErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeTopicReassignmentErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_topic_reassignment_error(resp: http.Response) -> DescribeTopicReassignmentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.BadRequestException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.ForbiddenException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.InternalServerErrorException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.NotFoundException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.ServiceUnavailableException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.TooManyRequestsException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return DescribeTopicReassignmentErr.UnauthorizedException(x)
+      Err(msg) => return DescribeTopicReassignmentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeTopicReassignmentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the status and progress of a topic reassignment operation.
+pub fn (c: Client) describe_topic_reassignment(input: DescribeTopicReassignmentRequest) -> DescribeTopicReassignmentResponse ! DescribeTopicReassignmentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_topic_reassignment(c.params, input)) ?? e => return Err(DescribeTopicReassignmentErr.InvalidInput(e))
+  var req = serialize_describe_topic_reassignment(ep, input, "") ?? e => return Err(DescribeTopicReassignmentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeTopicReassignmentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_topic_reassignment_error(resp))
+  }
+  deserialize_describe_topic_reassignment(resp) ?? e => Err(DescribeTopicReassignmentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_describe_vpc_connection(base: EndpointParameters, input: DescribeVpcConnectionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DescribeVpcConnection.
+pub fn serialize_describe_vpc_connection(ep: rest.Endpoint, input: DescribeVpcConnectionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_arn = match input.arn {
+    Some(v) => v
+    None => return Err("input member Arn is required")
+  }
+  if label_arn == "" {
+    return Err("input member Arn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/vpc-connection/${rest.escape(label_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_describe_vpc_connection(resp: http.Response) -> DescribeVpcConnectionResponse ! Str {
+  var out = DescribeVpcConnectionResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "vpcConnectionArn" => out.vpc_connection_arn = jsonv.read_str(fv)?
+      "targetClusterArn" => out.target_cluster_arn = jsonv.read_str(fv)?
+      "state" => out.state = VpcConnectionState.from(jsonv.read_str(fv)?)
+      "authentication" => out.authentication = jsonv.read_str(fv)?
+      "vpcId" => out.vpc_id = jsonv.read_str(fv)?
+      "subnets" => out.subnets = from_json_list_of_string(fv)?
+      "securityGroups" => out.security_groups = from_json_list_of_string(fv)?
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      "tags" => out.tags = from_json_map_of_string(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeVpcConnection.
+pub enum DescribeVpcConnectionErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DescribeVpcConnectionErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_describe_vpc_connection_error(resp: http.Response) -> DescribeVpcConnectionErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DescribeVpcConnectionErr.BadRequestException(x)
+      Err(msg) => return DescribeVpcConnectionErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DescribeVpcConnectionErr.ForbiddenException(x)
+      Err(msg) => return DescribeVpcConnectionErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return DescribeVpcConnectionErr.InternalServerErrorException(x)
+      Err(msg) => return DescribeVpcConnectionErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DescribeVpcConnectionErr.NotFoundException(x)
+      Err(msg) => return DescribeVpcConnectionErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return DescribeVpcConnectionErr.ServiceUnavailableException(x)
+      Err(msg) => return DescribeVpcConnectionErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return DescribeVpcConnectionErr.UnauthorizedException(x)
+      Err(msg) => return DescribeVpcConnectionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DescribeVpcConnectionErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a description of this MSK VPC connection.
+pub fn (c: Client) describe_vpc_connection(input: DescribeVpcConnectionRequest) -> DescribeVpcConnectionResponse ! DescribeVpcConnectionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_describe_vpc_connection(c.params, input)) ?? e => return Err(DescribeVpcConnectionErr.InvalidInput(e))
+  var req = serialize_describe_vpc_connection(ep, input, "") ?? e => return Err(DescribeVpcConnectionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DescribeVpcConnectionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_describe_vpc_connection_error(resp))
+  }
+  deserialize_describe_vpc_connection(resp) ?? e => Err(DescribeVpcConnectionErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_bootstrap_brokers(base: EndpointParameters, input: GetBootstrapBrokersRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBootstrapBrokers.
+pub fn serialize_get_bootstrap_brokers(ep: rest.Endpoint, input: GetBootstrapBrokersRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/bootstrap-brokers"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_bootstrap_brokers(resp: http.Response) -> GetBootstrapBrokersResponse ! Str {
+  var out = GetBootstrapBrokersResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "bootstrapBrokerString" => out.bootstrap_broker_string = jsonv.read_str(fv)?
+      "bootstrapBrokerStringTls" => out.bootstrap_broker_string_tls = jsonv.read_str(fv)?
+      "bootstrapBrokerStringSaslScram" => out.bootstrap_broker_string_sasl_scram = jsonv.read_str(fv)?
+      "bootstrapBrokerStringSaslIam" => out.bootstrap_broker_string_sasl_iam = jsonv.read_str(fv)?
+      "bootstrapBrokerStringPublicTls" => out.bootstrap_broker_string_public_tls = jsonv.read_str(fv)?
+      "bootstrapBrokerStringPublicSaslScram" => out.bootstrap_broker_string_public_sasl_scram = jsonv.read_str(fv)?
+      "bootstrapBrokerStringPublicSaslIam" => out.bootstrap_broker_string_public_sasl_iam = jsonv.read_str(fv)?
+      "bootstrapBrokerStringVpcConnectivityTls" => out.bootstrap_broker_string_vpc_connectivity_tls = jsonv.read_str(fv)?
+      "bootstrapBrokerStringVpcConnectivitySaslScram" => out.bootstrap_broker_string_vpc_connectivity_sasl_scram = jsonv.read_str(fv)?
+      "bootstrapBrokerStringVpcConnectivitySaslIam" => out.bootstrap_broker_string_vpc_connectivity_sasl_iam = jsonv.read_str(fv)?
+      "bootstrapBrokerStringIpv6" => out.bootstrap_broker_string_ipv6 = jsonv.read_str(fv)?
+      "bootstrapBrokerStringTlsIpv6" => out.bootstrap_broker_string_tls_ipv6 = jsonv.read_str(fv)?
+      "bootstrapBrokerStringSaslScramIpv6" => out.bootstrap_broker_string_sasl_scram_ipv6 = jsonv.read_str(fv)?
+      "bootstrapBrokerStringSaslIamIpv6" => out.bootstrap_broker_string_sasl_iam_ipv6 = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetBootstrapBrokers.
+pub enum GetBootstrapBrokersErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetBootstrapBrokersErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_bootstrap_brokers_error(resp: http.Response) -> GetBootstrapBrokersErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return GetBootstrapBrokersErr.BadRequestException(x)
+      Err(msg) => return GetBootstrapBrokersErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetBootstrapBrokersErr.ConflictException(x)
+      Err(msg) => return GetBootstrapBrokersErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return GetBootstrapBrokersErr.ForbiddenException(x)
+      Err(msg) => return GetBootstrapBrokersErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return GetBootstrapBrokersErr.InternalServerErrorException(x)
+      Err(msg) => return GetBootstrapBrokersErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return GetBootstrapBrokersErr.UnauthorizedException(x)
+      Err(msg) => return GetBootstrapBrokersErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetBootstrapBrokersErr.Api(restjson.api_error(resp, body))
+}
+
+/// A list of brokers that a client application can use to bootstrap. This
+/// list doesn't necessarily include all of the brokers in the cluster. The
+/// following Python 3.6 example shows how you can use the Amazon Resource
+/// Name (ARN) of a cluster to get its bootstrap brokers. If you don't know
+/// the ARN of your cluster, you can use the ListClusters operation to get
+/// the ARNs of all the clusters in this account and Region.
+pub fn (c: Client) get_bootstrap_brokers(input: GetBootstrapBrokersRequest) -> GetBootstrapBrokersResponse ! GetBootstrapBrokersErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_bootstrap_brokers(c.params, input)) ?? e => return Err(GetBootstrapBrokersErr.InvalidInput(e))
+  var req = serialize_get_bootstrap_brokers(ep, input, "") ?? e => return Err(GetBootstrapBrokersErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetBootstrapBrokersErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_bootstrap_brokers_error(resp))
+  }
+  deserialize_get_bootstrap_brokers(resp) ?? e => Err(GetBootstrapBrokersErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_cluster_policy(base: EndpointParameters, input: GetClusterPolicyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetClusterPolicy.
+pub fn serialize_get_cluster_policy(ep: rest.Endpoint, input: GetClusterPolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/policy"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_cluster_policy(resp: http.Response) -> GetClusterPolicyResponse ! Str {
+  var out = GetClusterPolicyResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "currentVersion" => out.current_version = jsonv.read_str(fv)?
+      "policy" => out.policy = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetClusterPolicy.
+pub enum GetClusterPolicyErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetClusterPolicyErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_cluster_policy_error(resp: http.Response) -> GetClusterPolicyErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return GetClusterPolicyErr.BadRequestException(x)
+      Err(msg) => return GetClusterPolicyErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return GetClusterPolicyErr.ForbiddenException(x)
+      Err(msg) => return GetClusterPolicyErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return GetClusterPolicyErr.InternalServerErrorException(x)
+      Err(msg) => return GetClusterPolicyErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetClusterPolicyErr.NotFoundException(x)
+      Err(msg) => return GetClusterPolicyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetClusterPolicyErr.Api(restjson.api_error(resp, body))
+}
+
+/// Get the MSK cluster policy specified by the Amazon Resource Name (ARN)
+/// in the request.
+pub fn (c: Client) get_cluster_policy(input: GetClusterPolicyRequest) -> GetClusterPolicyResponse ! GetClusterPolicyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_cluster_policy(c.params, input)) ?? e => return Err(GetClusterPolicyErr.InvalidInput(e))
+  var req = serialize_get_cluster_policy(ep, input, "") ?? e => return Err(GetClusterPolicyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetClusterPolicyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_cluster_policy_error(resp))
+  }
+  deserialize_get_cluster_policy(resp) ?? e => Err(GetClusterPolicyErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_compatible_kafka_versions(base: EndpointParameters, input: GetCompatibleKafkaVersionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetCompatibleKafkaVersions.
+pub fn serialize_get_compatible_kafka_versions(ep: rest.Endpoint, input: GetCompatibleKafkaVersionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.cluster_arn {
+    qs.push(("clusterArn", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/compatible-kafka-versions"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_compatible_kafka_versions(resp: http.Response) -> GetCompatibleKafkaVersionsResponse ! Str {
+  var out = GetCompatibleKafkaVersionsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "compatibleKafkaVersions" => out.compatible_kafka_versions = from_json_list_of_compatible_kafka_version(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetCompatibleKafkaVersions.
+pub enum GetCompatibleKafkaVersionsErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetCompatibleKafkaVersionsErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_compatible_kafka_versions_error(resp: http.Response) -> GetCompatibleKafkaVersionsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.BadRequestException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.ForbiddenException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.InternalServerErrorException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.NotFoundException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.ServiceUnavailableException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.TooManyRequestsException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return GetCompatibleKafkaVersionsErr.UnauthorizedException(x)
+      Err(msg) => return GetCompatibleKafkaVersionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetCompatibleKafkaVersionsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets the Apache Kafka versions to which you can update the MSK cluster.
+pub fn (c: Client) get_compatible_kafka_versions(input: GetCompatibleKafkaVersionsRequest) -> GetCompatibleKafkaVersionsResponse ! GetCompatibleKafkaVersionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_compatible_kafka_versions(c.params, input)) ?? e => return Err(GetCompatibleKafkaVersionsErr.InvalidInput(e))
+  var req = serialize_get_compatible_kafka_versions(ep, input, "") ?? e => return Err(GetCompatibleKafkaVersionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetCompatibleKafkaVersionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_compatible_kafka_versions_error(resp))
+  }
+  deserialize_get_compatible_kafka_versions(resp) ?? e => Err(GetCompatibleKafkaVersionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_assessment_findings(base: EndpointParameters, input: ListAssessmentFindingsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAssessmentFindings.
+pub fn serialize_list_assessment_findings(ep: rest.Endpoint, input: ListAssessmentFindingsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_assessment_arn = match input.assessment_arn {
+    Some(v) => v
+    None => return Err("input member AssessmentArn is required")
+  }
+  if label_assessment_arn == "" {
+    return Err("input member AssessmentArn must not be empty")
+  }
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  if let Some(v) = input.category {
+    qs.push(("category", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.severity {
+    qs.push(("severity", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/assessments/${rest.escape(label_assessment_arn, false)}/findings"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_assessment_findings(resp: http.Response) -> ListAssessmentFindingsResponse ! Str {
+  var out = ListAssessmentFindingsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "findings" => out.findings = from_json_list_of_assessment_finding(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAssessmentFindings.
+pub enum ListAssessmentFindingsErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAssessmentFindingsErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_assessment_findings_error(resp: http.Response) -> ListAssessmentFindingsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.BadRequestException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.ConflictException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.ForbiddenException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.InternalServerErrorException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.NotFoundException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.ServiceUnavailableException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.TooManyRequestsException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return ListAssessmentFindingsErr.UnauthorizedException(x)
+      Err(msg) => return ListAssessmentFindingsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAssessmentFindingsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the findings for a completed assessment. Paginated.
+pub fn (c: Client) list_assessment_findings(input: ListAssessmentFindingsRequest) -> ListAssessmentFindingsResponse ! ListAssessmentFindingsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_assessment_findings(c.params, input)) ?? e => return Err(ListAssessmentFindingsErr.InvalidInput(e))
+  var req = serialize_list_assessment_findings(ep, input, "") ?? e => return Err(ListAssessmentFindingsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAssessmentFindingsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_assessment_findings_error(resp))
+  }
+  deserialize_list_assessment_findings(resp) ?? e => Err(ListAssessmentFindingsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_assessments(base: EndpointParameters, input: ListAssessmentsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAssessments.
+pub fn serialize_list_assessments(ep: rest.Endpoint, input: ListAssessmentsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  if let Some(v) = input.assessment_type {
+    qs.push(("assessmentType", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/assessments"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_assessments(resp: http.Response) -> ListAssessmentsResponse ! Str {
+  var out = ListAssessmentsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "assessments" => out.assessments = from_json_list_of_assessment_info(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAssessments.
+pub enum ListAssessmentsErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAssessmentsErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_assessments_error(resp: http.Response) -> ListAssessmentsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.BadRequestException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.ForbiddenException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.InternalServerErrorException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.NotFoundException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.ServiceUnavailableException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.TooManyRequestsException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return ListAssessmentsErr.UnauthorizedException(x)
+      Err(msg) => return ListAssessmentsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAssessmentsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a list of assessments for the specified cluster. Optionally
+/// filterable by assessment type.
+pub fn (c: Client) list_assessments(input: ListAssessmentsRequest) -> ListAssessmentsResponse ! ListAssessmentsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_assessments(c.params, input)) ?? e => return Err(ListAssessmentsErr.InvalidInput(e))
+  var req = serialize_list_assessments(ep, input, "") ?? e => return Err(ListAssessmentsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAssessmentsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_assessments_error(resp))
+  }
+  deserialize_list_assessments(resp) ?? e => Err(ListAssessmentsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_channels(base: EndpointParameters, input: ListChannelsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListChannels.
+pub fn serialize_list_channels(ep: rest.Endpoint, input: ListChannelsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.topic_name_filter {
+    qs.push(("topicNameFilter", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/channels"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_list_channels(resp: http.Response) -> ListChannelsResponse ! Str {
   var out = ListChannelsResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -1618,6 +3202,149 @@ pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> 
   deserialize_list_tags_for_resource(resp) ?? e => Err(ListTagsForResourceErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_topic_reassignments(base: EndpointParameters, input: ListTopicReassignmentsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListTopicReassignments.
+pub fn serialize_list_topic_reassignments(ep: rest.Endpoint, input: ListTopicReassignmentsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.status_filter {
+    qs.push(("statusFilter", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/topic-reassignments"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_topic_reassignments(resp: http.Response) -> ListTopicReassignmentsResponse ! Str {
+  var out = ListTopicReassignmentsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "reassignments" => out.reassignments = from_json_list_of_topic_reassignment_info(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListTopicReassignments.
+pub enum ListTopicReassignmentsErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListTopicReassignmentsErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_topic_reassignments_error(resp: http.Response) -> ListTopicReassignmentsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.BadRequestException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.ForbiddenException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.InternalServerErrorException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.NotFoundException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.ServiceUnavailableException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.TooManyRequestsException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return ListTopicReassignmentsErr.UnauthorizedException(x)
+      Err(msg) => return ListTopicReassignmentsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListTopicReassignmentsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists topic reassignment operations for a cluster.
+pub fn (c: Client) list_topic_reassignments(input: ListTopicReassignmentsRequest) -> ListTopicReassignmentsResponse ! ListTopicReassignmentsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_topic_reassignments(c.params, input)) ?? e => return Err(ListTopicReassignmentsErr.InvalidInput(e))
+  var req = serialize_list_topic_reassignments(ep, input, "") ?? e => return Err(ListTopicReassignmentsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListTopicReassignmentsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_topic_reassignments_error(resp))
+  }
+  deserialize_list_topic_reassignments(resp) ?? e => Err(ListTopicReassignmentsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_topics(base: EndpointParameters, input: ListTopicsRequest) -> EndpointParameters {
   let _ = input
   base
@@ -2246,6 +3973,304 @@ pub fn (c: Client) reject_client_vpc_connection(input: RejectClientVpcConnection
   deserialize_reject_client_vpc_connection(resp) ?? e => Err(RejectClientVpcConnectionErr.Deserialize(e))
 }
 
+pub fn endpoint_params_start_topic_reassignment(base: EndpointParameters, input: StartTopicReassignmentRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartTopicReassignment.
+pub fn serialize_start_topic_reassignment(ep: rest.Endpoint, input: StartTopicReassignmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.target_instance_type {
+    fs.push(("targetInstanceType", json.Value.Str(x)))
+  }
+  if let Some(x) = input.topics_to_exclude {
+    fs.push(("topicsToExclude", json_of_list_of_string_min1_max256(x)))
+  }
+  if let Some(x) = input.topics_to_include {
+    fs.push(("topicsToInclude", json_of_list_of_string_min1_max256(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/topic-reassignments"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_topic_reassignment(resp: http.Response) -> StartTopicReassignmentResponse ! Str {
+  var out = StartTopicReassignmentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "clusterArn" => out.cluster_arn = jsonv.read_str(fv)?
+      "status" => out.status = TopicReassignmentStatus.from(jsonv.read_str(fv)?)
+      "topicReassignmentOperationArn" => out.topic_reassignment_operation_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartTopicReassignment.
+pub enum StartTopicReassignmentErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartTopicReassignmentErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_topic_reassignment_error(resp: http.Response) -> StartTopicReassignmentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.BadRequestException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.ConflictException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.ForbiddenException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.InternalServerErrorException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.NotFoundException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.ServiceUnavailableException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.TooManyRequestsException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return StartTopicReassignmentErr.UnauthorizedException(x)
+      Err(msg) => return StartTopicReassignmentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartTopicReassignmentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Initiates topic partition reassignment between broker types in a
+/// mixed-mode cluster.
+pub fn (c: Client) start_topic_reassignment(input: StartTopicReassignmentRequest) -> StartTopicReassignmentResponse ! StartTopicReassignmentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_topic_reassignment(c.params, input)) ?? e => return Err(StartTopicReassignmentErr.InvalidInput(e))
+  var req = serialize_start_topic_reassignment(ep, input, "") ?? e => return Err(StartTopicReassignmentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartTopicReassignmentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_topic_reassignment_error(resp))
+  }
+  deserialize_start_topic_reassignment(resp) ?? e => Err(StartTopicReassignmentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_stop_topic_reassignment(base: EndpointParameters, input: StopTopicReassignmentRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StopTopicReassignment.
+pub fn serialize_stop_topic_reassignment(ep: rest.Endpoint, input: StopTopicReassignmentRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_cluster_arn = match input.cluster_arn {
+    Some(v) => v
+    None => return Err("input member ClusterArn is required")
+  }
+  if label_cluster_arn == "" {
+    return Err("input member ClusterArn must not be empty")
+  }
+  let label_topic_reassignment_operation_arn = match input.topic_reassignment_operation_arn {
+    Some(v) => v
+    None => return Err("input member TopicReassignmentOperationArn is required")
+  }
+  if label_topic_reassignment_operation_arn == "" {
+    return Err("input member TopicReassignmentOperationArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/clusters/${rest.escape(label_cluster_arn, false)}/topic-reassignments/${rest.escape(label_topic_reassignment_operation_arn, false)}/stop"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_stop_topic_reassignment(resp: http.Response) -> StopTopicReassignmentResponse ! Str {
+  var out = StopTopicReassignmentResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = TopicReassignmentStatus.from(jsonv.read_str(fv)?)
+      "topicReassignmentOperationArn" => out.topic_reassignment_operation_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StopTopicReassignment.
+pub enum StopTopicReassignmentErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StopTopicReassignmentErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_stop_topic_reassignment_error(resp: http.Response) -> StopTopicReassignmentErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.BadRequestException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.ForbiddenException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.InternalServerErrorException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.NotFoundException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.ServiceUnavailableException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.TooManyRequestsException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return StopTopicReassignmentErr.UnauthorizedException(x)
+      Err(msg) => return StopTopicReassignmentErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StopTopicReassignmentErr.Api(restjson.api_error(resp, body))
+}
+
+/// Stops an active topic reassignment operation.
+pub fn (c: Client) stop_topic_reassignment(input: StopTopicReassignmentRequest) -> StopTopicReassignmentResponse ! StopTopicReassignmentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_stop_topic_reassignment(c.params, input)) ?? e => return Err(StopTopicReassignmentErr.InvalidInput(e))
+  var req = serialize_stop_topic_reassignment(ep, input, "") ?? e => return Err(StopTopicReassignmentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StopTopicReassignmentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_stop_topic_reassignment_error(resp))
+  }
+  deserialize_stop_topic_reassignment(resp) ?? e => Err(StopTopicReassignmentErr.Deserialize(e))
+}
+
 pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceRequest) -> EndpointParameters {
   let _ = input
   base
@@ -2742,6 +4767,9 @@ pub fn serialize_update_broker_type(ep: rest.Endpoint, input: UpdateBrokerTypeRe
   }
   if let Some(x) = input.target_instance_type {
     fs.push(("targetInstanceType", json.Value.Str(x)))
+  }
+  if let Some(x) = input.topic_reassignment {
+    fs.push(("topicReassignment", json.Value.Str(x.value())))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))

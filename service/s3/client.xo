@@ -233,6 +233,9 @@ fn xml_write_abort_multipart_upload_output(var w: xmlv.Writer, v: AbortMultipart
   if let Some(x) = v.request_charged {
     xmlv.elem(w, "RequestCharged", x.value(), [])
   }
+  if let Some(x) = v.version_id {
+    xmlv.elem(w, "VersionId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -241,6 +244,7 @@ fn xml_read_abort_multipart_upload_output(e: xml.Element) -> AbortMultipartUploa
   for c in xmlv.elements(e) {
     match c.name.local {
       "RequestCharged" => out.request_charged = RequestCharged.from(c.text())
+      "VersionId" => out.version_id = c.text()
       _ => {}
     }
   }
@@ -2210,6 +2214,9 @@ fn xml_write_create_multipart_upload_output(var w: xmlv.Writer, v: CreateMultipa
   if let Some(x) = v.checksum_type {
     xmlv.elem(w, "ChecksumType", x.value(), [])
   }
+  if let Some(x) = v.version_id {
+    xmlv.elem(w, "VersionId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -2231,6 +2238,7 @@ fn xml_read_create_multipart_upload_output(e: xml.Element) -> CreateMultipartUpl
       "RequestCharged" => out.request_charged = RequestCharged.from(c.text())
       "ChecksumAlgorithm" => out.checksum_algorithm = ChecksumAlgorithm.from(c.text())
       "ChecksumType" => out.checksum_type = ChecksumType.from(c.text())
+      "VersionId" => out.version_id = c.text()
       _ => {}
     }
   }
@@ -3443,6 +3451,9 @@ fn xml_write_encryption_configuration(var w: xmlv.Writer, v: EncryptionConfigura
   if let Some(x) = v.replica_kms_key_id {
     xmlv.elem(w, "ReplicaKmsKeyID", x, [])
   }
+  if let Some(x) = v.use_source_multi_region_key {
+    xml_write_use_source_multi_region_key(w, x, "UseSourceMultiRegionKey", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -3451,6 +3462,7 @@ fn xml_read_encryption_configuration(e: xml.Element) -> EncryptionConfiguration 
   for c in xmlv.elements(e) {
     match c.name.local {
       "ReplicaKmsKeyID" => out.replica_kms_key_id = c.text()
+      "UseSourceMultiRegionKey" => out.use_source_multi_region_key = xml_read_use_source_multi_region_key(c)?
       _ => {}
     }
   }
@@ -8251,6 +8263,9 @@ fn xml_write_list_parts_output(var w: xmlv.Writer, v: ListPartsOutput, name: Str
   if let Some(x) = v.checksum_type {
     xmlv.elem(w, "ChecksumType", x.value(), [])
   }
+  if let Some(x) = v.version_id {
+    xmlv.elem(w, "VersionId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -8278,6 +8293,7 @@ fn xml_read_list_parts_output(e: xml.Element) -> ListPartsOutput ! Str {
       "RequestCharged" => out.request_charged = RequestCharged.from(c.text())
       "ChecksumAlgorithm" => out.checksum_algorithm = ChecksumAlgorithm.from(c.text())
       "ChecksumType" => out.checksum_type = ChecksumType.from(c.text())
+      "VersionId" => out.version_id = c.text()
       _ => {}
     }
   }
@@ -8727,6 +8743,9 @@ fn xml_write_multipart_upload(var w: xmlv.Writer, v: MultipartUpload, name: Str,
   if let Some(x) = v.checksum_type {
     xmlv.elem(w, "ChecksumType", x.value(), [])
   }
+  if let Some(x) = v.version_id {
+    xmlv.elem(w, "VersionId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -8742,6 +8761,7 @@ fn xml_read_multipart_upload(e: xml.Element) -> MultipartUpload ! Str {
       "Initiator" => out.initiator = xml_read_initiator(c)?
       "ChecksumAlgorithm" => out.checksum_algorithm = ChecksumAlgorithm.from(c.text())
       "ChecksumType" => out.checksum_type = ChecksumType.from(c.text())
+      "VersionId" => out.version_id = c.text()
       _ => {}
     }
   }
@@ -11690,6 +11710,23 @@ fn xml_read_replication_configuration(e: xml.Element) -> ReplicationConfiguratio
   Ok(out)
 }
 
+fn xml_write_replication_prefix_list(var w: xmlv.Writer, v: List[Str], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xmlv.elem(w, "Prefix", item, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_replication_prefix_list(e: xml.Element) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for c in xmlv.elements(e) {
+    out.push(c.text())
+  }
+  Ok(out)
+}
+
 fn xml_write_replication_rule(var w: xmlv.Writer, v: ReplicationRule, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -11753,6 +11790,9 @@ fn xml_write_replication_rule_and_operator(var w: xmlv.Writer, v: ReplicationRul
       xml_write_tag(w, item, "Tag", [])
     }
   }
+  if let Some(x) = v.not {
+    xml_write_replication_rule_not_operator(w, x, "Not", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -11766,6 +11806,7 @@ fn xml_read_replication_rule_and_operator(e: xml.Element) -> ReplicationRuleAndO
         items.push(xml_read_tag(c)?)
         out.tags = items
       }
+      "Not" => out.not = xml_read_replication_rule_not_operator(c)?
       _ => {}
     }
   }
@@ -11784,6 +11825,9 @@ fn xml_write_replication_rule_filter(var w: xmlv.Writer, v: ReplicationRuleFilte
   if let Some(x) = v.and {
     xml_write_replication_rule_and_operator(w, x, "And", [])
   }
+  if let Some(x) = v.not {
+    xml_write_replication_rule_not_operator(w, x, "Not", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -11794,6 +11838,71 @@ fn xml_read_replication_rule_filter(e: xml.Element) -> ReplicationRuleFilter ! S
       "Prefix" => out.prefix = c.text()
       "Tag" => out.tag = xml_read_tag(c)?
       "And" => out.and = xml_read_replication_rule_and_operator(c)?
+      "Not" => out.not = xml_read_replication_rule_not_operator(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_replication_rule_not_operator(var w: xmlv.Writer, v: ReplicationRuleNotOperator, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.prefix {
+    xmlv.elem(w, "Prefix", x, [])
+  }
+  if let Some(x) = v.tag {
+    xml_write_tag(w, x, "Tag", [])
+  }
+  if let Some(x) = v.or {
+    xml_write_replication_rule_or_operator(w, x, "Or", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_replication_rule_not_operator(e: xml.Element) -> ReplicationRuleNotOperator ! Str {
+  var out = ReplicationRuleNotOperator{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Prefix" => out.prefix = c.text()
+      "Tag" => out.tag = xml_read_tag(c)?
+      "Or" => out.or = xml_read_replication_rule_or_operator(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_replication_rule_or_operator(var w: xmlv.Writer, v: ReplicationRuleOrOperator, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.prefixes {
+    for item in x {
+      xmlv.elem(w, "Prefix", item, [])
+    }
+  }
+  if let Some(x) = v.tags {
+    for item in x {
+      xml_write_tag(w, item, "Tag", [])
+    }
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_replication_rule_or_operator(e: xml.Element) -> ReplicationRuleOrOperator ! Str {
+  var out = ReplicationRuleOrOperator{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Prefix" => {
+        var items = out.prefixes ?? []
+        items.push(c.text())
+        out.prefixes = items
+      }
+      "Tag" => {
+        var items = out.tags ?? []
+        items.push(xml_read_tag(c)?)
+        out.tags = items
+      }
       _ => {}
     }
   }
@@ -13215,6 +13324,9 @@ fn xml_write_upload_part_copy_output(var w: xmlv.Writer, v: UploadPartCopyOutput
   if let Some(x) = v.request_charged {
     xmlv.elem(w, "RequestCharged", x.value(), [])
   }
+  if let Some(x) = v.version_id {
+    xmlv.elem(w, "VersionId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -13230,6 +13342,7 @@ fn xml_read_upload_part_copy_output(e: xml.Element) -> UploadPartCopyOutput ! St
       "SSEKMSKeyId" => out.sse_kms_key_id = c.text()
       "BucketKeyEnabled" => out.bucket_key_enabled = xmlv.read_bool(c.text())?
       "RequestCharged" => out.request_charged = RequestCharged.from(c.text())
+      "VersionId" => out.version_id = c.text()
       _ => {}
     }
   }
@@ -13382,6 +13495,9 @@ fn xml_write_upload_part_output(var w: xmlv.Writer, v: UploadPartOutput, name: S
   if let Some(x) = v.request_charged {
     xmlv.elem(w, "RequestCharged", x.value(), [])
   }
+  if let Some(x) = v.version_id {
+    xmlv.elem(w, "VersionId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -13406,6 +13522,7 @@ fn xml_read_upload_part_output(e: xml.Element) -> UploadPartOutput ! Str {
       "SSEKMSKeyId" => out.sse_kms_key_id = c.text()
       "BucketKeyEnabled" => out.bucket_key_enabled = xmlv.read_bool(c.text())?
       "RequestCharged" => out.request_charged = RequestCharged.from(c.text())
+      "VersionId" => out.version_id = c.text()
       _ => {}
     }
   }
@@ -13514,6 +13631,26 @@ fn xml_read_upload_part_request(e: xml.Element) -> UploadPartRequest ! Str {
       "SSECustomerKeyMD5" => out.sse_customer_key_md5 = c.text()
       "RequestPayer" => out.request_payer = RequestPayer.from(c.text())
       "ExpectedBucketOwner" => out.expected_bucket_owner = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_use_source_multi_region_key(var w: xmlv.Writer, v: UseSourceMultiRegionKey, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.status {
+    xmlv.elem(w, "Status", x.value(), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_use_source_multi_region_key(e: xml.Element) -> UseSourceMultiRegionKey ! Str {
+  var out = UseSourceMultiRegionKey{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Status" => out.status = UseSourceMultiRegionKeyStatus.from(c.text())
       _ => {}
     }
   }
@@ -14186,125 +14323,5 @@ fn xml_body_delete_bucket_replication_request(v: DeleteBucketReplicationRequest,
 fn xml_body_delete_bucket_request(v: DeleteBucketRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_delete_bucket_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_bucket_tagging_request(v: DeleteBucketTaggingRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_bucket_tagging_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_bucket_website_request(v: DeleteBucketWebsiteRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_bucket_website_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_marker_entry(v: DeleteMarkerEntry, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_marker_entry(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_marker_replication(v: DeleteMarkerReplication, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_marker_replication(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_object_annotation_output(v: DeleteObjectAnnotationOutput, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_object_annotation_output(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_object_annotation_request(v: DeleteObjectAnnotationRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_object_annotation_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_object_output(v: DeleteObjectOutput, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_object_output(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_object_request(v: DeleteObjectRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_object_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_object_tagging_output(v: DeleteObjectTaggingOutput, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_object_tagging_output(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_object_tagging_request(v: DeleteObjectTaggingRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_object_tagging_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_objects_output(v: DeleteObjectsOutput, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_objects_output(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_objects_request(v: DeleteObjectsRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_objects_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_delete_public_access_block_request(v: DeletePublicAccessBlockRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_delete_public_access_block_request(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_deleted_object(v: DeletedObject, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_deleted_object(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_destination(v: Destination, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_destination(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_destination_result(v: DestinationResult, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_destination_result(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_encryption(v: Encryption, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_encryption(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_encryption_configuration(v: EncryptionConfiguration, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_encryption_configuration(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_encryption_type_mismatch(v: EncryptionTypeMismatch, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_encryption_type_mismatch(w, v, name, ns)
-  xmlv.finish(w)
-}
-
-fn xml_body_end_event(v: EndEvent, name: Str, ns: List[(Str, Str)]) -> Bytes {
-  var w = xmlv.writer()
-  xml_write_end_event(w, v, name, ns)
   xmlv.finish(w)
 }

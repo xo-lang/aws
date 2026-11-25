@@ -8653,6 +8653,7 @@ fn from_json_intermediate_table_column_list(v: json.Value) -> List[IntermediateT
 fn json_of_intermediate_table_compute_configuration(v: IntermediateTableComputeConfiguration) -> json.Value {
   match v {
     QueryComputeConfiguration(x) => json.Value.Object([("queryComputeConfiguration", json_of_worker_compute_configuration(x))])
+    JobComputeConfiguration(x) => json.Value.Object([("jobComputeConfiguration", json_of_protected_job_compute_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -8664,6 +8665,7 @@ fn from_json_intermediate_table_compute_configuration(v: json.Value) -> Intermed
     }
     return match k {
       "queryComputeConfiguration" => Ok(IntermediateTableComputeConfiguration.QueryComputeConfiguration(from_json_worker_compute_configuration(fv)?))
+      "jobComputeConfiguration" => Ok(IntermediateTableComputeConfiguration.JobComputeConfiguration(from_json_protected_job_compute_configuration(fv)?))
       _ => Ok(IntermediateTableComputeConfiguration.Unknown(k))
     }
   }
@@ -11373,6 +11375,7 @@ fn from_json_populate_intermediate_table_output(v: json.Value) -> PopulateInterm
 fn json_of_population_analysis_configuration(v: PopulationAnalysisConfiguration) -> json.Value {
   match v {
     SqlParameters(x) => json.Value.Object([("sqlParameters", json_of_population_analysis_sql_parameters(x))])
+    JobParameters(x) => json.Value.Object([("jobParameters", json_of_population_analysis_job_parameters(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -11384,10 +11387,33 @@ fn from_json_population_analysis_configuration(v: json.Value) -> PopulationAnaly
     }
     return match k {
       "sqlParameters" => Ok(PopulationAnalysisConfiguration.SqlParameters(from_json_population_analysis_sql_parameters(fv)?))
+      "jobParameters" => Ok(PopulationAnalysisConfiguration.JobParameters(from_json_population_analysis_job_parameters(fv)?))
       _ => Ok(PopulationAnalysisConfiguration.Unknown(k))
     }
   }
   Err("PopulationAnalysisConfiguration: no member set")
+}
+
+fn json_of_population_analysis_job_parameters(v: PopulationAnalysisJobParameters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.analysis_template_arn {
+    fs.push(("analysisTemplateArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_population_analysis_job_parameters(v: json.Value) -> PopulationAnalysisJobParameters ! Str {
+  var out = PopulationAnalysisJobParameters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "analysisTemplateArn" => out.analysis_template_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
 }
 
 fn json_of_population_analysis_sql_parameters(v: PopulationAnalysisSqlParameters) -> json.Value {
@@ -11938,6 +11964,9 @@ fn json_of_protected_job_error(v: ProtectedJobError) -> json.Value {
   if let Some(x) = v.code {
     fs.push(("code", json.Value.Str(x)))
   }
+  if let Some(x) = v.retry {
+    fs.push(("retry", json_of_retry_info(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -11950,6 +11979,7 @@ fn from_json_protected_job_error(v: json.Value) -> ProtectedJobError ! Str {
     match k {
       "message" => out.message = jsonv.read_str(fv)?
       "code" => out.code = jsonv.read_str(fv)?
+      "retry" => out.retry = from_json_retry_info(fv)?
       _ => {}
     }
   }
@@ -12062,6 +12092,7 @@ fn json_of_protected_job_output_configuration_output(v: ProtectedJobOutputConfig
   match v {
     S3(x) => json.Value.Object([("s3", json_of_protected_job_s3_output_configuration_output(x))])
     Member(x) => json.Value.Object([("member", json_of_protected_job_member_output_configuration_output(x))])
+    IntermediateTable(x) => json.Value.Object([("intermediateTable", json_of_intermediate_table_output_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -12074,6 +12105,7 @@ fn from_json_protected_job_output_configuration_output(v: json.Value) -> Protect
     return match k {
       "s3" => Ok(ProtectedJobOutputConfigurationOutput.S3(from_json_protected_job_s3_output_configuration_output(fv)?))
       "member" => Ok(ProtectedJobOutputConfigurationOutput.Member(from_json_protected_job_member_output_configuration_output(fv)?))
+      "intermediateTable" => Ok(ProtectedJobOutputConfigurationOutput.IntermediateTable(from_json_intermediate_table_output_configuration(fv)?))
       _ => Ok(ProtectedJobOutputConfigurationOutput.Unknown(k))
     }
   }
@@ -12379,6 +12411,9 @@ fn json_of_protected_job_summary(v: ProtectedJobSummary) -> json.Value {
   if let Some(x) = v.job_compute_payer_account_id {
     fs.push(("jobComputePayerAccountId", json.Value.Str(x)))
   }
+  if let Some(x) = v.intermediate_table_configuration {
+    fs.push(("intermediateTableConfiguration", json_of_intermediate_table_output_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -12396,6 +12431,7 @@ fn from_json_protected_job_summary(v: json.Value) -> ProtectedJobSummary ! Str {
       "status" => out.status = ProtectedJobStatus.from(jsonv.read_str(fv)?)
       "receiverConfigurations" => out.receiver_configurations = from_json_protected_job_receiver_configurations(fv)?
       "jobComputePayerAccountId" => out.job_compute_payer_account_id = jsonv.read_str(fv)?
+      "intermediateTableConfiguration" => out.intermediate_table_configuration = from_json_intermediate_table_output_configuration(fv)?
       _ => {}
     }
   }
@@ -12612,6 +12648,9 @@ fn json_of_protected_query_error(v: ProtectedQueryError) -> json.Value {
   if let Some(x) = v.code {
     fs.push(("code", json.Value.Str(x)))
   }
+  if let Some(x) = v.retry {
+    fs.push(("retry", json_of_retry_info(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -12624,6 +12663,7 @@ fn from_json_protected_query_error(v: json.Value) -> ProtectedQueryError ! Str {
     match k {
       "message" => out.message = jsonv.read_str(fv)?
       "code" => out.code = jsonv.read_str(fv)?
+      "retry" => out.retry = from_json_retry_info(fv)?
       _ => {}
     }
   }
@@ -13146,6 +13186,28 @@ fn from_json_resource_not_found_exception(v: json.Value) -> ResourceNotFoundExce
   Ok(out)
 }
 
+fn json_of_retry_info(v: RetryInfo) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.retryable {
+    fs.push(("retryable", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_retry_info(v: json.Value) -> RetryInfo ! Str {
+  var out = RetryInfo{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "retryable" => out.retryable = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_s3_location(v: S3Location) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.bucket {
@@ -13346,96 +13408,4 @@ fn from_json_schema_configuration_list(v: json.Value) -> List[SchemaConfiguratio
 
 fn json_of_schema_list(v: List[Schema]) -> json.Value {
   json.Value.List(v.map(fn(x: Schema) -> json.Value { json_of_schema(x) }))
-}
-
-fn from_json_schema_list(v: json.Value) -> List[Schema] ! Str {
-  var out: List[Schema] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_schema(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_schema_status_detail(v: SchemaStatusDetail) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.status {
-    fs.push(("status", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.reasons {
-    fs.push(("reasons", json_of_schema_status_reason_list(x)))
-  }
-  if let Some(x) = v.analysis_rule_type {
-    fs.push(("analysisRuleType", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.configurations {
-    fs.push(("configurations", json_of_schema_configuration_list(x)))
-  }
-  if let Some(x) = v.analysis_type {
-    fs.push(("analysisType", json.Value.Str(x.value())))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_schema_status_detail(v: json.Value) -> SchemaStatusDetail ! Str {
-  var out = SchemaStatusDetail{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "status" => out.status = SchemaStatus.from(jsonv.read_str(fv)?)
-      "reasons" => out.reasons = from_json_schema_status_reason_list(fv)?
-      "analysisRuleType" => out.analysis_rule_type = AnalysisRuleType.from(jsonv.read_str(fv)?)
-      "configurations" => out.configurations = from_json_schema_configuration_list(fv)?
-      "analysisType" => out.analysis_type = AnalysisType.from(jsonv.read_str(fv)?)
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_schema_status_detail_list(v: List[SchemaStatusDetail]) -> json.Value {
-  json.Value.List(v.map(fn(x: SchemaStatusDetail) -> json.Value { json_of_schema_status_detail(x) }))
-}
-
-fn from_json_schema_status_detail_list(v: json.Value) -> List[SchemaStatusDetail] ! Str {
-  var out: List[SchemaStatusDetail] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_schema_status_detail(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_schema_status_reason(v: SchemaStatusReason) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.code {
-    fs.push(("code", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.message {
-    fs.push(("message", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_schema_status_reason(v: json.Value) -> SchemaStatusReason ! Str {
-  var out = SchemaStatusReason{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "code" => out.code = SchemaStatusReasonCode.from(jsonv.read_str(fv)?)
-      "message" => out.message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

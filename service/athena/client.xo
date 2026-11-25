@@ -1473,6 +1473,22 @@ fn from_json_database(v: json.Value) -> Database ! Str {
   Ok(out)
 }
 
+fn json_of_database_attributes_list(v: List[DatabaseAttributes]) -> json.Value {
+  json.Value.List(v.map(fn(x: DatabaseAttributes) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_database_attributes_list(v: json.Value) -> List[DatabaseAttributes] ! Str {
+  var out: List[DatabaseAttributes] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(DatabaseAttributes.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
 fn json_of_database_list(v: List[Database]) -> json.Value {
   json.Value.List(v.map(fn(x: Database) -> json.Value { json_of_database(x) }))
 }
@@ -3407,6 +3423,9 @@ fn json_of_list_databases_input(v: ListDatabasesInput) -> json.Value {
   if let Some(x) = v.work_group {
     fs.push(("WorkGroup", json.Value.Str(x)))
   }
+  if let Some(x) = v.attributes_to_get {
+    fs.push(("AttributesToGet", json_of_database_attributes_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3421,6 +3440,7 @@ fn from_json_list_databases_input(v: json.Value) -> ListDatabasesInput ! Str {
       "NextToken" => out.next_token = jsonv.read_str(fv)?
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
       "WorkGroup" => out.work_group = jsonv.read_str(fv)?
+      "AttributesToGet" => out.attributes_to_get = from_json_database_attributes_list(fv)?
       _ => {}
     }
   }
@@ -3985,6 +4005,9 @@ fn json_of_list_table_metadata_input(v: ListTableMetadataInput) -> json.Value {
   if let Some(x) = v.work_group {
     fs.push(("WorkGroup", json.Value.Str(x)))
   }
+  if let Some(x) = v.attributes_to_get {
+    fs.push(("AttributesToGet", json_of_table_attributes_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -4001,6 +4024,7 @@ fn from_json_list_table_metadata_input(v: json.Value) -> ListTableMetadataInput 
       "NextToken" => out.next_token = jsonv.read_str(fv)?
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
       "WorkGroup" => out.work_group = jsonv.read_str(fv)?
+      "AttributesToGet" => out.attributes_to_get = from_json_table_attributes_list(fv)?
       _ => {}
     }
   }
@@ -5993,6 +6017,22 @@ fn from_json_system_table_status_list(v: json.Value) -> List[SystemTableStatus] 
       continue
     }
     out.push(from_json_system_table_status(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_table_attributes_list(v: List[TableAttributes]) -> json.Value {
+  json.Value.List(v.map(fn(x: TableAttributes) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_table_attributes_list(v: json.Value) -> List[TableAttributes] ! Str {
+  var out: List[TableAttributes] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(TableAttributes.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -12143,6 +12183,9 @@ pub fn serialize_list_databases(ep: rest.Endpoint, input: ListDatabasesInput, id
   if let Some(x) = input.work_group {
     fs.push(("WorkGroup", json.Value.Str(x)))
   }
+  if let Some(x) = input.attributes_to_get {
+    fs.push(("AttributesToGet", json_of_database_attributes_list(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
   headers.push(("X-Amz-Target", "AmazonAthena.ListDatabases"))
@@ -13041,46 +13084,4 @@ pub fn (c: Client) list_query_executions(input: ListQueryExecutionsInput) -> Lis
     return Err(deserialize_list_query_executions_error(resp))
   }
   deserialize_list_query_executions(resp) ?? e => Err(ListQueryExecutionsErr.Deserialize(e))
-}
-
-pub fn endpoint_params_list_sessions(base: EndpointParameters, input: ListSessionsRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ListSessions.
-pub fn serialize_list_sessions(ep: rest.Endpoint, input: ListSessionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.work_group {
-    fs.push(("WorkGroup", json.Value.Str(x)))
-  }
-  if let Some(x) = input.state_filter {
-    fs.push(("StateFilter", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.max_results {
-    fs.push(("MaxResults", json.Value.Int(x)))
-  }
-  if let Some(x) = input.next_token {
-    fs.push(("NextToken", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "AmazonAthena.ListSessions"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

@@ -4,6 +4,8 @@ use github.com/xo-lang/aws/endpoints
 
 /// The endpoint rule parameters: what `resolve_endpoint` decides on.
 pub struct EndpointParameters {
+  /// The AWS region used to dispatch the request.
+  pub region: Str? = None
   /// When true, use the dual-stack endpoint. If the configured endpoint
   /// does not support dual-stack, dispatching the request MAY return an
   /// error.
@@ -14,8 +16,14 @@ pub struct EndpointParameters {
   pub use_fips: Bool = false
   /// Override the endpoint used to send this request
   pub endpoint: Str? = None
-  /// The AWS region used to dispatch the request.
-  pub region: Str? = None
+  /// The AWS AccountId used for the request.
+  pub account_id: Str? = None
+  /// The AccountId Endpoint Mode.
+  pub account_id_endpoint_mode: Str? = None
+  /// The ARN of the stream for the request.
+  pub stream_arn: Str? = None
+  /// The shard iterator for the GetRecords request.
+  pub shard_iterator: Str? = None
 }
 
 /// Resolves the endpoint for `params` from the service's endpoint rules.
@@ -32,53 +40,116 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
       })
     }
     return Ok(endpoints.Endpoint{
-      url: endpoint,
+      url: "${endpoint}",
     })
   }
   if let Some(region) = params.region {
     if let Some(partition_result) = endpoints.partition(region) {
-      if partition_result.name == "aws" && !params.use_fips && params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams-dynamodb.${region}.${partition_result.dual_stack_dns_suffix}",
-        })
-      }
-      if partition_result.name == "aws" && params.use_fips && params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams-dynamodb-fips.${region}." +
-            "${partition_result.dual_stack_dns_suffix}",
-        })
-      }
-      if partition_result.name == "aws-cn" && !params.use_fips && params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams-dynamodb.${region}.${partition_result.dual_stack_dns_suffix}",
-        })
-      }
-      if partition_result.name == "aws-cn" && params.use_fips && params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams-dynamodb-fips.${region}." +
-            "${partition_result.dual_stack_dns_suffix}",
-        })
-      }
-      if partition_result.name == "aws-us-gov" && !params.use_fips && params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams-dynamodb.${region}.${partition_result.dual_stack_dns_suffix}",
-        })
-      }
-      if partition_result.name == "aws-us-gov" && params.use_fips && params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams-dynamodb-fips.${region}." +
-            "${partition_result.dual_stack_dns_suffix}",
-        })
-      }
-      if partition_result.name == "aws-us-gov" && params.use_fips && !params.use_dual_stack {
-        return Ok(endpoints.Endpoint{
-          url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
-        })
-      }
       if params.use_fips && params.use_dual_stack {
         if partition_result.supports_fips && partition_result.supports_dual_stack {
+          if !(partition_result.name == "aws") &&
+              !(partition_result.name == "aws-cn") &&
+              !(partition_result.name == "aws-us-gov") {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams-dynamodb-fips.${region}." +
+                "${partition_result.dual_stack_dns_suffix}",
+            })
+          }
+          if region == "me-central-1" {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams-dynamodb-fips.${region}." +
+                "${partition_result.dual_stack_dns_suffix}",
+            })
+          }
+          if region == "me-south-1" {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams-dynamodb-fips.${region}." +
+                "${partition_result.dual_stack_dns_suffix}",
+            })
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(stream_arn) = params.stream_arn {
+                if let Some(parsed_arn) = endpoints.parse_arn(stream_arn) {
+                  if parsed_arn.service == "dynamodb" &&
+                      endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                      parsed_arn.region == "${region}" &&
+                      endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${parsed_arn.account_id}.streams-ddb-fips.${region}." +
+                        "${partition_result.dual_stack_dns_suffix}",
+                    })
+                  }
+                }
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(shard_iterator) = params.shard_iterator {
+                if let Some(parsed_arn) = endpoints.parse_arn(shard_iterator) {
+                  if parsed_arn.service == "dynamodb" &&
+                      endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                      parsed_arn.region == "${region}" &&
+                      endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${parsed_arn.account_id}.streams-ddb-fips.${region}." +
+                        "${partition_result.dual_stack_dns_suffix}",
+                    })
+                  }
+                }
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(account_id) = params.account_id {
+                if endpoints.is_valid_host_label(account_id, false) {
+                  return Ok(endpoints.Endpoint{
+                    url: "https://${account_id}.streams-ddb-fips.${region}." +
+                      "${partition_result.dual_stack_dns_suffix}",
+                  })
+                }
+                return Err(endpoints.RuleErr{
+                  msg: "Credentials-sourced account ID parameter is invalid",
+                })
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if account_id_endpoint_mode == "required" {
+              return Err(endpoints.RuleErr{
+                msg: "AccountIdEndpointMode is required but no AccountID was provided or " +
+                  "able to be loaded",
+              })
+            }
+          }
           return Ok(endpoints.Endpoint{
-            url: "https://streams.dynamodb-fips.${region}." +
+            url: "https://streams-dynamodb-fips.${region}." +
               "${partition_result.dual_stack_dns_suffix}",
           })
         }
@@ -86,8 +157,209 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
           msg: "FIPS and DualStack are enabled, but this partition does not support one or both",
         })
       }
-      if params.use_fips && !params.use_dual_stack {
+      if params.use_fips {
         if partition_result.supports_fips {
+          if partition_result.name == "aws-us-gov" {
+            if !(partition_result.name == "aws") &&
+                !(partition_result.name == "aws-cn") &&
+                !(partition_result.name == "aws-us-gov") {
+              if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+                if account_id_endpoint_mode == "required" {
+                  return Err(endpoints.RuleErr{
+                    msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                      "account endpoints are not supported in this region",
+                  })
+                }
+              }
+              return Ok(endpoints.Endpoint{
+                url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+              })
+            }
+            if region == "me-central-1" {
+              if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+                if account_id_endpoint_mode == "required" {
+                  return Err(endpoints.RuleErr{
+                    msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                      "account endpoints are not supported in this region",
+                  })
+                }
+              }
+              return Ok(endpoints.Endpoint{
+                url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+              })
+            }
+            if region == "me-south-1" {
+              if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+                if account_id_endpoint_mode == "required" {
+                  return Err(endpoints.RuleErr{
+                    msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                      "account endpoints are not supported in this region",
+                  })
+                }
+              }
+              return Ok(endpoints.Endpoint{
+                url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+              })
+            }
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if !(account_id_endpoint_mode == "disabled") {
+                if let Some(stream_arn) = params.stream_arn {
+                  if let Some(parsed_arn) = endpoints.parse_arn(stream_arn) {
+                    if parsed_arn.service == "dynamodb" &&
+                        endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                        parsed_arn.region == "${region}" &&
+                        endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                      return Ok(endpoints.Endpoint{
+                        url: "https://${parsed_arn.account_id}.streams-ddb-fips.${region}." +
+                          "${partition_result.dns_suffix}",
+                      })
+                    }
+                  }
+                }
+              }
+            }
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if !(account_id_endpoint_mode == "disabled") {
+                if let Some(shard_iterator) = params.shard_iterator {
+                  if let Some(parsed_arn) = endpoints.parse_arn(shard_iterator) {
+                    if parsed_arn.service == "dynamodb" &&
+                        endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                        parsed_arn.region == "${region}" &&
+                        endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                      return Ok(endpoints.Endpoint{
+                        url: "https://${parsed_arn.account_id}.streams-ddb-fips.${region}." +
+                          "${partition_result.dns_suffix}",
+                      })
+                    }
+                  }
+                }
+              }
+            }
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if !(account_id_endpoint_mode == "disabled") {
+                if let Some(account_id) = params.account_id {
+                  if endpoints.is_valid_host_label(account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${account_id}.streams-ddb-fips.${region}." +
+                        "${partition_result.dns_suffix}",
+                    })
+                  }
+                  return Err(endpoints.RuleErr{
+                    msg: "Credentials-sourced account ID parameter is invalid",
+                  })
+                }
+              }
+            }
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "AccountIdEndpointMode is required but no AccountID was provided or " +
+                    "able to be loaded",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+            })
+          }
+          if !(partition_result.name == "aws") &&
+              !(partition_result.name == "aws-cn") &&
+              !(partition_result.name == "aws-us-gov") {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams.dynamodb-fips.${region}.${partition_result.dns_suffix}",
+            })
+          }
+          if region == "me-central-1" {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams.dynamodb-fips.${region}.${partition_result.dns_suffix}",
+            })
+          }
+          if region == "me-south-1" {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams.dynamodb-fips.${region}.${partition_result.dns_suffix}",
+            })
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(stream_arn) = params.stream_arn {
+                if let Some(parsed_arn) = endpoints.parse_arn(stream_arn) {
+                  if parsed_arn.service == "dynamodb" &&
+                      endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                      parsed_arn.region == "${region}" &&
+                      endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${parsed_arn.account_id}.streams-ddb-fips.${region}." +
+                        "${partition_result.dns_suffix}",
+                    })
+                  }
+                }
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(shard_iterator) = params.shard_iterator {
+                if let Some(parsed_arn) = endpoints.parse_arn(shard_iterator) {
+                  if parsed_arn.service == "dynamodb" &&
+                      endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                      parsed_arn.region == "${region}" &&
+                      endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${parsed_arn.account_id}.streams-ddb-fips.${region}." +
+                        "${partition_result.dns_suffix}",
+                    })
+                  }
+                }
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(account_id) = params.account_id {
+                if endpoints.is_valid_host_label(account_id, false) {
+                  return Ok(endpoints.Endpoint{
+                    url: "https://${account_id}.streams-ddb-fips.${region}." +
+                      "${partition_result.dns_suffix}",
+                  })
+                }
+                return Err(endpoints.RuleErr{
+                  msg: "Credentials-sourced account ID parameter is invalid",
+                })
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if account_id_endpoint_mode == "required" {
+              return Err(endpoints.RuleErr{
+                msg: "AccountIdEndpointMode is required but no AccountID was provided or " +
+                  "able to be loaded",
+              })
+            }
+          }
           return Ok(endpoints.Endpoint{
             url: "https://streams.dynamodb-fips.${region}.${partition_result.dns_suffix}",
           })
@@ -96,15 +368,214 @@ pub fn resolve_endpoint(params: EndpointParameters) -> endpoints.Endpoint ! endp
           msg: "FIPS is enabled but this partition does not support FIPS",
         })
       }
-      if !params.use_fips && params.use_dual_stack {
+      if params.use_dual_stack {
         if partition_result.supports_dual_stack {
+          if !(partition_result.name == "aws") &&
+              !(partition_result.name == "aws-cn") &&
+              !(partition_result.name == "aws-us-gov") {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams-dynamodb.${region}." +
+                "${partition_result.dual_stack_dns_suffix}",
+            })
+          }
+          if region == "me-central-1" {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams-dynamodb.${region}." +
+                "${partition_result.dual_stack_dns_suffix}",
+            })
+          }
+          if region == "me-south-1" {
+            if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+              if account_id_endpoint_mode == "required" {
+                return Err(endpoints.RuleErr{
+                  msg: "Invalid Configuration: AccountIdEndpointMode is required but " +
+                    "account endpoints are not supported in this region",
+                })
+              }
+            }
+            return Ok(endpoints.Endpoint{
+              url: "https://streams-dynamodb.${region}." +
+                "${partition_result.dual_stack_dns_suffix}",
+            })
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(stream_arn) = params.stream_arn {
+                if let Some(parsed_arn) = endpoints.parse_arn(stream_arn) {
+                  if parsed_arn.service == "dynamodb" &&
+                      endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                      parsed_arn.region == "${region}" &&
+                      endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${parsed_arn.account_id}.streams-ddb.${region}." +
+                        "${partition_result.dual_stack_dns_suffix}",
+                    })
+                  }
+                }
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(shard_iterator) = params.shard_iterator {
+                if let Some(parsed_arn) = endpoints.parse_arn(shard_iterator) {
+                  if parsed_arn.service == "dynamodb" &&
+                      endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                      parsed_arn.region == "${region}" &&
+                      endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                    return Ok(endpoints.Endpoint{
+                      url: "https://${parsed_arn.account_id}.streams-ddb.${region}." +
+                        "${partition_result.dual_stack_dns_suffix}",
+                    })
+                  }
+                }
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if !(account_id_endpoint_mode == "disabled") {
+              if let Some(account_id) = params.account_id {
+                if endpoints.is_valid_host_label(account_id, false) {
+                  return Ok(endpoints.Endpoint{
+                    url: "https://${account_id}.streams-ddb.${region}." +
+                      "${partition_result.dual_stack_dns_suffix}",
+                  })
+                }
+                return Err(endpoints.RuleErr{
+                  msg: "Credentials-sourced account ID parameter is invalid",
+                })
+              }
+            }
+          }
+          if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+            if account_id_endpoint_mode == "required" {
+              return Err(endpoints.RuleErr{
+                msg: "AccountIdEndpointMode is required but no AccountID was provided or " +
+                  "able to be loaded",
+              })
+            }
+          }
           return Ok(endpoints.Endpoint{
-            url: "https://streams.dynamodb.${region}.${partition_result.dual_stack_dns_suffix}",
+            url: "https://streams-dynamodb.${region}.${partition_result.dual_stack_dns_suffix}",
           })
         }
         return Err(endpoints.RuleErr{
           msg: "DualStack is enabled but this partition does not support DualStack",
         })
+      }
+      if !(partition_result.name == "aws") &&
+          !(partition_result.name == "aws-cn") &&
+          !(partition_result.name == "aws-us-gov") {
+        if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+          if account_id_endpoint_mode == "required" {
+            return Err(endpoints.RuleErr{
+              msg: "Invalid Configuration: AccountIdEndpointMode is required but account " +
+                "endpoints are not supported in this region",
+            })
+          }
+        }
+        return Ok(endpoints.Endpoint{
+          url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+        })
+      }
+      if region == "me-central-1" {
+        if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+          if account_id_endpoint_mode == "required" {
+            return Err(endpoints.RuleErr{
+              msg: "Invalid Configuration: AccountIdEndpointMode is required but account " +
+                "endpoints are not supported in this region",
+            })
+          }
+        }
+        return Ok(endpoints.Endpoint{
+          url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+        })
+      }
+      if region == "me-south-1" {
+        if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+          if account_id_endpoint_mode == "required" {
+            return Err(endpoints.RuleErr{
+              msg: "Invalid Configuration: AccountIdEndpointMode is required but account " +
+                "endpoints are not supported in this region",
+            })
+          }
+        }
+        return Ok(endpoints.Endpoint{
+          url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",
+        })
+      }
+      if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+        if !(account_id_endpoint_mode == "disabled") {
+          if let Some(stream_arn) = params.stream_arn {
+            if let Some(parsed_arn) = endpoints.parse_arn(stream_arn) {
+              if parsed_arn.service == "dynamodb" &&
+                  endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                  parsed_arn.region == "${region}" &&
+                  endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                return Ok(endpoints.Endpoint{
+                  url: "https://${parsed_arn.account_id}.streams-ddb.${region}." +
+                    "${partition_result.dns_suffix}",
+                })
+              }
+            }
+          }
+        }
+      }
+      if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+        if !(account_id_endpoint_mode == "disabled") {
+          if let Some(shard_iterator) = params.shard_iterator {
+            if let Some(parsed_arn) = endpoints.parse_arn(shard_iterator) {
+              if parsed_arn.service == "dynamodb" &&
+                  endpoints.is_valid_host_label(parsed_arn.region, false) &&
+                  parsed_arn.region == "${region}" &&
+                  endpoints.is_valid_host_label(parsed_arn.account_id, false) {
+                return Ok(endpoints.Endpoint{
+                  url: "https://${parsed_arn.account_id}.streams-ddb.${region}." +
+                    "${partition_result.dns_suffix}",
+                })
+              }
+            }
+          }
+        }
+      }
+      if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+        if !(account_id_endpoint_mode == "disabled") {
+          if let Some(account_id) = params.account_id {
+            if endpoints.is_valid_host_label(account_id, false) {
+              return Ok(endpoints.Endpoint{
+                url: "https://${account_id}.streams-ddb.${region}." +
+                  "${partition_result.dns_suffix}",
+              })
+            }
+            return Err(endpoints.RuleErr{
+              msg: "Credentials-sourced account ID parameter is invalid",
+            })
+          }
+        }
+      }
+      if let Some(account_id_endpoint_mode) = params.account_id_endpoint_mode {
+        if account_id_endpoint_mode == "required" {
+          return Err(endpoints.RuleErr{
+            msg: "AccountIdEndpointMode is required but no AccountID was provided or able " +
+              "to be loaded",
+          })
+        }
       }
       return Ok(endpoints.Endpoint{
         url: "https://streams.dynamodb.${region}.${partition_result.dns_suffix}",

@@ -7,6 +7,1821 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+/// Authorizes the Amazon Web Services account that created a specified VPC
+/// to submit an AssociateVPCWithHostedZone request to associate the VPC
+/// with a specified hosted zone that was created by a different account. To
+/// submit a CreateVPCAssociationAuthorization request, you must use the
+/// account that created the hosted zone. After you authorize the
+/// association, use the account that created the VPC to submit an
+/// AssociateVPCWithHostedZone request. If you want to associate multiple
+/// VPCs that you created by using one account with a hosted zone that you
+/// created by using a different account, you must submit one authorization
+/// request for each VPC.
+pub fn (c: Client) create_vpc_association_authorization(input: CreateVPCAssociationAuthorizationRequest) -> CreateVPCAssociationAuthorizationResponse ! CreateVPCAssociationAuthorizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_vpc_association_authorization(c.params, input)) ?? e => return Err(CreateVPCAssociationAuthorizationErr.InvalidInput(e))
+  var req = serialize_create_vpc_association_authorization(ep, input, "") ?? e => return Err(CreateVPCAssociationAuthorizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(CreateVPCAssociationAuthorizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_vpc_association_authorization_error(resp))
+  }
+  deserialize_create_vpc_association_authorization(resp) ?? e => Err(CreateVPCAssociationAuthorizationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_deactivate_key_signing_key(base: EndpointParameters, input: DeactivateKeySigningKeyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeactivateKeySigningKey.
+pub fn serialize_deactivate_key_signing_key(ep: rest.Endpoint, given: DeactivateKeySigningKeyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  let label_name = match input.name {
+    Some(v) => v
+    None => return Err("input member Name is required")
+  }
+  if label_name == "" {
+    return Err("input member Name must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/keysigningkey/${rest.escape(label_hosted_zone_id, false)}/${rest.escape(label_name, false)}/deactivate"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_deactivate_key_signing_key(resp: http.Response) -> DeactivateKeySigningKeyResponse ! Str {
+  var out = DeactivateKeySigningKeyResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeactivateKeySigningKey.
+pub enum DeactivateKeySigningKeyErr {
+  ConcurrentModification(e: ConcurrentModification)
+  InvalidInputError(e: InvalidInput)
+  InvalidKeySigningKeyStatus(e: InvalidKeySigningKeyStatus)
+  InvalidSigningStatus(e: InvalidSigningStatus)
+  KeySigningKeyInParentDSRecord(e: KeySigningKeyInParentDSRecord)
+  KeySigningKeyInUse(e: KeySigningKeyInUse)
+  NoSuchKeySigningKey(e: NoSuchKeySigningKey)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeactivateKeySigningKeyErr) display() -> Str {
+  match e {
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidKeySigningKeyStatus(x) => "InvalidKeySigningKeyStatus: ${x:?}"
+    InvalidSigningStatus(x) => "InvalidSigningStatus: ${x:?}"
+    KeySigningKeyInParentDSRecord(x) => "KeySigningKeyInParentDSRecord: ${x:?}"
+    KeySigningKeyInUse(x) => "KeySigningKeyInUse: ${x:?}"
+    NoSuchKeySigningKey(x) => "NoSuchKeySigningKey: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_deactivate_key_signing_key_error(resp: http.Response) -> DeactivateKeySigningKeyErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.ConcurrentModification(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.InvalidInputError(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidKeySigningKeyStatus" => match read_error_invalid_key_signing_key_status(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.InvalidKeySigningKeyStatus(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidSigningStatus" => match read_error_invalid_signing_status(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.InvalidSigningStatus(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    "KeySigningKeyInParentDSRecord" => match read_error_key_signing_key_in_parent_ds_record(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.KeySigningKeyInParentDSRecord(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    "KeySigningKeyInUse" => match read_error_key_signing_key_in_use(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.KeySigningKeyInUse(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    "NoSuchKeySigningKey" => match read_error_no_such_key_signing_key(resp, body) {
+      Ok(x) => return DeactivateKeySigningKeyErr.NoSuchKeySigningKey(x)
+      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeactivateKeySigningKeyErr.Api(restxml.api_error(resp))
+}
+
+/// Deactivates a key-signing key (KSK) so that it will not be used for
+/// signing by DNSSEC. This operation changes the KSK status to INACTIVE .
+pub fn (c: Client) deactivate_key_signing_key(input: DeactivateKeySigningKeyRequest) -> DeactivateKeySigningKeyResponse ! DeactivateKeySigningKeyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_deactivate_key_signing_key(c.params, input)) ?? e => return Err(DeactivateKeySigningKeyErr.InvalidInput(e))
+  var req = serialize_deactivate_key_signing_key(ep, input, "") ?? e => return Err(DeactivateKeySigningKeyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeactivateKeySigningKeyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_deactivate_key_signing_key_error(resp))
+  }
+  deserialize_deactivate_key_signing_key(resp) ?? e => Err(DeactivateKeySigningKeyErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_cidr_collection(base: EndpointParameters, input: DeleteCidrCollectionRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteCidrCollection.
+pub fn serialize_delete_cidr_collection(ep: rest.Endpoint, input: DeleteCidrCollectionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/cidrcollection/${rest.escape(label_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_cidr_collection(resp: http.Response) -> DeleteCidrCollectionResponse ! Str {
+  var out = DeleteCidrCollectionResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteCidrCollection.
+pub enum DeleteCidrCollectionErr {
+  CidrCollectionInUseException(e: CidrCollectionInUseException)
+  ConcurrentModification(e: ConcurrentModification)
+  InvalidInputError(e: InvalidInput)
+  NoSuchCidrCollectionException(e: NoSuchCidrCollectionException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteCidrCollectionErr) display() -> Str {
+  match e {
+    CidrCollectionInUseException(x) => "CidrCollectionInUseException: ${x:?}"
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchCidrCollectionException(x) => "NoSuchCidrCollectionException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_cidr_collection_error(resp: http.Response) -> DeleteCidrCollectionErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "CidrCollectionInUseException" => match read_error_cidr_collection_in_use_exception(resp, body) {
+      Ok(x) => return DeleteCidrCollectionErr.CidrCollectionInUseException(x)
+      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
+    }
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DeleteCidrCollectionErr.ConcurrentModification(x)
+      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteCidrCollectionErr.InvalidInputError(x)
+      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
+    }
+    "NoSuchCidrCollectionException" => match read_error_no_such_cidr_collection_exception(resp, body) {
+      Ok(x) => return DeleteCidrCollectionErr.NoSuchCidrCollectionException(x)
+      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteCidrCollectionErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a CIDR collection in the current Amazon Web Services account.
+/// The collection must be empty before it can be deleted.
+pub fn (c: Client) delete_cidr_collection(input: DeleteCidrCollectionRequest) -> DeleteCidrCollectionResponse ! DeleteCidrCollectionErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_cidr_collection(c.params, input)) ?? e => return Err(DeleteCidrCollectionErr.InvalidInput(e))
+  var req = serialize_delete_cidr_collection(ep, input, "") ?? e => return Err(DeleteCidrCollectionErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteCidrCollectionErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_cidr_collection_error(resp))
+  }
+  deserialize_delete_cidr_collection(resp) ?? e => Err(DeleteCidrCollectionErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_health_check(base: EndpointParameters, input: DeleteHealthCheckRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteHealthCheck.
+pub fn serialize_delete_health_check(ep: rest.Endpoint, input: DeleteHealthCheckRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_health_check_id = match input.health_check_id {
+    Some(v) => v
+    None => return Err("input member HealthCheckId is required")
+  }
+  if label_health_check_id == "" {
+    return Err("input member HealthCheckId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/healthcheck/${rest.escape(label_health_check_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_health_check(resp: http.Response) -> DeleteHealthCheckResponse ! Str {
+  var out = DeleteHealthCheckResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteHealthCheck.
+pub enum DeleteHealthCheckErr {
+  HealthCheckInUse(e: HealthCheckInUse)
+  InvalidInputError(e: InvalidInput)
+  NoSuchHealthCheck(e: NoSuchHealthCheck)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteHealthCheckErr) display() -> Str {
+  match e {
+    HealthCheckInUse(x) => "HealthCheckInUse: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchHealthCheck(x) => "NoSuchHealthCheck: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_health_check_error(resp: http.Response) -> DeleteHealthCheckErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "HealthCheckInUse" => match read_error_health_check_in_use(resp, body) {
+      Ok(x) => return DeleteHealthCheckErr.HealthCheckInUse(x)
+      Err(msg) => return DeleteHealthCheckErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteHealthCheckErr.InvalidInputError(x)
+      Err(msg) => return DeleteHealthCheckErr.Deserialize(msg)
+    }
+    "NoSuchHealthCheck" => match read_error_no_such_health_check(resp, body) {
+      Ok(x) => return DeleteHealthCheckErr.NoSuchHealthCheck(x)
+      Err(msg) => return DeleteHealthCheckErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteHealthCheckErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a health check. Amazon Route 53 does not prevent you from
+/// deleting a health check even if the health check is associated with one
+/// or more resource record sets. If you delete a health check and you don't
+/// update the associated resource record sets, the future status of the
+/// health check can't be predicted and may change. This will affect the
+/// routing of DNS queries for your DNS failover configuration. For more
+/// information, see Replacing and Deleting Health Checks in the Amazon
+/// Route 53 Developer Guide . If you're using Cloud Map and you configured
+/// Cloud Map to create a Route 53 health check when you register an
+/// instance, you can't use the Route 53 DeleteHealthCheck command to delete
+/// the health check. The health check is deleted automatically when you
+/// deregister the instance; there can be a delay of several hours before
+/// the health check is deleted from Route 53.
+pub fn (c: Client) delete_health_check(input: DeleteHealthCheckRequest) -> DeleteHealthCheckResponse ! DeleteHealthCheckErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_health_check(c.params, input)) ?? e => return Err(DeleteHealthCheckErr.InvalidInput(e))
+  var req = serialize_delete_health_check(ep, input, "") ?? e => return Err(DeleteHealthCheckErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteHealthCheckErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_health_check_error(resp))
+  }
+  deserialize_delete_health_check(resp) ?? e => Err(DeleteHealthCheckErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_health_check_source(base: EndpointParameters, input: DeleteHealthCheckSourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteHealthCheckSource.
+pub fn serialize_delete_health_check_source(ep: rest.Endpoint, input: DeleteHealthCheckSourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_health_check_source_id = match input.health_check_source_id {
+    Some(v) => v
+    None => return Err("input member HealthCheckSourceId is required")
+  }
+  if label_health_check_source_id == "" {
+    return Err("input member HealthCheckSourceId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/healthchecksource/${rest.escape(label_health_check_source_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_health_check_source(resp: http.Response) -> DeleteHealthCheckSourceResponse ! Str {
+  var out = DeleteHealthCheckSourceResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      "HealthCheckSourceStatus" => out.health_check_source_status = HealthCheckSourceStatus.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteHealthCheckSource.
+pub enum DeleteHealthCheckSourceErr {
+  InvalidInputError(e: InvalidInput)
+  NoSuchHealthCheckSource(e: NoSuchHealthCheckSource)
+  PriorRequestNotComplete(e: PriorRequestNotComplete)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteHealthCheckSourceErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchHealthCheckSource(x) => "NoSuchHealthCheckSource: ${x:?}"
+    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_health_check_source_error(resp: http.Response) -> DeleteHealthCheckSourceErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteHealthCheckSourceErr.InvalidInputError(x)
+      Err(msg) => return DeleteHealthCheckSourceErr.Deserialize(msg)
+    }
+    "NoSuchHealthCheckSource" => match read_error_no_such_health_check_source(resp, body) {
+      Ok(x) => return DeleteHealthCheckSourceErr.NoSuchHealthCheckSource(x)
+      Err(msg) => return DeleteHealthCheckSourceErr.Deserialize(msg)
+    }
+    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
+      Ok(x) => return DeleteHealthCheckSourceErr.PriorRequestNotComplete(x)
+      Err(msg) => return DeleteHealthCheckSourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteHealthCheckSourceErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a health check source. Before you delete a health check source,
+/// delete or update any health checks that reference it. Otherwise, the
+/// request fails with InvalidInput . The request also fails with
+/// InvalidInput if the status of the health check source is CREATE_PENDING
+/// or CREATE_IN_PROGRESS . Wait until the status is CREATE_COMPLETED or
+/// CREATE_FAILED , and then try again. Route 53 deletes a health check
+/// source asynchronously, and the initial HealthCheckSourceStatus is
+/// DELETE_PENDING . Call GetHealthCheckSource to track progress. After the
+/// deletion completes, GetHealthCheckSource returns NoSuchHealthCheckSource
+/// and the health check source no longer appears in the results of
+/// ListHealthCheckSources . If you delete a health check source that is
+/// already deleted, the request fails with NoSuchHealthCheckSource . To use
+/// this operation, you must have the route53:DeleteHealthCheckSource
+/// permission. You must also have permission to create a service-linked
+/// role.
+pub fn (c: Client) delete_health_check_source(input: DeleteHealthCheckSourceRequest) -> DeleteHealthCheckSourceResponse ! DeleteHealthCheckSourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_health_check_source(c.params, input)) ?? e => return Err(DeleteHealthCheckSourceErr.InvalidInput(e))
+  var req = serialize_delete_health_check_source(ep, input, "") ?? e => return Err(DeleteHealthCheckSourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteHealthCheckSourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_health_check_source_error(resp))
+  }
+  deserialize_delete_health_check_source(resp) ?? e => Err(DeleteHealthCheckSourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_hosted_zone(base: EndpointParameters, input: DeleteHostedZoneRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteHostedZone.
+pub fn serialize_delete_hosted_zone(ep: rest.Endpoint, given: DeleteHostedZoneRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {id: given.id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_hosted_zone(resp: http.Response) -> DeleteHostedZoneResponse ! Str {
+  var out = DeleteHostedZoneResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteHostedZone.
+pub enum DeleteHostedZoneErr {
+  HostedZoneNotEmpty(e: HostedZoneNotEmpty)
+  InvalidDomainName(e: InvalidDomainName)
+  InvalidInputError(e: InvalidInput)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  PriorRequestNotComplete(e: PriorRequestNotComplete)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteHostedZoneErr) display() -> Str {
+  match e {
+    HostedZoneNotEmpty(x) => "HostedZoneNotEmpty: ${x:?}"
+    InvalidDomainName(x) => "InvalidDomainName: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_hosted_zone_error(resp: http.Response) -> DeleteHostedZoneErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "HostedZoneNotEmpty" => match read_error_hosted_zone_not_empty(resp, body) {
+      Ok(x) => return DeleteHostedZoneErr.HostedZoneNotEmpty(x)
+      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
+    }
+    "InvalidDomainName" => match read_error_invalid_domain_name(resp, body) {
+      Ok(x) => return DeleteHostedZoneErr.InvalidDomainName(x)
+      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteHostedZoneErr.InvalidInputError(x)
+      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return DeleteHostedZoneErr.NoSuchHostedZone(x)
+      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
+    }
+    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
+      Ok(x) => return DeleteHostedZoneErr.PriorRequestNotComplete(x)
+      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteHostedZoneErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a hosted zone. If the hosted zone was created by another
+/// service, such as Cloud Map, see Deleting Public Hosted Zones That Were
+/// Created by Another Service in the Amazon Route 53 Developer Guide for
+/// information about how to delete it. (The process is the same for public
+/// and private hosted zones that were created by another service.) If you
+/// want to keep your domain registration but you want to stop routing
+/// internet traffic to your website or web application, we recommend that
+/// you delete resource record sets in the hosted zone instead of deleting
+/// the hosted zone. If you delete a hosted zone, you can't undelete it. You
+/// must create a new hosted zone and update the name servers for your
+/// domain registration, which can require up to 48 hours to take effect.
+/// (If you delegated responsibility for a subdomain to a hosted zone and
+/// you delete the child hosted zone, you must update the name servers in
+/// the parent hosted zone.) In addition, if you delete a hosted zone,
+/// someone could hijack the domain and route traffic to their own resources
+/// using your domain name. If you want to avoid the monthly charge for the
+/// hosted zone, you can transfer DNS service for the domain to a free DNS
+/// service. When you transfer DNS service, you have to update the name
+/// servers for the domain registration. If the domain is registered with
+/// Route 53, see UpdateDomainNameservers for information about how to
+/// replace Route 53 name servers with name servers for the new DNS service.
+/// If the domain is registered with another registrar, use the method
+/// provided by the registrar to update name servers for the domain
+/// registration. For more information, perform an internet search on "free
+/// DNS service." You can delete a hosted zone only if it contains only the
+/// default SOA and NS records and has DNSSEC signing disabled. If the
+/// hosted zone contains other records or has DNSSEC enabled, you must
+/// delete the records and disable DNSSEC before deletion. Attempting to
+/// delete a hosted zone with additional records or DNSSEC enabled returns a
+/// HostedZoneNotEmpty error. For information about deleting records, see
+/// ChangeResourceRecordSets . You also can't delete a hosted zone that has
+/// resource record set protections. To see the protections in a hosted
+/// zone, use ListResourceRecordSetProtections . To delete them, use
+/// DeleteResourceRecordSetProtections . To verify that the hosted zone has
+/// been deleted, do one of the following: Use the GetHostedZone action to
+/// request information about the hosted zone. Use the ListHostedZones
+/// action to get a list of the hosted zones associated with the current
+/// Amazon Web Services account.
+pub fn (c: Client) delete_hosted_zone(input: DeleteHostedZoneRequest) -> DeleteHostedZoneResponse ! DeleteHostedZoneErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_hosted_zone(c.params, input)) ?? e => return Err(DeleteHostedZoneErr.InvalidInput(e))
+  var req = serialize_delete_hosted_zone(ep, input, "") ?? e => return Err(DeleteHostedZoneErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteHostedZoneErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_hosted_zone_error(resp))
+  }
+  deserialize_delete_hosted_zone(resp) ?? e => Err(DeleteHostedZoneErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_key_signing_key(base: EndpointParameters, input: DeleteKeySigningKeyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteKeySigningKey.
+pub fn serialize_delete_key_signing_key(ep: rest.Endpoint, given: DeleteKeySigningKeyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  let label_name = match input.name {
+    Some(v) => v
+    None => return Err("input member Name is required")
+  }
+  if label_name == "" {
+    return Err("input member Name must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/keysigningkey/${rest.escape(label_hosted_zone_id, false)}/${rest.escape(label_name, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_key_signing_key(resp: http.Response) -> DeleteKeySigningKeyResponse ! Str {
+  var out = DeleteKeySigningKeyResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteKeySigningKey.
+pub enum DeleteKeySigningKeyErr {
+  ConcurrentModification(e: ConcurrentModification)
+  InvalidInputError(e: InvalidInput)
+  InvalidKeySigningKeyStatus(e: InvalidKeySigningKeyStatus)
+  InvalidKMSArn(e: InvalidKMSArn)
+  InvalidSigningStatus(e: InvalidSigningStatus)
+  NoSuchKeySigningKey(e: NoSuchKeySigningKey)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteKeySigningKeyErr) display() -> Str {
+  match e {
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidKeySigningKeyStatus(x) => "InvalidKeySigningKeyStatus: ${x:?}"
+    InvalidKMSArn(x) => "InvalidKMSArn: ${x:?}"
+    InvalidSigningStatus(x) => "InvalidSigningStatus: ${x:?}"
+    NoSuchKeySigningKey(x) => "NoSuchKeySigningKey: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_key_signing_key_error(resp: http.Response) -> DeleteKeySigningKeyErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DeleteKeySigningKeyErr.ConcurrentModification(x)
+      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteKeySigningKeyErr.InvalidInputError(x)
+      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidKeySigningKeyStatus" => match read_error_invalid_key_signing_key_status(resp, body) {
+      Ok(x) => return DeleteKeySigningKeyErr.InvalidKeySigningKeyStatus(x)
+      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidKMSArn" => match read_error_invalid_kms_arn(resp, body) {
+      Ok(x) => return DeleteKeySigningKeyErr.InvalidKMSArn(x)
+      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
+    }
+    "InvalidSigningStatus" => match read_error_invalid_signing_status(resp, body) {
+      Ok(x) => return DeleteKeySigningKeyErr.InvalidSigningStatus(x)
+      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
+    }
+    "NoSuchKeySigningKey" => match read_error_no_such_key_signing_key(resp, body) {
+      Ok(x) => return DeleteKeySigningKeyErr.NoSuchKeySigningKey(x)
+      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteKeySigningKeyErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a key-signing key (KSK). Before you can delete a KSK, you must
+/// deactivate it. The KSK must be deactivated before you can delete it
+/// regardless of whether the hosted zone is enabled for DNSSEC signing. You
+/// can use DeactivateKeySigningKey to deactivate the key before you delete
+/// it. Use GetDNSSEC to verify that the KSK is in an INACTIVE status.
+pub fn (c: Client) delete_key_signing_key(input: DeleteKeySigningKeyRequest) -> DeleteKeySigningKeyResponse ! DeleteKeySigningKeyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_key_signing_key(c.params, input)) ?? e => return Err(DeleteKeySigningKeyErr.InvalidInput(e))
+  var req = serialize_delete_key_signing_key(ep, input, "") ?? e => return Err(DeleteKeySigningKeyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteKeySigningKeyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_key_signing_key_error(resp))
+  }
+  deserialize_delete_key_signing_key(resp) ?? e => Err(DeleteKeySigningKeyErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_query_logging_config(base: EndpointParameters, input: DeleteQueryLoggingConfigRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteQueryLoggingConfig.
+pub fn serialize_delete_query_logging_config(ep: rest.Endpoint, input: DeleteQueryLoggingConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/queryloggingconfig/${rest.escape(label_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_query_logging_config(resp: http.Response) -> DeleteQueryLoggingConfigResponse ! Str {
+  var out = DeleteQueryLoggingConfigResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteQueryLoggingConfig.
+pub enum DeleteQueryLoggingConfigErr {
+  ConcurrentModification(e: ConcurrentModification)
+  InvalidInputError(e: InvalidInput)
+  NoSuchQueryLoggingConfig(e: NoSuchQueryLoggingConfig)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteQueryLoggingConfigErr) display() -> Str {
+  match e {
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchQueryLoggingConfig(x) => "NoSuchQueryLoggingConfig: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_query_logging_config_error(resp: http.Response) -> DeleteQueryLoggingConfigErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DeleteQueryLoggingConfigErr.ConcurrentModification(x)
+      Err(msg) => return DeleteQueryLoggingConfigErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteQueryLoggingConfigErr.InvalidInputError(x)
+      Err(msg) => return DeleteQueryLoggingConfigErr.Deserialize(msg)
+    }
+    "NoSuchQueryLoggingConfig" => match read_error_no_such_query_logging_config(resp, body) {
+      Ok(x) => return DeleteQueryLoggingConfigErr.NoSuchQueryLoggingConfig(x)
+      Err(msg) => return DeleteQueryLoggingConfigErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteQueryLoggingConfigErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a configuration for DNS query logging. If you delete a
+/// configuration, Amazon Route 53 stops sending query logs to CloudWatch
+/// Logs. Route 53 doesn't delete any logs that are already in CloudWatch
+/// Logs. For more information about DNS query logs, see
+/// CreateQueryLoggingConfig .
+pub fn (c: Client) delete_query_logging_config(input: DeleteQueryLoggingConfigRequest) -> DeleteQueryLoggingConfigResponse ! DeleteQueryLoggingConfigErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_query_logging_config(c.params, input)) ?? e => return Err(DeleteQueryLoggingConfigErr.InvalidInput(e))
+  var req = serialize_delete_query_logging_config(ep, input, "") ?? e => return Err(DeleteQueryLoggingConfigErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteQueryLoggingConfigErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_query_logging_config_error(resp))
+  }
+  deserialize_delete_query_logging_config(resp) ?? e => Err(DeleteQueryLoggingConfigErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_resource_record_set_protections(base: EndpointParameters, input: DeleteResourceRecordSetProtectionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteResourceRecordSetProtections.
+pub fn serialize_delete_resource_record_set_protections(ep: rest.Endpoint, given: DeleteResourceRecordSetProtectionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  var w = xmlv.writer()
+  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
+  xmlv.start(w, "DeleteResourceRecordSetProtectionsRequest", attrs)
+  if let Some(x) = input.protections {
+    xml_write_resource_record_set_protection_key_batch(w, x, "Protections", [])
+  }
+  xmlv.end(w, "DeleteResourceRecordSetProtectionsRequest")
+  body = xmlv.finish(w)
+  headers.push(("Content-Type", "application/xml"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/rrsetprotection/delete"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_resource_record_set_protections(resp: http.Response) -> DeleteResourceRecordSetProtectionsResponse ! Str {
+  var out = DeleteResourceRecordSetProtectionsResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteResourceRecordSetProtections.
+pub enum DeleteResourceRecordSetProtectionsErr {
+  InvalidInputError(e: InvalidInput)
+  InvalidResourceRecordSetProtectionBatch(e: InvalidResourceRecordSetProtectionBatch)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  PriorRequestNotComplete(e: PriorRequestNotComplete)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteResourceRecordSetProtectionsErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidResourceRecordSetProtectionBatch(x) => "InvalidResourceRecordSetProtectionBatch: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_resource_record_set_protections_error(resp: http.Response) -> DeleteResourceRecordSetProtectionsErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteResourceRecordSetProtectionsErr.InvalidInputError(x)
+      Err(msg) => return DeleteResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "InvalidResourceRecordSetProtectionBatch" => match read_error_invalid_resource_record_set_protection_batch(resp, body) {
+      Ok(x) => return DeleteResourceRecordSetProtectionsErr.InvalidResourceRecordSetProtectionBatch(x)
+      Err(msg) => return DeleteResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return DeleteResourceRecordSetProtectionsErr.NoSuchHostedZone(x)
+      Err(msg) => return DeleteResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
+      Ok(x) => return DeleteResourceRecordSetProtectionsErr.PriorRequestNotComplete(x)
+      Err(msg) => return DeleteResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteResourceRecordSetProtectionsErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes one or more resource record set protections from a hosted zone.
+/// After a protection is deleted, you can change the resource record sets
+/// that have that name and type by using ChangeResourceRecordSets . The
+/// request is atomic. Route 53 either deletes all of the protections in the
+/// request or none of them. If one or more entries fail, for example
+/// because no protection exists for the specified name and type, Route 53
+/// returns an InvalidResourceRecordSetProtectionBatch error that lists the
+/// failing entries and the reason that each one failed. You can specify up
+/// to 100 protections in one request.
+pub fn (c: Client) delete_resource_record_set_protections(input: DeleteResourceRecordSetProtectionsRequest) -> DeleteResourceRecordSetProtectionsResponse ! DeleteResourceRecordSetProtectionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_resource_record_set_protections(c.params, input)) ?? e => return Err(DeleteResourceRecordSetProtectionsErr.InvalidInput(e))
+  var req = serialize_delete_resource_record_set_protections(ep, input, "") ?? e => return Err(DeleteResourceRecordSetProtectionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteResourceRecordSetProtectionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_resource_record_set_protections_error(resp))
+  }
+  deserialize_delete_resource_record_set_protections(resp) ?? e => Err(DeleteResourceRecordSetProtectionsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_reusable_delegation_set(base: EndpointParameters, input: DeleteReusableDelegationSetRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteReusableDelegationSet.
+pub fn serialize_delete_reusable_delegation_set(ep: rest.Endpoint, given: DeleteReusableDelegationSetRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {id: given.id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/delegationset/${rest.escape(label_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_reusable_delegation_set(resp: http.Response) -> DeleteReusableDelegationSetResponse ! Str {
+  var out = DeleteReusableDelegationSetResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteReusableDelegationSet.
+pub enum DeleteReusableDelegationSetErr {
+  DelegationSetInUse(e: DelegationSetInUse)
+  DelegationSetNotReusable(e: DelegationSetNotReusable)
+  InvalidInputError(e: InvalidInput)
+  NoSuchDelegationSet(e: NoSuchDelegationSet)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteReusableDelegationSetErr) display() -> Str {
+  match e {
+    DelegationSetInUse(x) => "DelegationSetInUse: ${x:?}"
+    DelegationSetNotReusable(x) => "DelegationSetNotReusable: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchDelegationSet(x) => "NoSuchDelegationSet: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_reusable_delegation_set_error(resp: http.Response) -> DeleteReusableDelegationSetErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "DelegationSetInUse" => match read_error_delegation_set_in_use(resp, body) {
+      Ok(x) => return DeleteReusableDelegationSetErr.DelegationSetInUse(x)
+      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
+    }
+    "DelegationSetNotReusable" => match read_error_delegation_set_not_reusable(resp, body) {
+      Ok(x) => return DeleteReusableDelegationSetErr.DelegationSetNotReusable(x)
+      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteReusableDelegationSetErr.InvalidInputError(x)
+      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
+    }
+    "NoSuchDelegationSet" => match read_error_no_such_delegation_set(resp, body) {
+      Ok(x) => return DeleteReusableDelegationSetErr.NoSuchDelegationSet(x)
+      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteReusableDelegationSetErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a reusable delegation set. You can delete a reusable delegation
+/// set only if it isn't associated with any hosted zones. To verify that
+/// the reusable delegation set is not associated with any hosted zones,
+/// submit a GetReusableDelegationSet request and specify the ID of the
+/// reusable delegation set that you want to delete.
+pub fn (c: Client) delete_reusable_delegation_set(input: DeleteReusableDelegationSetRequest) -> DeleteReusableDelegationSetResponse ! DeleteReusableDelegationSetErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_reusable_delegation_set(c.params, input)) ?? e => return Err(DeleteReusableDelegationSetErr.InvalidInput(e))
+  var req = serialize_delete_reusable_delegation_set(ep, input, "") ?? e => return Err(DeleteReusableDelegationSetErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteReusableDelegationSetErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_reusable_delegation_set_error(resp))
+  }
+  deserialize_delete_reusable_delegation_set(resp) ?? e => Err(DeleteReusableDelegationSetErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_traffic_policy(base: EndpointParameters, input: DeleteTrafficPolicyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteTrafficPolicy.
+pub fn serialize_delete_traffic_policy(ep: rest.Endpoint, input: DeleteTrafficPolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  let label_version = match input.version {
+    Some(v) => "${v}"
+    None => return Err("input member Version is required")
+  }
+  if label_version == "" {
+    return Err("input member Version must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/trafficpolicy/${rest.escape(label_id, false)}/${rest.escape(label_version, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_traffic_policy(resp: http.Response) -> DeleteTrafficPolicyResponse ! Str {
+  var out = DeleteTrafficPolicyResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteTrafficPolicy.
+pub enum DeleteTrafficPolicyErr {
+  ConcurrentModification(e: ConcurrentModification)
+  InvalidInputError(e: InvalidInput)
+  NoSuchTrafficPolicy(e: NoSuchTrafficPolicy)
+  TrafficPolicyInUse(e: TrafficPolicyInUse)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteTrafficPolicyErr) display() -> Str {
+  match e {
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchTrafficPolicy(x) => "NoSuchTrafficPolicy: ${x:?}"
+    TrafficPolicyInUse(x) => "TrafficPolicyInUse: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_traffic_policy_error(resp: http.Response) -> DeleteTrafficPolicyErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyErr.ConcurrentModification(x)
+      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyErr.InvalidInputError(x)
+      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
+    }
+    "NoSuchTrafficPolicy" => match read_error_no_such_traffic_policy(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyErr.NoSuchTrafficPolicy(x)
+      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
+    }
+    "TrafficPolicyInUse" => match read_error_traffic_policy_in_use(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyErr.TrafficPolicyInUse(x)
+      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteTrafficPolicyErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a traffic policy. When you delete a traffic policy, Route 53
+/// sets a flag on the policy to indicate that it has been deleted. However,
+/// Route 53 never fully deletes the traffic policy. Note the following:
+/// Deleted traffic policies aren't listed if you run ListTrafficPolicies .
+/// There's no way to get a list of deleted policies. If you retain the ID
+/// of the policy, you can get information about the policy, including the
+/// traffic policy document, by running GetTrafficPolicy .
+pub fn (c: Client) delete_traffic_policy(input: DeleteTrafficPolicyRequest) -> DeleteTrafficPolicyResponse ! DeleteTrafficPolicyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_traffic_policy(c.params, input)) ?? e => return Err(DeleteTrafficPolicyErr.InvalidInput(e))
+  var req = serialize_delete_traffic_policy(ep, input, "") ?? e => return Err(DeleteTrafficPolicyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteTrafficPolicyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_traffic_policy_error(resp))
+  }
+  deserialize_delete_traffic_policy(resp) ?? e => Err(DeleteTrafficPolicyErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_traffic_policy_instance(base: EndpointParameters, input: DeleteTrafficPolicyInstanceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteTrafficPolicyInstance.
+pub fn serialize_delete_traffic_policy_instance(ep: rest.Endpoint, input: DeleteTrafficPolicyInstanceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/trafficpolicyinstance/${rest.escape(label_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_traffic_policy_instance(resp: http.Response) -> DeleteTrafficPolicyInstanceResponse ! Str {
+  var out = DeleteTrafficPolicyInstanceResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteTrafficPolicyInstance.
+pub enum DeleteTrafficPolicyInstanceErr {
+  InvalidInputError(e: InvalidInput)
+  NoSuchTrafficPolicyInstance(e: NoSuchTrafficPolicyInstance)
+  PriorRequestNotComplete(e: PriorRequestNotComplete)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteTrafficPolicyInstanceErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchTrafficPolicyInstance(x) => "NoSuchTrafficPolicyInstance: ${x:?}"
+    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_traffic_policy_instance_error(resp: http.Response) -> DeleteTrafficPolicyInstanceErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyInstanceErr.InvalidInputError(x)
+      Err(msg) => return DeleteTrafficPolicyInstanceErr.Deserialize(msg)
+    }
+    "NoSuchTrafficPolicyInstance" => match read_error_no_such_traffic_policy_instance(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyInstanceErr.NoSuchTrafficPolicyInstance(x)
+      Err(msg) => return DeleteTrafficPolicyInstanceErr.Deserialize(msg)
+    }
+    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
+      Ok(x) => return DeleteTrafficPolicyInstanceErr.PriorRequestNotComplete(x)
+      Err(msg) => return DeleteTrafficPolicyInstanceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteTrafficPolicyInstanceErr.Api(restxml.api_error(resp))
+}
+
+/// Deletes a traffic policy instance and all of the resource record sets
+/// that Amazon Route 53 created when you created the instance. In the Route
+/// 53 console, traffic policy instances are known as policy records.
+pub fn (c: Client) delete_traffic_policy_instance(input: DeleteTrafficPolicyInstanceRequest) -> DeleteTrafficPolicyInstanceResponse ! DeleteTrafficPolicyInstanceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_traffic_policy_instance(c.params, input)) ?? e => return Err(DeleteTrafficPolicyInstanceErr.InvalidInput(e))
+  var req = serialize_delete_traffic_policy_instance(ep, input, "") ?? e => return Err(DeleteTrafficPolicyInstanceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteTrafficPolicyInstanceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_traffic_policy_instance_error(resp))
+  }
+  deserialize_delete_traffic_policy_instance(resp) ?? e => Err(DeleteTrafficPolicyInstanceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_delete_vpc_association_authorization(base: EndpointParameters, input: DeleteVPCAssociationAuthorizationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteVPCAssociationAuthorization.
+pub fn serialize_delete_vpc_association_authorization(ep: rest.Endpoint, given: DeleteVPCAssociationAuthorizationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  var w = xmlv.writer()
+  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
+  xmlv.start(w, "DeleteVPCAssociationAuthorizationRequest", attrs)
+  if let Some(x) = input.vpc {
+    xml_write_vpc(w, x, "VPC", [])
+  }
+  xmlv.end(w, "DeleteVPCAssociationAuthorizationRequest")
+  body = xmlv.finish(w)
+  headers.push(("Content-Type", "application/xml"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/deauthorizevpcassociation"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_vpc_association_authorization(resp: http.Response) -> DeleteVPCAssociationAuthorizationResponse ! Str {
+  var out = DeleteVPCAssociationAuthorizationResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteVPCAssociationAuthorization.
+pub enum DeleteVPCAssociationAuthorizationErr {
+  ConcurrentModification(e: ConcurrentModification)
+  InvalidInputError(e: InvalidInput)
+  InvalidVPCId(e: InvalidVPCId)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  VPCAssociationAuthorizationNotFound(e: VPCAssociationAuthorizationNotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteVPCAssociationAuthorizationErr) display() -> Str {
+  match e {
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidVPCId(x) => "InvalidVPCId: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    VPCAssociationAuthorizationNotFound(x) => "VPCAssociationAuthorizationNotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_vpc_association_authorization_error(resp: http.Response) -> DeleteVPCAssociationAuthorizationErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DeleteVPCAssociationAuthorizationErr.ConcurrentModification(x)
+      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DeleteVPCAssociationAuthorizationErr.InvalidInputError(x)
+      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
+    }
+    "InvalidVPCId" => match read_error_invalid_vpc_id(resp, body) {
+      Ok(x) => return DeleteVPCAssociationAuthorizationErr.InvalidVPCId(x)
+      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return DeleteVPCAssociationAuthorizationErr.NoSuchHostedZone(x)
+      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
+    }
+    "VPCAssociationAuthorizationNotFound" => match read_error_vpc_association_authorization_not_found(resp, body) {
+      Ok(x) => return DeleteVPCAssociationAuthorizationErr.VPCAssociationAuthorizationNotFound(x)
+      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DeleteVPCAssociationAuthorizationErr.Api(restxml.api_error(resp))
+}
+
+/// Removes authorization to submit an AssociateVPCWithHostedZone request to
+/// associate a specified VPC with a hosted zone that was created by a
+/// different account. You must use the account that created the hosted zone
+/// to submit a DeleteVPCAssociationAuthorization request. Sending this
+/// request only prevents the Amazon Web Services account that created the
+/// VPC from associating the VPC with the Amazon Route 53 hosted zone in the
+/// future. If the VPC is already associated with the hosted zone,
+/// DeleteVPCAssociationAuthorization won't disassociate the VPC from the
+/// hosted zone. If you want to delete an existing association, use
+/// DisassociateVPCFromHostedZone .
+pub fn (c: Client) delete_vpc_association_authorization(input: DeleteVPCAssociationAuthorizationRequest) -> DeleteVPCAssociationAuthorizationResponse ! DeleteVPCAssociationAuthorizationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_vpc_association_authorization(c.params, input)) ?? e => return Err(DeleteVPCAssociationAuthorizationErr.InvalidInput(e))
+  var req = serialize_delete_vpc_association_authorization(ep, input, "") ?? e => return Err(DeleteVPCAssociationAuthorizationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteVPCAssociationAuthorizationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_vpc_association_authorization_error(resp))
+  }
+  deserialize_delete_vpc_association_authorization(resp) ?? e => Err(DeleteVPCAssociationAuthorizationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_disable_hosted_zone_dnssec(base: EndpointParameters, input: DisableHostedZoneDNSSECRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DisableHostedZoneDNSSEC.
+pub fn serialize_disable_hosted_zone_dnssec(ep: rest.Endpoint, given: DisableHostedZoneDNSSECRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/disable-dnssec"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disable_hosted_zone_dnssec(resp: http.Response) -> DisableHostedZoneDNSSECResponse ! Str {
+  var out = DisableHostedZoneDNSSECResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DisableHostedZoneDNSSEC.
+pub enum DisableHostedZoneDNSSECErr {
+  ConcurrentModification(e: ConcurrentModification)
+  DNSSECNotFound(e: DNSSECNotFound)
+  InvalidArgument(e: InvalidArgument)
+  InvalidInputError(e: InvalidInput)
+  InvalidKeySigningKeyStatus(e: InvalidKeySigningKeyStatus)
+  InvalidKMSArn(e: InvalidKMSArn)
+  KeySigningKeyInParentDSRecord(e: KeySigningKeyInParentDSRecord)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisableHostedZoneDNSSECErr) display() -> Str {
+  match e {
+    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
+    DNSSECNotFound(x) => "DNSSECNotFound: ${x:?}"
+    InvalidArgument(x) => "InvalidArgument: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidKeySigningKeyStatus(x) => "InvalidKeySigningKeyStatus: ${x:?}"
+    InvalidKMSArn(x) => "InvalidKMSArn: ${x:?}"
+    KeySigningKeyInParentDSRecord(x) => "KeySigningKeyInParentDSRecord: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disable_hosted_zone_dnssec_error(resp: http.Response) -> DisableHostedZoneDNSSECErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.ConcurrentModification(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "DNSSECNotFound" => match read_error_dnssec_not_found(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.DNSSECNotFound(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "InvalidArgument" => match read_error_invalid_argument(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidArgument(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidInputError(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "InvalidKeySigningKeyStatus" => match read_error_invalid_key_signing_key_status(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidKeySigningKeyStatus(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "InvalidKMSArn" => match read_error_invalid_kms_arn(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidKMSArn(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "KeySigningKeyInParentDSRecord" => match read_error_key_signing_key_in_parent_ds_record(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.KeySigningKeyInParentDSRecord(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return DisableHostedZoneDNSSECErr.NoSuchHostedZone(x)
+      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DisableHostedZoneDNSSECErr.Api(restxml.api_error(resp))
+}
+
+/// Disables DNSSEC signing in a specific hosted zone. This action does not
+/// deactivate any key-signing keys (KSKs) that are active in the hosted
+/// zone.
+pub fn (c: Client) disable_hosted_zone_dnssec(input: DisableHostedZoneDNSSECRequest) -> DisableHostedZoneDNSSECResponse ! DisableHostedZoneDNSSECErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disable_hosted_zone_dnssec(c.params, input)) ?? e => return Err(DisableHostedZoneDNSSECErr.InvalidInput(e))
+  var req = serialize_disable_hosted_zone_dnssec(ep, input, "") ?? e => return Err(DisableHostedZoneDNSSECErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DisableHostedZoneDNSSECErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disable_hosted_zone_dnssec_error(resp))
+  }
+  deserialize_disable_hosted_zone_dnssec(resp) ?? e => Err(DisableHostedZoneDNSSECErr.Deserialize(e))
+}
+
+pub fn endpoint_params_disassociate_vpc_from_hosted_zone(base: EndpointParameters, input: DisassociateVPCFromHostedZoneRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DisassociateVPCFromHostedZone.
+pub fn serialize_disassociate_vpc_from_hosted_zone(ep: rest.Endpoint, given: DisassociateVPCFromHostedZoneRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  var w = xmlv.writer()
+  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
+  xmlv.start(w, "DisassociateVPCFromHostedZoneRequest", attrs)
+  if let Some(x) = input.vpc {
+    xml_write_vpc(w, x, "VPC", [])
+  }
+  if let Some(x) = input.comment {
+    xmlv.elem(w, "Comment", x, [])
+  }
+  xmlv.end(w, "DisassociateVPCFromHostedZoneRequest")
+  body = xmlv.finish(w)
+  headers.push(("Content-Type", "application/xml"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/disassociatevpc"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disassociate_vpc_from_hosted_zone(resp: http.Response) -> DisassociateVPCFromHostedZoneResponse ! Str {
+  var out = DisassociateVPCFromHostedZoneResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DisassociateVPCFromHostedZone.
+pub enum DisassociateVPCFromHostedZoneErr {
+  InvalidInputError(e: InvalidInput)
+  InvalidVPCId(e: InvalidVPCId)
+  LastVPCAssociation(e: LastVPCAssociation)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  VPCAssociationNotFound(e: VPCAssociationNotFound)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisassociateVPCFromHostedZoneErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidVPCId(x) => "InvalidVPCId: ${x:?}"
+    LastVPCAssociation(x) => "LastVPCAssociation: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    VPCAssociationNotFound(x) => "VPCAssociationNotFound: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disassociate_vpc_from_hosted_zone_error(resp: http.Response) -> DisassociateVPCFromHostedZoneErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return DisassociateVPCFromHostedZoneErr.InvalidInputError(x)
+      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
+    }
+    "InvalidVPCId" => match read_error_invalid_vpc_id(resp, body) {
+      Ok(x) => return DisassociateVPCFromHostedZoneErr.InvalidVPCId(x)
+      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
+    }
+    "LastVPCAssociation" => match read_error_last_vpc_association(resp, body) {
+      Ok(x) => return DisassociateVPCFromHostedZoneErr.LastVPCAssociation(x)
+      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return DisassociateVPCFromHostedZoneErr.NoSuchHostedZone(x)
+      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
+    }
+    "VPCAssociationNotFound" => match read_error_vpc_association_not_found(resp, body) {
+      Ok(x) => return DisassociateVPCFromHostedZoneErr.VPCAssociationNotFound(x)
+      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  DisassociateVPCFromHostedZoneErr.Api(restxml.api_error(resp))
+}
+
+/// Disassociates an Amazon Virtual Private Cloud (Amazon VPC) from an
+/// Amazon Route 53 private hosted zone. Note the following: You can't
+/// disassociate the last Amazon VPC from a private hosted zone. You can't
+/// convert a private hosted zone into a public hosted zone. You can submit
+/// a DisassociateVPCFromHostedZone request using either the account that
+/// created the hosted zone or the account that created the Amazon VPC. Some
+/// services, such as Cloud Map and Amazon Elastic File System (Amazon EFS)
+/// automatically create hosted zones and associate VPCs with the hosted
+/// zones. A service can create a hosted zone using your account or using
+/// its own account. You can disassociate a VPC from a hosted zone only if
+/// the service created the hosted zone using your account. When you run
+/// DisassociateVPCFromHostedZone , if the hosted zone has a value for
+/// OwningAccount , you can use DisassociateVPCFromHostedZone . If the
+/// hosted zone has a value for OwningService , you can't use
+/// DisassociateVPCFromHostedZone . When revoking access, the hosted zone
+/// and the Amazon VPC must belong to the same partition. A partition is a
+/// group of Amazon Web Services Regions. Each Amazon Web Services account
+/// is scoped to one partition. The following are the supported partitions:
+/// aws - Amazon Web Services Regions aws-cn - China Regions aws-us-gov -
+/// Amazon Web Services GovCloud (US) Region For more information, see
+/// Access Management in the Amazon Web Services General Reference .
+pub fn (c: Client) disassociate_vpc_from_hosted_zone(input: DisassociateVPCFromHostedZoneRequest) -> DisassociateVPCFromHostedZoneResponse ! DisassociateVPCFromHostedZoneErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disassociate_vpc_from_hosted_zone(c.params, input)) ?? e => return Err(DisassociateVPCFromHostedZoneErr.InvalidInput(e))
+  var req = serialize_disassociate_vpc_from_hosted_zone(ep, input, "") ?? e => return Err(DisassociateVPCFromHostedZoneErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DisassociateVPCFromHostedZoneErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disassociate_vpc_from_hosted_zone_error(resp))
+  }
+  deserialize_disassociate_vpc_from_hosted_zone(resp) ?? e => Err(DisassociateVPCFromHostedZoneErr.Deserialize(e))
+}
+
+pub fn endpoint_params_enable_hosted_zone_dnssec(base: EndpointParameters, input: EnableHostedZoneDNSSECRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of EnableHostedZoneDNSSEC.
+pub fn serialize_enable_hosted_zone_dnssec(ep: rest.Endpoint, given: EnableHostedZoneDNSSECRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/enable-dnssec"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_enable_hosted_zone_dnssec(resp: http.Response) -> EnableHostedZoneDNSSECResponse ! Str {
   var out = EnableHostedZoneDNSSECResponse{}
   let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
@@ -923,6 +2738,109 @@ pub fn (c: Client) get_health_check_last_failure_reason(input: GetHealthCheckLas
   deserialize_get_health_check_last_failure_reason(resp) ?? e => Err(GetHealthCheckLastFailureReasonErr.Deserialize(e))
 }
 
+pub fn endpoint_params_get_health_check_source(base: EndpointParameters, input: GetHealthCheckSourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetHealthCheckSource.
+pub fn serialize_get_health_check_source(ep: rest.Endpoint, input: GetHealthCheckSourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_health_check_source_id = match input.health_check_source_id {
+    Some(v) => v
+    None => return Err("input member HealthCheckSourceId is required")
+  }
+  if label_health_check_source_id == "" {
+    return Err("input member HealthCheckSourceId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/healthchecksource/${rest.escape(label_health_check_source_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_health_check_source(resp: http.Response) -> GetHealthCheckSourceResponse ! Str {
+  var out = GetHealthCheckSourceResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "HealthCheckSource" => out.health_check_source = xml_read_health_check_source(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetHealthCheckSource.
+pub enum GetHealthCheckSourceErr {
+  InvalidInputError(e: InvalidInput)
+  NoSuchHealthCheckSource(e: NoSuchHealthCheckSource)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetHealthCheckSourceErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchHealthCheckSource(x) => "NoSuchHealthCheckSource: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_health_check_source_error(resp: http.Response) -> GetHealthCheckSourceErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return GetHealthCheckSourceErr.InvalidInputError(x)
+      Err(msg) => return GetHealthCheckSourceErr.Deserialize(msg)
+    }
+    "NoSuchHealthCheckSource" => match read_error_no_such_health_check_source(resp, body) {
+      Ok(x) => return GetHealthCheckSourceErr.NoSuchHealthCheckSource(x)
+      Err(msg) => return GetHealthCheckSourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetHealthCheckSourceErr.Api(restxml.api_error(resp))
+}
+
+/// Gets information about a specified health check source, including its
+/// status and the virtual private cloud (VPC), subnets, and security groups
+/// that it uses.
+pub fn (c: Client) get_health_check_source(input: GetHealthCheckSourceRequest) -> GetHealthCheckSourceResponse ! GetHealthCheckSourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_health_check_source(c.params, input)) ?? e => return Err(GetHealthCheckSourceErr.InvalidInput(e))
+  var req = serialize_get_health_check_source(ep, input, "") ?? e => return Err(GetHealthCheckSourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetHealthCheckSourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_health_check_source_error(resp))
+  }
+  deserialize_get_health_check_source(resp) ?? e => Err(GetHealthCheckSourceErr.Deserialize(e))
+}
+
 pub fn endpoint_params_get_health_check_status(base: EndpointParameters, input: GetHealthCheckStatusRequest) -> EndpointParameters {
   let _ = input
   base
@@ -1133,6 +3051,137 @@ pub fn (c: Client) get_hosted_zone(input: GetHostedZoneRequest) -> GetHostedZone
     return Err(deserialize_get_hosted_zone_error(resp))
   }
   deserialize_get_hosted_zone(resp) ?? e => Err(GetHostedZoneErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_hosted_zone_change_batch(base: EndpointParameters, input: GetHostedZoneChangeBatchRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetHostedZoneChangeBatch.
+pub fn serialize_get_hosted_zone_change_batch(ep: rest.Endpoint, given: GetHostedZoneChangeBatchRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v }), change_id: given.change_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  let label_change_id = match input.change_id {
+    Some(v) => v
+    None => return Err("input member ChangeId is required")
+  }
+  if label_change_id == "" {
+    return Err("input member ChangeId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/changebatches/${rest.escape(label_change_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_hosted_zone_change_batch(resp: http.Response) -> GetHostedZoneChangeBatchResponse ! Str {
+  var out = GetHostedZoneChangeBatchResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeBatchSummary" => out.change_batch_summary = xml_read_change_batch_summary(c)?
+      "ChangeBatch" => out.change_batch = xml_read_change_batch(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetHostedZoneChangeBatch.
+pub enum GetHostedZoneChangeBatchErr {
+  FeatureNotEnabled(e: FeatureNotEnabled)
+  InvalidInputError(e: InvalidInput)
+  NoSuchChange(e: NoSuchChange)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetHostedZoneChangeBatchErr) display() -> Str {
+  match e {
+    FeatureNotEnabled(x) => "FeatureNotEnabled: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchChange(x) => "NoSuchChange: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_hosted_zone_change_batch_error(resp: http.Response) -> GetHostedZoneChangeBatchErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "FeatureNotEnabled" => match read_error_feature_not_enabled(resp, body) {
+      Ok(x) => return GetHostedZoneChangeBatchErr.FeatureNotEnabled(x)
+      Err(msg) => return GetHostedZoneChangeBatchErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return GetHostedZoneChangeBatchErr.InvalidInputError(x)
+      Err(msg) => return GetHostedZoneChangeBatchErr.Deserialize(msg)
+    }
+    "NoSuchChange" => match read_error_no_such_change(resp, body) {
+      Ok(x) => return GetHostedZoneChangeBatchErr.NoSuchChange(x)
+      Err(msg) => return GetHostedZoneChangeBatchErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return GetHostedZoneChangeBatchErr.NoSuchHostedZone(x)
+      Err(msg) => return GetHostedZoneChangeBatchErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetHostedZoneChangeBatchErr.Api(restxml.api_error(resp))
+}
+
+/// Returns one change batch from the change history of a hosted zone,
+/// including every change in the batch. Each resource record set is in the
+/// same form that ListResourceRecordSets returns. For example, the name is
+/// in lowercase and ends with a dot. For an UPSERT or a DELETE , the
+/// response doesn't contain the values that the resource record set had
+/// before the change. If the change batch isn't in the hosted zone's
+/// retained change history, for example because it's in another hosted
+/// zone, it expired, or it's from before RetentionStartsAt , Route 53
+/// returns a NoSuchChange error. If Change History isn't turned on for the
+/// hosted zone, Route 53 returns a FeatureNotEnabled error.
+pub fn (c: Client) get_hosted_zone_change_batch(input: GetHostedZoneChangeBatchRequest) -> GetHostedZoneChangeBatchResponse ! GetHostedZoneChangeBatchErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_hosted_zone_change_batch(c.params, input)) ?? e => return Err(GetHostedZoneChangeBatchErr.InvalidInput(e))
+  var req = serialize_get_hosted_zone_change_batch(ep, input, "") ?? e => return Err(GetHostedZoneChangeBatchErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetHostedZoneChangeBatchErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_hosted_zone_change_batch_error(resp))
+  }
+  deserialize_get_hosted_zone_change_batch(resp) ?? e => Err(GetHostedZoneChangeBatchErr.Deserialize(e))
 }
 
 pub fn endpoint_params_get_hosted_zone_count(base: EndpointParameters, input: GetHostedZoneCountRequest) -> EndpointParameters {
@@ -2398,6 +4447,104 @@ pub fn (c: Client) list_geo_locations(input: ListGeoLocationsRequest) -> ListGeo
   deserialize_list_geo_locations(resp) ?? e => Err(ListGeoLocationsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_health_check_sources(base: EndpointParameters, input: ListHealthCheckSourcesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListHealthCheckSources.
+pub fn serialize_list_health_check_sources(ep: rest.Endpoint, input: ListHealthCheckSourcesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.next_token {
+    qs.push(("nexttoken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxresults", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/healthchecksource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_health_check_sources(resp: http.Response) -> ListHealthCheckSourcesResponse ! Str {
+  var out = ListHealthCheckSourcesResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "HealthCheckSources" => out.health_check_sources = xml_read_health_check_sources(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListHealthCheckSources.
+pub enum ListHealthCheckSourcesErr {
+  InvalidInputError(e: InvalidInput)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListHealthCheckSourcesErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_health_check_sources_error(resp: http.Response) -> ListHealthCheckSourcesErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return ListHealthCheckSourcesErr.InvalidInputError(x)
+      Err(msg) => return ListHealthCheckSourcesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListHealthCheckSourcesErr.Api(restxml.api_error(resp))
+}
+
+/// Retrieves a list of the health check sources that are associated with
+/// the current Amazon Web Services account. Results are paginated. To get
+/// more results, specify the NextToken value from the previous response for
+/// NextToken .
+pub fn (c: Client) list_health_check_sources(input: ListHealthCheckSourcesRequest) -> ListHealthCheckSourcesResponse ! ListHealthCheckSourcesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_health_check_sources(c.params, input)) ?? e => return Err(ListHealthCheckSourcesErr.InvalidInput(e))
+  var req = serialize_list_health_check_sources(ep, input, "") ?? e => return Err(ListHealthCheckSourcesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(ListHealthCheckSourcesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_health_check_sources_error(resp))
+  }
+  deserialize_list_health_check_sources(resp) ?? e => Err(ListHealthCheckSourcesErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_health_checks(base: EndpointParameters, input: ListHealthChecksRequest) -> EndpointParameters {
   let _ = input
   base
@@ -2501,6 +4648,265 @@ pub fn (c: Client) list_health_checks(input: ListHealthChecksRequest) -> ListHea
     return Err(deserialize_list_health_checks_error(resp))
   }
   deserialize_list_health_checks(resp) ?? e => Err(ListHealthChecksErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_health_checks_by_source(base: EndpointParameters, input: ListHealthChecksBySourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListHealthChecksBySource.
+pub fn serialize_list_health_checks_by_source(ep: rest.Endpoint, input: ListHealthChecksBySourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_health_check_source_id = match input.health_check_source_id {
+    Some(v) => v
+    None => return Err("input member HealthCheckSourceId is required")
+  }
+  if label_health_check_source_id == "" {
+    return Err("input member HealthCheckSourceId must not be empty")
+  }
+  if let Some(v) = input.marker {
+    qs.push(("marker", v))
+  }
+  if let Some(v) = input.max_items {
+    qs.push(("maxitems", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/healthchecks/source/${rest.escape(label_health_check_source_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_health_checks_by_source(resp: http.Response) -> ListHealthChecksBySourceResponse ! Str {
+  var out = ListHealthChecksBySourceResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "HealthChecks" => out.health_checks = xml_read_health_checks(c)?
+      "Marker" => out.marker = c.text()
+      "IsTruncated" => out.is_truncated = xmlv.read_bool(c.text())?
+      "NextMarker" => out.next_marker = c.text()
+      "MaxItems" => out.max_items = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListHealthChecksBySource.
+pub enum ListHealthChecksBySourceErr {
+  InvalidInputError(e: InvalidInput)
+  NoSuchHealthCheckSource(e: NoSuchHealthCheckSource)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListHealthChecksBySourceErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchHealthCheckSource(x) => "NoSuchHealthCheckSource: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_health_checks_by_source_error(resp: http.Response) -> ListHealthChecksBySourceErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return ListHealthChecksBySourceErr.InvalidInputError(x)
+      Err(msg) => return ListHealthChecksBySourceErr.Deserialize(msg)
+    }
+    "NoSuchHealthCheckSource" => match read_error_no_such_health_check_source(resp, body) {
+      Ok(x) => return ListHealthChecksBySourceErr.NoSuchHealthCheckSource(x)
+      Err(msg) => return ListHealthChecksBySourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListHealthChecksBySourceErr.Api(restxml.api_error(resp))
+}
+
+/// Retrieves a list of the health checks that use a specified health check
+/// source. Results are paginated. If IsTruncated is true , specify the
+/// NextMarker value for marker to get more results.
+pub fn (c: Client) list_health_checks_by_source(input: ListHealthChecksBySourceRequest) -> ListHealthChecksBySourceResponse ! ListHealthChecksBySourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_health_checks_by_source(c.params, input)) ?? e => return Err(ListHealthChecksBySourceErr.InvalidInput(e))
+  var req = serialize_list_health_checks_by_source(ep, input, "") ?? e => return Err(ListHealthChecksBySourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(ListHealthChecksBySourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_health_checks_by_source_error(resp))
+  }
+  deserialize_list_health_checks_by_source(resp) ?? e => Err(ListHealthChecksBySourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_hosted_zone_change_batches(base: EndpointParameters, input: ListHostedZoneChangeBatchesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListHostedZoneChangeBatches.
+pub fn serialize_list_hosted_zone_change_batches(ep: rest.Endpoint, given: ListHostedZoneChangeBatchesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v }), start_after_change_id: given.start_after_change_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  if let Some(v) = input.submitted_after {
+    qs.push(("submittedafter", v))
+  }
+  if let Some(v) = input.submitted_before {
+    qs.push(("submittedbefore", v))
+  }
+  if let Some(v) = input.start_after_change_id {
+    qs.push(("startafterchangeid", v))
+  }
+  if let Some(v) = input.sort_order {
+    qs.push(("sortorder", v.value()))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxresults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nexttoken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/changebatches"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_hosted_zone_change_batches(resp: http.Response) -> ListHostedZoneChangeBatchesResponse ! Str {
+  var out = ListHostedZoneChangeBatchesResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ChangeBatchSummaries" => out.change_batch_summaries = xml_read_change_batch_summaries(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListHostedZoneChangeBatches.
+pub enum ListHostedZoneChangeBatchesErr {
+  FeatureNotEnabled(e: FeatureNotEnabled)
+  InvalidInputError(e: InvalidInput)
+  InvalidPaginationToken(e: InvalidPaginationToken)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListHostedZoneChangeBatchesErr) display() -> Str {
+  match e {
+    FeatureNotEnabled(x) => "FeatureNotEnabled: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidPaginationToken(x) => "InvalidPaginationToken: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_hosted_zone_change_batches_error(resp: http.Response) -> ListHostedZoneChangeBatchesErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "FeatureNotEnabled" => match read_error_feature_not_enabled(resp, body) {
+      Ok(x) => return ListHostedZoneChangeBatchesErr.FeatureNotEnabled(x)
+      Err(msg) => return ListHostedZoneChangeBatchesErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return ListHostedZoneChangeBatchesErr.InvalidInputError(x)
+      Err(msg) => return ListHostedZoneChangeBatchesErr.Deserialize(msg)
+    }
+    "InvalidPaginationToken" => match read_error_invalid_pagination_token(resp, body) {
+      Ok(x) => return ListHostedZoneChangeBatchesErr.InvalidPaginationToken(x)
+      Err(msg) => return ListHostedZoneChangeBatchesErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return ListHostedZoneChangeBatchesErr.NoSuchHostedZone(x)
+      Err(msg) => return ListHostedZoneChangeBatchesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListHostedZoneChangeBatchesErr.Api(restxml.api_error(resp))
+}
+
+/// Lists the change batches in an Amazon Route 53 hosted zone. For each
+/// change batch, the response contains its change ID, the operation that
+/// submitted it, and when and by whom it was submitted. It also contains
+/// the request ID, the comment if there is one, and the number of changes.
+/// Use this list to review who changed the hosted zone and when. Each
+/// change batch records one ChangeResourceRecordSets or CreateHostedZone
+/// request. A CreateHostedZone change batch has a ChangeCount of 0. You can
+/// read a change batch for 365 days after it was submitted, but not from
+/// before the RetentionStartsAt time that GetHostedZone returns in
+/// Features/ChangeHistory . If Change History isn't turned on for the
+/// hosted zone, Route 53 returns a FeatureNotEnabled error. Results are
+/// paginated. To get the next page, use the NextToken value from the
+/// response. To get the changes in a change batch, use
+/// GetHostedZoneChangeBatch .
+pub fn (c: Client) list_hosted_zone_change_batches(input: ListHostedZoneChangeBatchesRequest) -> ListHostedZoneChangeBatchesResponse ! ListHostedZoneChangeBatchesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_hosted_zone_change_batches(c.params, input)) ?? e => return Err(ListHostedZoneChangeBatchesErr.InvalidInput(e))
+  var req = serialize_list_hosted_zone_change_batches(ep, input, "") ?? e => return Err(ListHostedZoneChangeBatchesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(ListHostedZoneChangeBatchesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_hosted_zone_change_batches_error(resp))
+  }
+  deserialize_list_hosted_zone_change_batches(resp) ?? e => Err(ListHostedZoneChangeBatchesErr.Deserialize(e))
 }
 
 pub fn endpoint_params_list_hosted_zones(base: EndpointParameters, input: ListHostedZonesRequest) -> EndpointParameters {
@@ -3013,6 +5419,280 @@ pub fn (c: Client) list_query_logging_configs(input: ListQueryLoggingConfigsRequ
   deserialize_list_query_logging_configs(resp) ?? e => Err(ListQueryLoggingConfigsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_resource_record_set_changes(base: EndpointParameters, input: ListResourceRecordSetChangesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListResourceRecordSetChanges.
+pub fn serialize_list_resource_record_set_changes(ep: rest.Endpoint, given: ListResourceRecordSetChangesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  if let Some(v) = input.record_name {
+    qs.push(("recordname", v))
+  }
+  if let Some(v) = input.record_type {
+    qs.push(("recordtype", v.value()))
+  }
+  if let Some(v) = input.submitted_after {
+    qs.push(("submittedafter", v))
+  }
+  if let Some(v) = input.submitted_before {
+    qs.push(("submittedbefore", v))
+  }
+  if let Some(v) = input.sort_order {
+    qs.push(("sortorder", v.value()))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxresults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nexttoken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/rrsetchanges"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_resource_record_set_changes(resp: http.Response) -> ListResourceRecordSetChangesResponse ! Str {
+  var out = ListResourceRecordSetChangesResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ResourceRecordSetChanges" => out.resource_record_set_changes = xml_read_resource_record_set_changes(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListResourceRecordSetChanges.
+pub enum ListResourceRecordSetChangesErr {
+  FeatureNotEnabled(e: FeatureNotEnabled)
+  InvalidInputError(e: InvalidInput)
+  InvalidPaginationToken(e: InvalidPaginationToken)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListResourceRecordSetChangesErr) display() -> Str {
+  match e {
+    FeatureNotEnabled(x) => "FeatureNotEnabled: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidPaginationToken(x) => "InvalidPaginationToken: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_resource_record_set_changes_error(resp: http.Response) -> ListResourceRecordSetChangesErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "FeatureNotEnabled" => match read_error_feature_not_enabled(resp, body) {
+      Ok(x) => return ListResourceRecordSetChangesErr.FeatureNotEnabled(x)
+      Err(msg) => return ListResourceRecordSetChangesErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return ListResourceRecordSetChangesErr.InvalidInputError(x)
+      Err(msg) => return ListResourceRecordSetChangesErr.Deserialize(msg)
+    }
+    "InvalidPaginationToken" => match read_error_invalid_pagination_token(resp, body) {
+      Ok(x) => return ListResourceRecordSetChangesErr.InvalidPaginationToken(x)
+      Err(msg) => return ListResourceRecordSetChangesErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return ListResourceRecordSetChangesErr.NoSuchHostedZone(x)
+      Err(msg) => return ListResourceRecordSetChangesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListResourceRecordSetChangesErr.Api(restxml.api_error(resp))
+}
+
+/// Lists the individual changes in the change history of a hosted zone.
+/// Each entry is one change, with the full resource record set that the
+/// change wrote or deleted. To list only the changes to the resource record
+/// sets that have a specific name and type, specify RecordName and
+/// RecordType . Weighted, latency, and other resource record sets that have
+/// the same name and type appear as separate entries, each with its
+/// SetIdentifier . A change can take a few seconds to appear in
+/// ListResourceRecordSetChanges after it appears in
+/// ListHostedZoneChangeBatches . For a complete, ordered list of changes,
+/// use ListHostedZoneChangeBatches . Results are paginated. To get the next
+/// page, use the NextToken value from the response. If Change History isn't
+/// turned on for the hosted zone, Route 53 returns a FeatureNotEnabled
+/// error.
+pub fn (c: Client) list_resource_record_set_changes(input: ListResourceRecordSetChangesRequest) -> ListResourceRecordSetChangesResponse ! ListResourceRecordSetChangesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_resource_record_set_changes(c.params, input)) ?? e => return Err(ListResourceRecordSetChangesErr.InvalidInput(e))
+  var req = serialize_list_resource_record_set_changes(ep, input, "") ?? e => return Err(ListResourceRecordSetChangesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(ListResourceRecordSetChangesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_resource_record_set_changes_error(resp))
+  }
+  deserialize_list_resource_record_set_changes(resp) ?? e => Err(ListResourceRecordSetChangesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_resource_record_set_protections(base: EndpointParameters, input: ListResourceRecordSetProtectionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListResourceRecordSetProtections.
+pub fn serialize_list_resource_record_set_protections(ep: rest.Endpoint, given: ListResourceRecordSetProtectionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  if let Some(v) = input.start_record_name {
+    qs.push(("name", v))
+  }
+  if let Some(v) = input.start_record_type {
+    qs.push(("type", v.value()))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxresults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nexttoken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/rrsetprotection"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_resource_record_set_protections(resp: http.Response) -> ListResourceRecordSetProtectionsResponse ! Str {
+  var out = ListResourceRecordSetProtectionsResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "ResourceRecordSetProtections" => out.resource_record_set_protections = xml_read_resource_record_set_protections(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListResourceRecordSetProtections.
+pub enum ListResourceRecordSetProtectionsErr {
+  InvalidInputError(e: InvalidInput)
+  InvalidPaginationToken(e: InvalidPaginationToken)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListResourceRecordSetProtectionsErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidPaginationToken(x) => "InvalidPaginationToken: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_resource_record_set_protections_error(resp: http.Response) -> ListResourceRecordSetProtectionsErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return ListResourceRecordSetProtectionsErr.InvalidInputError(x)
+      Err(msg) => return ListResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "InvalidPaginationToken" => match read_error_invalid_pagination_token(resp, body) {
+      Ok(x) => return ListResourceRecordSetProtectionsErr.InvalidPaginationToken(x)
+      Err(msg) => return ListResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return ListResourceRecordSetProtectionsErr.NoSuchHostedZone(x)
+      Err(msg) => return ListResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  ListResourceRecordSetProtectionsErr.Api(restxml.api_error(resp))
+}
+
+/// Lists the resource record set protections in a hosted zone. We recommend
+/// using pagination to ensure that the operation returns quickly and
+/// successfully. If the response includes a NextToken element, there are
+/// more protections to list. To get the next page of results, submit
+/// another request and specify the value of NextToken in the NextToken
+/// parameter.
+pub fn (c: Client) list_resource_record_set_protections(input: ListResourceRecordSetProtectionsRequest) -> ListResourceRecordSetProtectionsResponse ! ListResourceRecordSetProtectionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_resource_record_set_protections(c.params, input)) ?? e => return Err(ListResourceRecordSetProtectionsErr.InvalidInput(e))
+  var req = serialize_list_resource_record_set_protections(ep, input, "") ?? e => return Err(ListResourceRecordSetProtectionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(ListResourceRecordSetProtectionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_resource_record_set_protections_error(resp))
+  }
+  deserialize_list_resource_record_set_protections(resp) ?? e => Err(ListResourceRecordSetProtectionsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_resource_record_sets(base: EndpointParameters, input: ListResourceRecordSetsRequest) -> EndpointParameters {
   let _ = input
   base
@@ -3321,6 +6001,7 @@ pub fn deserialize_list_tags_for_resource(resp: http.Response) -> ListTagsForRes
 pub enum ListTagsForResourceErr {
   InvalidInputError(e: InvalidInput)
   NoSuchHealthCheck(e: NoSuchHealthCheck)
+  NoSuchHealthCheckSource(e: NoSuchHealthCheckSource)
   NoSuchHostedZone(e: NoSuchHostedZone)
   PriorRequestNotComplete(e: PriorRequestNotComplete)
   ThrottlingException(e: ThrottlingException)
@@ -3338,6 +6019,7 @@ pub fn (e: ListTagsForResourceErr) display() -> Str {
   match e {
     InvalidInputError(x) => "InvalidInput: ${x:?}"
     NoSuchHealthCheck(x) => "NoSuchHealthCheck: ${x:?}"
+    NoSuchHealthCheckSource(x) => "NoSuchHealthCheckSource: ${x:?}"
     NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
     PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
@@ -3357,6 +6039,10 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
     }
     "NoSuchHealthCheck" => match read_error_no_such_health_check(resp, body) {
       Ok(x) => return ListTagsForResourceErr.NoSuchHealthCheck(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "NoSuchHealthCheckSource" => match read_error_no_such_health_check_source(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.NoSuchHealthCheckSource(x)
       Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
     }
     "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
@@ -3451,6 +6137,7 @@ pub fn deserialize_list_tags_for_resources(resp: http.Response) -> ListTagsForRe
 pub enum ListTagsForResourcesErr {
   InvalidInputError(e: InvalidInput)
   NoSuchHealthCheck(e: NoSuchHealthCheck)
+  NoSuchHealthCheckSource(e: NoSuchHealthCheckSource)
   NoSuchHostedZone(e: NoSuchHostedZone)
   PriorRequestNotComplete(e: PriorRequestNotComplete)
   ThrottlingException(e: ThrottlingException)
@@ -3468,6 +6155,7 @@ pub fn (e: ListTagsForResourcesErr) display() -> Str {
   match e {
     InvalidInputError(x) => "InvalidInput: ${x:?}"
     NoSuchHealthCheck(x) => "NoSuchHealthCheck: ${x:?}"
+    NoSuchHealthCheckSource(x) => "NoSuchHealthCheckSource: ${x:?}"
     NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
     PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
@@ -3487,6 +6175,10 @@ pub fn deserialize_list_tags_for_resources_error(resp: http.Response) -> ListTag
     }
     "NoSuchHealthCheck" => match read_error_no_such_health_check(resp, body) {
       Ok(x) => return ListTagsForResourcesErr.NoSuchHealthCheck(x)
+      Err(msg) => return ListTagsForResourcesErr.Deserialize(msg)
+    }
+    "NoSuchHealthCheckSource" => match read_error_no_such_health_check_source(resp, body) {
+      Ok(x) => return ListTagsForResourcesErr.NoSuchHealthCheckSource(x)
       Err(msg) => return ListTagsForResourcesErr.Deserialize(msg)
     }
     "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
@@ -4425,6 +7117,9 @@ pub fn serialize_update_health_check(ep: rest.Endpoint, input: UpdateHealthCheck
   if let Some(x) = input.reset_elements {
     xml_write_resettable_element_name_list(w, x, "ResetElements", [])
   }
+  if let Some(x) = input.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
   xmlv.end(w, "UpdateHealthCheckRequest")
   body = xmlv.finish(w)
   headers.push(("Content-Type", "application/xml"))
@@ -4662,6 +7357,15 @@ pub fn serialize_update_hosted_zone_features(ep: rest.Endpoint, given: UpdateHos
   if let Some(x) = input.enable_accelerated_recovery {
     xmlv.elem(w, "EnableAcceleratedRecovery", "${x}", [])
   }
+  if let Some(x) = input.enable_public_dns_fallback {
+    xmlv.elem(w, "EnablePublicDNSFallback", "${x}", [])
+  }
+  if let Some(x) = input.change_guardrails {
+    xml_write_change_guardrails(w, x, "ChangeGuardrails", [])
+  }
+  if let Some(x) = input.dry_run {
+    xmlv.elem(w, "DryRun", "${x}", [])
+  }
   xmlv.end(w, "UpdateHostedZoneFeaturesRequest")
   body = xmlv.finish(w)
   headers.push(("Content-Type", "application/xml"))
@@ -4741,9 +7445,14 @@ pub fn deserialize_update_hosted_zone_features_error(resp: http.Response) -> Upd
 
 /// Updates the features configuration for a hosted zone. This operation
 /// allows you to enable or disable specific features for your hosted zone,
-/// such as accelerated recovery. Accelerated recovery enables you to update
-/// DNS records in your public hosted zone even when the us-east-1 region is
-/// unavailable.
+/// such as accelerated recovery and public DNS fallback. Accelerated
+/// recovery enables you to update DNS records in your public hosted zone
+/// even when the us-east-1 region is unavailable. Public DNS fallback
+/// enables Route 53 to retry a query against public DNS when a query for a
+/// domain name in a private hosted zone matches no existing name ( NXDOMAIN
+/// ). Fallback does not occur when the name exists but has no record of the
+/// requested type. Public DNS fallback is supported only for private hosted
+/// zones.
 pub fn (c: Client) update_hosted_zone_features(input: UpdateHostedZoneFeaturesRequest) -> UpdateHostedZoneFeaturesResponse ! UpdateHostedZoneFeaturesErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_hosted_zone_features(c.params, input)) ?? e => return Err(UpdateHostedZoneFeaturesErr.InvalidInput(e))
   var req = serialize_update_hosted_zone_features(ep, input, "") ?? e => return Err(UpdateHostedZoneFeaturesErr.InvalidInput(e))
@@ -4755,6 +7464,127 @@ pub fn (c: Client) update_hosted_zone_features(input: UpdateHostedZoneFeaturesRe
     return Err(deserialize_update_hosted_zone_features_error(resp))
   }
   deserialize_update_hosted_zone_features(resp) ?? e => Err(UpdateHostedZoneFeaturesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_hosted_zone_tier(base: EndpointParameters, input: UpdateHostedZoneTierRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateHostedZoneTier.
+pub fn serialize_update_hosted_zone_tier(ep: rest.Endpoint, given: UpdateHostedZoneTierRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  var w = xmlv.writer()
+  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
+  xmlv.start(w, "UpdateHostedZoneTierRequest", attrs)
+  if let Some(x) = input.hosted_zone_tier {
+    xmlv.elem(w, "HostedZoneTier", x.value(), [])
+  }
+  if let Some(x) = input.dry_run {
+    xmlv.elem(w, "DryRun", "${x}", [])
+  }
+  xmlv.end(w, "UpdateHostedZoneTierRequest")
+  body = xmlv.finish(w)
+  headers.push(("Content-Type", "application/xml"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/tier"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_hosted_zone_tier(resp: http.Response) -> UpdateHostedZoneTierResponse ! Str {
+  var out = UpdateHostedZoneTierResponse{}
+  Ok(out)
+}
+
+/// The errors of UpdateHostedZoneTier.
+pub enum UpdateHostedZoneTierErr {
+  InvalidInputError(e: InvalidInput)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  PriorRequestNotComplete(e: PriorRequestNotComplete)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateHostedZoneTierErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_hosted_zone_tier_error(resp: http.Response) -> UpdateHostedZoneTierErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return UpdateHostedZoneTierErr.InvalidInputError(x)
+      Err(msg) => return UpdateHostedZoneTierErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return UpdateHostedZoneTierErr.NoSuchHostedZone(x)
+      Err(msg) => return UpdateHostedZoneTierErr.Deserialize(msg)
+    }
+    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
+      Ok(x) => return UpdateHostedZoneTierErr.PriorRequestNotComplete(x)
+      Err(msg) => return UpdateHostedZoneTierErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  UpdateHostedZoneTierErr.Api(restxml.api_error(resp))
+}
+
+/// Changes the tier of a hosted zone. The tier determines which features
+/// the hosted zone includes and which optional features you can turn on.
+/// For pricing information, see Amazon Route 53 pricing on the AWS website.
+/// When the hosted zone moves to a new tier, Route 53 turns on the features
+/// that the new tier includes. Route 53 also disables any enabled features
+/// that the new tier doesn't include. Before you move a hosted zone to a
+/// tier that doesn't offer an optional feature that you turned on, turn off
+/// that feature. You can't change the tier of a hosted zone that uses a
+/// CloudFront flat-rate pricing plan.
+pub fn (c: Client) update_hosted_zone_tier(input: UpdateHostedZoneTierRequest) -> UpdateHostedZoneTierResponse ! UpdateHostedZoneTierErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_hosted_zone_tier(c.params, input)) ?? e => return Err(UpdateHostedZoneTierErr.InvalidInput(e))
+  var req = serialize_update_hosted_zone_tier(ep, input, "") ?? e => return Err(UpdateHostedZoneTierErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(UpdateHostedZoneTierErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_hosted_zone_tier_error(resp))
+  }
+  deserialize_update_hosted_zone_tier(resp) ?? e => Err(UpdateHostedZoneTierErr.Deserialize(e))
 }
 
 pub fn endpoint_params_update_traffic_policy_comment(base: EndpointParameters, input: UpdateTrafficPolicyCommentRequest) -> EndpointParameters {

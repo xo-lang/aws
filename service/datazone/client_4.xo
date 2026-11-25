@@ -8,6 +8,72 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// The HTTP request of DeleteEnvironmentAction.
+pub fn serialize_delete_environment_action(ep: rest.Endpoint, input: DeleteEnvironmentActionInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_identifier = match input.domain_identifier {
+    Some(v) => v
+    None => return Err("input member domainIdentifier is required")
+  }
+  if label_domain_identifier == "" {
+    return Err("input member domainIdentifier must not be empty")
+  }
+  let label_environment_identifier = match input.environment_identifier {
+    Some(v) => v
+    None => return Err("input member environmentIdentifier is required")
+  }
+  if label_environment_identifier == "" {
+    return Err("input member environmentIdentifier must not be empty")
+  }
+  let label_identifier = match input.identifier {
+    Some(v) => v
+    None => return Err("input member identifier is required")
+  }
+  if label_identifier == "" {
+    return Err("input member identifier must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v2/domains/${rest.escape(label_domain_identifier, false)}/environments/${rest.escape(label_environment_identifier, false)}/actions/${rest.escape(label_identifier, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_environment_action(resp: http.Response) -> () ! Str {
+  let _ = resp
+  Ok(())
+}
+
+/// The errors of DeleteEnvironmentAction.
+pub enum DeleteEnvironmentActionErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: DeleteEnvironmentActionErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
@@ -2816,6 +2882,7 @@ pub fn deserialize_get_asset(resp: http.Response) -> GetAssetOutput ! Str {
       "formsOutput" => out.forms_output = from_json_form_output_list(fv)?
       "readOnlyFormsOutput" => out.read_only_forms_output = from_json_form_output_list(fv)?
       "latestTimeSeriesDataPointFormsOutput" => out.latest_time_series_data_point_forms_output = from_json_time_series_data_point_summary_form_output_list(fv)?
+      "ownershipTransfer" => out.ownership_transfer = from_json_asset_ownership_transfer(fv)?
       _ => {}
     }
   }
@@ -10505,51 +10572,4 @@ pub fn serialize_list_environment_actions(ep: rest.Endpoint, input: ListEnvironm
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_list_environment_actions(resp: http.Response) -> ListEnvironmentActionsOutput ! Str {
-  var out = ListEnvironmentActionsOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "items" => out.items = from_json_list_environment_action_summaries(fv)?
-      "nextToken" => out.next_token = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ListEnvironmentActions.
-pub enum ListEnvironmentActionsErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  UnauthorizedException(e: UnauthorizedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ListEnvironmentActionsErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
 }

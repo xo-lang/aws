@@ -2439,6 +2439,9 @@ fn xml_write_create_serverless_cache_request(var w: xmlv.Writer, v: CreateServer
   if let Some(x) = v.connection_type {
     xmlv.elem(w, "ConnectionType", x.value(), [])
   }
+  if let Some(x) = v.integrations {
+    xml_write_integration_request_list(w, x, "Integrations", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -2461,6 +2464,7 @@ fn xml_read_create_serverless_cache_request(e: xml.Element) -> CreateServerlessC
       "DailySnapshotTime" => out.daily_snapshot_time = c.text()
       "NetworkType" => out.network_type = NetworkType.from(c.text())
       "ConnectionType" => out.connection_type = ConnectionType.from(c.text())
+      "Integrations" => out.integrations = xml_read_integration_request_list(c)?
       _ => {}
     }
   }
@@ -4916,6 +4920,84 @@ fn xml_read_insufficient_cache_cluster_capacity_fault(e: xml.Element) -> Insuffi
       "message" => out.message = c.text()
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_integration(var w: xmlv.Writer, v: Integration, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.integration_type {
+    xmlv.elem(w, "IntegrationType", x.value(), [])
+  }
+  if let Some(x) = v.status {
+    xmlv.elem(w, "Status", x.value(), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_integration(e: xml.Element) -> Integration ! Str {
+  var out = Integration{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "IntegrationType" => out.integration_type = IntegrationType.from(c.text())
+      "Status" => out.status = IntegrationStatus.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_integration_list(var w: xmlv.Writer, v: List[Integration], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_integration(w, item, "Integration", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_integration_list(e: xml.Element) -> List[Integration] ! Str {
+  var out: List[Integration] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_integration(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_integration_request(var w: xmlv.Writer, v: IntegrationRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.integration_type {
+    xmlv.elem(w, "IntegrationType", x.value(), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_integration_request(e: xml.Element) -> IntegrationRequest ! Str {
+  var out = IntegrationRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "IntegrationType" => out.integration_type = IntegrationType.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_integration_request_list(var w: xmlv.Writer, v: List[IntegrationRequest], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_integration_request(w, item, "IntegrationRequest", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_integration_request_list(e: xml.Element) -> List[IntegrationRequest] ! Str {
+  var out: List[IntegrationRequest] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_integration_request(c)?)
   }
   Ok(out)
 }
@@ -8287,6 +8369,9 @@ fn xml_write_serverless_cache(var w: xmlv.Writer, v: ServerlessCache, name: Str,
   if let Some(x) = v.migration {
     xml_write_migration_summary(w, x, "Migration", [])
   }
+  if let Some(x) = v.integrations {
+    xml_write_integration_list(w, x, "Integrations", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -8315,6 +8400,7 @@ fn xml_read_serverless_cache(e: xml.Element) -> ServerlessCache ! Str {
       "NetworkType" => out.network_type = NetworkType.from(c.text())
       "ConnectionType" => out.connection_type = ConnectionType.from(c.text())
       "Migration" => out.migration = xml_read_migration_summary(c)?
+      "Integrations" => out.integrations = xml_read_integration_list(c)?
       _ => {}
     }
   }
@@ -11326,6 +11412,9 @@ fn query_put_create_serverless_cache_request(var f: query.Form, prefix: Str, v: 
   if let Some(x) = v.connection_type {
     query.add(f, query.key(prefix, "ConnectionType"), x.value())
   }
+  if let Some(x) = v.integrations {
+    query_put_integration_request_list(f, query.key(prefix, "Integrations"), x, false)
+  }
 }
 
 fn query_put_create_serverless_cache_response(var f: query.Form, prefix: Str, v: CreateServerlessCacheResponse) {
@@ -12393,6 +12482,43 @@ fn query_put_increase_replica_count_result(var f: query.Form, prefix: Str, v: In
 fn query_put_insufficient_cache_cluster_capacity_fault(var f: query.Form, prefix: Str, v: InsufficientCacheClusterCapacityFault) {
   if let Some(x) = v.message {
     query.add(f, query.key(prefix, "message"), x)
+  }
+}
+
+fn query_put_integration(var f: query.Form, prefix: Str, v: Integration) {
+  if let Some(x) = v.integration_type {
+    query.add(f, query.key(prefix, "IntegrationType"), x.value())
+  }
+  if let Some(x) = v.status {
+    query.add(f, query.key(prefix, "Status"), x.value())
+  }
+}
+
+fn query_put_integration_list(var f: query.Form, prefix: Str, v: List[Integration], flat: Bool) {
+  if v.is_empty() {
+    query.add(f, prefix, "")
+    return
+  }
+  for (i, x) in v.indexed() {
+    let k = if flat { "${prefix}.${i + 1}" } else { "${prefix}.Integration.${i + 1}" }
+    query_put_integration(f, k, x)
+  }
+}
+
+fn query_put_integration_request(var f: query.Form, prefix: Str, v: IntegrationRequest) {
+  if let Some(x) = v.integration_type {
+    query.add(f, query.key(prefix, "IntegrationType"), x.value())
+  }
+}
+
+fn query_put_integration_request_list(var f: query.Form, prefix: Str, v: List[IntegrationRequest], flat: Bool) {
+  if v.is_empty() {
+    query.add(f, prefix, "")
+    return
+  }
+  for (i, x) in v.indexed() {
+    let k = if flat { "${prefix}.${i + 1}" } else { "${prefix}.IntegrationRequest.${i + 1}" }
+    query_put_integration_request(f, k, x)
   }
 }
 

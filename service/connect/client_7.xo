@@ -8,6 +8,495 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn (e: ImportWorkspaceMediaErr) display() -> Str {
+  match e {
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_import_workspace_media_error(resp: http.Response) -> ImportWorkspaceMediaErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ImportWorkspaceMediaErr.InternalServiceException(x)
+      Err(msg) => return ImportWorkspaceMediaErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return ImportWorkspaceMediaErr.InvalidParameterException(x)
+      Err(msg) => return ImportWorkspaceMediaErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ImportWorkspaceMediaErr.InvalidRequestException(x)
+      Err(msg) => return ImportWorkspaceMediaErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ImportWorkspaceMediaErr.ResourceNotFoundException(x)
+      Err(msg) => return ImportWorkspaceMediaErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ImportWorkspaceMediaErr.ThrottlingException(x)
+      Err(msg) => return ImportWorkspaceMediaErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ImportWorkspaceMediaErr.Api(restjson.api_error(resp, body))
+}
+
+/// Imports a media asset (such as a logo) for use in a workspace.
+pub fn (c: Client) import_workspace_media(input: ImportWorkspaceMediaRequest) -> ImportWorkspaceMediaResponse ! ImportWorkspaceMediaErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_import_workspace_media(c.params, input)) ?? e => return Err(ImportWorkspaceMediaErr.InvalidInput(e))
+  var req = serialize_import_workspace_media(ep, input, "") ?? e => return Err(ImportWorkspaceMediaErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ImportWorkspaceMediaErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_import_workspace_media_error(resp))
+  }
+  deserialize_import_workspace_media(resp) ?? e => Err(ImportWorkspaceMediaErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_agent_statuses(base: EndpointParameters, input: ListAgentStatusRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAgentStatuses.
+pub fn serialize_list_agent_statuses(ep: rest.Endpoint, input: ListAgentStatusRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_instance_id = match input.instance_id {
+    Some(v) => v
+    None => return Err("input member InstanceId is required")
+  }
+  if label_instance_id == "" {
+    return Err("input member InstanceId must not be empty")
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(xs) = input.agent_status_types {
+    for x in xs {
+      qs.push(("AgentStatusTypes", x.value()))
+    }
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/agent-status/${rest.escape(label_instance_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_agent_statuses(resp: http.Response) -> ListAgentStatusResponse ! Str {
+  var out = ListAgentStatusResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      "AgentStatusSummaryList" => out.agent_status_summary_list = from_json_agent_status_summary_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAgentStatuses.
+pub enum ListAgentStatusesErr {
+  InternalServiceException(e: InternalServiceException)
+  InvalidParameterException(e: InvalidParameterException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAgentStatusesErr) display() -> Str {
+  match e {
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_agent_statuses_error(resp: http.Response) -> ListAgentStatusesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ListAgentStatusesErr.InternalServiceException(x)
+      Err(msg) => return ListAgentStatusesErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return ListAgentStatusesErr.InvalidParameterException(x)
+      Err(msg) => return ListAgentStatusesErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListAgentStatusesErr.InvalidRequestException(x)
+      Err(msg) => return ListAgentStatusesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListAgentStatusesErr.ResourceNotFoundException(x)
+      Err(msg) => return ListAgentStatusesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListAgentStatusesErr.ThrottlingException(x)
+      Err(msg) => return ListAgentStatusesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAgentStatusesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists agent statuses.
+pub fn (c: Client) list_agent_statuses(input: ListAgentStatusRequest) -> ListAgentStatusResponse ! ListAgentStatusesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_agent_statuses(c.params, input)) ?? e => return Err(ListAgentStatusesErr.InvalidInput(e))
+  var req = serialize_list_agent_statuses(ep, input, "") ?? e => return Err(ListAgentStatusesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAgentStatusesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_agent_statuses_error(resp))
+  }
+  deserialize_list_agent_statuses(resp) ?? e => Err(ListAgentStatusesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_analytics_data_associations(base: EndpointParameters, input: ListAnalyticsDataAssociationsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAnalyticsDataAssociations.
+pub fn serialize_list_analytics_data_associations(ep: rest.Endpoint, input: ListAnalyticsDataAssociationsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_instance_id = match input.instance_id {
+    Some(v) => v
+    None => return Err("input member InstanceId is required")
+  }
+  if label_instance_id == "" {
+    return Err("input member InstanceId must not be empty")
+  }
+  if let Some(v) = input.data_set_id {
+    qs.push(("DataSetId", v))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/analytics-data/instance/${rest.escape(label_instance_id, false)}/association"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_analytics_data_associations(resp: http.Response) -> ListAnalyticsDataAssociationsResponse ! Str {
+  var out = ListAnalyticsDataAssociationsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Results" => out.results = from_json_analytics_data_association_results(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAnalyticsDataAssociations.
+pub enum ListAnalyticsDataAssociationsErr {
+  InternalServiceException(e: InternalServiceException)
+  InvalidParameterException(e: InvalidParameterException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAnalyticsDataAssociationsErr) display() -> Str {
+  match e {
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_analytics_data_associations_error(resp: http.Response) -> ListAnalyticsDataAssociationsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataAssociationsErr.InternalServiceException(x)
+      Err(msg) => return ListAnalyticsDataAssociationsErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataAssociationsErr.InvalidParameterException(x)
+      Err(msg) => return ListAnalyticsDataAssociationsErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataAssociationsErr.InvalidRequestException(x)
+      Err(msg) => return ListAnalyticsDataAssociationsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataAssociationsErr.ResourceNotFoundException(x)
+      Err(msg) => return ListAnalyticsDataAssociationsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataAssociationsErr.ThrottlingException(x)
+      Err(msg) => return ListAnalyticsDataAssociationsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAnalyticsDataAssociationsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the association status of requested dataset ID for a given Connect
+/// Customer instance.
+pub fn (c: Client) list_analytics_data_associations(input: ListAnalyticsDataAssociationsRequest) -> ListAnalyticsDataAssociationsResponse ! ListAnalyticsDataAssociationsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_analytics_data_associations(c.params, input)) ?? e => return Err(ListAnalyticsDataAssociationsErr.InvalidInput(e))
+  var req = serialize_list_analytics_data_associations(ep, input, "") ?? e => return Err(ListAnalyticsDataAssociationsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAnalyticsDataAssociationsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_analytics_data_associations_error(resp))
+  }
+  deserialize_list_analytics_data_associations(resp) ?? e => Err(ListAnalyticsDataAssociationsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_analytics_data_lake_data_sets(base: EndpointParameters, input: ListAnalyticsDataLakeDataSetsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAnalyticsDataLakeDataSets.
+pub fn serialize_list_analytics_data_lake_data_sets(ep: rest.Endpoint, input: ListAnalyticsDataLakeDataSetsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_instance_id = match input.instance_id {
+    Some(v) => v
+    None => return Err("input member InstanceId is required")
+  }
+  if label_instance_id == "" {
+    return Err("input member InstanceId must not be empty")
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/analytics-data/instance/${rest.escape(label_instance_id, false)}/datasets"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_analytics_data_lake_data_sets(resp: http.Response) -> ListAnalyticsDataLakeDataSetsResponse ! Str {
+  var out = ListAnalyticsDataLakeDataSetsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Results" => out.results = from_json_analytics_data_sets_results(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAnalyticsDataLakeDataSets.
+pub enum ListAnalyticsDataLakeDataSetsErr {
+  InternalServiceException(e: InternalServiceException)
+  InvalidParameterException(e: InvalidParameterException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAnalyticsDataLakeDataSetsErr) display() -> Str {
+  match e {
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_analytics_data_lake_data_sets_error(resp: http.Response) -> ListAnalyticsDataLakeDataSetsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataLakeDataSetsErr.InternalServiceException(x)
+      Err(msg) => return ListAnalyticsDataLakeDataSetsErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataLakeDataSetsErr.InvalidParameterException(x)
+      Err(msg) => return ListAnalyticsDataLakeDataSetsErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataLakeDataSetsErr.InvalidRequestException(x)
+      Err(msg) => return ListAnalyticsDataLakeDataSetsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataLakeDataSetsErr.ResourceNotFoundException(x)
+      Err(msg) => return ListAnalyticsDataLakeDataSetsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListAnalyticsDataLakeDataSetsErr.ThrottlingException(x)
+      Err(msg) => return ListAnalyticsDataLakeDataSetsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAnalyticsDataLakeDataSetsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the data lake datasets available to associate with for a given
+/// Connect Customer instance.
+pub fn (c: Client) list_analytics_data_lake_data_sets(input: ListAnalyticsDataLakeDataSetsRequest) -> ListAnalyticsDataLakeDataSetsResponse ! ListAnalyticsDataLakeDataSetsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_analytics_data_lake_data_sets(c.params, input)) ?? e => return Err(ListAnalyticsDataLakeDataSetsErr.InvalidInput(e))
+  var req = serialize_list_analytics_data_lake_data_sets(ep, input, "") ?? e => return Err(ListAnalyticsDataLakeDataSetsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAnalyticsDataLakeDataSetsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_analytics_data_lake_data_sets_error(resp))
+  }
+  deserialize_list_analytics_data_lake_data_sets(resp) ?? e => Err(ListAnalyticsDataLakeDataSetsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_approved_origins(base: EndpointParameters, input: ListApprovedOriginsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListApprovedOrigins.
+pub fn serialize_list_approved_origins(ep: rest.Endpoint, input: ListApprovedOriginsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_instance_id = match input.instance_id {
+    Some(v) => v
+    None => return Err("input member InstanceId is required")
+  }
+  if label_instance_id == "" {
+    return Err("input member InstanceId must not be empty")
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/instance/${rest.escape(label_instance_id, false)}/approved-origins"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_list_approved_origins(resp: http.Response) -> ListApprovedOriginsResponse ! Str {
   var out = ListApprovedOriginsResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -10286,443 +10775,4 @@ pub fn deserialize_release_phone_number_error(resp: http.Response) -> ReleasePho
     _ => {}
   }
   ReleasePhoneNumberErr.Api(restjson.api_error(resp, body))
-}
-
-/// Releases a phone number previously claimed to an Connect Customer
-/// instance or traffic distribution group. You can call this API only in
-/// the Amazon Web Services Region where the number was claimed. To release
-/// phone numbers from a traffic distribution group, use the
-/// ReleasePhoneNumber API, not the Connect Customer admin website. After
-/// releasing a phone number, the phone number enters into a cooldown period
-/// for up to 180 days. It cannot be searched for or claimed again until the
-/// period has ended. If you accidentally release a phone number, contact
-/// Amazon Web Services Support. If you plan to claim and release numbers
-/// frequently, contact us for a service quota exception. Otherwise, it is
-/// possible you will be blocked from claiming and releasing any more
-/// numbers until up to 180 days past the oldest number released has
-/// expired. By default you can claim and release up to 200% of your maximum
-/// number of active phone numbers. If you claim and release phone numbers
-/// using the UI or API during a rolling 180 day cycle that exceeds 200% of
-/// your phone number service level quota, you will be blocked from claiming
-/// any more numbers until 180 days past the oldest number released has
-/// expired. For example, if you already have 99 claimed numbers and a
-/// service level quota of 99 phone numbers, and in any 180 day period you
-/// release 99, claim 99, and then release 99, you will have exceeded the
-/// 200% limit. At that point you are blocked from claiming any more numbers
-/// until you open an Amazon Web Services support ticket.
-pub fn (c: Client) release_phone_number(input: ReleasePhoneNumberRequest) -> () ! ReleasePhoneNumberErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_release_phone_number(c.params, input)) ?? e => return Err(ReleasePhoneNumberErr.InvalidInput(e))
-  var req = serialize_release_phone_number(ep, input, rest.uuid(c.rand)) ?? e => return Err(ReleasePhoneNumberErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ReleasePhoneNumberErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_release_phone_number_error(resp))
-  }
-  deserialize_release_phone_number(resp) ?? e => Err(ReleasePhoneNumberErr.Deserialize(e))
-}
-
-pub fn endpoint_params_replicate_instance(base: EndpointParameters, input: ReplicateInstanceRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ReplicateInstance.
-pub fn serialize_replicate_instance(ep: rest.Endpoint, input: ReplicateInstanceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_instance_id = match input.instance_id {
-    Some(v) => v
-    None => return Err("input member InstanceId is required")
-  }
-  if label_instance_id == "" {
-    return Err("input member InstanceId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.replica_region {
-    fs.push(("ReplicaRegion", json.Value.Str(x)))
-  }
-  if let Some(x) = input.client_token {
-    fs.push(("ClientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.replica_alias {
-    fs.push(("ReplicaAlias", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/instance/${rest.escape(label_instance_id, false)}/replicate"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_replicate_instance(resp: http.Response) -> ReplicateInstanceResponse ! Str {
-  var out = ReplicateInstanceResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Id" => out.id = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ReplicateInstance.
-pub enum ReplicateInstanceErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidRequestException(e: InvalidRequestException)
-  ResourceConflictException(e: ResourceConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ResourceNotReadyException(e: ResourceNotReadyException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ReplicateInstanceErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    ResourceConflictException(x) => "ResourceConflictException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ResourceNotReadyException(x) => "ResourceNotReadyException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_replicate_instance_error(resp: http.Response) -> ReplicateInstanceErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.AccessDeniedException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.InternalServiceException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.InvalidRequestException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "ResourceConflictException" => match read_error_resource_conflict_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.ResourceConflictException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.ResourceNotFoundException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "ResourceNotReadyException" => match read_error_resource_not_ready_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.ResourceNotReadyException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.ServiceQuotaExceededException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return ReplicateInstanceErr.ThrottlingException(x)
-      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ReplicateInstanceErr.Api(restjson.api_error(resp, body))
-}
-
-/// Replicates an Connect Customer instance in the specified Amazon Web
-/// Services Region and copies configuration information for Connect
-/// Customer resources across Amazon Web Services Regions. For more
-/// information about replicating an Connect Customer instance, see Create a
-/// replica of your existing Connect Customer instance in the Connect
-/// Customer Administrator Guide .
-pub fn (c: Client) replicate_instance(input: ReplicateInstanceRequest) -> ReplicateInstanceResponse ! ReplicateInstanceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_replicate_instance(c.params, input)) ?? e => return Err(ReplicateInstanceErr.InvalidInput(e))
-  var req = serialize_replicate_instance(ep, input, rest.uuid(c.rand)) ?? e => return Err(ReplicateInstanceErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ReplicateInstanceErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_replicate_instance_error(resp))
-  }
-  deserialize_replicate_instance(resp) ?? e => Err(ReplicateInstanceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_resume_contact(base: EndpointParameters, input: ResumeContactRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ResumeContact.
-pub fn serialize_resume_contact(ep: rest.Endpoint, input: ResumeContactRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.contact_id {
-    fs.push(("ContactId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.contact_flow_id {
-    fs.push(("ContactFlowId", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/contact/resume"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_resume_contact(resp: http.Response) -> ResumeContactResponse ! Str {
-  var out = ResumeContactResponse{}
-  Ok(out)
-}
-
-/// The errors of ResumeContact.
-pub enum ResumeContactErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidParameterException(e: InvalidParameterException)
-  InvalidRequestException(e: InvalidRequestException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ResumeContactErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_resume_contact_error(resp: http.Response) -> ResumeContactErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.AccessDeniedException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.ConflictException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.InternalServiceException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.InvalidParameterException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.InvalidRequestException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.ResourceNotFoundException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return ResumeContactErr.ThrottlingException(x)
-      Err(msg) => return ResumeContactErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ResumeContactErr.Api(restjson.api_error(resp, body))
-}
-
-/// Resumes a task or email contact in a paused state.
-pub fn (c: Client) resume_contact(input: ResumeContactRequest) -> ResumeContactResponse ! ResumeContactErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_resume_contact(c.params, input)) ?? e => return Err(ResumeContactErr.InvalidInput(e))
-  var req = serialize_resume_contact(ep, input, "") ?? e => return Err(ResumeContactErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResumeContactErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_resume_contact_error(resp))
-  }
-  deserialize_resume_contact(resp) ?? e => Err(ResumeContactErr.Deserialize(e))
-}
-
-pub fn endpoint_params_resume_contact_recording(base: EndpointParameters, input: ResumeContactRecordingRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ResumeContactRecording.
-pub fn serialize_resume_contact_recording(ep: rest.Endpoint, input: ResumeContactRecordingRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.instance_id {
-    fs.push(("InstanceId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.contact_id {
-    fs.push(("ContactId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.initial_contact_id {
-    fs.push(("InitialContactId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.contact_recording_type {
-    fs.push(("ContactRecordingType", json.Value.Str(x.value())))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/contact/resume-recording"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_resume_contact_recording(resp: http.Response) -> ResumeContactRecordingResponse ! Str {
-  var out = ResumeContactRecordingResponse{}
-  Ok(out)
-}
-
-/// The errors of ResumeContactRecording.
-pub enum ResumeContactRecordingErr {
-  InternalServiceException(e: InternalServiceException)
-  InvalidActiveRegionException(e: InvalidActiveRegionException)
-  InvalidRequestException(e: InvalidRequestException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ResumeContactRecordingErr) display() -> Str {
-  match e {
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidActiveRegionException(x) => "InvalidActiveRegionException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_resume_contact_recording_error(resp: http.Response) -> ResumeContactRecordingErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
-      Ok(x) => return ResumeContactRecordingErr.InternalServiceException(x)
-      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
-    }
-    "InvalidActiveRegionException" => match read_error_invalid_active_region_exception(resp, body) {
-      Ok(x) => return ResumeContactRecordingErr.InvalidActiveRegionException(x)
-      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return ResumeContactRecordingErr.InvalidRequestException(x)
-      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return ResumeContactRecordingErr.ResourceNotFoundException(x)
-      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ResumeContactRecordingErr.Api(restjson.api_error(resp, body))
-}
-
-/// When a contact is being recorded, and the recording has been suspended
-/// using SuspendContactRecording, this API resumes recording whatever
-/// recording is selected in the flow configuration: call, screen, or both.
-/// If only call recording or only screen recording is enabled, then it
-/// would resume. Voice and screen recordings are supported.
-pub fn (c: Client) resume_contact_recording(input: ResumeContactRecordingRequest) -> ResumeContactRecordingResponse ! ResumeContactRecordingErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_resume_contact_recording(c.params, input)) ?? e => return Err(ResumeContactRecordingErr.InvalidInput(e))
-  var req = serialize_resume_contact_recording(ep, input, "") ?? e => return Err(ResumeContactRecordingErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResumeContactRecordingErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_resume_contact_recording_error(resp))
-  }
-  deserialize_resume_contact_recording(resp) ?? e => Err(ResumeContactRecordingErr.Deserialize(e))
 }

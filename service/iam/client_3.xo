@@ -8,6 +8,503 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn (e: GetGroupErr) display() -> Str {
+  match e {
+    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_group_error(resp: http.Response) -> GetGroupErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
+      Ok(x) => return GetGroupErr.NoSuchEntityException(x)
+      Err(msg) => return GetGroupErr.Deserialize(msg)
+    }
+    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return GetGroupErr.ServiceFailureException(x)
+      Err(msg) => return GetGroupErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetGroupErr.Api(restxml.api_error(resp))
+}
+
+/// Returns a list of IAM users that are in the specified IAM group. You can
+/// paginate the results using the MaxItems and Marker parameters.
+pub fn (c: Client) get_group(input: GetGroupRequest) -> GetGroupResponse ! GetGroupErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_group(c.params, input)) ?? e => return Err(GetGroupErr.InvalidInput(e))
+  var req = serialize_get_group(ep, input, "") ?? e => return Err(GetGroupErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetGroupErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_group_error(resp))
+  }
+  deserialize_get_group(resp) ?? e => Err(GetGroupErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_group_policy(base: EndpointParameters, input: GetGroupPolicyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetGroupPolicy.
+pub fn serialize_get_group_policy(ep: rest.Endpoint, input: GetGroupPolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var f = query.form("GetGroupPolicy", "2010-05-08")
+  if let Some(x) = input.group_name {
+    query.add(f, query.key("", "GroupName"), x)
+  }
+  if let Some(x) = input.policy_name {
+    query.add(f, query.key("", "PolicyName"), x)
+  }
+  body = query.encode(f).bytes()
+  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_group_policy(resp: http.Response) -> GetGroupPolicyResponse ! Str {
+  var out = GetGroupPolicyResponse{}
+  let body = query.result_of(resp.body, "GetGroupPolicy")?
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "GroupName" => out.group_name = c.text()
+      "PolicyName" => out.policy_name = c.text()
+      "PolicyDocument" => out.policy_document = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetGroupPolicy.
+pub enum GetGroupPolicyErr {
+  NoSuchEntityException(e: NoSuchEntityException)
+  ServiceFailureException(e: ServiceFailureException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetGroupPolicyErr) display() -> Str {
+  match e {
+    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_group_policy_error(resp: http.Response) -> GetGroupPolicyErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
+      Ok(x) => return GetGroupPolicyErr.NoSuchEntityException(x)
+      Err(msg) => return GetGroupPolicyErr.Deserialize(msg)
+    }
+    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return GetGroupPolicyErr.ServiceFailureException(x)
+      Err(msg) => return GetGroupPolicyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetGroupPolicyErr.Api(restxml.api_error(resp))
+}
+
+/// Retrieves the specified inline policy document that is embedded in the
+/// specified IAM group. Policies returned by this operation are URL-encoded
+/// compliant with RFC 3986 . You can use a URL decoding method to convert
+/// the policy back to plain JSON text. For example, if you use Java, you
+/// can use the decode method of the java.net.URLDecoder utility class in
+/// the Java SDK. Other languages and SDKs provide similar functionality,
+/// and some SDKs do this decoding automatically. An IAM group can also have
+/// managed policies attached to it. To retrieve a managed policy document
+/// that is attached to a group, use GetPolicy to determine the policy's
+/// default version, then use GetPolicyVersion to retrieve the policy
+/// document. For more information about policies, see Managed policies and
+/// inline policies in the IAM User Guide .
+pub fn (c: Client) get_group_policy(input: GetGroupPolicyRequest) -> GetGroupPolicyResponse ! GetGroupPolicyErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_group_policy(c.params, input)) ?? e => return Err(GetGroupPolicyErr.InvalidInput(e))
+  var req = serialize_get_group_policy(ep, input, "") ?? e => return Err(GetGroupPolicyErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetGroupPolicyErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_group_policy_error(resp))
+  }
+  deserialize_get_group_policy(resp) ?? e => Err(GetGroupPolicyErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_human_readable_summary(base: EndpointParameters, input: GetHumanReadableSummaryRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetHumanReadableSummary.
+pub fn serialize_get_human_readable_summary(ep: rest.Endpoint, input: GetHumanReadableSummaryRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var f = query.form("GetHumanReadableSummary", "2010-05-08")
+  if let Some(x) = input.entity_arn {
+    query.add(f, query.key("", "EntityArn"), x)
+  }
+  if let Some(x) = input.locale {
+    query.add(f, query.key("", "Locale"), x)
+  }
+  body = query.encode(f).bytes()
+  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_human_readable_summary(resp: http.Response) -> GetHumanReadableSummaryResponse ! Str {
+  var out = GetHumanReadableSummaryResponse{}
+  let body = query.result_of(resp.body, "GetHumanReadableSummary")?
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "SummaryContent" => out.summary_content = c.text()
+      "Locale" => out.locale = c.text()
+      "SummaryState" => out.summary_state = SummaryStateType.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetHumanReadableSummary.
+pub enum GetHumanReadableSummaryErr {
+  InvalidInputException(e: InvalidInputException)
+  NoSuchEntityException(e: NoSuchEntityException)
+  ServiceFailureException(e: ServiceFailureException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetHumanReadableSummaryErr) display() -> Str {
+  match e {
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_human_readable_summary_error(resp: http.Response) -> GetHumanReadableSummaryErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetHumanReadableSummaryErr.InvalidInputException(x)
+      Err(msg) => return GetHumanReadableSummaryErr.Deserialize(msg)
+    }
+    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
+      Ok(x) => return GetHumanReadableSummaryErr.NoSuchEntityException(x)
+      Err(msg) => return GetHumanReadableSummaryErr.Deserialize(msg)
+    }
+    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return GetHumanReadableSummaryErr.ServiceFailureException(x)
+      Err(msg) => return GetHumanReadableSummaryErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetHumanReadableSummaryErr.Api(restxml.api_error(resp))
+}
+
+/// Retrieves a human readable summary for a given entity. At this time, the
+/// only supported entity type is delegation-request This method uses a
+/// Large Language Model (LLM) to generate the summary. If a delegation
+/// request has no owner or owner account, GetHumanReadableSummary for that
+/// delegation request can be called by any account. If the owner account is
+/// assigned but there is no owner id, only identities within that owner
+/// account can call GetHumanReadableSummary for the delegation request to
+/// retrieve a summary of that request. Once the delegation request is fully
+/// owned, the owner of the request gets a default permission to get that
+/// delegation request. For more details, read default permissions granted
+/// to delegation requests . These rules are identical to
+/// GetDelegationRequest API behavior, such that a party who has permissions
+/// to call GetDelegationRequest for a given delegation request will always
+/// be able to retrieve the human readable summary for that request.
+pub fn (c: Client) get_human_readable_summary(input: GetHumanReadableSummaryRequest) -> GetHumanReadableSummaryResponse ! GetHumanReadableSummaryErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_human_readable_summary(c.params, input)) ?? e => return Err(GetHumanReadableSummaryErr.InvalidInput(e))
+  var req = serialize_get_human_readable_summary(ep, input, "") ?? e => return Err(GetHumanReadableSummaryErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetHumanReadableSummaryErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_human_readable_summary_error(resp))
+  }
+  deserialize_get_human_readable_summary(resp) ?? e => Err(GetHumanReadableSummaryErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_instance_profile(base: EndpointParameters, input: GetInstanceProfileRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetInstanceProfile.
+pub fn serialize_get_instance_profile(ep: rest.Endpoint, input: GetInstanceProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var f = query.form("GetInstanceProfile", "2010-05-08")
+  if let Some(x) = input.instance_profile_name {
+    query.add(f, query.key("", "InstanceProfileName"), x)
+  }
+  body = query.encode(f).bytes()
+  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_instance_profile(resp: http.Response) -> GetInstanceProfileResponse ! Str {
+  var out = GetInstanceProfileResponse{}
+  let body = query.result_of(resp.body, "GetInstanceProfile")?
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "InstanceProfile" => out.instance_profile = xml_read_instance_profile(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetInstanceProfile.
+pub enum GetInstanceProfileErr {
+  NoSuchEntityException(e: NoSuchEntityException)
+  ServiceFailureException(e: ServiceFailureException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetInstanceProfileErr) display() -> Str {
+  match e {
+    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_instance_profile_error(resp: http.Response) -> GetInstanceProfileErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
+      Ok(x) => return GetInstanceProfileErr.NoSuchEntityException(x)
+      Err(msg) => return GetInstanceProfileErr.Deserialize(msg)
+    }
+    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return GetInstanceProfileErr.ServiceFailureException(x)
+      Err(msg) => return GetInstanceProfileErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetInstanceProfileErr.Api(restxml.api_error(resp))
+}
+
+/// Retrieves information about the specified instance profile, including
+/// the instance profile's path, GUID, ARN, and role. For more information
+/// about instance profiles, see Using instance profiles in the IAM User
+/// Guide .
+pub fn (c: Client) get_instance_profile(input: GetInstanceProfileRequest) -> GetInstanceProfileResponse ! GetInstanceProfileErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_instance_profile(c.params, input)) ?? e => return Err(GetInstanceProfileErr.InvalidInput(e))
+  var req = serialize_get_instance_profile(ep, input, "") ?? e => return Err(GetInstanceProfileErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetInstanceProfileErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_instance_profile_error(resp))
+  }
+  deserialize_get_instance_profile(resp) ?? e => Err(GetInstanceProfileErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_login_profile(base: EndpointParameters, input: GetLoginProfileRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetLoginProfile.
+pub fn serialize_get_login_profile(ep: rest.Endpoint, input: GetLoginProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var f = query.form("GetLoginProfile", "2010-05-08")
+  if let Some(x) = input.user_name {
+    query.add(f, query.key("", "UserName"), x)
+  }
+  body = query.encode(f).bytes()
+  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_login_profile(resp: http.Response) -> GetLoginProfileResponse ! Str {
+  var out = GetLoginProfileResponse{}
+  let body = query.result_of(resp.body, "GetLoginProfile")?
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "LoginProfile" => out.login_profile = xml_read_login_profile(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetLoginProfile.
+pub enum GetLoginProfileErr {
+  NoSuchEntityException(e: NoSuchEntityException)
+  ServiceFailureException(e: ServiceFailureException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetLoginProfileErr) display() -> Str {
+  match e {
+    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
+    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_login_profile_error(resp: http.Response) -> GetLoginProfileErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
+      Ok(x) => return GetLoginProfileErr.NoSuchEntityException(x)
+      Err(msg) => return GetLoginProfileErr.Deserialize(msg)
+    }
+    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
+      Ok(x) => return GetLoginProfileErr.ServiceFailureException(x)
+      Err(msg) => return GetLoginProfileErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  GetLoginProfileErr.Api(restxml.api_error(resp))
+}
+
+/// Retrieves the user name for the specified IAM user. A login profile is
+/// created when you create a password for the user to access the Amazon Web
+/// Services Management Console. If the user does not exist or does not have
+/// a password, the operation returns a 404 ( NoSuchEntity ) error. If you
+/// create an IAM user with access to the console, the CreateDate reflects
+/// the date you created the initial password for the user. If you create an
+/// IAM user with programmatic access, and then later add a password for the
+/// user to access the Amazon Web Services Management Console, the
+/// CreateDate reflects the initial password creation date. A user with
+/// programmatic access does not have a login profile unless you create a
+/// password for the user to access the Amazon Web Services Management
+/// Console.
+pub fn (c: Client) get_login_profile(input: GetLoginProfileRequest) -> GetLoginProfileResponse ! GetLoginProfileErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_login_profile(c.params, input)) ?? e => return Err(GetLoginProfileErr.InvalidInput(e))
+  var req = serialize_get_login_profile(ep, input, "") ?? e => return Err(GetLoginProfileErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetLoginProfileErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_login_profile_error(resp))
+  }
+  deserialize_get_login_profile(resp) ?? e => Err(GetLoginProfileErr.Deserialize(e))
+}
+
 pub fn endpoint_params_get_mfa_device(base: EndpointParameters, input: GetMFADeviceRequest) -> EndpointParameters {
   let _ = input
   base
@@ -156,6 +653,9 @@ pub fn deserialize_get_open_id_connect_provider(resp: http.Response) -> GetOpenI
       "ThumbprintList" => out.thumbprint_list = xml_read_thumbprint_list_type(c)?
       "CreateDate" => out.create_date = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
       "Tags" => out.tags = xml_read_tag_list_type(c)?
+      "ContextProvider" => out.context_provider = xml_read_context_provider(c)?
+      "IdentityCenterInstanceArn" => out.identity_center_instance_arn = c.text()
+      "IdentityStoreArn" => out.identity_store_arn = c.text()
       _ => {}
     }
   }
@@ -1065,11 +1565,15 @@ pub fn deserialize_get_saml_provider(resp: http.Response) -> GetSAMLProviderResp
     match c.name.local {
       "SAMLProviderUUID" => out.saml_provider_uuid = c.text()
       "SAMLMetadataDocument" => out.saml_metadata_document = c.text()
+      "ContextProvider" => out.context_provider = xml_read_context_provider(c)?
+      "SAMLKeyHashes" => out.saml_key_hashes = xml_read_saml_key_hash_list_type(c)?
       "CreateDate" => out.create_date = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
       "ValidUntil" => out.valid_until = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
       "Tags" => out.tags = xml_read_tag_list_type(c)?
       "AssertionEncryptionMode" => out.assertion_encryption_mode = AssertionEncryptionModeType.from(c.text())
       "PrivateKeyList" => out.private_key_list = xml_read_private_key_list(c)?
+      "IdentityCenterInstanceArn" => out.identity_center_instance_arn = c.text()
+      "IdentityStoreArn" => out.identity_store_arn = c.text()
       _ => {}
     }
   }
@@ -10335,505 +10839,4 @@ pub fn (c: Client) update_account_password_policy(input: UpdateAccountPasswordPo
 pub fn endpoint_params_update_assume_role_policy(base: EndpointParameters, input: UpdateAssumeRolePolicyRequest) -> EndpointParameters {
   let _ = input
   base
-}
-
-/// The HTTP request of UpdateAssumeRolePolicy.
-pub fn serialize_update_assume_role_policy(ep: rest.Endpoint, input: UpdateAssumeRolePolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("UpdateAssumeRolePolicy", "2010-05-08")
-  if let Some(x) = input.role_name {
-    query.add(f, query.key("", "RoleName"), x)
-  }
-  if let Some(x) = input.policy_document {
-    query.add(f, query.key("", "PolicyDocument"), x)
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_assume_role_policy(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of UpdateAssumeRolePolicy.
-pub enum UpdateAssumeRolePolicyErr {
-  LimitExceededException(e: LimitExceededException)
-  MalformedPolicyDocumentException(e: MalformedPolicyDocumentException)
-  NoSuchEntityException(e: NoSuchEntityException)
-  ServiceFailureException(e: ServiceFailureException)
-  UnmodifiableEntityException(e: UnmodifiableEntityException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateAssumeRolePolicyErr) display() -> Str {
-  match e {
-    LimitExceededException(x) => "LimitExceededException: ${x:?}"
-    MalformedPolicyDocumentException(x) => "MalformedPolicyDocumentException: ${x:?}"
-    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
-    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
-    UnmodifiableEntityException(x) => "UnmodifiableEntityException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_assume_role_policy_error(resp: http.Response) -> UpdateAssumeRolePolicyErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "LimitExceeded" => match read_error_limit_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateAssumeRolePolicyErr.LimitExceededException(x)
-      Err(msg) => return UpdateAssumeRolePolicyErr.Deserialize(msg)
-    }
-    "MalformedPolicyDocument" => match read_error_malformed_policy_document_exception(resp, body) {
-      Ok(x) => return UpdateAssumeRolePolicyErr.MalformedPolicyDocumentException(x)
-      Err(msg) => return UpdateAssumeRolePolicyErr.Deserialize(msg)
-    }
-    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
-      Ok(x) => return UpdateAssumeRolePolicyErr.NoSuchEntityException(x)
-      Err(msg) => return UpdateAssumeRolePolicyErr.Deserialize(msg)
-    }
-    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
-      Ok(x) => return UpdateAssumeRolePolicyErr.ServiceFailureException(x)
-      Err(msg) => return UpdateAssumeRolePolicyErr.Deserialize(msg)
-    }
-    "UnmodifiableEntity" => match read_error_unmodifiable_entity_exception(resp, body) {
-      Ok(x) => return UpdateAssumeRolePolicyErr.UnmodifiableEntityException(x)
-      Err(msg) => return UpdateAssumeRolePolicyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  UpdateAssumeRolePolicyErr.Api(restxml.api_error(resp))
-}
-
-/// Updates the policy that grants an IAM entity permission to assume a
-/// role. This is typically referred to as the "role trust policy". For more
-/// information about roles, see Using roles to delegate permissions and
-/// federate identities .
-pub fn (c: Client) update_assume_role_policy(input: UpdateAssumeRolePolicyRequest) -> () ! UpdateAssumeRolePolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_assume_role_policy(c.params, input)) ?? e => return Err(UpdateAssumeRolePolicyErr.InvalidInput(e))
-  var req = serialize_update_assume_role_policy(ep, input, "") ?? e => return Err(UpdateAssumeRolePolicyErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(UpdateAssumeRolePolicyErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_assume_role_policy_error(resp))
-  }
-  deserialize_update_assume_role_policy(resp) ?? e => Err(UpdateAssumeRolePolicyErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_delegation_request(base: EndpointParameters, input: UpdateDelegationRequestRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateDelegationRequest.
-pub fn serialize_update_delegation_request(ep: rest.Endpoint, input: UpdateDelegationRequestRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("UpdateDelegationRequest", "2010-05-08")
-  if let Some(x) = input.delegation_request_id {
-    query.add(f, query.key("", "DelegationRequestId"), x)
-  }
-  if let Some(x) = input.notes {
-    query.add(f, query.key("", "Notes"), x)
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_delegation_request(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of UpdateDelegationRequest.
-pub enum UpdateDelegationRequestErr {
-  ConcurrentModificationException(e: ConcurrentModificationException)
-  InvalidInputException(e: InvalidInputException)
-  NoSuchEntityException(e: NoSuchEntityException)
-  ServiceFailureException(e: ServiceFailureException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateDelegationRequestErr) display() -> Str {
-  match e {
-    ConcurrentModificationException(x) => "ConcurrentModificationException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
-    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_delegation_request_error(resp: http.Response) -> UpdateDelegationRequestErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification_exception(resp, body) {
-      Ok(x) => return UpdateDelegationRequestErr.ConcurrentModificationException(x)
-      Err(msg) => return UpdateDelegationRequestErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return UpdateDelegationRequestErr.InvalidInputException(x)
-      Err(msg) => return UpdateDelegationRequestErr.Deserialize(msg)
-    }
-    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
-      Ok(x) => return UpdateDelegationRequestErr.NoSuchEntityException(x)
-      Err(msg) => return UpdateDelegationRequestErr.Deserialize(msg)
-    }
-    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
-      Ok(x) => return UpdateDelegationRequestErr.ServiceFailureException(x)
-      Err(msg) => return UpdateDelegationRequestErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  UpdateDelegationRequestErr.Api(restxml.api_error(resp))
-}
-
-/// Updates an existing delegation request with additional information. When
-/// the delegation request is updated, it reaches the PENDING_APPROVAL
-/// state. Once a delegation request has an owner, that owner gets a default
-/// permission to update the delegation request. For more details, see
-/// Managing Permissions for Delegation Requests .
-pub fn (c: Client) update_delegation_request(input: UpdateDelegationRequestRequest) -> () ! UpdateDelegationRequestErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_delegation_request(c.params, input)) ?? e => return Err(UpdateDelegationRequestErr.InvalidInput(e))
-  var req = serialize_update_delegation_request(ep, input, "") ?? e => return Err(UpdateDelegationRequestErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(UpdateDelegationRequestErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_delegation_request_error(resp))
-  }
-  deserialize_update_delegation_request(resp) ?? e => Err(UpdateDelegationRequestErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_group(base: EndpointParameters, input: UpdateGroupRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateGroup.
-pub fn serialize_update_group(ep: rest.Endpoint, input: UpdateGroupRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("UpdateGroup", "2010-05-08")
-  if let Some(x) = input.group_name {
-    query.add(f, query.key("", "GroupName"), x)
-  }
-  if let Some(x) = input.new_path {
-    query.add(f, query.key("", "NewPath"), x)
-  }
-  if let Some(x) = input.new_group_name {
-    query.add(f, query.key("", "NewGroupName"), x)
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_group(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of UpdateGroup.
-pub enum UpdateGroupErr {
-  EntityAlreadyExistsException(e: EntityAlreadyExistsException)
-  LimitExceededException(e: LimitExceededException)
-  NoSuchEntityException(e: NoSuchEntityException)
-  ServiceFailureException(e: ServiceFailureException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateGroupErr) display() -> Str {
-  match e {
-    EntityAlreadyExistsException(x) => "EntityAlreadyExistsException: ${x:?}"
-    LimitExceededException(x) => "LimitExceededException: ${x:?}"
-    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
-    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_group_error(resp: http.Response) -> UpdateGroupErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "EntityAlreadyExists" => match read_error_entity_already_exists_exception(resp, body) {
-      Ok(x) => return UpdateGroupErr.EntityAlreadyExistsException(x)
-      Err(msg) => return UpdateGroupErr.Deserialize(msg)
-    }
-    "LimitExceeded" => match read_error_limit_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateGroupErr.LimitExceededException(x)
-      Err(msg) => return UpdateGroupErr.Deserialize(msg)
-    }
-    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
-      Ok(x) => return UpdateGroupErr.NoSuchEntityException(x)
-      Err(msg) => return UpdateGroupErr.Deserialize(msg)
-    }
-    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
-      Ok(x) => return UpdateGroupErr.ServiceFailureException(x)
-      Err(msg) => return UpdateGroupErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  UpdateGroupErr.Api(restxml.api_error(resp))
-}
-
-/// Updates the name and/or the path of the specified IAM group. You should
-/// understand the implications of changing a group's path or name. For more
-/// information, see Renaming users and groups in the IAM User Guide . The
-/// person making the request (the principal), must have permission to
-/// change the role group with the old name and the new name. For example,
-/// to change the group named Managers to MGRs , the principal must have a
-/// policy that allows them to update both groups. If the principal has
-/// permission to update the Managers group, but not the MGRs group, then
-/// the update fails. For more information about permissions, see Access
-/// management .
-pub fn (c: Client) update_group(input: UpdateGroupRequest) -> () ! UpdateGroupErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_group(c.params, input)) ?? e => return Err(UpdateGroupErr.InvalidInput(e))
-  var req = serialize_update_group(ep, input, "") ?? e => return Err(UpdateGroupErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(UpdateGroupErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_group_error(resp))
-  }
-  deserialize_update_group(resp) ?? e => Err(UpdateGroupErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_login_profile(base: EndpointParameters, input: UpdateLoginProfileRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateLoginProfile.
-pub fn serialize_update_login_profile(ep: rest.Endpoint, input: UpdateLoginProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("UpdateLoginProfile", "2010-05-08")
-  if let Some(x) = input.user_name {
-    query.add(f, query.key("", "UserName"), x)
-  }
-  if let Some(x) = input.password {
-    query.add(f, query.key("", "Password"), x)
-  }
-  if let Some(x) = input.password_reset_required {
-    query.add(f, query.key("", "PasswordResetRequired"), "${x}")
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_login_profile(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of UpdateLoginProfile.
-pub enum UpdateLoginProfileErr {
-  EntityTemporarilyUnmodifiableException(e: EntityTemporarilyUnmodifiableException)
-  LimitExceededException(e: LimitExceededException)
-  NoSuchEntityException(e: NoSuchEntityException)
-  PasswordPolicyViolationException(e: PasswordPolicyViolationException)
-  ServiceFailureException(e: ServiceFailureException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateLoginProfileErr) display() -> Str {
-  match e {
-    EntityTemporarilyUnmodifiableException(x) => "EntityTemporarilyUnmodifiableException: ${x:?}"
-    LimitExceededException(x) => "LimitExceededException: ${x:?}"
-    NoSuchEntityException(x) => "NoSuchEntityException: ${x:?}"
-    PasswordPolicyViolationException(x) => "PasswordPolicyViolationException: ${x:?}"
-    ServiceFailureException(x) => "ServiceFailureException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_login_profile_error(resp: http.Response) -> UpdateLoginProfileErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "EntityTemporarilyUnmodifiable" => match read_error_entity_temporarily_unmodifiable_exception(resp, body) {
-      Ok(x) => return UpdateLoginProfileErr.EntityTemporarilyUnmodifiableException(x)
-      Err(msg) => return UpdateLoginProfileErr.Deserialize(msg)
-    }
-    "LimitExceeded" => match read_error_limit_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateLoginProfileErr.LimitExceededException(x)
-      Err(msg) => return UpdateLoginProfileErr.Deserialize(msg)
-    }
-    "NoSuchEntity" => match read_error_no_such_entity_exception(resp, body) {
-      Ok(x) => return UpdateLoginProfileErr.NoSuchEntityException(x)
-      Err(msg) => return UpdateLoginProfileErr.Deserialize(msg)
-    }
-    "PasswordPolicyViolation" => match read_error_password_policy_violation_exception(resp, body) {
-      Ok(x) => return UpdateLoginProfileErr.PasswordPolicyViolationException(x)
-      Err(msg) => return UpdateLoginProfileErr.Deserialize(msg)
-    }
-    "ServiceFailure" => match read_error_service_failure_exception(resp, body) {
-      Ok(x) => return UpdateLoginProfileErr.ServiceFailureException(x)
-      Err(msg) => return UpdateLoginProfileErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  UpdateLoginProfileErr.Api(restxml.api_error(resp))
-}
-
-/// Changes the password for the specified IAM user. You can use the CLI,
-/// the Amazon Web Services API, or the Users page in the IAM console to
-/// change the password for any IAM user. Use ChangePassword to change your
-/// own password in the My Security Credentials page in the Amazon Web
-/// Services Management Console. For more information about modifying
-/// passwords, see Managing passwords in the IAM User Guide .
-pub fn (c: Client) update_login_profile(input: UpdateLoginProfileRequest) -> () ! UpdateLoginProfileErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_login_profile(c.params, input)) ?? e => return Err(UpdateLoginProfileErr.InvalidInput(e))
-  var req = serialize_update_login_profile(ep, input, "") ?? e => return Err(UpdateLoginProfileErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(UpdateLoginProfileErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_login_profile_error(resp))
-  }
-  deserialize_update_login_profile(resp) ?? e => Err(UpdateLoginProfileErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_open_id_connect_provider_thumbprint(base: EndpointParameters, input: UpdateOpenIDConnectProviderThumbprintRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateOpenIDConnectProviderThumbprint.
-pub fn serialize_update_open_id_connect_provider_thumbprint(ep: rest.Endpoint, input: UpdateOpenIDConnectProviderThumbprintRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var f = query.form("UpdateOpenIDConnectProviderThumbprint", "2010-05-08")
-  if let Some(x) = input.open_id_connect_provider_arn {
-    query.add(f, query.key("", "OpenIDConnectProviderArn"), x)
-  }
-  if let Some(x) = input.thumbprint_list {
-    query_put_thumbprint_list_type(f, query.key("", "ThumbprintList"), x, false)
-  }
-  body = query.encode(f).bytes()
-  headers.push(("Content-Type", "application/x-www-form-urlencoded"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

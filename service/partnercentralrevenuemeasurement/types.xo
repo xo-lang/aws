@@ -2,6 +2,7 @@
 
 /// The request was denied due to insufficient permissions.
 pub struct AccessDeniedException {
+  /// A human-readable message describing the access denial reason.
   pub message: Str? = None
   /// The reason for the access denial.
   pub reason: AccessDeniedExceptionReason? = None
@@ -57,6 +58,8 @@ pub struct AttributionSummary {
   /// The total number of allocations under this revenue attribution, counting
   /// both ACTIVE and INACTIVE.
   pub total_revenue_attribution_allocation_count: Int? = None
+  /// Program-defined key-value attributes for the revenue attribution.
+  pub context: Map[Str, Str]? = None
 }
 
 pub enum CatalogName: Str {
@@ -68,6 +71,7 @@ pub enum CatalogName: Str {
 /// The request could not be completed due to a conflict with the current
 /// state of the resource.
 pub struct ConflictException {
+  /// A human-readable message describing the conflict that occurred.
   pub message: Str? = None
   /// The reason for the conflict.
   pub reason: ConflictExceptionReason? = None
@@ -81,18 +85,32 @@ pub enum ConflictExceptionReason: Str {
   Unknown(value: Str)
 }
 
+/// Filters revenue attributions by a context key and, optionally, a set of
+/// values.
+pub struct ContextFilter {
+  /// The context key to filter on.
+  pub key: Str? = None
+  /// Matches when the stored value equals any of these values. When omitted,
+  /// matches when the key is present.
+  pub values: List[Str]? = None
+}
+
 pub struct CreateMarketplaceRevenueShareAllocationInput {
   /// The catalog in which to create the allocation.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product identifier for the parent revenue share.
-  pub product_id: Str? = None
+  /// The parent marketplace revenue share, by ID (mrs-...) or ARN.
+  pub marketplace_revenue_share_identifier: Str? = None
   /// A unique token to ensure idempotency of the create request.
   pub client_token: Str? = None
+  /// The revision of the parent marketplace revenue share that the caller
+  /// last read, for optimistic concurrency control. A stale value returns
+  /// ConflictException with Reason REVISION_MISMATCH.
+  pub marketplace_revenue_share_revision: Str? = None
   /// The effective start date for the allocation. Must be the first day of a
   /// month.
   pub effective_from: Str? = None
   /// The effective end date for the allocation. Must be the last day of a
-  /// month (YYYY-MM-DD). Omit for open-ended allocations.
+  /// month (YYYY-MM-DD).
   pub effective_until: Str? = None
   /// The revenue share percentage for this allocation.
   pub revenue_share_percent: Str? = None
@@ -101,15 +119,11 @@ pub struct CreateMarketplaceRevenueShareAllocationInput {
 pub struct CreateMarketplaceRevenueShareAllocationOutput {
   /// The unique identifier of the newly created allocation.
   pub marketplace_revenue_share_allocation_id: Str? = None
-  /// The AWS Marketplace product identifier.
-  pub product_id: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
-  /// The Amazon Resource Name (ARN) of the allocation.
-  pub arn: Str? = None
+  /// The parent marketplace revenue share, short ID form (mrs-...).
+  pub marketplace_revenue_share_identifier: Str? = None
   /// The effective start date of the allocation.
   pub effective_from: Str? = None
-  /// The effective end date of the allocation, or null if open-ended.
+  /// The effective end date of the allocation.
   pub effective_until: Str? = None
   /// The revenue share percentage.
   pub revenue_share_percent: Str? = None
@@ -119,8 +133,11 @@ pub struct CreateMarketplaceRevenueShareAllocationOutput {
   pub created_date: Time? = None
   /// The date when the allocation was last modified.
   pub last_modified_date: Time? = None
+  /// The revision of the parent marketplace revenue share at which the
+  /// allocation was created.
+  pub marketplace_revenue_share_revision: Str? = None
   /// The latest revision of the parent marketplace revenue share.
-  pub latest_marketplace_revenue_share_revision: Str? = None
+  pub marketplace_revenue_share_latest_revision: Str? = None
 }
 
 pub struct CreateMarketplaceRevenueShareInput {
@@ -128,31 +145,31 @@ pub struct CreateMarketplaceRevenueShareInput {
   pub catalog: CatalogName? = None
   /// A unique token to ensure idempotency of the create request.
   pub client_token: Str? = None
-  /// The AWS Marketplace product identifier for this revenue share.
-  pub product_id: Str? = None
+  /// The products in the marketplace revenue share, each with its typed
+  /// account lists. 1 to 25 products.
+  pub products: List[MarketplaceRevenueShareProductEntry]? = None
   /// Tags to associate with the marketplace revenue share upon creation.
   pub tags: List[Tag]? = None
 }
 
 pub struct CreateMarketplaceRevenueShareOutput {
-  /// The AWS Marketplace product identifier of the newly created revenue
-  /// share.
-  pub product_id: Str? = None
+  /// The unique identifier of the newly created marketplace revenue share,
+  /// short ID form (mrs-...).
+  pub id: Str? = None
   /// The Amazon Resource Name (ARN) of the newly created marketplace revenue
   /// share.
   pub arn: Str? = None
   /// The catalog that the marketplace revenue share belongs to.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product code.
-  pub product_code: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
+  /// The products in the newly created marketplace revenue share, each with
+  /// per-type account counts.
+  pub products: List[MarketplaceRevenueShareProductSummary]? = None
   /// The date when the marketplace revenue share was created.
   pub created_date: Time? = None
   /// The date when the marketplace revenue share was last modified.
   pub last_modified_date: Time? = None
-  /// The revision number of the newly created marketplace revenue share.
-  pub revision: Int? = None
+  /// The revision of the newly created marketplace revenue share.
+  pub revision: Str? = None
 }
 
 pub struct CreateRevenueAttributionInput {
@@ -172,6 +189,8 @@ pub struct CreateRevenueAttributionInput {
   pub product_identifier: Str? = None
   /// Tags to associate with the revenue attribution upon creation.
   pub tags: List[Tag]? = None
+  /// Program-defined key-value attributes for the revenue attribution.
+  pub context: Map[Str, Str]? = None
 }
 
 pub struct CreateRevenueAttributionOutput {
@@ -189,6 +208,8 @@ pub struct CreateRevenueAttributionOutput {
   pub marketplace_product: MarketplaceProductSummary? = None
   /// The revision of the newly created attribution resource.
   pub revision: Str? = None
+  /// Program-defined key-value attributes for the revenue attribution.
+  pub context: Map[Str, Str]? = None
 }
 
 pub enum EntityType: Str {
@@ -213,8 +234,8 @@ pub enum FieldValidationCode: Str {
 pub struct GetMarketplaceRevenueShareAllocationInput {
   /// The catalog that the allocation belongs to.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product identifier of the parent revenue share.
-  pub product_id: Str? = None
+  /// The parent marketplace revenue share, by ID (mrs-...) or ARN.
+  pub marketplace_revenue_share_identifier: Str? = None
   /// The unique identifier of the allocation to retrieve.
   pub marketplace_revenue_share_allocation_id: Str? = None
   /// The revision of the parent marketplace revenue share at which to
@@ -225,15 +246,11 @@ pub struct GetMarketplaceRevenueShareAllocationInput {
 pub struct GetMarketplaceRevenueShareAllocationOutput {
   /// The unique identifier of the allocation.
   pub marketplace_revenue_share_allocation_id: Str? = None
-  /// The AWS Marketplace product identifier.
-  pub product_id: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
-  /// The Amazon Resource Name (ARN) of the allocation.
-  pub arn: Str? = None
+  /// The parent marketplace revenue share, short ID form (mrs-...).
+  pub marketplace_revenue_share_identifier: Str? = None
   /// The effective start date of the allocation.
   pub effective_from: Str? = None
-  /// The effective end date of the allocation, or null if open-ended.
+  /// The effective end date of the allocation.
   pub effective_until: Str? = None
   /// The revenue share percentage.
   pub revenue_share_percent: Str? = None
@@ -243,39 +260,50 @@ pub struct GetMarketplaceRevenueShareAllocationOutput {
   pub created_date: Time? = None
   /// The date when the allocation was last modified.
   pub last_modified_date: Time? = None
+  /// The revision of the parent marketplace revenue share at which the
+  /// allocation was read.
+  pub marketplace_revenue_share_revision: Str? = None
   /// The latest revision of the parent marketplace revenue share.
-  pub latest_marketplace_revenue_share_revision: Str? = None
+  pub marketplace_revenue_share_latest_revision: Str? = None
 }
 
 pub struct GetMarketplaceRevenueShareInput {
   /// The catalog that the marketplace revenue share belongs to.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product identifier of the revenue share to retrieve.
-  pub product_id: Str? = None
+  /// The marketplace revenue share to retrieve, by ID (mrs-...) or ARN.
+  pub identifier: Str? = None
   /// The revision of the marketplace revenue share to retrieve. Omit to
   /// return the latest revision.
-  pub revision: Int? = None
+  pub revision: Str? = None
 }
 
 pub struct GetMarketplaceRevenueShareOutput {
-  /// The AWS Marketplace product identifier of the revenue share.
-  pub product_id: Str? = None
+  /// The unique identifier of the marketplace revenue share, short ID form
+  /// (mrs-...).
+  pub id: Str? = None
   /// The Amazon Resource Name (ARN) of the marketplace revenue share.
   pub arn: Str? = None
   /// The catalog that the marketplace revenue share belongs to.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product code.
-  pub product_code: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
+  /// The products in the marketplace revenue share, each with its typed
+  /// account lists and full account IDs. Empty when the share is closed.
+  pub products: List[MarketplaceRevenueShareProductDetail]? = None
   /// The date when the marketplace revenue share was created.
   pub created_date: Time? = None
   /// The date when the marketplace revenue share was last modified.
   pub last_modified_date: Time? = None
-  /// The revision number of the retrieved marketplace revenue share.
-  pub revision: Int? = None
-  /// The latest revision number of the marketplace revenue share.
-  pub latest_revision: Int? = None
+  /// The revision of the retrieved marketplace revenue share.
+  pub revision: Str? = None
+  /// The latest revision of the marketplace revenue share.
+  pub latest_revision: Str? = None
+  /// The date from which this share is effective, derived from the earliest
+  /// ACTIVE allocation start date (YYYY-MM-DD). Absent when no ACTIVE
+  /// allocation remains.
+  pub effective_from: Str? = None
+  /// The date until which this share is effective, derived from the latest
+  /// ACTIVE allocation end date (YYYY-MM-DD). Absent when no ACTIVE
+  /// allocation remains.
+  pub effective_until: Str? = None
   /// The number of active allocations under this marketplace revenue share.
   pub total_active_marketplace_revenue_share_allocation_count: Int? = None
   /// The total number of allocations under this marketplace revenue share.
@@ -400,27 +428,34 @@ pub struct GetRevenueAttributionOutput {
   /// The total number of allocations under this revenue attribution, counting
   /// both ACTIVE and INACTIVE.
   pub total_revenue_attribution_allocation_count: Int? = None
+  /// Program-defined key-value attributes for the revenue attribution.
+  pub context: Map[Str, Str]? = None
 }
 
 /// An internal server error occurred. Retry your request.
 pub struct InternalServerException {
+  /// A human-readable message describing the internal server error.
   pub message: Str? = None
 }
 
 pub struct ListMarketplaceRevenueShareAllocationsInput {
   /// The catalog containing the allocations.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product identifier for the parent revenue share.
-  pub product_id: Str? = None
+  /// The parent marketplace revenue share, by ID (mrs-...) or ARN.
+  pub marketplace_revenue_share_identifier: Str? = None
   /// Filter by allocation status.
-  pub status: AllocationStatus? = None
+  pub status_filter: AllocationStatus? = None
   /// Inclusive lower bound for EffectiveFrom date filter.
   pub after_effective_from: Str? = None
   /// Exclusive upper bound for EffectiveFrom date filter (half-open range).
   pub before_effective_from: Str? = None
+  /// Inclusive lower bound for EffectiveUntil date filter.
+  pub after_effective_until: Str? = None
+  /// Exclusive upper bound for EffectiveUntil date filter (half-open range).
+  pub before_effective_until: Str? = None
   /// The field to sort marketplace revenue share allocations by.
   pub sort_by: MarketplaceRevenueShareAllocationSortField? = None
-  /// The direction to sort results. Defaults to DESCENDING.
+  /// The direction to sort results. Defaults to ASCENDING.
   pub sort_order: SortOrder? = None
   /// Maximum number of results per page.
   pub max_results: Int? = None
@@ -441,9 +476,16 @@ pub struct ListMarketplaceRevenueShareAllocationsOutput {
 pub struct ListMarketplaceRevenueSharesInput {
   /// The catalog to list marketplace revenue shares from.
   pub catalog: CatalogName? = None
-  /// Filter results to only include shares with these product identifiers.
+  /// Filter results to only include these marketplace revenue shares, by ID
+  /// or ARN. 1 to 100 identifiers. When several filters are sent, a share
+  /// must match all of them.
+  pub identifiers: List[Str]? = None
+  /// Filter results to the marketplace revenue shares that contain any of
+  /// these products. 1 to 10 product IDs or product ARNs. Shares the caller
+  /// does not own are never returned.
   pub product_ids: List[Str]? = None
-  /// Filter results to only include shares with these product codes.
+  /// Filter results to the marketplace revenue shares that contain a product
+  /// with any of these product codes. 1 to 10 product codes.
   pub product_codes: List[Str]? = None
   /// The maximum number of results to return in a single call.
   pub max_results: Int? = None
@@ -454,11 +496,11 @@ pub struct ListMarketplaceRevenueSharesInput {
   pub sort_by: MarketplaceRevenueShareSortBy? = None
   /// The direction to sort results.
   pub sort_order: SortOrder? = None
-  /// Filter results to only include marketplace revenue shares created after
-  /// this timestamp.
+  /// Filter results to marketplace revenue shares created at or after this
+  /// timestamp (inclusive).
   pub created_after: Time? = None
-  /// Filter results to only include marketplace revenue shares created before
-  /// this timestamp.
+  /// Filter results to marketplace revenue shares created before this
+  /// timestamp (exclusive).
   pub created_before: Time? = None
 }
 
@@ -530,6 +572,9 @@ pub struct ListRevenueAttributionsInput {
   /// Token for pagination. Use the value returned in the previous response to
   /// retrieve the next page.
   pub next_token: Str? = None
+  /// Filter results by context. Filters are combined with AND; values within
+  /// a filter are combined with OR.
+  pub context_filters: List[ContextFilter]? = None
 }
 
 pub struct ListRevenueAttributionsOutput {
@@ -569,15 +614,11 @@ pub enum MarketplaceRevenueShareAllocationSortField: Str {
 pub struct MarketplaceRevenueShareAllocationSummary {
   /// The unique identifier of the allocation.
   pub marketplace_revenue_share_allocation_id: Str? = None
-  /// The AWS Marketplace product identifier.
-  pub product_id: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
-  /// The Amazon Resource Name (ARN) of the parent marketplace revenue share.
-  pub arn: Str? = None
+  /// The parent marketplace revenue share, short ID form (mrs-...).
+  pub marketplace_revenue_share_identifier: Str? = None
   /// The effective start date of the allocation.
   pub effective_from: Str? = None
-  /// The effective end date of the allocation, or null if open-ended.
+  /// The effective end date of the allocation.
   pub effective_until: Str? = None
   /// The revenue share percentage.
   pub revenue_share_percent: Str? = None
@@ -589,6 +630,48 @@ pub struct MarketplaceRevenueShareAllocationSummary {
   pub last_modified_date: Time? = None
 }
 
+/// A product in a marketplace revenue share, as returned by
+/// GetMarketplaceRevenueShare, with the full typed account lists.
+pub struct MarketplaceRevenueShareProductDetail {
+  /// The AWS Marketplace product identifier.
+  pub product_id: Str? = None
+  /// The AWS Marketplace product code, resolved by the service.
+  pub product_code: Str? = None
+  /// The display name of the AWS Marketplace product, resolved by the
+  /// service.
+  pub product_name: Str? = None
+  /// The typed account lists for this product, each with its count and full
+  /// list of IDs.
+  pub accounts: List[RevenueShareProductAccountDetail]? = None
+}
+
+/// A product and its typed account lists as supplied in a
+/// CreateMarketplaceRevenueShare or UpdateMarketplaceRevenueShare request.
+pub struct MarketplaceRevenueShareProductEntry {
+  /// The AWS Marketplace product ID or product ARN. The share stores and
+  /// returns the product ID.
+  pub product_id: Str? = None
+  /// The typed account lists for this product. Omit to have the service
+  /// determine the accounts. At most one entry per type; each entry must
+  /// carry at least one account. An empty list is the same as omitting the
+  /// field.
+  pub accounts: List[RevenueShareProductAccountEntry]? = None
+}
+
+/// A product in a marketplace revenue share, as returned in Create, Update
+/// and List responses, with per-type account counts but no account IDs.
+pub struct MarketplaceRevenueShareProductSummary {
+  /// The AWS Marketplace product identifier.
+  pub product_id: Str? = None
+  /// The AWS Marketplace product code, resolved by the service.
+  pub product_code: Str? = None
+  /// The display name of the AWS Marketplace product, resolved by the
+  /// service.
+  pub product_name: Str? = None
+  /// Per-type counts of the accounts associated with this product.
+  pub accounts: List[RevenueShareProductAccountSummary]? = None
+}
+
 pub enum MarketplaceRevenueShareSortBy: Str {
   LastModifiedDate = "LastModifiedDate"
   Unknown(value: Str)
@@ -596,22 +679,30 @@ pub enum MarketplaceRevenueShareSortBy: Str {
 
 /// Summary information about a marketplace revenue share.
 pub struct MarketplaceRevenueShareSummary {
-  /// The AWS Marketplace product identifier.
-  pub product_id: Str? = None
+  /// The unique identifier of the marketplace revenue share, short ID form
+  /// (mrs-...).
+  pub id: Str? = None
   /// The Amazon Resource Name (ARN) of the marketplace revenue share.
   pub arn: Str? = None
   /// The catalog that the marketplace revenue share belongs to.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product code.
-  pub product_code: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
+  /// The products in the marketplace revenue share, each with per-type
+  /// account counts. Empty when the share is closed.
+  pub products: List[MarketplaceRevenueShareProductSummary]? = None
   /// The date when the marketplace revenue share was created.
   pub created_date: Time? = None
   /// The date when the marketplace revenue share was last modified.
   pub last_modified_date: Time? = None
-  /// The latest revision number of the marketplace revenue share.
-  pub latest_revision: Int? = None
+  /// The latest revision of the marketplace revenue share.
+  pub latest_revision: Str? = None
+  /// The date from which this share is effective, derived from the earliest
+  /// ACTIVE allocation start date (YYYY-MM-DD). Absent when no ACTIVE
+  /// allocation remains.
+  pub effective_from: Str? = None
+  /// The date until which this share is effective, derived from the latest
+  /// ACTIVE allocation end date (YYYY-MM-DD). Absent when no ACTIVE
+  /// allocation remains.
+  pub effective_until: Str? = None
   /// The number of active allocations under this share.
   pub total_active_marketplace_revenue_share_allocation_count: Int? = None
   /// The total number of allocations under this share.
@@ -620,6 +711,7 @@ pub struct MarketplaceRevenueShareSummary {
 
 /// The specified resource was not found.
 pub struct ResourceNotFoundException {
+  /// A human-readable message describing which resource was not found.
   pub message: Str? = None
   /// The reason the resource was not found.
   pub reason: ResourceNotFoundExceptionReason? = None
@@ -729,8 +821,46 @@ pub struct RevenueShareAllocation {
   pub status: AllocationStatus? = None
 }
 
+/// A typed account list returned by GetMarketplaceRevenueShare, with its
+/// count and full list of IDs.
+pub struct RevenueShareProductAccountDetail {
+  /// The type of account list.
+  pub account_type: RevenueShareProductAccountType? = None
+  /// The number of accounts of this type.
+  pub count: Int? = None
+  /// The full list of AWS account identifiers of this type.
+  pub account_ids: List[Str]? = None
+}
+
+/// A typed account list supplied for a product in a
+/// CreateMarketplaceRevenueShare or UpdateMarketplaceRevenueShare request.
+pub struct RevenueShareProductAccountEntry {
+  /// The type of account list.
+  pub account_type: RevenueShareProductAccountType? = None
+  /// The AWS account identifiers for this type. Each ID must be a 12-digit
+  /// AWS account ID. Account ownership is verified after the request is
+  /// accepted.
+  pub account_ids: List[Str]? = None
+}
+
+/// A per-type count of accounts associated with a product.
+pub struct RevenueShareProductAccountSummary {
+  /// The type of account list.
+  pub account_type: RevenueShareProductAccountType? = None
+  /// The number of accounts of this type.
+  pub count: Int? = None
+}
+
+pub enum RevenueShareProductAccountType: Str {
+  Deployment = "DEPLOYMENT"
+  Organization = "ORGANIZATION"
+  Unknown(value: Str)
+}
+
 /// The request would exceed a service quota limit.
 pub struct ServiceQuotaExceededException {
+  /// A human-readable message describing which service quota would be
+  /// exceeded.
   pub message: Str? = None
   /// The reason the service quota was exceeded.
   pub reason: ServiceQuotaExceededExceptionReason? = None
@@ -802,6 +932,8 @@ pub enum TenancyModel: Str {
 
 /// The request was throttled due to too many requests. Retry your request.
 pub struct ThrottlingException {
+  /// A human-readable message indicating that the request rate limit has been
+  /// exceeded.
   pub message: Str? = None
   /// The service code associated with the throttling error.
   pub service_code: Str? = None
@@ -819,8 +951,8 @@ pub struct UntagResourceInput {
 pub struct UpdateMarketplaceRevenueShareAllocationInput {
   /// The catalog containing the allocation.
   pub catalog: CatalogName? = None
-  /// The AWS Marketplace product identifier for the parent revenue share.
-  pub product_id: Str? = None
+  /// The parent marketplace revenue share, by ID (mrs-...) or ARN.
+  pub marketplace_revenue_share_identifier: Str? = None
   /// The identifier of the allocation to update.
   pub marketplace_revenue_share_allocation_id: Str? = None
   /// The current revision of the parent share. Must match for optimistic
@@ -828,12 +960,6 @@ pub struct UpdateMarketplaceRevenueShareAllocationInput {
   pub marketplace_revenue_share_revision: Str? = None
   /// A unique token to ensure idempotency of the update request.
   pub client_token: Str? = None
-  /// The new effective start date. Must be the first day of a month. Only
-  /// modifiable on future-dated allocations.
-  pub effective_from: Str? = None
-  /// The new effective end date. Must be the last day of a month and on or
-  /// after today.
-  pub effective_until: Str? = None
   /// The new revenue share percentage. Only modifiable on future-dated
   /// allocations.
   pub revenue_share_percent: Str? = None
@@ -845,15 +971,11 @@ pub struct UpdateMarketplaceRevenueShareAllocationInput {
 pub struct UpdateMarketplaceRevenueShareAllocationOutput {
   /// The unique identifier of the updated allocation.
   pub marketplace_revenue_share_allocation_id: Str? = None
-  /// The AWS Marketplace product identifier.
-  pub product_id: Str? = None
-  /// The display name of the AWS Marketplace product.
-  pub product_name: Str? = None
-  /// The Amazon Resource Name (ARN) of the parent marketplace revenue share.
-  pub arn: Str? = None
+  /// The parent marketplace revenue share, short ID form (mrs-...).
+  pub marketplace_revenue_share_identifier: Str? = None
   /// The effective start date of the allocation.
   pub effective_from: Str? = None
-  /// The effective end date of the allocation, or null if open-ended.
+  /// The effective end date of the allocation.
   pub effective_until: Str? = None
   /// The revenue share percentage.
   pub revenue_share_percent: Str? = None
@@ -863,9 +985,45 @@ pub struct UpdateMarketplaceRevenueShareAllocationOutput {
   pub created_date: Time? = None
   /// The date when the allocation was last modified.
   pub last_modified_date: Time? = None
+  /// The revision of the parent marketplace revenue share at which the update
+  /// was committed.
+  pub marketplace_revenue_share_revision: Str? = None
   /// The latest revision of the parent marketplace revenue share after the
   /// update.
-  pub latest_marketplace_revenue_share_revision: Str? = None
+  pub marketplace_revenue_share_latest_revision: Str? = None
+}
+
+pub struct UpdateMarketplaceRevenueShareInput {
+  /// The catalog that the marketplace revenue share belongs to.
+  pub catalog: CatalogName? = None
+  /// The marketplace revenue share to update, by ID (mrs-...) or ARN.
+  pub identifier: Str? = None
+  /// A unique token to ensure idempotency of the update request.
+  pub client_token: Str? = None
+  /// The current revision of the marketplace revenue share, for optimistic
+  /// concurrency control. A stale value returns ConflictException with Reason
+  /// REVISION_MISMATCH.
+  pub revision: Str? = None
+  /// The complete desired set of products in the marketplace revenue share,
+  /// each with its typed account lists. 0 to 25 products; an empty list
+  /// closes the marketplace revenue share.
+  pub products: List[MarketplaceRevenueShareProductEntry]? = None
+}
+
+pub struct UpdateMarketplaceRevenueShareOutput {
+  /// The unique identifier of the updated marketplace revenue share, short ID
+  /// form (mrs-...).
+  pub id: Str? = None
+  /// The Amazon Resource Name (ARN) of the updated marketplace revenue share.
+  pub arn: Str? = None
+  /// The products in the marketplace revenue share after the update, each
+  /// with per-type account counts. Empty when the marketplace revenue share
+  /// is closed.
+  pub products: List[MarketplaceRevenueShareProductSummary]? = None
+  /// The date when the marketplace revenue share was last modified.
+  pub last_modified_date: Time? = None
+  /// The latest revision of the marketplace revenue share after the update.
+  pub latest_revision: Str? = None
 }
 
 pub struct UpdateRevenueAttributionInput {
@@ -881,6 +1039,9 @@ pub struct UpdateRevenueAttributionInput {
   /// The current revision of the revenue attribution. Must match the server's
   /// current value.
   pub revision: Str? = None
+  /// Full-replacement context map. Omit to leave the stored context
+  /// unchanged; pass an empty map to clear it.
+  pub context: Map[Str, Str]? = None
 }
 
 pub struct UpdateRevenueAttributionOutput {
@@ -894,10 +1055,13 @@ pub struct UpdateRevenueAttributionOutput {
   pub last_modified_date: Time? = None
   /// The latest revision of the attribution after the update.
   pub latest_revision: Str? = None
+  /// The context stored on the revenue attribution after the update.
+  pub context: Map[Str, Str]? = None
 }
 
 /// The request failed validation due to invalid input parameters.
 pub struct ValidationException {
+  /// A human-readable message describing the validation failure.
   pub message: Str? = None
   /// The reason for the validation failure.
   pub reason: ValidationExceptionReason? = None

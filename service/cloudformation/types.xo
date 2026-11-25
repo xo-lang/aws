@@ -1026,12 +1026,17 @@ pub struct CreateStackSetInput {
   /// template, without first reviewing the resulting changes in a change set.
   /// To create the StackSet directly, you must acknowledge this capability.
   /// For more information, see Perform custom processing on CloudFormation
-  /// templates with template macros . StackSets with service-managed
-  /// permissions don't currently support the use of macros in templates.
-  /// (This includes the AWS::Include and AWS::Serverless transforms, which
-  /// are macros hosted by CloudFormation.) Even if you specify this
-  /// capability for a StackSet with service-managed permissions, if you
-  /// reference a macro in your template the StackSet operation will fail.
+  /// templates with template macros . With service-managed permissions,
+  /// CloudFormation can process macros, nested stacks, and transforms in your
+  /// StackSet template only when you provide a custom execution role
+  /// template. (Macros include the AWS::Include and AWS::Serverless
+  /// transforms, which are macros hosted by CloudFormation.) The default
+  /// service-managed execution role can't provision them: if you reference a
+  /// macro in your template, the StackSet operation fails even when you
+  /// specify this capability. To use macros, nested stacks, or transforms
+  /// with service-managed permissions, specify a custom execution role
+  /// template in ExecutionRoleTemplateBody or ExecutionRoleTemplateUrl , and
+  /// specify both CAPABILITY_NAMED_IAM and CAPABILITY_AUTO_EXPAND .
   pub capabilities: List[Capability]? = None
   /// The key-value pairs to associate with this StackSet and the stacks
   /// created from it. CloudFormation also propagates these tags to supported
@@ -1049,12 +1054,16 @@ pub struct CreateStackSetInput {
   /// see Grant self-managed permissions in the CloudFormation User Guide .
   /// Valid only if the permissions model is SELF_MANAGED .
   pub administration_role_arn: Str? = None
-  /// The name of the IAM execution role to use to create the StackSet. If you
-  /// do not specify an execution role, CloudFormation uses the
+  /// The name of the IAM execution role that CloudFormation uses for StackSet
+  /// operations in your target accounts. [Self-managed permissions] If you do
+  /// not specify an execution role, CloudFormation uses the
   /// AWSCloudFormationStackSetExecutionRole role for the StackSet operation.
   /// Specify an IAM role only if you are using customized execution roles to
   /// control which stack resources users and groups can include in their
-  /// StackSets. Valid only if the permissions model is SELF_MANAGED .
+  /// StackSets. [Service-managed permissions] Set this name when you use
+  /// custom execution roles. The role that your custom execution role
+  /// template provisions in your target accounts must have this same name,
+  /// and the name must begin with stacksets-exec-custom- .
   pub execution_role_name: Str? = None
   /// Describes how the IAM roles required for StackSet operations are
   /// created. By default, SELF-MANAGED is specified. With self-managed
@@ -1096,6 +1105,24 @@ pub struct CreateStackSetInput {
   /// Describes whether CloudFormation performs non-conflicting operations
   /// concurrently and queues conflicting operations.
   pub managed_execution: ManagedExecution? = None
+  /// The body of the template that creates a custom execution role in target
+  /// accounts. This parameter applies only when the permissions model is
+  /// SERVICE_MANAGED . Conditional: Specify either ExecutionRoleTemplateBody
+  /// or ExecutionRoleTemplateUrl , but not both. If you don't specify either,
+  /// CloudFormation uses the default service-managed execution role in target
+  /// accounts.
+  pub execution_role_template_body: Str? = None
+  /// The URL of an Amazon S3 object that contains the template that creates a
+  /// custom execution role in target accounts. This parameter applies only
+  /// when the permissions model is SERVICE_MANAGED . Conditional: Specify
+  /// either ExecutionRoleTemplateBody or ExecutionRoleTemplateUrl , but not
+  /// both. If you don't specify either, CloudFormation uses the default
+  /// service-managed execution role in target accounts.
+  pub execution_role_template_url: Str? = None
+  /// The name of the Amazon S3 bucket that stores the execution role stack
+  /// template body. CloudFormation uses this bucket only when you specify a
+  /// custom execution role template.
+  pub stack_set_output_bucket: Str? = None
 }
 
 pub struct CreateStackSetOutput {
@@ -3804,6 +3831,66 @@ pub enum RegionConcurrencyType: Str {
   Unknown(value: Str)
 }
 
+/// Provides visibility into the stack instances deployment stage for a
+/// single Region, including per-stack-instance progress counts and a
+/// completion percentage for that Region.
+pub struct RegionalStackInstancesDeployment {
+  /// The status of the stack instances deployment stage can be one of the
+  /// following values: NOT_APPLICABLE : The operation does not deploy stack
+  /// instances, such as a drift detection operation. NOT_STARTED : Stack
+  /// instances deployment has not started. The operation is still
+  /// provisioning roles, has not begun, or failed before this stage was
+  /// reached. IN_PROGRESS : At least one stack instance has started
+  /// deploying. SUCCEEDED : Deployment finished and succeeded for all stack
+  /// instances that were not skipped. PARTIAL_SUCCESS : Deployment finished
+  /// with a mix of succeeded, failed, and canceled stack instances. FAILED :
+  /// Deployment finished and every stack instance that was not skipped failed
+  /// or was canceled.
+  pub status: StageStatus? = None
+  /// The number of stack instances that deployed successfully in this Region.
+  pub succeeded_stack_instances_count: Int? = None
+  /// The number of stack instances that failed to deploy in this Region.
+  pub failed_stack_instances_count: Int? = None
+  /// The number of stack instances in this Region that have reached a final
+  /// state. This count includes stack instances that succeeded, failed, were
+  /// skipped, or were canceled.
+  pub completed_stack_instances_count: Int? = None
+  /// The number of stack instances in this Region that have not reached a
+  /// final state. This is the total number of stack instances in this Region
+  /// minus the completed count.
+  pub pending_stack_instances_count: Int? = None
+  /// The number of stack instances in this Region that were canceled because
+  /// the operation exceeded its failure tolerance or was stopped.
+  pub cancelled_stack_instances_count: Int? = None
+  /// The number of stack instances in this Region that were skipped because
+  /// role provisioning failed for their target account.
+  pub skipped_stack_instances_count: Int? = None
+  /// The total number of stack instances targeted by this operation in this
+  /// Region.
+  pub total_stack_instances_count: Int? = None
+  /// The percentage of stack instances in this Region that have reached a
+  /// final state.
+  pub percentage_completed: Float? = None
+}
+
+/// Contains the progress information for the individual stages of a
+/// StackSet operation in a single Region. Currently reports the stack
+/// instances deployment stage for the Region.
+pub struct RegionalStages {
+  /// The progress detail for the stack instances deployment stage in this
+  /// Region.
+  pub regional_stack_instances_deployment: RegionalStackInstancesDeployment? = None
+}
+
+/// Contains the progress detail for a single Region of a StackSet
+/// operation. This information is returned only by
+/// DescribeStackSetOperation .
+pub struct RegionalStatusDetail {
+  /// The progress information for the individual stages of the operation in
+  /// this Region.
+  pub stages: RegionalStages? = None
+}
+
 pub struct RegisterPublisherInput {
   /// Whether you accept the Terms and Conditions for publishing extensions in
   /// the CloudFormation registry. You must accept the terms and conditions in
@@ -3889,6 +3976,12 @@ pub enum RegistryType: Str {
   Module = "MODULE"
   Hook = "HOOK"
   Unknown(value: Str)
+}
+
+/// The input for the RemoveAlias action.
+pub struct RemoveAliasInput {
+  /// The alias name to remove.
+  pub alias_name: Str? = None
 }
 
 pub enum Replacement: Str {
@@ -4304,6 +4397,38 @@ pub struct ResourceToImport {
   pub resource_identifier: Map[Str, Str]? = None
 }
 
+/// Provides visibility into the role provisioning stage of a StackSet
+/// operation, including per-account progress counts and a completion
+/// percentage. For operations that do not provision IAM roles in target
+/// accounts, the Status is NOT_APPLICABLE and the progress counts are
+/// omitted.
+pub struct RoleProvisioning {
+  /// The status of the role provisioning stage can be one of the following
+  /// values: NOT_APPLICABLE : The operation does not provision roles. This
+  /// includes self-managed operations and service-managed operations whose
+  /// configuration does not require role provisioning. NOT_STARTED : Role
+  /// provisioning has not started. The operation has not begun resolving
+  /// target accounts, or it failed or stopped before the total number of
+  /// target accounts was resolved. IN_PROGRESS : Role provisioning is
+  /// actively processing target accounts. SUCCEEDED : Role provisioning
+  /// finished and succeeded for all target accounts. PARTIAL_SUCCESS : Role
+  /// provisioning finished, but succeeded for only a subset of target
+  /// accounts; one or more accounts failed. FAILED : Role provisioning
+  /// finished and failed for all target accounts.
+  pub status: StageStatus? = None
+  /// The number of accounts for which role provisioning succeeded.
+  pub succeeded_accounts_count: Int? = None
+  /// The number of accounts for which role provisioning failed.
+  pub failed_accounts_count: Int? = None
+  /// The number of accounts that have finished role provisioning, including
+  /// both succeeded and failed accounts.
+  pub completed_accounts_count: Int? = None
+  /// The number of accounts that are still awaiting role provisioning.
+  pub pending_accounts_count: Int? = None
+  /// The percentage of accounts that have completed role provisioning.
+  pub percentage_completed: Float? = None
+}
+
 /// Structure that contains the rollback triggers for CloudFormation to
 /// monitor during stack creation and updating operations, and for the
 /// specified monitoring period afterwards. Rollback triggers enable you to
@@ -4439,6 +4564,19 @@ pub struct ScannedResourceIdentifier {
   /// "TableName": "MyDDBTable" . For more information, see primaryIdentifier
   /// in the CloudFormation Command Line Interface (CLI) User Guide .
   pub resource_identifier: Map[Str, Str]? = None
+}
+
+/// The input for the SetAlias action.
+pub struct SetAliasInput {
+  /// The name or unique stack ID of the stack to assign an alias to.
+  pub stack_name: Str? = None
+  /// The alias to assign to the stack. The alias can then be used in place of
+  /// the stack name in any API call that accepts StackName . The name must be
+  /// unique within the same account and Region. It cannot match an existing
+  /// stack name or another active alias. An alias name can contain only
+  /// alphanumeric characters (case-sensitive) and hyphens. It must start with
+  /// an alphabetic character and can't be longer than 128 characters.
+  pub alias_name: Str? = None
 }
 
 /// The input for the SetStackPolicy action.
@@ -4619,6 +4757,10 @@ pub struct Stack {
   pub detailed_status: DetailedStatus? = None
   /// Information about the most recent operations performed on this stack.
   pub last_operations: List[OperationEntry]? = None
+  /// The alias assigned to the stack, if one has been set. An alias is an
+  /// alternative name that can be used in place of the stack name in any
+  /// CloudFormation API call that accepts the StackName parameter.
+  pub alias_name: Str? = None
 }
 
 /// Describes the stack and the template used by the stack.
@@ -4976,6 +5118,44 @@ pub struct StackInstanceSummary {
   /// The last unique ID of a StackSet operation performed on a stack
   /// instance.
   pub last_operation_id: Str? = None
+}
+
+/// Provides visibility into the stack instances deployment stage of a
+/// StackSet operation, including per-stack-instance progress counts and a
+/// completion percentage. For service-managed operations that provision
+/// roles, this stage begins after role provisioning finishes.
+pub struct StackInstancesDeployment {
+  /// The status of the stack instances deployment stage can be one of the
+  /// following values: NOT_APPLICABLE : The operation does not deploy stack
+  /// instances, such as a drift detection operation. NOT_STARTED : Stack
+  /// instances deployment has not started. The operation is still
+  /// provisioning roles, has not begun, or failed before this stage was
+  /// reached. IN_PROGRESS : At least one stack instance has started
+  /// deploying. SUCCEEDED : Deployment finished and succeeded for all stack
+  /// instances that were not skipped. PARTIAL_SUCCESS : Deployment finished
+  /// with a mix of succeeded, failed, and canceled stack instances. FAILED :
+  /// Deployment finished and every stack instance that was not skipped failed
+  /// or was canceled.
+  pub status: StageStatus? = None
+  /// The number of stack instances that deployed successfully.
+  pub succeeded_stack_instances_count: Int? = None
+  /// The number of stack instances that failed to deploy.
+  pub failed_stack_instances_count: Int? = None
+  /// The number of stack instances that have reached a final state. This
+  /// count includes stack instances that succeeded, failed, were skipped, or
+  /// were canceled.
+  pub completed_stack_instances_count: Int? = None
+  /// The number of stack instances that have not reached a final state. This
+  /// is the total number of stack instances minus the completed count.
+  pub pending_stack_instances_count: Int? = None
+  /// The number of stack instances that were canceled because the operation
+  /// exceeded its failure tolerance or was stopped.
+  pub cancelled_stack_instances_count: Int? = None
+  /// The number of stack instances that were skipped because role
+  /// provisioning failed for their target account.
+  pub skipped_stack_instances_count: Int? = None
+  /// The percentage of stack instances that have reached a final state.
+  pub percentage_completed: Float? = None
 }
 
 /// The specified stack ARN doesn't exist or stack doesn't exist
@@ -5365,6 +5545,10 @@ pub struct StackSet {
   /// stack instances deployed in. The Amazon Web Services Regions list output
   /// is in no particular order.
   pub regions: List[Str]? = None
+  /// The Amazon S3 bucket path where CloudFormation stores the execution role
+  /// stack template body. CloudFormation uses this bucket only when you
+  /// specify a custom execution role template.
+  pub stack_set_output_bucket_path: Str? = None
 }
 
 /// One of the targets for the StackSet. Returned by the
@@ -5529,6 +5713,11 @@ pub struct StackSetOperation {
   pub status_reason: Str? = None
   /// Detailed information about the StackSet operation.
   pub status_details: StackSetOperationStatusDetails? = None
+  /// The progress detail for each Region of the operation, keyed by Region.
+  /// Each entry reports the stack instances deployment progress for that
+  /// Region. This field is returned only by DescribeStackSetOperation . It is
+  /// not included in the ListStackSetOperations summary.
+  pub regional_status_details: Map[Str, RegionalStatusDetail]? = None
 }
 
 pub enum StackSetOperationAction: Str {
@@ -5654,6 +5843,20 @@ pub enum StackSetOperationStatus: Str {
 
 /// Detailed information about the StackSet operation.
 pub struct StackSetOperationStatusDetails {
+  /// The detailed progress information for the individual stages of the
+  /// StackSet operation: the role provisioning stage and the stack instances
+  /// deployment stage.
+  pub stages: Stages? = None
+  /// The total number of accounts targeted by this StackSet operation.
+  /// Self-managed operations and service-managed operations that do not
+  /// provision roles also report this value when it is known. CloudFormation
+  /// populates this value after it resolves the target accounts. Until then,
+  /// this field is not present.
+  pub total_accounts_count: Int? = None
+  /// The total number of stack instances targeted by this StackSet operation.
+  /// CloudFormation populates this value after it resolves the target stack
+  /// instances. Until then, this field is not present.
+  pub total_stack_instances_count: Int? = None
   /// The number of stack instances for which the StackSet operation failed.
   pub failed_stack_instances_count: Int? = None
 }
@@ -5820,6 +6023,31 @@ pub struct StackSummary {
   pub drift_information: StackDriftInformationSummary? = None
   /// Information about the most recent operations performed on this stack.
   pub last_operations: List[OperationEntry]? = None
+}
+
+pub enum StageStatus: Str {
+  Pending = "PENDING"
+  NotApplicable = "NOT_APPLICABLE"
+  NotStarted = "NOT_STARTED"
+  InProgress = "IN_PROGRESS"
+  Succeeded = "SUCCEEDED"
+  PartialSuccess = "PARTIAL_SUCCESS"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// Contains detailed progress information for the individual stages of a
+/// StackSet operation: the role provisioning stage and the stack instances
+/// deployment stage.
+pub struct Stages {
+  /// The progress detail for the role provisioning stage. For operations that
+  /// do not provision roles, this stage is present with a Status of
+  /// NOT_APPLICABLE .
+  pub role_provisioning: RoleProvisioning? = None
+  /// The progress detail for the stack instances deployment stage. This stage
+  /// reports the deployment of stack instances to the target accounts and
+  /// Amazon Web Services Regions, after any role provisioning has finished.
+  pub stack_instances_deployment: StackInstancesDeployment? = None
 }
 
 /// Another operation has been performed on this StackSet since the
@@ -6528,12 +6756,17 @@ pub struct UpdateStackSetInput {
   /// template, without first reviewing the resulting changes in a change set.
   /// To update the StackSet directly, you must acknowledge this capability.
   /// For more information, see Perform custom processing on CloudFormation
-  /// templates with template macros . StackSets with service-managed
-  /// permissions do not currently support the use of macros in templates.
-  /// (This includes the AWS::Include and AWS::Serverless transforms, which
-  /// are macros hosted by CloudFormation.) Even if you specify this
-  /// capability for a StackSet with service-managed permissions, if you
-  /// reference a macro in your template the StackSet operation will fail.
+  /// templates with template macros . With service-managed permissions,
+  /// CloudFormation can process macros, nested stacks, and transforms in your
+  /// StackSet template only when you provide a custom execution role
+  /// template. (Macros include the AWS::Include and AWS::Serverless
+  /// transforms, which are macros hosted by CloudFormation.) The default
+  /// service-managed execution role can't provision them: if you reference a
+  /// macro in your template, the StackSet operation fails even when you
+  /// specify this capability. To use macros, nested stacks, or transforms
+  /// with service-managed permissions, specify a custom execution role
+  /// template in ExecutionRoleTemplateBody or ExecutionRoleTemplateUrl , and
+  /// specify both CAPABILITY_NAMED_IAM and CAPABILITY_AUTO_EXPAND .
   pub capabilities: List[Capability]? = None
   /// The key-value pairs to associate with this StackSet and the stacks
   /// created from it. CloudFormation also propagates these tags to supported
@@ -6570,16 +6803,23 @@ pub struct UpdateStackSetInput {
   /// administrator role, even if it is the same customized administrator role
   /// used with this StackSet previously.
   pub administration_role_arn: Str? = None
-  /// [Self-managed permissions] The name of the IAM execution role to use to
-  /// update the stack set. If you do not specify an execution role,
-  /// CloudFormation uses the AWSCloudFormationStackSetExecutionRole role for
-  /// the StackSet operation. Specify an IAM role only if you are using
-  /// customized execution roles to control which stack resources users and
-  /// groups can include in their StackSets. If you specify a customized
-  /// execution role, CloudFormation uses that role to update the stack. If
-  /// you do not specify a customized execution role, CloudFormation performs
-  /// the update using the role previously associated with the StackSet, so
-  /// long as you have permissions to perform operations on the StackSet.
+  /// The name of the IAM execution role that CloudFormation uses for StackSet
+  /// operations in your target accounts. [Self-managed permissions] The name
+  /// of the IAM execution role to use to update the stack set. If you do not
+  /// specify an execution role, CloudFormation uses the
+  /// AWSCloudFormationStackSetExecutionRole role for the StackSet operation.
+  /// Specify an IAM role only if you are using customized execution roles to
+  /// control which stack resources users and groups can include in their
+  /// StackSets. If you specify a customized execution role, CloudFormation
+  /// uses that role to update the stack. If you do not specify a customized
+  /// execution role, CloudFormation performs the update using the role
+  /// previously associated with the StackSet, so long as you have permissions
+  /// to perform operations on the StackSet. [Service-managed permissions] Set
+  /// this name when you use custom execution roles. The role that your custom
+  /// execution role template provisions in your target accounts must have
+  /// this same name, and the name must begin with stacksets-exec-custom- .
+  /// You don't need to specify this parameter if an execution role name is
+  /// already configured for the StackSet and you aren't changing it.
   pub execution_role_name: Str? = None
   /// [Service-managed permissions] The Organizations accounts in which to
   /// update associated stack instances. To update all the stack instances
@@ -6659,6 +6899,31 @@ pub struct UpdateStackSetInput {
   /// Describes whether CloudFormation performs non-conflicting operations
   /// concurrently and queues conflicting operations.
   pub managed_execution: ManagedExecution? = None
+  /// The body of the template that creates or updates a custom execution role
+  /// in target accounts. This parameter applies only when the permissions
+  /// model is SERVICE_MANAGED . Conditional: Specify either
+  /// ExecutionRoleTemplateBody or ExecutionRoleTemplateUrl , but not both. If
+  /// you don't specify either, CloudFormation uses the default
+  /// service-managed execution role in target accounts.
+  pub execution_role_template_body: Str? = None
+  /// The URL of an Amazon S3 object that contains the template that creates
+  /// or updates a custom execution role in target accounts. This parameter
+  /// applies only when the permissions model is SERVICE_MANAGED .
+  /// Conditional: Specify either ExecutionRoleTemplateBody or
+  /// ExecutionRoleTemplateUrl , but not both. If you don't specify either,
+  /// CloudFormation uses the default service-managed execution role in target
+  /// accounts.
+  pub execution_role_template_url: Str? = None
+  /// Specifies whether CloudFormation uses the default service-managed
+  /// execution role instead of a custom execution role in target accounts. If
+  /// you set this to true , CloudFormation ignores any custom execution role
+  /// template specified in ExecutionRoleTemplateBody or
+  /// ExecutionRoleTemplateUrl .
+  pub use_admin_execution_role: Bool? = None
+  /// The name of the Amazon S3 bucket that stores the execution role stack
+  /// template body. CloudFormation uses this bucket only when you specify a
+  /// custom execution role template.
+  pub stack_set_output_bucket: Str? = None
 }
 
 pub struct UpdateStackSetOutput {

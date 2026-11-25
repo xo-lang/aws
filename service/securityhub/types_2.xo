@@ -2,6 +2,21 @@
 
 use std/json
 
+/// The action that WAF should take on a web request when it matches a
+/// rule's statement. Settings at the web ACL level can override the rule
+/// action setting.
+pub struct AwsWafv2RulesActionDetails {
+  /// Instructs WAF to allow the web request.
+  pub allow: AwsWafv2ActionAllowDetails? = None
+  /// Instructs WAF to block the web request.
+  pub block: AwsWafv2ActionBlockDetails? = None
+  /// Instructs WAF to run a CAPTCHA check against the web request.
+  pub captcha: AwsWafv2RulesActionCaptchaDetails? = None
+  /// Instructs WAF to count the web request and then continue evaluating the
+  /// request using the remaining rules in the web ACL.
+  pub count: AwsWafv2RulesActionCountDetails? = None
+}
+
 /// Provides details about rules in a rule group. A rule identifies web
 /// requests that you want to allow, block, or count. Each rule includes one
 /// top-level Statement that WAF uses to identify matching web requests, and
@@ -528,6 +543,7 @@ pub struct ClassificationStatus {
 pub enum CloudProviderName: Str {
   Azure = "Azure"
   Aws = "AWS"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -666,6 +682,7 @@ pub enum ConfigurationPolicyAssociationStatus: Str {
   Pending = "PENDING"
   Success = "SUCCESS"
   Failed = "FAILED"
+  Disabled = "DISABLED"
   Unknown(value: Str)
 }
 
@@ -688,7 +705,11 @@ pub struct ConfigurationPolicyAssociationSummary {
   /// policy association was last updated.
   pub updated_at: Time? = None
   /// The current status of the association between the specified target and
-  /// the configuration.
+  /// the configuration. Possible values are: PENDING - The association is in
+  /// progress. SUCCESS - The association succeeded. FAILED - The association
+  /// failed. For details, see AssociationStatusMessage . DISABLED - Central
+  /// configuration is disabled because the organization is managed by
+  /// Security Hub CSPM policies in Organizations.
   pub association_status: ConfigurationPolicyAssociationStatus? = None
   /// The explanation for a FAILED value for AssociationStatus .
   pub association_status_message: Str? = None
@@ -738,6 +759,7 @@ pub enum ConnectorProviderName: Str {
   JiraCloud = "JIRA_CLOUD"
   Servicenow = "SERVICENOW"
   Azure = "AZURE"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -1137,12 +1159,15 @@ pub enum CriticalitySourceType: Str {
   AutomationRule = "AutomationRule"
   ResourceName = "ResourceName"
   TagInference = "TagInference"
+  CloudwatchTelemetryInference = "CloudWatchTelemetryInference"
+  InstalledSoftwareAndPackageInference = "InstalledSoftwareAndPackageInference"
   Unknown(value: Str)
 }
 
 /// The name of the cloud provider for a CSPM connector.
 pub enum CspmConnectorProviderName: Str {
   Azure = "AZURE"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -1199,17 +1224,19 @@ pub struct CspmHealthCheck {
 }
 
 /// The cloud provider configuration for creating a connector. This is a
-/// union type that currently supports Azure.
+/// union type that currently supports Azure and GCP.
 pub enum CspmProviderConfiguration {
   Azure(value: AzureProviderConfiguration)
+  Gcp(value: GcpProviderConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
 
 /// The detailed cloud provider configuration for a connector. This is a
-/// union type that currently supports Azure.
+/// union type that currently supports Azure and GCP.
 pub enum CspmProviderDetail {
   Azure(value: AzureDetail)
+  Gcp(value: GcpDetail)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -1225,9 +1252,10 @@ pub struct CspmProviderSummary {
 }
 
 /// The cloud provider configuration for updating a connector. This is a
-/// union type that currently supports Azure.
+/// union type that currently supports Azure and GCP.
 pub enum CspmProviderUpdateConfiguration {
   Azure(value: AzureUpdateConfiguration)
+  Gcp(value: GcpUpdateConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -1599,7 +1627,8 @@ pub struct DescribeStandardsRequest {
   /// The maximum number of standards to return.
   pub max_results: Int? = None
   /// A list of cloud providers to filter the standards by. For example,
-  /// specify Azure to return only standards that evaluate Azure resources.
+  /// specify Azure to return only standards that evaluate Azure resources, or
+  /// GCP to return only standards that evaluate GCP resources.
   pub providers: List[StandardsProvider]? = None
 }
 
@@ -2466,6 +2495,55 @@ pub enum FreeTrialType: Str {
   Unknown(value: Str)
 }
 
+/// The detailed GCP configuration for a connector.
+pub struct GcpDetail {
+  /// The ARN of the multi-cloud configuration connector used to establish the
+  /// connection to GCP.
+  pub aws_config_connector_arn: Str? = None
+  /// The scope configuration that defines which GCP resources are monitored.
+  pub scope_configuration: GcpScopeConfiguration? = None
+  /// The list of GCP regions being monitored.
+  pub gcp_regions: List[Str]? = None
+}
+
+/// The configuration for connecting to a GCP environment.
+pub struct GcpProviderConfiguration {
+  /// The ARN of the multi-cloud configuration connector used to establish the
+  /// connection to GCP.
+  pub aws_config_connector_arn: Str? = None
+  /// The scope configuration that defines which GCP resources are monitored.
+  pub scope_configuration: GcpScopeConfiguration? = None
+  /// The list of GCP regions to monitor.
+  pub gcp_regions: List[Str]? = None
+}
+
+/// The scope configuration for a GCP connector, defining the organization
+/// or project scope.
+pub struct GcpScopeConfiguration {
+  /// The type of scope. Valid values are ORGANIZATION and PROJECT .
+  pub scope_type: GcpScopeType? = None
+  /// The list of scope values. Use an organization ID when the scope type is
+  /// ORGANIZATION , or project IDs when the scope type is PROJECT .
+  pub scope_values: List[Str]? = None
+}
+
+/// The type of scope for a GCP connector. Valid values are ORGANIZATION
+/// (monitor all projects in the organization) and PROJECT (monitor specific
+/// projects).
+pub enum GcpScopeType: Str {
+  Project = "PROJECT"
+  Organization = "ORGANIZATION"
+  Unknown(value: Str)
+}
+
+/// The configuration for updating a GCP connector's scope and regions.
+pub struct GcpUpdateConfiguration {
+  /// The updated scope configuration.
+  pub scope_configuration: GcpScopeConfiguration? = None
+  /// The updated list of GCP regions to monitor.
+  pub gcp_regions: List[Str]? = None
+}
+
 pub struct GenerateRecommendedPolicyV2Request {
   /// The unique identifier (ID) of Security Hub OCSF findings found under the
   /// metadata.uid field of the finding.
@@ -2575,7 +2653,11 @@ pub struct GetConfigurationPolicyAssociationResponse {
   /// policy association was last updated.
   pub updated_at: Time? = None
   /// The current status of the association between the specified target and
-  /// the configuration.
+  /// the configuration. Possible values are: PENDING - The association is in
+  /// progress. SUCCESS - The association succeeded. FAILED - The association
+  /// failed. For details, see AssociationStatusMessage . DISABLED - Central
+  /// configuration is disabled because the organization is managed by
+  /// Security Hub CSPM policies in Organizations.
   pub association_status: ConfigurationPolicyAssociationStatus? = None
   /// The explanation for a FAILED value for AssociationStatus .
   pub association_status_message: Str? = None
@@ -2689,7 +2771,8 @@ pub struct GetEnabledStandardsRequest {
   pub max_results: Int? = None
   /// A list of cloud providers to filter the enabled standards by. For
   /// example, specify Azure to return only enabled standards that evaluate
-  /// Azure resources.
+  /// Azure resources, or GCP to return only enabled standards that evaluate
+  /// GCP resources.
   pub providers: List[StandardsProvider]? = None
 }
 
@@ -4011,7 +4094,7 @@ pub struct ListSecurityControlDefinitionsRequest {
   pub max_results: Int? = None
   /// A list of cloud providers to filter the security control definitions by.
   /// For example, specify Azure to return only controls that evaluate Azure
-  /// resources.
+  /// resources, or GCP to return only controls that evaluate GCP resources.
   pub providers: List[SecurityControlsProvider]? = None
 }
 
@@ -4652,7 +4735,10 @@ pub struct OrganizationConfiguration {
   pub configuration_type: OrganizationConfigurationConfigurationType? = None
   /// Describes whether central configuration could be enabled as the
   /// ConfigurationType for the organization. If your ConfigurationType is
-  /// local configuration, then the value of Status is always ENABLED .
+  /// local configuration, then the value of Status is always ENABLED . If the
+  /// value of Status is DISABLED , central configuration is disabled because
+  /// the organization is managed by Security Hub CSPM policies in
+  /// Organizations.
   pub status: OrganizationConfigurationStatus? = None
   /// Provides an explanation if the value of Status is equal to FAILED when
   /// ConfigurationType is equal to CENTRAL .
@@ -4669,6 +4755,7 @@ pub enum OrganizationConfigurationStatus: Str {
   Pending = "PENDING"
   Enabled = "ENABLED"
   Failed = "FAILED"
+  Disabled = "DISABLED"
   Unknown(value: Str)
 }
 
@@ -4944,6 +5031,7 @@ pub enum ProviderConfiguration {
   JiraCloud(value: JiraCloudProviderConfiguration)
   ServiceNow(value: ServiceNowProviderConfiguration)
   Azure(value: AzureProviderConfiguration)
+  Gcp(value: GcpProviderConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -4953,6 +5041,7 @@ pub enum ProviderDetail {
   JiraCloud(value: JiraCloudDetail)
   ServiceNow(value: ServiceNowDetail)
   Azure(value: AzureDetail)
+  Gcp(value: GcpDetail)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -4972,6 +5061,7 @@ pub enum ProviderUpdateConfiguration {
   JiraCloud(value: JiraCloudUpdateConfiguration)
   ServiceNow(value: ServiceNowUpdateConfiguration)
   Azure(value: AzureUpdateConfiguration)
+  Gcp(value: GcpUpdateConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -5703,6 +5793,8 @@ pub struct ResourceDetails {
   pub code_repository: CodeRepositoryDetails? = None
   /// Details about an Azure resource that is related to a finding.
   pub azure_resource: json.Value? = None
+  /// Details about a GCP resource that is related to a finding.
+  pub gcp_resource: json.Value? = None
 }
 
 /// A list of summaries for all finding types on a resource.
@@ -6462,7 +6554,7 @@ pub struct SecurityControl {
   /// underscores.
   pub last_update_reason: Str? = None
   /// The cloud provider whose resources the security control evaluates. For
-  /// example, AWS or Azure .
+  /// example, AWS , Azure , or GCP .
   pub provider: SecurityControlsProvider? = None
 }
 
@@ -6514,7 +6606,7 @@ pub struct SecurityControlDefinition {
   /// control that doesn't support custom parameters.
   pub parameter_definitions: Map[Str, ParameterDefinition]? = None
   /// The cloud provider whose resources the security control evaluates. For
-  /// example, AWS or Azure .
+  /// example, AWS , Azure , or GCP .
   pub provider: SecurityControlsProvider? = None
 }
 
@@ -6551,6 +6643,7 @@ pub struct SecurityControlsConfiguration {
 pub enum SecurityControlsProvider: Str {
   Aws = "AWS"
   Azure = "Azure"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -7019,7 +7112,7 @@ pub struct Standard {
   /// enabled by default unless EnableDefaultStandards is set to false .
   pub enabled_by_default: Bool? = None
   /// The cloud provider whose resources the standard evaluates. For example,
-  /// AWS or Azure .
+  /// AWS , Azure , or GCP .
   pub provider: StandardsProvider? = None
   /// Provides details about the management of a standard.
   pub standards_managed_by: StandardsManagedBy? = None
@@ -7176,6 +7269,7 @@ pub struct StandardsManagedBy {
 pub enum StandardsProvider: Str {
   Aws = "AWS"
   Azure = "Azure"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -7224,7 +7318,7 @@ pub struct StandardsSubscription {
   /// The reason for the current status.
   pub standards_status_reason: StandardsStatusReason? = None
   /// The cloud provider whose resources the standard evaluates. For example,
-  /// AWS or Azure .
+  /// AWS , Azure , or GCP .
   pub provider: StandardsProvider? = None
 }
 
@@ -7264,7 +7358,11 @@ pub struct StartConfigurationPolicyAssociationResponse {
   /// policy association was last updated.
   pub updated_at: Time? = None
   /// The current status of the association between the specified target and
-  /// the configuration.
+  /// the configuration. Possible values are: PENDING - The association is in
+  /// progress. SUCCESS - The association succeeded. FAILED - The association
+  /// failed. For details, see AssociationStatusMessage . DISABLED - Central
+  /// configuration is disabled because the organization is managed by
+  /// Security Hub CSPM policies in Organizations.
   pub association_status: ConfigurationPolicyAssociationStatus? = None
   /// An explanation for a FAILED value for AssociationStatus .
   pub association_status_message: Str? = None

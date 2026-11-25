@@ -2390,6 +2390,9 @@ fn json_of_default_run_setting(v: DefaultRunSetting) -> json.Value {
   if let Some(x) = v.scratch_storage_mode {
     fs.push(("scratchStorageMode", json.Value.Str(x)))
   }
+  if let Some(x) = v.requester_pays_enabled {
+    fs.push(("requesterPaysEnabled", json.Value.Bool(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2423,6 +2426,7 @@ fn from_json_default_run_setting(v: json.Value) -> DefaultRunSetting ! Str {
       "sessionPolicy" => out.session_policy = jsonv.read_str(fv)?
       "engineSettings" => out.engine_settings = fv
       "scratchStorageMode" => out.scratch_storage_mode = jsonv.read_str(fv)?
+      "requesterPaysEnabled" => out.requester_pays_enabled = jsonv.read_bool(fv)?
       _ => {}
     }
   }
@@ -4800,6 +4804,12 @@ fn json_of_get_run_response(v: GetRunResponse) -> json.Value {
   if let Some(x) = v.output_uri_prefix_mode {
     fs.push(("outputUriPrefixMode", json.Value.Str(x)))
   }
+  if let Some(x) = v.requester_pays_enabled {
+    fs.push(("requesterPaysEnabled", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.parameters_uri {
+    fs.push(("parametersUri", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -4854,6 +4864,8 @@ fn from_json_get_run_response(v: json.Value) -> GetRunResponse ! Str {
       "engineSettings" => out.engine_settings = fv
       "sessionPolicy" => out.session_policy = jsonv.read_str(fv)?
       "outputUriPrefixMode" => out.output_uri_prefix_mode = jsonv.read_str(fv)?
+      "requesterPaysEnabled" => out.requester_pays_enabled = jsonv.read_bool(fv)?
+      "parametersUri" => out.parameters_uri = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -10263,6 +10275,12 @@ fn json_of_start_run_request(v: StartRunRequest) -> json.Value {
   if let Some(x) = v.output_uri_prefix_mode {
     fs.push(("outputUriPrefixMode", json.Value.Str(x)))
   }
+  if let Some(x) = v.requester_pays_enabled {
+    fs.push(("requesterPaysEnabled", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.parameters_uri {
+    fs.push(("parametersUri", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -10298,6 +10316,8 @@ fn from_json_start_run_request(v: json.Value) -> StartRunRequest ! Str {
       "sessionPolicy" => out.session_policy = jsonv.read_str(fv)?
       "engineSettings" => out.engine_settings = fv
       "outputUriPrefixMode" => out.output_uri_prefix_mode = jsonv.read_str(fv)?
+      "requesterPaysEnabled" => out.requester_pays_enabled = jsonv.read_bool(fv)?
+      "parametersUri" => out.parameters_uri = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -14197,44 +14217,4 @@ pub fn (e: CreateRunCacheErr) display() -> Str {
     InvalidInput(msg) => "invalid input: ${msg}"
     Deserialize(msg) => "cannot read the response: ${msg}"
   }
-}
-
-pub fn deserialize_create_run_cache_error(resp: http.Response) -> CreateRunCacheErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.AccessDeniedException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.ConflictException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.InternalServerException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "RequestTimeoutException" => match read_error_request_timeout_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.RequestTimeoutException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.ThrottlingException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateRunCacheErr.ValidationException(x)
-      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateRunCacheErr.Api(restjson.api_error(resp, body))
 }

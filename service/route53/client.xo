@@ -97,6 +97,30 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
+fn xml_write_az_affinity(var w: xmlv.Writer, v: AZAffinity, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.location_type {
+    xmlv.elem(w, "LocationType", x.value(), [])
+  }
+  if let Some(x) = v.location_id {
+    xmlv.elem(w, "LocationId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_az_affinity(e: xml.Element) -> AZAffinity ! Str {
+  var out = AZAffinity{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "LocationType" => out.location_type = AZAffinityLocationType.from(c.text())
+      "LocationId" => out.location_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_account_limit(var w: xmlv.Writer, v: AccountLimit, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -313,6 +337,67 @@ fn xml_read_change_batch(e: xml.Element) -> ChangeBatch ! Str {
   Ok(out)
 }
 
+fn xml_write_change_batch_summaries(var w: xmlv.Writer, v: List[ChangeBatchSummary], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_change_batch_summary(w, item, "ChangeBatchSummary", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_change_batch_summaries(e: xml.Element) -> List[ChangeBatchSummary] ! Str {
+  var out: List[ChangeBatchSummary] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_change_batch_summary(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_change_batch_summary(var w: xmlv.Writer, v: ChangeBatchSummary, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.change_id {
+    xmlv.elem(w, "ChangeId", x, [])
+  }
+  if let Some(x) = v.operation {
+    xmlv.elem(w, "Operation", x.value(), [])
+  }
+  if let Some(x) = v.submitted_at {
+    xmlv.elem(w, "SubmittedAt", rest.date_time(x), [])
+  }
+  if let Some(x) = v.submitted_by {
+    xmlv.elem(w, "SubmittedBy", x, [])
+  }
+  if let Some(x) = v.request_id {
+    xmlv.elem(w, "RequestId", x, [])
+  }
+  if let Some(x) = v.comment {
+    xmlv.elem(w, "Comment", x, [])
+  }
+  if let Some(x) = v.change_count {
+    xmlv.elem(w, "ChangeCount", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_change_batch_summary(e: xml.Element) -> ChangeBatchSummary ! Str {
+  var out = ChangeBatchSummary{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "ChangeId" => out.change_id = c.text()
+      "Operation" => out.operation = ChangeHistoryOperation.from(c.text())
+      "SubmittedAt" => out.submitted_at = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
+      "SubmittedBy" => out.submitted_by = c.text()
+      "RequestId" => out.request_id = c.text()
+      "Comment" => out.comment = c.text()
+      "ChangeCount" => out.change_count = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_change_cidr_collection_request(var w: xmlv.Writer, v: ChangeCidrCollectionRequest, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -355,6 +440,71 @@ fn xml_read_change_cidr_collection_response(e: xml.Element) -> ChangeCidrCollect
   for c in xmlv.elements(e) {
     match c.name.local {
       "Id" => out.id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_change_guardrail(var w: xmlv.Writer, v: ChangeGuardrail, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.name {
+    xmlv.elem(w, "Name", x.value(), [])
+  }
+  if let Some(x) = v.status {
+    xmlv.elem(w, "Status", x.value(), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_change_guardrail(e: xml.Element) -> ChangeGuardrail ! Str {
+  var out = ChangeGuardrail{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Name" => out.name = ChangeGuardrailName.from(c.text())
+      "Status" => out.status = ChangeGuardrailStatus.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_change_guardrails(var w: xmlv.Writer, v: List[ChangeGuardrail], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_change_guardrail(w, item, "ChangeGuardrail", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_change_guardrails(e: xml.Element) -> List[ChangeGuardrail] ! Str {
+  var out: List[ChangeGuardrail] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_change_guardrail(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_change_history_feature(var w: xmlv.Writer, v: ChangeHistoryFeature, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.status {
+    xmlv.elem(w, "Status", x.value(), [])
+  }
+  if let Some(x) = v.retention_starts_at {
+    xmlv.elem(w, "RetentionStartsAt", rest.date_time(x), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_change_history_feature(e: xml.Element) -> ChangeHistoryFeature ! Str {
+  var out = ChangeHistoryFeature{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Status" => out.status = FeatureEnablement.from(c.text())
+      "RetentionStartsAt" => out.retention_starts_at = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
       _ => {}
     }
   }
@@ -1049,6 +1199,62 @@ fn xml_read_create_health_check_response(e: xml.Element) -> CreateHealthCheckRes
   Ok(out)
 }
 
+fn xml_write_create_health_check_source_request(var w: xmlv.Writer, v: CreateHealthCheckSourceRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.caller_reference {
+    xmlv.elem(w, "CallerReference", x, [])
+  }
+  if let Some(x) = v.health_check_source_config {
+    xml_write_health_check_source_config(w, x, "HealthCheckSourceConfig", [])
+  }
+  if let Some(x) = v.tags {
+    xml_write_tag_list(w, x, "Tags", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_create_health_check_source_request(e: xml.Element) -> CreateHealthCheckSourceRequest ! Str {
+  var out = CreateHealthCheckSourceRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "CallerReference" => out.caller_reference = c.text()
+      "HealthCheckSourceConfig" => out.health_check_source_config = xml_read_health_check_source_config(c)?
+      "Tags" => out.tags = xml_read_tag_list(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_create_health_check_source_response(var w: xmlv.Writer, v: CreateHealthCheckSourceResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
+  if let Some(x) = v.health_check_source_status {
+    xmlv.elem(w, "HealthCheckSourceStatus", x.value(), [])
+  }
+  if let Some(x) = v.location {
+    xmlv.elem(w, "Location", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_create_health_check_source_response(e: xml.Element) -> CreateHealthCheckSourceResponse ! Str {
+  var out = CreateHealthCheckSourceResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      "HealthCheckSourceStatus" => out.health_check_source_status = HealthCheckSourceStatus.from(c.text())
+      "Location" => out.location = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_create_hosted_zone_request(var w: xmlv.Writer, v: CreateHostedZoneRequest, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -1067,6 +1273,12 @@ fn xml_write_create_hosted_zone_request(var w: xmlv.Writer, v: CreateHostedZoneR
   if let Some(x) = v.delegation_set_id {
     xmlv.elem(w, "DelegationSetId", x, [])
   }
+  if let Some(x) = v.enable_public_dns_fallback {
+    xmlv.elem(w, "EnablePublicDNSFallback", "${x}", [])
+  }
+  if let Some(x) = v.change_guardrails {
+    xml_write_change_guardrails(w, x, "ChangeGuardrails", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1079,6 +1291,8 @@ fn xml_read_create_hosted_zone_request(e: xml.Element) -> CreateHostedZoneReques
       "CallerReference" => out.caller_reference = c.text()
       "HostedZoneConfig" => out.hosted_zone_config = xml_read_hosted_zone_config(c)?
       "DelegationSetId" => out.delegation_set_id = c.text()
+      "EnablePublicDNSFallback" => out.enable_public_dns_fallback = xmlv.read_bool(c.text())?
+      "ChangeGuardrails" => out.change_guardrails = xml_read_change_guardrails(c)?
       _ => {}
     }
   }
@@ -1230,6 +1444,43 @@ fn xml_read_create_query_logging_config_response(e: xml.Element) -> CreateQueryL
       _ => {}
     }
   }
+  Ok(out)
+}
+
+fn xml_write_create_resource_record_set_protections_request(var w: xmlv.Writer, v: CreateResourceRecordSetProtectionsRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.protections {
+    xml_write_resource_record_set_protection_config_batch(w, x, "Protections", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_create_resource_record_set_protections_request(e: xml.Element) -> CreateResourceRecordSetProtectionsRequest ! Str {
+  var out = CreateResourceRecordSetProtectionsRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "Protections" => out.protections = xml_read_resource_record_set_protection_config_batch(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_create_resource_record_set_protections_response(var w: xmlv.Writer, v: CreateResourceRecordSetProtectionsResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  let _ = v
+  xmlv.end(w, name)
+}
+
+fn xml_read_create_resource_record_set_protections_response(e: xml.Element) -> CreateResourceRecordSetProtectionsResponse ! Str {
+  var out = CreateResourceRecordSetProtectionsResponse{}
+  let _ = e
   Ok(out)
 }
 
@@ -1809,6 +2060,50 @@ fn xml_read_delete_health_check_response(e: xml.Element) -> DeleteHealthCheckRes
   Ok(out)
 }
 
+fn xml_write_delete_health_check_source_request(var w: xmlv.Writer, v: DeleteHealthCheckSourceRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_delete_health_check_source_request(e: xml.Element) -> DeleteHealthCheckSourceRequest ! Str {
+  var out = DeleteHealthCheckSourceRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_delete_health_check_source_response(var w: xmlv.Writer, v: DeleteHealthCheckSourceResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
+  if let Some(x) = v.health_check_source_status {
+    xmlv.elem(w, "HealthCheckSourceStatus", x.value(), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_delete_health_check_source_response(e: xml.Element) -> DeleteHealthCheckSourceResponse ! Str {
+  var out = DeleteHealthCheckSourceResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      "HealthCheckSourceStatus" => out.health_check_source_status = HealthCheckSourceStatus.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_delete_hosted_zone_request(var w: xmlv.Writer, v: DeleteHostedZoneRequest, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -1922,6 +2217,43 @@ fn xml_write_delete_query_logging_config_response(var w: xmlv.Writer, v: DeleteQ
 
 fn xml_read_delete_query_logging_config_response(e: xml.Element) -> DeleteQueryLoggingConfigResponse ! Str {
   var out = DeleteQueryLoggingConfigResponse{}
+  let _ = e
+  Ok(out)
+}
+
+fn xml_write_delete_resource_record_set_protections_request(var w: xmlv.Writer, v: DeleteResourceRecordSetProtectionsRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.protections {
+    xml_write_resource_record_set_protection_key_batch(w, x, "Protections", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_delete_resource_record_set_protections_request(e: xml.Element) -> DeleteResourceRecordSetProtectionsRequest ! Str {
+  var out = DeleteResourceRecordSetProtectionsRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "Protections" => out.protections = xml_read_resource_record_set_protection_key_batch(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_delete_resource_record_set_protections_response(var w: xmlv.Writer, v: DeleteResourceRecordSetProtectionsResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  let _ = v
+  xmlv.end(w, name)
+}
+
+fn xml_read_delete_resource_record_set_protections_response(e: xml.Element) -> DeleteResourceRecordSetProtectionsResponse ! Str {
+  var out = DeleteResourceRecordSetProtectionsResponse{}
   let _ = e
   Ok(out)
 }
@@ -2248,6 +2580,26 @@ fn xml_read_error_messages(e: xml.Element) -> List[Str] ! Str {
   var out: List[Str] = []
   for c in xmlv.elements(e) {
     out.push(c.text())
+  }
+  Ok(out)
+}
+
+fn xml_write_feature_not_enabled(var w: xmlv.Writer, v: FeatureNotEnabled, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.message {
+    xmlv.elem(w, "message", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_feature_not_enabled(e: xml.Element) -> FeatureNotEnabled ! Str {
+  var out = FeatureNotEnabled{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "message" => out.message = c.text()
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -2691,6 +3043,46 @@ fn xml_read_get_health_check_response(e: xml.Element) -> GetHealthCheckResponse 
   Ok(out)
 }
 
+fn xml_write_get_health_check_source_request(var w: xmlv.Writer, v: GetHealthCheckSourceRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_get_health_check_source_request(e: xml.Element) -> GetHealthCheckSourceRequest ! Str {
+  var out = GetHealthCheckSourceRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_get_health_check_source_response(var w: xmlv.Writer, v: GetHealthCheckSourceResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source {
+    xml_write_health_check_source(w, x, "HealthCheckSource", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_get_health_check_source_response(e: xml.Element) -> GetHealthCheckSourceResponse ! Str {
+  var out = GetHealthCheckSourceResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSource" => out.health_check_source = xml_read_health_check_source(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_get_health_check_status_request(var w: xmlv.Writer, v: GetHealthCheckStatusRequest, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -2725,6 +3117,54 @@ fn xml_read_get_health_check_status_response(e: xml.Element) -> GetHealthCheckSt
   for c in xmlv.elements(e) {
     match c.name.local {
       "HealthCheckObservations" => out.health_check_observations = xml_read_health_check_observations(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_get_hosted_zone_change_batch_request(var w: xmlv.Writer, v: GetHostedZoneChangeBatchRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.change_id {
+    xmlv.elem(w, "ChangeId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_get_hosted_zone_change_batch_request(e: xml.Element) -> GetHostedZoneChangeBatchRequest ! Str {
+  var out = GetHostedZoneChangeBatchRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "ChangeId" => out.change_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_get_hosted_zone_change_batch_response(var w: xmlv.Writer, v: GetHostedZoneChangeBatchResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.change_batch_summary {
+    xml_write_change_batch_summary(w, x, "ChangeBatchSummary", [])
+  }
+  if let Some(x) = v.change_batch {
+    xml_write_change_batch(w, x, "ChangeBatch", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_get_hosted_zone_change_batch_response(e: xml.Element) -> GetHostedZoneChangeBatchResponse ! Str {
+  var out = GetHostedZoneChangeBatchResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "ChangeBatchSummary" => out.change_batch_summary = xml_read_change_batch_summary(c)?
+      "ChangeBatch" => out.change_batch = xml_read_change_batch(c)?
       _ => {}
     }
   }
@@ -3222,6 +3662,12 @@ fn xml_write_health_check_config(var w: xmlv.Writer, v: HealthCheckConfig, name:
   if let Some(x) = v.routing_control_arn {
     xmlv.elem(w, "RoutingControlArn", x, [])
   }
+  if let Some(x) = v.endpoint_type {
+    xmlv.elem(w, "EndpointType", x.value(), [])
+  }
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -3247,6 +3693,8 @@ fn xml_read_health_check_config(e: xml.Element) -> HealthCheckConfig ! Str {
       "AlarmIdentifier" => out.alarm_identifier = xml_read_alarm_identifier(c)?
       "InsufficientDataHealthStatus" => out.insufficient_data_health_status = InsufficientDataHealthStatus.from(c.text())
       "RoutingControlArn" => out.routing_control_arn = c.text()
+      "EndpointType" => out.endpoint_type = EndpointType.from(c.text())
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
       _ => {}
     }
   }
@@ -3331,6 +3779,103 @@ fn xml_read_health_check_region_list(e: xml.Element) -> List[HealthCheckRegion] 
   var out: List[HealthCheckRegion] = []
   for c in xmlv.elements(e) {
     out.push(HealthCheckRegion.from(c.text()))
+  }
+  Ok(out)
+}
+
+fn xml_write_health_check_source(var w: xmlv.Writer, v: HealthCheckSource, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
+  if let Some(x) = v.health_check_source_status {
+    xmlv.elem(w, "HealthCheckSourceStatus", x.value(), [])
+  }
+  if let Some(x) = v.health_check_source_config {
+    xml_write_health_check_source_config(w, x, "HealthCheckSourceConfig", [])
+  }
+  if let Some(x) = v.status_reason_code {
+    xmlv.elem(w, "StatusReasonCode", x.value(), [])
+  }
+  if let Some(x) = v.status_reason {
+    xmlv.elem(w, "StatusReason", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_health_check_source(e: xml.Element) -> HealthCheckSource ! Str {
+  var out = HealthCheckSource{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      "HealthCheckSourceStatus" => out.health_check_source_status = HealthCheckSourceStatus.from(c.text())
+      "HealthCheckSourceConfig" => out.health_check_source_config = xml_read_health_check_source_config(c)?
+      "StatusReasonCode" => out.status_reason_code = HealthCheckSourceStatusReasonCode.from(c.text())
+      "StatusReason" => out.status_reason = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_health_check_source_already_exists(var w: xmlv.Writer, v: HealthCheckSourceAlreadyExists, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.message {
+    xmlv.elem(w, "message", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_health_check_source_already_exists(e: xml.Element) -> HealthCheckSourceAlreadyExists ! Str {
+  var out = HealthCheckSourceAlreadyExists{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_health_check_source_config(var w: xmlv.Writer, v: HealthCheckSourceConfig, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.vpc_id {
+    xmlv.elem(w, "VpcId", x, [])
+  }
+  if let Some(x) = v.subnet_configuration_list {
+    xml_write_subnet_configuration_list(w, x, "SubnetConfigurationList", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_health_check_source_config(e: xml.Element) -> HealthCheckSourceConfig ! Str {
+  var out = HealthCheckSourceConfig{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "VpcId" => out.vpc_id = c.text()
+      "SubnetConfigurationList" => out.subnet_configuration_list = xml_read_subnet_configuration_list(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_health_check_sources(var w: xmlv.Writer, v: List[HealthCheckSource], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_health_check_source(w, item, "HealthCheckSource", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_health_check_sources(e: xml.Element) -> List[HealthCheckSource] ! Str {
+  var out: List[HealthCheckSource] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_health_check_source(c)?)
   }
   Ok(out)
 }
@@ -3445,6 +3990,9 @@ fn xml_write_hosted_zone_config(var w: xmlv.Writer, v: HostedZoneConfig, name: S
   if let Some(x) = v.private_zone {
     xmlv.elem(w, "PrivateZone", "${x}", [])
   }
+  if let Some(x) = v.hosted_zone_tier {
+    xmlv.elem(w, "HostedZoneTier", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -3454,6 +4002,7 @@ fn xml_read_hosted_zone_config(e: xml.Element) -> HostedZoneConfig ! Str {
     match c.name.local {
       "Comment" => out.comment = c.text()
       "PrivateZone" => out.private_zone = xmlv.read_bool(c.text())?
+      "HostedZoneTier" => out.hosted_zone_tier = HostedZoneTier.from(c.text())
       _ => {}
     }
   }
@@ -3486,8 +4035,17 @@ fn xml_write_hosted_zone_features(var w: xmlv.Writer, v: HostedZoneFeatures, nam
   if let Some(x) = v.accelerated_recovery_status {
     xmlv.elem(w, "AcceleratedRecoveryStatus", x.value(), [])
   }
+  if let Some(x) = v.public_dns_fallback_status {
+    xmlv.elem(w, "PublicDNSFallbackStatus", x.value(), [])
+  }
+  if let Some(x) = v.change_history {
+    xml_write_change_history_feature(w, x, "ChangeHistory", [])
+  }
   if let Some(x) = v.failure_reasons {
     xml_write_hosted_zone_failure_reasons(w, x, "FailureReasons", [])
+  }
+  if let Some(x) = v.change_guardrails {
+    xml_write_change_guardrails(w, x, "ChangeGuardrails", [])
   }
   xmlv.end(w, name)
 }
@@ -3497,7 +4055,10 @@ fn xml_read_hosted_zone_features(e: xml.Element) -> HostedZoneFeatures ! Str {
   for c in xmlv.elements(e) {
     match c.name.local {
       "AcceleratedRecoveryStatus" => out.accelerated_recovery_status = AcceleratedRecoveryStatus.from(c.text())
+      "PublicDNSFallbackStatus" => out.public_dns_fallback_status = FeatureStatus.from(c.text())
+      "ChangeHistory" => out.change_history = xml_read_change_history_feature(c)?
       "FailureReasons" => out.failure_reasons = xml_read_hosted_zone_failure_reasons(c)?
+      "ChangeGuardrails" => out.change_guardrails = xml_read_change_guardrails(c)?
       _ => {}
     }
   }
@@ -3892,6 +4453,30 @@ fn xml_read_invalid_pagination_token(e: xml.Element) -> InvalidPaginationToken !
   for c in xmlv.elements(e) {
     match c.name.local {
       "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_invalid_resource_record_set_protection_batch(var w: xmlv.Writer, v: InvalidResourceRecordSetProtectionBatch, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.message {
+    xmlv.elem(w, "Message", x, [])
+  }
+  if let Some(x) = v.errors {
+    xml_write_protection_errors(w, x, "Errors", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_invalid_resource_record_set_protection_batch(e: xml.Element) -> InvalidResourceRecordSetProtectionBatch ! Str {
+  var out = InvalidResourceRecordSetProtectionBatch{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Message" => out.message = c.text()
+      "Errors" => out.errors = xml_read_protection_errors(c)?
       _ => {}
     }
   }
@@ -4427,6 +5012,118 @@ fn xml_read_list_geo_locations_response(e: xml.Element) -> ListGeoLocationsRespo
   Ok(out)
 }
 
+fn xml_write_list_health_check_sources_request(var w: xmlv.Writer, v: ListHealthCheckSourcesRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  if let Some(x) = v.max_results {
+    xmlv.elem(w, "MaxResults", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_health_check_sources_request(e: xml.Element) -> ListHealthCheckSourcesRequest ! Str {
+  var out = ListHealthCheckSourcesRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "NextToken" => out.next_token = c.text()
+      "MaxResults" => out.max_results = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_health_check_sources_response(var w: xmlv.Writer, v: ListHealthCheckSourcesResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_sources {
+    xml_write_health_check_sources(w, x, "HealthCheckSources", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_health_check_sources_response(e: xml.Element) -> ListHealthCheckSourcesResponse ! Str {
+  var out = ListHealthCheckSourcesResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSources" => out.health_check_sources = xml_read_health_check_sources(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_health_checks_by_source_request(var w: xmlv.Writer, v: ListHealthChecksBySourceRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
+  if let Some(x) = v.marker {
+    xmlv.elem(w, "Marker", x, [])
+  }
+  if let Some(x) = v.max_items {
+    xmlv.elem(w, "MaxItems", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_health_checks_by_source_request(e: xml.Element) -> ListHealthChecksBySourceRequest ! Str {
+  var out = ListHealthChecksBySourceRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      "Marker" => out.marker = c.text()
+      "MaxItems" => out.max_items = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_health_checks_by_source_response(var w: xmlv.Writer, v: ListHealthChecksBySourceResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.health_checks {
+    xml_write_health_checks(w, x, "HealthChecks", [])
+  }
+  if let Some(x) = v.marker {
+    xmlv.elem(w, "Marker", x, [])
+  }
+  if let Some(x) = v.is_truncated {
+    xmlv.elem(w, "IsTruncated", "${x}", [])
+  }
+  if let Some(x) = v.next_marker {
+    xmlv.elem(w, "NextMarker", x, [])
+  }
+  if let Some(x) = v.max_items {
+    xmlv.elem(w, "MaxItems", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_health_checks_by_source_response(e: xml.Element) -> ListHealthChecksBySourceResponse ! Str {
+  var out = ListHealthChecksBySourceResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HealthChecks" => out.health_checks = xml_read_health_checks(c)?
+      "Marker" => out.marker = c.text()
+      "IsTruncated" => out.is_truncated = xmlv.read_bool(c.text())?
+      "NextMarker" => out.next_marker = c.text()
+      "MaxItems" => out.max_items = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_list_health_checks_request(var w: xmlv.Writer, v: ListHealthChecksRequest, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -4481,6 +5178,74 @@ fn xml_read_list_health_checks_response(e: xml.Element) -> ListHealthChecksRespo
       "IsTruncated" => out.is_truncated = xmlv.read_bool(c.text())?
       "NextMarker" => out.next_marker = c.text()
       "MaxItems" => out.max_items = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_hosted_zone_change_batches_request(var w: xmlv.Writer, v: ListHostedZoneChangeBatchesRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.submitted_after {
+    xmlv.elem(w, "SubmittedAfter", x, [])
+  }
+  if let Some(x) = v.submitted_before {
+    xmlv.elem(w, "SubmittedBefore", x, [])
+  }
+  if let Some(x) = v.start_after_change_id {
+    xmlv.elem(w, "StartAfterChangeId", x, [])
+  }
+  if let Some(x) = v.sort_order {
+    xmlv.elem(w, "SortOrder", x.value(), [])
+  }
+  if let Some(x) = v.max_results {
+    xmlv.elem(w, "MaxResults", "${x}", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_hosted_zone_change_batches_request(e: xml.Element) -> ListHostedZoneChangeBatchesRequest ! Str {
+  var out = ListHostedZoneChangeBatchesRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "SubmittedAfter" => out.submitted_after = c.text()
+      "SubmittedBefore" => out.submitted_before = c.text()
+      "StartAfterChangeId" => out.start_after_change_id = c.text()
+      "SortOrder" => out.sort_order = ChangeHistorySortOrder.from(c.text())
+      "MaxResults" => out.max_results = xmlv.read_int(c.text())?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_hosted_zone_change_batches_response(var w: xmlv.Writer, v: ListHostedZoneChangeBatchesResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.change_batch_summaries {
+    xml_write_change_batch_summaries(w, x, "ChangeBatchSummaries", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_hosted_zone_change_batches_response(e: xml.Element) -> ListHostedZoneChangeBatchesResponse ! Str {
+  var out = ListHostedZoneChangeBatchesResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "ChangeBatchSummaries" => out.change_batch_summaries = xml_read_change_batch_summaries(c)?
+      "NextToken" => out.next_token = c.text()
       _ => {}
     }
   }
@@ -4732,6 +5497,138 @@ fn xml_read_list_query_logging_configs_response(e: xml.Element) -> ListQueryLogg
   for c in xmlv.elements(e) {
     match c.name.local {
       "QueryLoggingConfigs" => out.query_logging_configs = xml_read_query_logging_configs(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_resource_record_set_changes_request(var w: xmlv.Writer, v: ListResourceRecordSetChangesRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.record_name {
+    xmlv.elem(w, "RecordName", x, [])
+  }
+  if let Some(x) = v.record_type {
+    xmlv.elem(w, "RecordType", x.value(), [])
+  }
+  if let Some(x) = v.submitted_after {
+    xmlv.elem(w, "SubmittedAfter", x, [])
+  }
+  if let Some(x) = v.submitted_before {
+    xmlv.elem(w, "SubmittedBefore", x, [])
+  }
+  if let Some(x) = v.sort_order {
+    xmlv.elem(w, "SortOrder", x.value(), [])
+  }
+  if let Some(x) = v.max_results {
+    xmlv.elem(w, "MaxResults", "${x}", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_resource_record_set_changes_request(e: xml.Element) -> ListResourceRecordSetChangesRequest ! Str {
+  var out = ListResourceRecordSetChangesRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "RecordName" => out.record_name = c.text()
+      "RecordType" => out.record_type = RRType.from(c.text())
+      "SubmittedAfter" => out.submitted_after = c.text()
+      "SubmittedBefore" => out.submitted_before = c.text()
+      "SortOrder" => out.sort_order = ChangeHistorySortOrder.from(c.text())
+      "MaxResults" => out.max_results = xmlv.read_int(c.text())?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_resource_record_set_changes_response(var w: xmlv.Writer, v: ListResourceRecordSetChangesResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.resource_record_set_changes {
+    xml_write_resource_record_set_changes(w, x, "ResourceRecordSetChanges", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_resource_record_set_changes_response(e: xml.Element) -> ListResourceRecordSetChangesResponse ! Str {
+  var out = ListResourceRecordSetChangesResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "ResourceRecordSetChanges" => out.resource_record_set_changes = xml_read_resource_record_set_changes(c)?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_resource_record_set_protections_request(var w: xmlv.Writer, v: ListResourceRecordSetProtectionsRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.start_record_name {
+    xmlv.elem(w, "StartRecordName", x, [])
+  }
+  if let Some(x) = v.start_record_type {
+    xmlv.elem(w, "StartRecordType", x.value(), [])
+  }
+  if let Some(x) = v.max_results {
+    xmlv.elem(w, "MaxResults", "${x}", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_resource_record_set_protections_request(e: xml.Element) -> ListResourceRecordSetProtectionsRequest ! Str {
+  var out = ListResourceRecordSetProtectionsRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "StartRecordName" => out.start_record_name = c.text()
+      "StartRecordType" => out.start_record_type = RRType.from(c.text())
+      "MaxResults" => out.max_results = xmlv.read_int(c.text())?
+      "NextToken" => out.next_token = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_list_resource_record_set_protections_response(var w: xmlv.Writer, v: ListResourceRecordSetProtectionsResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.resource_record_set_protections {
+    xml_write_resource_record_set_protections(w, x, "ResourceRecordSetProtections", [])
+  }
+  if let Some(x) = v.next_token {
+    xmlv.elem(w, "NextToken", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_list_resource_record_set_protections_response(e: xml.Element) -> ListResourceRecordSetProtectionsResponse ! Str {
+  var out = ListResourceRecordSetProtectionsResponse{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "ResourceRecordSetProtections" => out.resource_record_set_protections = xml_read_resource_record_set_protections(c)?
       "NextToken" => out.next_token = c.text()
       _ => {}
     }
@@ -5532,6 +6429,26 @@ fn xml_read_no_such_health_check(e: xml.Element) -> NoSuchHealthCheck ! Str {
   Ok(out)
 }
 
+fn xml_write_no_such_health_check_source(var w: xmlv.Writer, v: NoSuchHealthCheckSource, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.message {
+    xmlv.elem(w, "message", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_no_such_health_check_source(e: xml.Element) -> NoSuchHealthCheckSource ! Str {
+  var out = NoSuchHealthCheckSource{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_no_such_hosted_zone(var w: xmlv.Writer, v: NoSuchHostedZone, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -5668,6 +6585,79 @@ fn xml_read_prior_request_not_complete(e: xml.Element) -> PriorRequestNotComplet
       "message" => out.message = c.text()
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_protection_already_exists(var w: xmlv.Writer, v: ProtectionAlreadyExists, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.message {
+    xmlv.elem(w, "Message", x, [])
+  }
+  if let Some(x) = v.errors {
+    xml_write_protection_errors(w, x, "Errors", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_protection_already_exists(e: xml.Element) -> ProtectionAlreadyExists ! Str {
+  var out = ProtectionAlreadyExists{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Message" => out.message = c.text()
+      "Errors" => out.errors = xml_read_protection_errors(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_protection_error(var w: xmlv.Writer, v: ProtectionError, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.record_name {
+    xmlv.elem(w, "RecordName", x, [])
+  }
+  if let Some(x) = v.record_type {
+    xmlv.elem(w, "RecordType", x.value(), [])
+  }
+  if let Some(x) = v.code {
+    xmlv.elem(w, "Code", x, [])
+  }
+  if let Some(x) = v.message {
+    xmlv.elem(w, "Message", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_protection_error(e: xml.Element) -> ProtectionError ! Str {
+  var out = ProtectionError{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "RecordName" => out.record_name = c.text()
+      "RecordType" => out.record_type = RRType.from(c.text())
+      "Code" => out.code = c.text()
+      "Message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_protection_errors(var w: xmlv.Writer, v: List[ProtectionError], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_protection_error(w, item, "ProtectionError", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_protection_errors(e: xml.Element) -> List[ProtectionError] ! Str {
+  var out: List[ProtectionError] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_protection_error(c)?)
   }
   Ok(out)
 }
@@ -5859,6 +6849,9 @@ fn xml_write_resource_record_set(var w: xmlv.Writer, v: ResourceRecordSet, name:
   if let Some(x) = v.geo_proximity_location {
     xml_write_geo_proximity_location(w, x, "GeoProximityLocation", [])
   }
+  if let Some(x) = v.az_affinity {
+    xml_write_az_affinity(w, x, "AZAffinity", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -5881,8 +6874,201 @@ fn xml_read_resource_record_set(e: xml.Element) -> ResourceRecordSet ! Str {
       "TrafficPolicyInstanceId" => out.traffic_policy_instance_id = c.text()
       "CidrRoutingConfig" => out.cidr_routing_config = xml_read_cidr_routing_config(c)?
       "GeoProximityLocation" => out.geo_proximity_location = xml_read_geo_proximity_location(c)?
+      "AZAffinity" => out.az_affinity = xml_read_az_affinity(c)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_change(var w: xmlv.Writer, v: ResourceRecordSetChange, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.change_id {
+    xmlv.elem(w, "ChangeId", x, [])
+  }
+  if let Some(x) = v.operation {
+    xmlv.elem(w, "Operation", x.value(), [])
+  }
+  if let Some(x) = v.submitted_at {
+    xmlv.elem(w, "SubmittedAt", rest.date_time(x), [])
+  }
+  if let Some(x) = v.submitted_by {
+    xmlv.elem(w, "SubmittedBy", x, [])
+  }
+  if let Some(x) = v.request_id {
+    xmlv.elem(w, "RequestId", x, [])
+  }
+  if let Some(x) = v.action {
+    xmlv.elem(w, "Action", x.value(), [])
+  }
+  if let Some(x) = v.resource_record_set {
+    xml_write_resource_record_set(w, x, "ResourceRecordSet", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_change(e: xml.Element) -> ResourceRecordSetChange ! Str {
+  var out = ResourceRecordSetChange{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "ChangeId" => out.change_id = c.text()
+      "Operation" => out.operation = ChangeHistoryOperation.from(c.text())
+      "SubmittedAt" => out.submitted_at = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
+      "SubmittedBy" => out.submitted_by = c.text()
+      "RequestId" => out.request_id = c.text()
+      "Action" => out.action = ChangeAction.from(c.text())
+      "ResourceRecordSet" => out.resource_record_set = xml_read_resource_record_set(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_changes(var w: xmlv.Writer, v: List[ResourceRecordSetChange], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_resource_record_set_change(w, item, "ResourceRecordSetChange", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_changes(e: xml.Element) -> List[ResourceRecordSetChange] ! Str {
+  var out: List[ResourceRecordSetChange] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_resource_record_set_change(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_protection(var w: xmlv.Writer, v: ResourceRecordSetProtection, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.record_name {
+    xmlv.elem(w, "RecordName", x, [])
+  }
+  if let Some(x) = v.record_type {
+    xmlv.elem(w, "RecordType", x.value(), [])
+  }
+  if let Some(x) = v.comment {
+    xmlv.elem(w, "Comment", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_protection(e: xml.Element) -> ResourceRecordSetProtection ! Str {
+  var out = ResourceRecordSetProtection{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "RecordName" => out.record_name = c.text()
+      "RecordType" => out.record_type = RRType.from(c.text())
+      "Comment" => out.comment = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_protection_config(var w: xmlv.Writer, v: ResourceRecordSetProtectionConfig, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.record_name {
+    xmlv.elem(w, "RecordName", x, [])
+  }
+  if let Some(x) = v.record_type {
+    xmlv.elem(w, "RecordType", x.value(), [])
+  }
+  if let Some(x) = v.comment {
+    xmlv.elem(w, "Comment", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_protection_config(e: xml.Element) -> ResourceRecordSetProtectionConfig ! Str {
+  var out = ResourceRecordSetProtectionConfig{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "RecordName" => out.record_name = c.text()
+      "RecordType" => out.record_type = RRType.from(c.text())
+      "Comment" => out.comment = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_protection_config_batch(var w: xmlv.Writer, v: List[ResourceRecordSetProtectionConfig], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_resource_record_set_protection_config(w, item, "ResourceRecordSetProtectionConfig", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_protection_config_batch(e: xml.Element) -> List[ResourceRecordSetProtectionConfig] ! Str {
+  var out: List[ResourceRecordSetProtectionConfig] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_resource_record_set_protection_config(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_protection_key(var w: xmlv.Writer, v: ResourceRecordSetProtectionKey, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.record_name {
+    xmlv.elem(w, "RecordName", x, [])
+  }
+  if let Some(x) = v.record_type {
+    xmlv.elem(w, "RecordType", x.value(), [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_protection_key(e: xml.Element) -> ResourceRecordSetProtectionKey ! Str {
+  var out = ResourceRecordSetProtectionKey{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "RecordName" => out.record_name = c.text()
+      "RecordType" => out.record_type = RRType.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_protection_key_batch(var w: xmlv.Writer, v: List[ResourceRecordSetProtectionKey], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_resource_record_set_protection_key(w, item, "ResourceRecordSetProtectionKey", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_protection_key_batch(e: xml.Element) -> List[ResourceRecordSetProtectionKey] ! Str {
+  var out: List[ResourceRecordSetProtectionKey] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_resource_record_set_protection_key(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_resource_record_set_protections(var w: xmlv.Writer, v: List[ResourceRecordSetProtection], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_resource_record_set_protection(w, item, "ResourceRecordSetProtection", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_resource_record_set_protections(e: xml.Element) -> List[ResourceRecordSetProtection] ! Str {
+  var out: List[ResourceRecordSetProtection] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_resource_record_set_protection(c)?)
   }
   Ok(out)
 }
@@ -5990,6 +7176,23 @@ fn xml_read_reusable_delegation_set_limit(e: xml.Element) -> ReusableDelegationS
   Ok(out)
 }
 
+fn xml_write_security_group_id_list(var w: xmlv.Writer, v: List[Str], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xmlv.elem(w, "SecurityGroupId", item, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_security_group_id_list(e: xml.Element) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for c in xmlv.elements(e) {
+    out.push(c.text())
+  }
+  Ok(out)
+}
+
 fn xml_write_status_report(var w: xmlv.Writer, v: StatusReport, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -6010,6 +7213,51 @@ fn xml_read_status_report(e: xml.Element) -> StatusReport ! Str {
       "CheckedTime" => out.checked_time = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_subnet_configuration(var w: xmlv.Writer, v: SubnetConfiguration, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.subnet_id {
+    xmlv.elem(w, "SubnetId", x, [])
+  }
+  if let Some(x) = v.availability_zone_id {
+    xmlv.elem(w, "AvailabilityZoneId", x, [])
+  }
+  if let Some(x) = v.security_group_id_list {
+    xml_write_security_group_id_list(w, x, "SecurityGroupIdList", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_subnet_configuration(e: xml.Element) -> SubnetConfiguration ! Str {
+  var out = SubnetConfiguration{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "SubnetId" => out.subnet_id = c.text()
+      "AvailabilityZoneId" => out.availability_zone_id = c.text()
+      "SecurityGroupIdList" => out.security_group_id_list = xml_read_security_group_id_list(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_subnet_configuration_list(var w: xmlv.Writer, v: List[SubnetConfiguration], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_subnet_configuration(w, item, "SubnetConfiguration", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_subnet_configuration_list(e: xml.Element) -> List[SubnetConfiguration] ! Str {
+  var out: List[SubnetConfiguration] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_subnet_configuration(c)?)
   }
   Ok(out)
 }
@@ -6180,6 +7428,26 @@ fn xml_write_throttling_exception(var w: xmlv.Writer, v: ThrottlingException, na
 
 fn xml_read_throttling_exception(e: xml.Element) -> ThrottlingException ! Str {
   var out = ThrottlingException{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_too_many_health_check_sources(var w: xmlv.Writer, v: TooManyHealthCheckSources, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.message {
+    xmlv.elem(w, "message", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_too_many_health_check_sources(e: xml.Element) -> TooManyHealthCheckSources ! Str {
+  var out = TooManyHealthCheckSources{}
   for c in xmlv.elements(e) {
     match c.name.local {
       "message" => out.message = c.text()
@@ -6622,6 +7890,9 @@ fn xml_write_update_health_check_request(var w: xmlv.Writer, v: UpdateHealthChec
   if let Some(x) = v.reset_elements {
     xml_write_resettable_element_name_list(w, x, "ResetElements", [])
   }
+  if let Some(x) = v.health_check_source_id {
+    xmlv.elem(w, "HealthCheckSourceId", x, [])
+  }
   xmlv.end(w, name)
 }
 
@@ -6646,6 +7917,7 @@ fn xml_read_update_health_check_request(e: xml.Element) -> UpdateHealthCheckRequ
       "AlarmIdentifier" => out.alarm_identifier = xml_read_alarm_identifier(c)?
       "InsufficientDataHealthStatus" => out.insufficient_data_health_status = InsufficientDataHealthStatus.from(c.text())
       "ResetElements" => out.reset_elements = xml_read_resettable_element_name_list(c)?
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
       _ => {}
     }
   }
@@ -6725,6 +7997,15 @@ fn xml_write_update_hosted_zone_features_request(var w: xmlv.Writer, v: UpdateHo
   if let Some(x) = v.enable_accelerated_recovery {
     xmlv.elem(w, "EnableAcceleratedRecovery", "${x}", [])
   }
+  if let Some(x) = v.enable_public_dns_fallback {
+    xmlv.elem(w, "EnablePublicDNSFallback", "${x}", [])
+  }
+  if let Some(x) = v.change_guardrails {
+    xml_write_change_guardrails(w, x, "ChangeGuardrails", [])
+  }
+  if let Some(x) = v.dry_run {
+    xmlv.elem(w, "DryRun", "${x}", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -6734,6 +8015,9 @@ fn xml_read_update_hosted_zone_features_request(e: xml.Element) -> UpdateHostedZ
     match c.name.local {
       "HostedZoneId" => out.hosted_zone_id = c.text()
       "EnableAcceleratedRecovery" => out.enable_accelerated_recovery = xmlv.read_bool(c.text())?
+      "EnablePublicDNSFallback" => out.enable_public_dns_fallback = xmlv.read_bool(c.text())?
+      "ChangeGuardrails" => out.change_guardrails = xml_read_change_guardrails(c)?
+      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
       _ => {}
     }
   }
@@ -6749,6 +8033,47 @@ fn xml_write_update_hosted_zone_features_response(var w: xmlv.Writer, v: UpdateH
 
 fn xml_read_update_hosted_zone_features_response(e: xml.Element) -> UpdateHostedZoneFeaturesResponse ! Str {
   var out = UpdateHostedZoneFeaturesResponse{}
+  let _ = e
+  Ok(out)
+}
+
+fn xml_write_update_hosted_zone_tier_request(var w: xmlv.Writer, v: UpdateHostedZoneTierRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.hosted_zone_id {
+    xmlv.elem(w, "HostedZoneId", x, [])
+  }
+  if let Some(x) = v.hosted_zone_tier {
+    xmlv.elem(w, "HostedZoneTier", x.value(), [])
+  }
+  if let Some(x) = v.dry_run {
+    xmlv.elem(w, "DryRun", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_update_hosted_zone_tier_request(e: xml.Element) -> UpdateHostedZoneTierRequest ! Str {
+  var out = UpdateHostedZoneTierRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "HostedZoneId" => out.hosted_zone_id = c.text()
+      "HostedZoneTier" => out.hosted_zone_tier = HostedZoneTier.from(c.text())
+      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_update_hosted_zone_tier_response(var w: xmlv.Writer, v: UpdateHostedZoneTierResponse, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  let _ = v
+  xmlv.end(w, name)
+}
+
+fn xml_read_update_hosted_zone_tier_response(e: xml.Element) -> UpdateHostedZoneTierResponse ! Str {
+  var out = UpdateHostedZoneTierResponse{}
   let _ = e
   Ok(out)
 }
@@ -6934,6 +8259,12 @@ fn xml_read_vpcs(e: xml.Element) -> List[VPC] ! Str {
   Ok(out)
 }
 
+fn xml_body_az_affinity(v: AZAffinity, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_az_affinity(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_account_limit(v: AccountLimit, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_account_limit(w, v, name, ns)
@@ -6988,6 +8319,12 @@ fn xml_body_change_batch(v: ChangeBatch, name: Str, ns: List[(Str, Str)]) -> Byt
   xmlv.finish(w)
 }
 
+fn xml_body_change_batch_summary(v: ChangeBatchSummary, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_change_batch_summary(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_change_cidr_collection_request(v: ChangeCidrCollectionRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_change_cidr_collection_request(w, v, name, ns)
@@ -6997,6 +8334,18 @@ fn xml_body_change_cidr_collection_request(v: ChangeCidrCollectionRequest, name:
 fn xml_body_change_cidr_collection_response(v: ChangeCidrCollectionResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_change_cidr_collection_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_change_guardrail(v: ChangeGuardrail, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_change_guardrail(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_change_history_feature(v: ChangeHistoryFeature, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_change_history_feature(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -7138,6 +8487,18 @@ fn xml_body_create_health_check_response(v: CreateHealthCheckResponse, name: Str
   xmlv.finish(w)
 }
 
+fn xml_body_create_health_check_source_request(v: CreateHealthCheckSourceRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_create_health_check_source_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_create_health_check_source_response(v: CreateHealthCheckSourceResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_create_health_check_source_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_create_hosted_zone_request(v: CreateHostedZoneRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_create_hosted_zone_request(w, v, name, ns)
@@ -7171,6 +8532,18 @@ fn xml_body_create_query_logging_config_request(v: CreateQueryLoggingConfigReque
 fn xml_body_create_query_logging_config_response(v: CreateQueryLoggingConfigResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_create_query_logging_config_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_create_resource_record_set_protections_request(v: CreateResourceRecordSetProtectionsRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_create_resource_record_set_protections_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_create_resource_record_set_protections_response(v: CreateResourceRecordSetProtectionsResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_create_resource_record_set_protections_response(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -7318,6 +8691,18 @@ fn xml_body_delete_health_check_response(v: DeleteHealthCheckResponse, name: Str
   xmlv.finish(w)
 }
 
+fn xml_body_delete_health_check_source_request(v: DeleteHealthCheckSourceRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_delete_health_check_source_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_delete_health_check_source_response(v: DeleteHealthCheckSourceResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_delete_health_check_source_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_delete_hosted_zone_request(v: DeleteHostedZoneRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_delete_hosted_zone_request(w, v, name, ns)
@@ -7351,6 +8736,18 @@ fn xml_body_delete_query_logging_config_request(v: DeleteQueryLoggingConfigReque
 fn xml_body_delete_query_logging_config_response(v: DeleteQueryLoggingConfigResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_delete_query_logging_config_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_delete_resource_record_set_protections_request(v: DeleteResourceRecordSetProtectionsRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_delete_resource_record_set_protections_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_delete_resource_record_set_protections_response(v: DeleteResourceRecordSetProtectionsResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_delete_resource_record_set_protections_response(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -7441,6 +8838,12 @@ fn xml_body_enable_hosted_zone_dnssec_request(v: EnableHostedZoneDNSSECRequest, 
 fn xml_body_enable_hosted_zone_dnssec_response(v: EnableHostedZoneDNSSECResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_enable_hosted_zone_dnssec_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_feature_not_enabled(v: FeatureNotEnabled, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_feature_not_enabled(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -7558,6 +8961,18 @@ fn xml_body_get_health_check_response(v: GetHealthCheckResponse, name: Str, ns: 
   xmlv.finish(w)
 }
 
+fn xml_body_get_health_check_source_request(v: GetHealthCheckSourceRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_get_health_check_source_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_get_health_check_source_response(v: GetHealthCheckSourceResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_get_health_check_source_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_get_health_check_status_request(v: GetHealthCheckStatusRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_get_health_check_status_request(w, v, name, ns)
@@ -7567,6 +8982,18 @@ fn xml_body_get_health_check_status_request(v: GetHealthCheckStatusRequest, name
 fn xml_body_get_health_check_status_response(v: GetHealthCheckStatusResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_get_health_check_status_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_get_hosted_zone_change_batch_request(v: GetHostedZoneChangeBatchRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_get_hosted_zone_change_batch_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_get_hosted_zone_change_batch_response(v: GetHostedZoneChangeBatchResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_get_hosted_zone_change_batch_response(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -7708,6 +9135,24 @@ fn xml_body_health_check_observation(v: HealthCheckObservation, name: Str, ns: L
   xmlv.finish(w)
 }
 
+fn xml_body_health_check_source(v: HealthCheckSource, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_health_check_source(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_health_check_source_already_exists(v: HealthCheckSourceAlreadyExists, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_health_check_source_already_exists(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_health_check_source_config(v: HealthCheckSourceConfig, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_health_check_source_config(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_health_check_version_mismatch(v: HealthCheckVersionMismatch, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_health_check_version_mismatch(w, v, name, ns)
@@ -7846,6 +9291,12 @@ fn xml_body_invalid_pagination_token(v: InvalidPaginationToken, name: Str, ns: L
   xmlv.finish(w)
 }
 
+fn xml_body_invalid_resource_record_set_protection_batch(v: InvalidResourceRecordSetProtectionBatch, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_invalid_resource_record_set_protection_batch(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_invalid_signing_status(v: InvalidSigningStatus, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_invalid_signing_status(w, v, name, ns)
@@ -7960,6 +9411,30 @@ fn xml_body_list_geo_locations_response(v: ListGeoLocationsResponse, name: Str, 
   xmlv.finish(w)
 }
 
+fn xml_body_list_health_check_sources_request(v: ListHealthCheckSourcesRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_health_check_sources_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_health_check_sources_response(v: ListHealthCheckSourcesResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_health_check_sources_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_health_checks_by_source_request(v: ListHealthChecksBySourceRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_health_checks_by_source_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_health_checks_by_source_response(v: ListHealthChecksBySourceResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_health_checks_by_source_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_list_health_checks_request(v: ListHealthChecksRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_list_health_checks_request(w, v, name, ns)
@@ -7969,6 +9444,18 @@ fn xml_body_list_health_checks_request(v: ListHealthChecksRequest, name: Str, ns
 fn xml_body_list_health_checks_response(v: ListHealthChecksResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_list_health_checks_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_hosted_zone_change_batches_request(v: ListHostedZoneChangeBatchesRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_hosted_zone_change_batches_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_hosted_zone_change_batches_response(v: ListHostedZoneChangeBatchesResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_hosted_zone_change_batches_response(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -8017,6 +9504,30 @@ fn xml_body_list_query_logging_configs_request(v: ListQueryLoggingConfigsRequest
 fn xml_body_list_query_logging_configs_response(v: ListQueryLoggingConfigsResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_list_query_logging_configs_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_resource_record_set_changes_request(v: ListResourceRecordSetChangesRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_resource_record_set_changes_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_resource_record_set_changes_response(v: ListResourceRecordSetChangesResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_resource_record_set_changes_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_resource_record_set_protections_request(v: ListResourceRecordSetProtectionsRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_resource_record_set_protections_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_list_resource_record_set_protections_response(v: ListResourceRecordSetProtectionsResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_list_resource_record_set_protections_response(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -8188,6 +9699,12 @@ fn xml_body_no_such_health_check(v: NoSuchHealthCheck, name: Str, ns: List[(Str,
   xmlv.finish(w)
 }
 
+fn xml_body_no_such_health_check_source(v: NoSuchHealthCheckSource, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_no_such_health_check_source(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_no_such_hosted_zone(v: NoSuchHostedZone, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_no_such_hosted_zone(w, v, name, ns)
@@ -8230,6 +9747,18 @@ fn xml_body_prior_request_not_complete(v: PriorRequestNotComplete, name: Str, ns
   xmlv.finish(w)
 }
 
+fn xml_body_protection_already_exists(v: ProtectionAlreadyExists, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_protection_already_exists(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_protection_error(v: ProtectionError, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_protection_error(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_public_zone_vpc_association(v: PublicZoneVPCAssociation, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_public_zone_vpc_association(w, v, name, ns)
@@ -8260,6 +9789,30 @@ fn xml_body_resource_record_set(v: ResourceRecordSet, name: Str, ns: List[(Str, 
   xmlv.finish(w)
 }
 
+fn xml_body_resource_record_set_change(v: ResourceRecordSetChange, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_resource_record_set_change(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_resource_record_set_protection(v: ResourceRecordSetProtection, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_resource_record_set_protection(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_resource_record_set_protection_config(v: ResourceRecordSetProtectionConfig, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_resource_record_set_protection_config(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_resource_record_set_protection_key(v: ResourceRecordSetProtectionKey, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_resource_record_set_protection_key(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_resource_tag_set(v: ResourceTagSet, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_resource_tag_set(w, v, name, ns)
@@ -8275,6 +9828,12 @@ fn xml_body_reusable_delegation_set_limit(v: ReusableDelegationSetLimit, name: S
 fn xml_body_status_report(v: StatusReport, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_status_report(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_subnet_configuration(v: SubnetConfiguration, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_subnet_configuration(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -8299,6 +9858,12 @@ fn xml_body_test_dns_answer_response(v: TestDNSAnswerResponse, name: Str, ns: Li
 fn xml_body_throttling_exception(v: ThrottlingException, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_throttling_exception(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_too_many_health_check_sources(v: TooManyHealthCheckSources, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_too_many_health_check_sources(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -8413,6 +9978,18 @@ fn xml_body_update_hosted_zone_features_request(v: UpdateHostedZoneFeaturesReque
 fn xml_body_update_hosted_zone_features_response(v: UpdateHostedZoneFeaturesResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_update_hosted_zone_features_response(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_update_hosted_zone_tier_request(v: UpdateHostedZoneTierRequest, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_update_hosted_zone_tier_request(w, v, name, ns)
+  xmlv.finish(w)
+}
+
+fn xml_body_update_hosted_zone_tier_response(v: UpdateHostedZoneTierResponse, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_update_hosted_zone_tier_response(w, v, name, ns)
   xmlv.finish(w)
 }
 
@@ -8614,6 +10191,18 @@ fn read_error_delegation_set_not_reusable(resp: http.Response, body: xml.Element
   Ok(out)
 }
 
+fn read_error_feature_not_enabled(resp: http.Response, body: xml.Element) -> FeatureNotEnabled ! Str {
+  let _ = (resp, body)
+  var out = FeatureNotEnabled{}
+  for c in xmlv.elements(body) {
+    match c.name.local.to_lower() {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_health_check_already_exists(resp: http.Response, body: xml.Element) -> HealthCheckAlreadyExists ! Str {
   let _ = (resp, body)
   var out = HealthCheckAlreadyExists{}
@@ -8629,6 +10218,18 @@ fn read_error_health_check_already_exists(resp: http.Response, body: xml.Element
 fn read_error_health_check_in_use(resp: http.Response, body: xml.Element) -> HealthCheckInUse ! Str {
   let _ = (resp, body)
   var out = HealthCheckInUse{}
+  for c in xmlv.elements(body) {
+    match c.name.local.to_lower() {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_health_check_source_already_exists(resp: http.Response, body: xml.Element) -> HealthCheckSourceAlreadyExists ! Str {
+  let _ = (resp, body)
+  var out = HealthCheckSourceAlreadyExists{}
   for c in xmlv.elements(body) {
     match c.name.local.to_lower() {
       "message" => out.message = c.text()
@@ -8831,6 +10432,19 @@ fn read_error_invalid_pagination_token(resp: http.Response, body: xml.Element) -
   Ok(out)
 }
 
+fn read_error_invalid_resource_record_set_protection_batch(resp: http.Response, body: xml.Element) -> InvalidResourceRecordSetProtectionBatch ! Str {
+  let _ = (resp, body)
+  var out = InvalidResourceRecordSetProtectionBatch{}
+  for c in xmlv.elements(body) {
+    match c.name.local.to_lower() {
+      "message" => out.message = c.text()
+      "errors" => out.errors = xml_read_protection_errors(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_invalid_signing_status(resp: http.Response, body: xml.Element) -> InvalidSigningStatus ! Str {
   let _ = (resp, body)
   var out = InvalidSigningStatus{}
@@ -9023,6 +10637,18 @@ fn read_error_no_such_health_check(resp: http.Response, body: xml.Element) -> No
   Ok(out)
 }
 
+fn read_error_no_such_health_check_source(resp: http.Response, body: xml.Element) -> NoSuchHealthCheckSource ! Str {
+  let _ = (resp, body)
+  var out = NoSuchHealthCheckSource{}
+  for c in xmlv.elements(body) {
+    match c.name.local.to_lower() {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_no_such_hosted_zone(resp: http.Response, body: xml.Element) -> NoSuchHostedZone ! Str {
   let _ = (resp, body)
   var out = NoSuchHostedZone{}
@@ -9107,6 +10733,19 @@ fn read_error_prior_request_not_complete(resp: http.Response, body: xml.Element)
   Ok(out)
 }
 
+fn read_error_protection_already_exists(resp: http.Response, body: xml.Element) -> ProtectionAlreadyExists ! Str {
+  let _ = (resp, body)
+  var out = ProtectionAlreadyExists{}
+  for c in xmlv.elements(body) {
+    match c.name.local.to_lower() {
+      "message" => out.message = c.text()
+      "errors" => out.errors = xml_read_protection_errors(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_public_zone_vpc_association(resp: http.Response, body: xml.Element) -> PublicZoneVPCAssociation ! Str {
   let _ = (resp, body)
   var out = PublicZoneVPCAssociation{}
@@ -9134,6 +10773,18 @@ fn read_error_query_logging_config_already_exists(resp: http.Response, body: xml
 fn read_error_throttling_exception(resp: http.Response, body: xml.Element) -> ThrottlingException ! Str {
   let _ = (resp, body)
   var out = ThrottlingException{}
+  for c in xmlv.elements(body) {
+    match c.name.local.to_lower() {
+      "message" => out.message = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_too_many_health_check_sources(resp: http.Response, body: xml.Element) -> TooManyHealthCheckSources ! Str {
+  let _ = (resp, body)
+  var out = TooManyHealthCheckSources{}
   for c in xmlv.elements(body) {
     match c.name.local.to_lower() {
       "message" => out.message = c.text()
@@ -9869,39 +11520,49 @@ pub fn deserialize_change_resource_record_sets_error(resp: http.Response) -> Cha
 /// either the DELETE or the CREATE action fails, then the request is
 /// canceled, and the original CNAME record continues to exist. If you try
 /// to delete the same resource record set more than once in a single change
-/// batch, Route 53 returns an InvalidChangeBatch error. Traffic Flow To
-/// create resource record sets for complex routing configurations, use
-/// either the traffic flow visual editor in the Route 53 console or the API
-/// actions for traffic policies and traffic policy instances. Save the
-/// configuration as a traffic policy, then associate the traffic policy
-/// with one or more domain names (such as example.com) or subdomain names
-/// (such as www.example.com), in the same hosted zone or in multiple hosted
-/// zones. You can roll back the updates if the new configuration isn't
-/// performing as expected. For more information, see Using Traffic Flow to
-/// Route DNS Traffic in the Amazon Route 53 Developer Guide . Create,
-/// Delete, and Upsert Use ChangeResourceRecordsSetsRequest to perform the
-/// following actions: CREATE : Creates a resource record set that has the
-/// specified values. DELETE : Deletes an existing resource record set that
-/// has the specified values. UPSERT : If a resource set doesn't exist,
-/// Route 53 creates it. If a resource set exists Route 53 updates it with
-/// the values in the request. Syntaxes for Creating, Updating, and Deleting
-/// Resource Record Sets The syntax for a request depends on the type of
-/// resource record set that you want to create, delete, or update, such as
-/// weighted, alias, or failover. The XML elements in your request must
-/// appear in the order listed in the syntax. For an example for each type
-/// of resource record set, see "Examples." Don't refer to the syntax in the
-/// "Parameter Syntax" section, which includes all of the elements for every
-/// kind of resource record set that you can create, delete, or update by
-/// using ChangeResourceRecordSets . Change Propagation to Route 53 DNS
-/// Servers When you submit a ChangeResourceRecordSets request, Route 53
-/// propagates your changes to all of the Route 53 authoritative DNS servers
-/// managing the hosted zone. While your changes are propagating, GetChange
-/// returns a status of PENDING . When propagation is complete, GetChange
-/// returns a status of INSYNC . Changes generally propagate to all Route 53
-/// name servers managing the hosted zone within 60 seconds. For more
-/// information, see GetChange . Limits on ChangeResourceRecordSets Requests
-/// For information about the limits on a ChangeResourceRecordSets request,
-/// see Limits in the Amazon Route 53 Developer Guide .
+/// batch, Route 53 returns an InvalidChangeBatch error. Protected Resource
+/// Record Sets If a resource record set protection exists for a name and
+/// type, Route 53 rejects any change in the change batch that creates,
+/// updates, or deletes a resource record set with that name and type.
+/// Because change batches are transactional, Route 53 rejects the entire
+/// request and returns an InvalidChangeBatch error. Route 53 identifies
+/// each protected resource record set in the error message and includes the
+/// protection's comment, if any. To make the change, first delete the
+/// protection by using DeleteResourceRecordSetProtections . To see which
+/// resource record sets are protected, use ListResourceRecordSetProtections
+/// . Traffic Flow To create resource record sets for complex routing
+/// configurations, use either the traffic flow visual editor in the Route
+/// 53 console or the API actions for traffic policies and traffic policy
+/// instances. Save the configuration as a traffic policy, then associate
+/// the traffic policy with one or more domain names (such as example.com)
+/// or subdomain names (such as www.example.com), in the same hosted zone or
+/// in multiple hosted zones. You can roll back the updates if the new
+/// configuration isn't performing as expected. For more information, see
+/// Using Traffic Flow to Route DNS Traffic in the Amazon Route 53 Developer
+/// Guide . Create, Delete, and Upsert Use ChangeResourceRecordsSetsRequest
+/// to perform the following actions: CREATE : Creates a resource record set
+/// that has the specified values. DELETE : Deletes an existing resource
+/// record set that has the specified values. UPSERT : If a resource set
+/// doesn't exist, Route 53 creates it. If a resource set exists Route 53
+/// updates it with the values in the request. Syntaxes for Creating,
+/// Updating, and Deleting Resource Record Sets The syntax for a request
+/// depends on the type of resource record set that you want to create,
+/// delete, or update, such as weighted, alias, or failover. The XML
+/// elements in your request must appear in the order listed in the syntax.
+/// For an example for each type of resource record set, see "Examples."
+/// Don't refer to the syntax in the "Parameter Syntax" section, which
+/// includes all of the elements for every kind of resource record set that
+/// you can create, delete, or update by using ChangeResourceRecordSets .
+/// Change Propagation to Route 53 DNS Servers When you submit a
+/// ChangeResourceRecordSets request, Route 53 propagates your changes to
+/// all of the Route 53 authoritative DNS servers managing the hosted zone.
+/// While your changes are propagating, GetChange returns a status of
+/// PENDING . When propagation is complete, GetChange returns a status of
+/// INSYNC . Changes generally propagate to all Route 53 name servers
+/// managing the hosted zone within 60 seconds. For more information, see
+/// GetChange . Limits on ChangeResourceRecordSets Requests For information
+/// about the limits on a ChangeResourceRecordSets request, see Limits in
+/// the Amazon Route 53 Developer Guide .
 pub fn (c: Client) change_resource_record_sets(input: ChangeResourceRecordSetsRequest) -> ChangeResourceRecordSetsResponse ! ChangeResourceRecordSetsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_change_resource_record_sets(c.params, input)) ?? e => return Err(ChangeResourceRecordSetsErr.InvalidInput(e))
   var req = serialize_change_resource_record_sets(ep, input, "") ?? e => return Err(ChangeResourceRecordSetsErr.InvalidInput(e))
@@ -9976,6 +11637,7 @@ pub fn deserialize_change_tags_for_resource(resp: http.Response) -> ChangeTagsFo
 pub enum ChangeTagsForResourceErr {
   InvalidInputError(e: InvalidInput)
   NoSuchHealthCheck(e: NoSuchHealthCheck)
+  NoSuchHealthCheckSource(e: NoSuchHealthCheckSource)
   NoSuchHostedZone(e: NoSuchHostedZone)
   PriorRequestNotComplete(e: PriorRequestNotComplete)
   ThrottlingException(e: ThrottlingException)
@@ -9993,6 +11655,7 @@ pub fn (e: ChangeTagsForResourceErr) display() -> Str {
   match e {
     InvalidInputError(x) => "InvalidInput: ${x:?}"
     NoSuchHealthCheck(x) => "NoSuchHealthCheck: ${x:?}"
+    NoSuchHealthCheckSource(x) => "NoSuchHealthCheckSource: ${x:?}"
     NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
     PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
@@ -10014,6 +11677,10 @@ pub fn deserialize_change_tags_for_resource_error(resp: http.Response) -> Change
       Ok(x) => return ChangeTagsForResourceErr.NoSuchHealthCheck(x)
       Err(msg) => return ChangeTagsForResourceErr.Deserialize(msg)
     }
+    "NoSuchHealthCheckSource" => match read_error_no_such_health_check_source(resp, body) {
+      Ok(x) => return ChangeTagsForResourceErr.NoSuchHealthCheckSource(x)
+      Err(msg) => return ChangeTagsForResourceErr.Deserialize(msg)
+    }
     "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
       Ok(x) => return ChangeTagsForResourceErr.NoSuchHostedZone(x)
       Err(msg) => return ChangeTagsForResourceErr.Deserialize(msg)
@@ -10032,9 +11699,10 @@ pub fn deserialize_change_tags_for_resource_error(resp: http.Response) -> Change
   ChangeTagsForResourceErr.Api(restxml.api_error(resp))
 }
 
-/// Adds, edits, or deletes tags for a health check or a hosted zone. For
-/// information about using tags for cost allocation, see Using Cost
-/// Allocation Tags in the Billing and Cost Management User Guide .
+/// Adds, edits, or deletes tags for a health check, a health check source,
+/// or a hosted zone. For information about using tags for cost allocation,
+/// see Using Cost Allocation Tags in the Billing and Cost Management User
+/// Guide .
 pub fn (c: Client) change_tags_for_resource(input: ChangeTagsForResourceRequest) -> ChangeTagsForResourceResponse ! ChangeTagsForResourceErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_change_tags_for_resource(c.params, input)) ?? e => return Err(ChangeTagsForResourceErr.InvalidInput(e))
   var req = serialize_change_tags_for_resource(ep, input, "") ?? e => return Err(ChangeTagsForResourceErr.InvalidInput(e))
@@ -10278,18 +11946,22 @@ pub fn deserialize_create_health_check_error(resp: http.Response) -> CreateHealt
 /// load balancer, you configure settings for an ELB health check, which
 /// performs a similar function to a Route 53 health check. Private Hosted
 /// Zones You can associate health checks with failover resource record sets
-/// in a private hosted zone. Note the following: Route 53 health checkers
-/// are outside the VPC. To check the health of an endpoint within a VPC by
-/// IP address, you must assign a public IP address to the instance in the
-/// VPC. You can configure a health checker to check the health of an
-/// external resource that the instance relies on, such as a database
-/// server. You can create a CloudWatch metric, associate an alarm with the
-/// metric, and then create a health check that is based on the state of the
-/// alarm. For example, you might create a CloudWatch metric that checks the
-/// status of the Amazon EC2 StatusCheckFailed metric, add an alarm to the
-/// metric, and then create a health check that is based on the state of the
-/// alarm. For information about creating CloudWatch metrics and alarms by
-/// using the CloudWatch console, see the Amazon CloudWatch User Guide .
+/// in a private hosted zone. Note the following: For a public health check,
+/// Route 53 health checkers are outside the VPC. To check the health of an
+/// endpoint within a VPC by IP address, you must assign a public IP address
+/// to the instance in the VPC. To check the health of an endpoint within a
+/// VPC by using a private IP address, use a private endpoint health check (
+/// EndpointType of PRIVATE ). For more information, see
+/// CreateHealthCheckSource . You can configure a health checker to check
+/// the health of an external resource that the instance relies on, such as
+/// a database server. You can create a CloudWatch metric, associate an
+/// alarm with the metric, and then create a health check that is based on
+/// the state of the alarm. For example, you might create a CloudWatch
+/// metric that checks the status of the Amazon EC2 StatusCheckFailed
+/// metric, add an alarm to the metric, and then create a health check that
+/// is based on the state of the alarm. For information about creating
+/// CloudWatch metrics and alarms by using the CloudWatch console, see the
+/// Amazon CloudWatch User Guide .
 pub fn (c: Client) create_health_check(input: CreateHealthCheckRequest) -> CreateHealthCheckResponse ! CreateHealthCheckErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_create_health_check(c.params, input)) ?? e => return Err(CreateHealthCheckErr.InvalidInput(e))
   var req = serialize_create_health_check(ep, input, "") ?? e => return Err(CreateHealthCheckErr.InvalidInput(e))
@@ -10301,6 +11973,148 @@ pub fn (c: Client) create_health_check(input: CreateHealthCheckRequest) -> Creat
     return Err(deserialize_create_health_check_error(resp))
   }
   deserialize_create_health_check(resp) ?? e => Err(CreateHealthCheckErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_health_check_source(base: EndpointParameters, input: CreateHealthCheckSourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateHealthCheckSource.
+pub fn serialize_create_health_check_source(ep: rest.Endpoint, input: CreateHealthCheckSourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var w = xmlv.writer()
+  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
+  xmlv.start(w, "CreateHealthCheckSourceRequest", attrs)
+  if let Some(x) = input.caller_reference {
+    xmlv.elem(w, "CallerReference", x, [])
+  } else if idempotency_token != "" {
+    xmlv.elem(w, "CallerReference", idempotency_token)
+  }
+  if let Some(x) = input.health_check_source_config {
+    xml_write_health_check_source_config(w, x, "HealthCheckSourceConfig", [])
+  }
+  if let Some(x) = input.tags {
+    xml_write_tag_list(w, x, "Tags", [])
+  }
+  xmlv.end(w, "CreateHealthCheckSourceRequest")
+  body = xmlv.finish(w)
+  headers.push(("Content-Type", "application/xml"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/healthchecksource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_health_check_source(resp: http.Response) -> CreateHealthCheckSourceResponse ! Str {
+  var out = CreateHealthCheckSourceResponse{}
+  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
+  if let Some(hv) = rest.first_header(resp, "Location") {
+    out.location = hv
+  }
+  for c in xmlv.elements(body) {
+    match c.name.local {
+      "HealthCheckSourceId" => out.health_check_source_id = c.text()
+      "HealthCheckSourceStatus" => out.health_check_source_status = HealthCheckSourceStatus.from(c.text())
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateHealthCheckSource.
+pub enum CreateHealthCheckSourceErr {
+  HealthCheckSourceAlreadyExists(e: HealthCheckSourceAlreadyExists)
+  InvalidInputError(e: InvalidInput)
+  InvalidVPCId(e: InvalidVPCId)
+  TooManyHealthCheckSources(e: TooManyHealthCheckSources)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateHealthCheckSourceErr) display() -> Str {
+  match e {
+    HealthCheckSourceAlreadyExists(x) => "HealthCheckSourceAlreadyExists: ${x:?}"
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidVPCId(x) => "InvalidVPCId: ${x:?}"
+    TooManyHealthCheckSources(x) => "TooManyHealthCheckSources: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_health_check_source_error(resp: http.Response) -> CreateHealthCheckSourceErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "HealthCheckSourceAlreadyExists" => match read_error_health_check_source_already_exists(resp, body) {
+      Ok(x) => return CreateHealthCheckSourceErr.HealthCheckSourceAlreadyExists(x)
+      Err(msg) => return CreateHealthCheckSourceErr.Deserialize(msg)
+    }
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return CreateHealthCheckSourceErr.InvalidInputError(x)
+      Err(msg) => return CreateHealthCheckSourceErr.Deserialize(msg)
+    }
+    "InvalidVPCId" => match read_error_invalid_vpc_id(resp, body) {
+      Ok(x) => return CreateHealthCheckSourceErr.InvalidVPCId(x)
+      Err(msg) => return CreateHealthCheckSourceErr.Deserialize(msg)
+    }
+    "TooManyHealthCheckSources" => match read_error_too_many_health_check_sources(resp, body) {
+      Ok(x) => return CreateHealthCheckSourceErr.TooManyHealthCheckSources(x)
+      Err(msg) => return CreateHealthCheckSourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  CreateHealthCheckSourceErr.Api(restxml.api_error(resp))
+}
+
+/// Creates a health check source, which defines the virtual private cloud
+/// (VPC), subnets, and security groups from which Route 53 sends private
+/// endpoint health check requests. To use this operation, you must have the
+/// route53:CreateHealthCheckSource permission. You must also have
+/// permission to create a service-linked role. Specify a VPC, one subnet in
+/// each Availability Zone that Route 53 uses for private endpoint health
+/// checks in the Amazon Web Services Region, and one or more security
+/// groups for each subnet. The security groups must allow outbound traffic
+/// to the endpoints that you want to check. Route 53 creates a health check
+/// source asynchronously, and the initial HealthCheckSourceStatus is
+/// CREATE_PENDING . Call GetHealthCheckSource until the status is
+/// CREATE_COMPLETED before you create health checks that use the source.
+/// You can't change the configuration of a health check source after you
+/// create it. If AWS Identity and Access Management (IAM) is still deleting
+/// the Route 53 service-linked role for your account, the request fails
+/// with InvalidInput . Retry after the deletion completes.
+pub fn (c: Client) create_health_check_source(input: CreateHealthCheckSourceRequest) -> CreateHealthCheckSourceResponse ! CreateHealthCheckSourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_health_check_source(c.params, input)) ?? e => return Err(CreateHealthCheckSourceErr.InvalidInput(e))
+  var req = serialize_create_health_check_source(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateHealthCheckSourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(CreateHealthCheckSourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_health_check_source_error(resp))
+  }
+  deserialize_create_health_check_source(resp) ?? e => Err(CreateHealthCheckSourceErr.Deserialize(e))
 }
 
 pub fn endpoint_params_create_hosted_zone(base: EndpointParameters, input: CreateHostedZoneRequest) -> EndpointParameters {
@@ -10332,6 +12146,12 @@ pub fn serialize_create_hosted_zone(ep: rest.Endpoint, given: CreateHostedZoneRe
   }
   if let Some(x) = input.delegation_set_id {
     xmlv.elem(w, "DelegationSetId", x, [])
+  }
+  if let Some(x) = input.enable_public_dns_fallback {
+    xmlv.elem(w, "EnablePublicDNSFallback", "${x}", [])
+  }
+  if let Some(x) = input.change_guardrails {
+    xml_write_change_guardrails(w, x, "ChangeGuardrails", [])
   }
   xmlv.end(w, "CreateHostedZoneRequest")
   body = xmlv.finish(w)
@@ -10876,6 +12696,157 @@ pub fn (c: Client) create_query_logging_config(input: CreateQueryLoggingConfigRe
     return Err(deserialize_create_query_logging_config_error(resp))
   }
   deserialize_create_query_logging_config(resp) ?? e => Err(CreateQueryLoggingConfigErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_resource_record_set_protections(base: EndpointParameters, input: CreateResourceRecordSetProtectionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateResourceRecordSetProtections.
+pub fn serialize_create_resource_record_set_protections(ep: rest.Endpoint, given: CreateResourceRecordSetProtectionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_hosted_zone_id = match input.hosted_zone_id {
+    Some(v) => v
+    None => return Err("input member HostedZoneId is required")
+  }
+  if label_hosted_zone_id == "" {
+    return Err("input member HostedZoneId must not be empty")
+  }
+  var body = b""
+  var w = xmlv.writer()
+  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
+  xmlv.start(w, "CreateResourceRecordSetProtectionsRequest", attrs)
+  if let Some(x) = input.protections {
+    xml_write_resource_record_set_protection_config_batch(w, x, "Protections", [])
+  }
+  xmlv.end(w, "CreateResourceRecordSetProtectionsRequest")
+  body = xmlv.finish(w)
+  headers.push(("Content-Type", "application/xml"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/rrsetprotection"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_resource_record_set_protections(resp: http.Response) -> CreateResourceRecordSetProtectionsResponse ! Str {
+  var out = CreateResourceRecordSetProtectionsResponse{}
+  Ok(out)
+}
+
+/// The errors of CreateResourceRecordSetProtections.
+pub enum CreateResourceRecordSetProtectionsErr {
+  InvalidInputError(e: InvalidInput)
+  InvalidResourceRecordSetProtectionBatch(e: InvalidResourceRecordSetProtectionBatch)
+  LimitsExceeded(e: LimitsExceeded)
+  NoSuchHostedZone(e: NoSuchHostedZone)
+  PriorRequestNotComplete(e: PriorRequestNotComplete)
+  ProtectionAlreadyExists(e: ProtectionAlreadyExists)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateResourceRecordSetProtectionsErr) display() -> Str {
+  match e {
+    InvalidInputError(x) => "InvalidInput: ${x:?}"
+    InvalidResourceRecordSetProtectionBatch(x) => "InvalidResourceRecordSetProtectionBatch: ${x:?}"
+    LimitsExceeded(x) => "LimitsExceeded: ${x:?}"
+    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
+    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
+    ProtectionAlreadyExists(x) => "ProtectionAlreadyExists: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_resource_record_set_protections_error(resp: http.Response) -> CreateResourceRecordSetProtectionsErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  match restxml.error_code(resp) {
+    "InvalidInput" => match read_error_invalid_input(resp, body) {
+      Ok(x) => return CreateResourceRecordSetProtectionsErr.InvalidInputError(x)
+      Err(msg) => return CreateResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "InvalidResourceRecordSetProtectionBatch" => match read_error_invalid_resource_record_set_protection_batch(resp, body) {
+      Ok(x) => return CreateResourceRecordSetProtectionsErr.InvalidResourceRecordSetProtectionBatch(x)
+      Err(msg) => return CreateResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "LimitsExceeded" => match read_error_limits_exceeded(resp, body) {
+      Ok(x) => return CreateResourceRecordSetProtectionsErr.LimitsExceeded(x)
+      Err(msg) => return CreateResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
+      Ok(x) => return CreateResourceRecordSetProtectionsErr.NoSuchHostedZone(x)
+      Err(msg) => return CreateResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
+      Ok(x) => return CreateResourceRecordSetProtectionsErr.PriorRequestNotComplete(x)
+      Err(msg) => return CreateResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    "ProtectionAlreadyExists" => match read_error_protection_already_exists(resp, body) {
+      Ok(x) => return CreateResourceRecordSetProtectionsErr.ProtectionAlreadyExists(x)
+      Err(msg) => return CreateResourceRecordSetProtectionsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+
+  CreateResourceRecordSetProtectionsErr.Api(restxml.api_error(resp))
+}
+
+/// Creates one or more resource record set protections in a hosted zone. A
+/// protection applies to every resource record set in the hosted zone that
+/// has the specified name and type. While a protection exists, Route 53
+/// rejects any ChangeResourceRecordSets request that creates, updates, or
+/// deletes a resource record set with that name and type, and returns an
+/// InvalidChangeBatch error. To change a protected resource record set,
+/// first delete its protection by using DeleteResourceRecordSetProtections
+/// . You can create a protection for a name and type that doesn't have a
+/// resource record set yet. In that case, Route 53 also rejects requests to
+/// create that resource record set. You can't delete a hosted zone that has
+/// protections. To delete the hosted zone, first delete all of its
+/// protections by using DeleteResourceRecordSetProtections . The request is
+/// atomic. Route 53 either creates all of the protections in the request or
+/// none of them. If one or more entries fail, the response is an error that
+/// lists the failing entries and the reason that each one failed. Route 53
+/// checks for invalid entries before it checks for existing protections, so
+/// if any entry is invalid, the error lists only the invalid entries. The
+/// error that Route 53 returns depends on the failures: If every entry
+/// already has a protection, Route 53 returns a ProtectionAlreadyExists
+/// error. For any other combination of failures, Route 53 returns an
+/// InvalidResourceRecordSetProtectionBatch error. You can specify up to 100
+/// protections in one request. The number of protections that you can have
+/// in a hosted zone is limited by a quota. If the request would exceed that
+/// quota, Route 53 returns a LimitsExceeded error.
+pub fn (c: Client) create_resource_record_set_protections(input: CreateResourceRecordSetProtectionsRequest) -> CreateResourceRecordSetProtectionsResponse ! CreateResourceRecordSetProtectionsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_resource_record_set_protections(c.params, input)) ?? e => return Err(CreateResourceRecordSetProtectionsErr.InvalidInput(e))
+  var req = serialize_create_resource_record_set_protections(ep, input, "") ?? e => return Err(CreateResourceRecordSetProtectionsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(CreateResourceRecordSetProtectionsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_resource_record_set_protections_error(resp))
+  }
+  deserialize_create_resource_record_set_protections(resp) ?? e => Err(CreateResourceRecordSetProtectionsErr.Deserialize(e))
 }
 
 pub fn endpoint_params_create_reusable_delegation_set(base: EndpointParameters, input: CreateReusableDelegationSetRequest) -> EndpointParameters {
@@ -11576,1570 +13547,4 @@ pub fn deserialize_create_vpc_association_authorization_error(resp: http.Respons
   }
 
   CreateVPCAssociationAuthorizationErr.Api(restxml.api_error(resp))
-}
-
-/// Authorizes the Amazon Web Services account that created a specified VPC
-/// to submit an AssociateVPCWithHostedZone request to associate the VPC
-/// with a specified hosted zone that was created by a different account. To
-/// submit a CreateVPCAssociationAuthorization request, you must use the
-/// account that created the hosted zone. After you authorize the
-/// association, use the account that created the VPC to submit an
-/// AssociateVPCWithHostedZone request. If you want to associate multiple
-/// VPCs that you created by using one account with a hosted zone that you
-/// created by using a different account, you must submit one authorization
-/// request for each VPC.
-pub fn (c: Client) create_vpc_association_authorization(input: CreateVPCAssociationAuthorizationRequest) -> CreateVPCAssociationAuthorizationResponse ! CreateVPCAssociationAuthorizationErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_vpc_association_authorization(c.params, input)) ?? e => return Err(CreateVPCAssociationAuthorizationErr.InvalidInput(e))
-  var req = serialize_create_vpc_association_authorization(ep, input, "") ?? e => return Err(CreateVPCAssociationAuthorizationErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(CreateVPCAssociationAuthorizationErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_vpc_association_authorization_error(resp))
-  }
-  deserialize_create_vpc_association_authorization(resp) ?? e => Err(CreateVPCAssociationAuthorizationErr.Deserialize(e))
-}
-
-pub fn endpoint_params_deactivate_key_signing_key(base: EndpointParameters, input: DeactivateKeySigningKeyRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeactivateKeySigningKey.
-pub fn serialize_deactivate_key_signing_key(ep: rest.Endpoint, given: DeactivateKeySigningKeyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_hosted_zone_id = match input.hosted_zone_id {
-    Some(v) => v
-    None => return Err("input member HostedZoneId is required")
-  }
-  if label_hosted_zone_id == "" {
-    return Err("input member HostedZoneId must not be empty")
-  }
-  let label_name = match input.name {
-    Some(v) => v
-    None => return Err("input member Name is required")
-  }
-  if label_name == "" {
-    return Err("input member Name must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/keysigningkey/${rest.escape(label_hosted_zone_id, false)}/${rest.escape(label_name, false)}/deactivate"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_deactivate_key_signing_key(resp: http.Response) -> DeactivateKeySigningKeyResponse ! Str {
-  var out = DeactivateKeySigningKeyResponse{}
-  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DeactivateKeySigningKey.
-pub enum DeactivateKeySigningKeyErr {
-  ConcurrentModification(e: ConcurrentModification)
-  InvalidInputError(e: InvalidInput)
-  InvalidKeySigningKeyStatus(e: InvalidKeySigningKeyStatus)
-  InvalidSigningStatus(e: InvalidSigningStatus)
-  KeySigningKeyInParentDSRecord(e: KeySigningKeyInParentDSRecord)
-  KeySigningKeyInUse(e: KeySigningKeyInUse)
-  NoSuchKeySigningKey(e: NoSuchKeySigningKey)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeactivateKeySigningKeyErr) display() -> Str {
-  match e {
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    InvalidKeySigningKeyStatus(x) => "InvalidKeySigningKeyStatus: ${x:?}"
-    InvalidSigningStatus(x) => "InvalidSigningStatus: ${x:?}"
-    KeySigningKeyInParentDSRecord(x) => "KeySigningKeyInParentDSRecord: ${x:?}"
-    KeySigningKeyInUse(x) => "KeySigningKeyInUse: ${x:?}"
-    NoSuchKeySigningKey(x) => "NoSuchKeySigningKey: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_deactivate_key_signing_key_error(resp: http.Response) -> DeactivateKeySigningKeyErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.ConcurrentModification(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.InvalidInputError(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidKeySigningKeyStatus" => match read_error_invalid_key_signing_key_status(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.InvalidKeySigningKeyStatus(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidSigningStatus" => match read_error_invalid_signing_status(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.InvalidSigningStatus(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    "KeySigningKeyInParentDSRecord" => match read_error_key_signing_key_in_parent_ds_record(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.KeySigningKeyInParentDSRecord(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    "KeySigningKeyInUse" => match read_error_key_signing_key_in_use(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.KeySigningKeyInUse(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    "NoSuchKeySigningKey" => match read_error_no_such_key_signing_key(resp, body) {
-      Ok(x) => return DeactivateKeySigningKeyErr.NoSuchKeySigningKey(x)
-      Err(msg) => return DeactivateKeySigningKeyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeactivateKeySigningKeyErr.Api(restxml.api_error(resp))
-}
-
-/// Deactivates a key-signing key (KSK) so that it will not be used for
-/// signing by DNSSEC. This operation changes the KSK status to INACTIVE .
-pub fn (c: Client) deactivate_key_signing_key(input: DeactivateKeySigningKeyRequest) -> DeactivateKeySigningKeyResponse ! DeactivateKeySigningKeyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_deactivate_key_signing_key(c.params, input)) ?? e => return Err(DeactivateKeySigningKeyErr.InvalidInput(e))
-  var req = serialize_deactivate_key_signing_key(ep, input, "") ?? e => return Err(DeactivateKeySigningKeyErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeactivateKeySigningKeyErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_deactivate_key_signing_key_error(resp))
-  }
-  deserialize_deactivate_key_signing_key(resp) ?? e => Err(DeactivateKeySigningKeyErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_cidr_collection(base: EndpointParameters, input: DeleteCidrCollectionRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteCidrCollection.
-pub fn serialize_delete_cidr_collection(ep: rest.Endpoint, input: DeleteCidrCollectionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member Id is required")
-  }
-  if label_id == "" {
-    return Err("input member Id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/cidrcollection/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_cidr_collection(resp: http.Response) -> DeleteCidrCollectionResponse ! Str {
-  var out = DeleteCidrCollectionResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteCidrCollection.
-pub enum DeleteCidrCollectionErr {
-  CidrCollectionInUseException(e: CidrCollectionInUseException)
-  ConcurrentModification(e: ConcurrentModification)
-  InvalidInputError(e: InvalidInput)
-  NoSuchCidrCollectionException(e: NoSuchCidrCollectionException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteCidrCollectionErr) display() -> Str {
-  match e {
-    CidrCollectionInUseException(x) => "CidrCollectionInUseException: ${x:?}"
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchCidrCollectionException(x) => "NoSuchCidrCollectionException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_cidr_collection_error(resp: http.Response) -> DeleteCidrCollectionErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "CidrCollectionInUseException" => match read_error_cidr_collection_in_use_exception(resp, body) {
-      Ok(x) => return DeleteCidrCollectionErr.CidrCollectionInUseException(x)
-      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
-    }
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DeleteCidrCollectionErr.ConcurrentModification(x)
-      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteCidrCollectionErr.InvalidInputError(x)
-      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
-    }
-    "NoSuchCidrCollectionException" => match read_error_no_such_cidr_collection_exception(resp, body) {
-      Ok(x) => return DeleteCidrCollectionErr.NoSuchCidrCollectionException(x)
-      Err(msg) => return DeleteCidrCollectionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteCidrCollectionErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a CIDR collection in the current Amazon Web Services account.
-/// The collection must be empty before it can be deleted.
-pub fn (c: Client) delete_cidr_collection(input: DeleteCidrCollectionRequest) -> DeleteCidrCollectionResponse ! DeleteCidrCollectionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_cidr_collection(c.params, input)) ?? e => return Err(DeleteCidrCollectionErr.InvalidInput(e))
-  var req = serialize_delete_cidr_collection(ep, input, "") ?? e => return Err(DeleteCidrCollectionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteCidrCollectionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_cidr_collection_error(resp))
-  }
-  deserialize_delete_cidr_collection(resp) ?? e => Err(DeleteCidrCollectionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_health_check(base: EndpointParameters, input: DeleteHealthCheckRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteHealthCheck.
-pub fn serialize_delete_health_check(ep: rest.Endpoint, input: DeleteHealthCheckRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_health_check_id = match input.health_check_id {
-    Some(v) => v
-    None => return Err("input member HealthCheckId is required")
-  }
-  if label_health_check_id == "" {
-    return Err("input member HealthCheckId must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/healthcheck/${rest.escape(label_health_check_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_health_check(resp: http.Response) -> DeleteHealthCheckResponse ! Str {
-  var out = DeleteHealthCheckResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteHealthCheck.
-pub enum DeleteHealthCheckErr {
-  HealthCheckInUse(e: HealthCheckInUse)
-  InvalidInputError(e: InvalidInput)
-  NoSuchHealthCheck(e: NoSuchHealthCheck)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteHealthCheckErr) display() -> Str {
-  match e {
-    HealthCheckInUse(x) => "HealthCheckInUse: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchHealthCheck(x) => "NoSuchHealthCheck: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_health_check_error(resp: http.Response) -> DeleteHealthCheckErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "HealthCheckInUse" => match read_error_health_check_in_use(resp, body) {
-      Ok(x) => return DeleteHealthCheckErr.HealthCheckInUse(x)
-      Err(msg) => return DeleteHealthCheckErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteHealthCheckErr.InvalidInputError(x)
-      Err(msg) => return DeleteHealthCheckErr.Deserialize(msg)
-    }
-    "NoSuchHealthCheck" => match read_error_no_such_health_check(resp, body) {
-      Ok(x) => return DeleteHealthCheckErr.NoSuchHealthCheck(x)
-      Err(msg) => return DeleteHealthCheckErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteHealthCheckErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a health check. Amazon Route 53 does not prevent you from
-/// deleting a health check even if the health check is associated with one
-/// or more resource record sets. If you delete a health check and you don't
-/// update the associated resource record sets, the future status of the
-/// health check can't be predicted and may change. This will affect the
-/// routing of DNS queries for your DNS failover configuration. For more
-/// information, see Replacing and Deleting Health Checks in the Amazon
-/// Route 53 Developer Guide . If you're using Cloud Map and you configured
-/// Cloud Map to create a Route 53 health check when you register an
-/// instance, you can't use the Route 53 DeleteHealthCheck command to delete
-/// the health check. The health check is deleted automatically when you
-/// deregister the instance; there can be a delay of several hours before
-/// the health check is deleted from Route 53.
-pub fn (c: Client) delete_health_check(input: DeleteHealthCheckRequest) -> DeleteHealthCheckResponse ! DeleteHealthCheckErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_health_check(c.params, input)) ?? e => return Err(DeleteHealthCheckErr.InvalidInput(e))
-  var req = serialize_delete_health_check(ep, input, "") ?? e => return Err(DeleteHealthCheckErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteHealthCheckErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_health_check_error(resp))
-  }
-  deserialize_delete_health_check(resp) ?? e => Err(DeleteHealthCheckErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_hosted_zone(base: EndpointParameters, input: DeleteHostedZoneRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteHostedZone.
-pub fn serialize_delete_hosted_zone(ep: rest.Endpoint, given: DeleteHostedZoneRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {id: given.id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member Id is required")
-  }
-  if label_id == "" {
-    return Err("input member Id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_hosted_zone(resp: http.Response) -> DeleteHostedZoneResponse ! Str {
-  var out = DeleteHostedZoneResponse{}
-  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DeleteHostedZone.
-pub enum DeleteHostedZoneErr {
-  HostedZoneNotEmpty(e: HostedZoneNotEmpty)
-  InvalidDomainName(e: InvalidDomainName)
-  InvalidInputError(e: InvalidInput)
-  NoSuchHostedZone(e: NoSuchHostedZone)
-  PriorRequestNotComplete(e: PriorRequestNotComplete)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteHostedZoneErr) display() -> Str {
-  match e {
-    HostedZoneNotEmpty(x) => "HostedZoneNotEmpty: ${x:?}"
-    InvalidDomainName(x) => "InvalidDomainName: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
-    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_hosted_zone_error(resp: http.Response) -> DeleteHostedZoneErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "HostedZoneNotEmpty" => match read_error_hosted_zone_not_empty(resp, body) {
-      Ok(x) => return DeleteHostedZoneErr.HostedZoneNotEmpty(x)
-      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
-    }
-    "InvalidDomainName" => match read_error_invalid_domain_name(resp, body) {
-      Ok(x) => return DeleteHostedZoneErr.InvalidDomainName(x)
-      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteHostedZoneErr.InvalidInputError(x)
-      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
-    }
-    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
-      Ok(x) => return DeleteHostedZoneErr.NoSuchHostedZone(x)
-      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
-    }
-    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
-      Ok(x) => return DeleteHostedZoneErr.PriorRequestNotComplete(x)
-      Err(msg) => return DeleteHostedZoneErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteHostedZoneErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a hosted zone. If the hosted zone was created by another
-/// service, such as Cloud Map, see Deleting Public Hosted Zones That Were
-/// Created by Another Service in the Amazon Route 53 Developer Guide for
-/// information about how to delete it. (The process is the same for public
-/// and private hosted zones that were created by another service.) If you
-/// want to keep your domain registration but you want to stop routing
-/// internet traffic to your website or web application, we recommend that
-/// you delete resource record sets in the hosted zone instead of deleting
-/// the hosted zone. If you delete a hosted zone, you can't undelete it. You
-/// must create a new hosted zone and update the name servers for your
-/// domain registration, which can require up to 48 hours to take effect.
-/// (If you delegated responsibility for a subdomain to a hosted zone and
-/// you delete the child hosted zone, you must update the name servers in
-/// the parent hosted zone.) In addition, if you delete a hosted zone,
-/// someone could hijack the domain and route traffic to their own resources
-/// using your domain name. If you want to avoid the monthly charge for the
-/// hosted zone, you can transfer DNS service for the domain to a free DNS
-/// service. When you transfer DNS service, you have to update the name
-/// servers for the domain registration. If the domain is registered with
-/// Route 53, see UpdateDomainNameservers for information about how to
-/// replace Route 53 name servers with name servers for the new DNS service.
-/// If the domain is registered with another registrar, use the method
-/// provided by the registrar to update name servers for the domain
-/// registration. For more information, perform an internet search on "free
-/// DNS service." You can delete a hosted zone only if it contains only the
-/// default SOA and NS records and has DNSSEC signing disabled. If the
-/// hosted zone contains other records or has DNSSEC enabled, you must
-/// delete the records and disable DNSSEC before deletion. Attempting to
-/// delete a hosted zone with additional records or DNSSEC enabled returns a
-/// HostedZoneNotEmpty error. For information about deleting records, see
-/// ChangeResourceRecordSets . To verify that the hosted zone has been
-/// deleted, do one of the following: Use the GetHostedZone action to
-/// request information about the hosted zone. Use the ListHostedZones
-/// action to get a list of the hosted zones associated with the current
-/// Amazon Web Services account.
-pub fn (c: Client) delete_hosted_zone(input: DeleteHostedZoneRequest) -> DeleteHostedZoneResponse ! DeleteHostedZoneErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_hosted_zone(c.params, input)) ?? e => return Err(DeleteHostedZoneErr.InvalidInput(e))
-  var req = serialize_delete_hosted_zone(ep, input, "") ?? e => return Err(DeleteHostedZoneErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteHostedZoneErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_hosted_zone_error(resp))
-  }
-  deserialize_delete_hosted_zone(resp) ?? e => Err(DeleteHostedZoneErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_key_signing_key(base: EndpointParameters, input: DeleteKeySigningKeyRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteKeySigningKey.
-pub fn serialize_delete_key_signing_key(ep: rest.Endpoint, given: DeleteKeySigningKeyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_hosted_zone_id = match input.hosted_zone_id {
-    Some(v) => v
-    None => return Err("input member HostedZoneId is required")
-  }
-  if label_hosted_zone_id == "" {
-    return Err("input member HostedZoneId must not be empty")
-  }
-  let label_name = match input.name {
-    Some(v) => v
-    None => return Err("input member Name is required")
-  }
-  if label_name == "" {
-    return Err("input member Name must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/keysigningkey/${rest.escape(label_hosted_zone_id, false)}/${rest.escape(label_name, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_key_signing_key(resp: http.Response) -> DeleteKeySigningKeyResponse ! Str {
-  var out = DeleteKeySigningKeyResponse{}
-  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DeleteKeySigningKey.
-pub enum DeleteKeySigningKeyErr {
-  ConcurrentModification(e: ConcurrentModification)
-  InvalidInputError(e: InvalidInput)
-  InvalidKeySigningKeyStatus(e: InvalidKeySigningKeyStatus)
-  InvalidKMSArn(e: InvalidKMSArn)
-  InvalidSigningStatus(e: InvalidSigningStatus)
-  NoSuchKeySigningKey(e: NoSuchKeySigningKey)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteKeySigningKeyErr) display() -> Str {
-  match e {
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    InvalidKeySigningKeyStatus(x) => "InvalidKeySigningKeyStatus: ${x:?}"
-    InvalidKMSArn(x) => "InvalidKMSArn: ${x:?}"
-    InvalidSigningStatus(x) => "InvalidSigningStatus: ${x:?}"
-    NoSuchKeySigningKey(x) => "NoSuchKeySigningKey: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_key_signing_key_error(resp: http.Response) -> DeleteKeySigningKeyErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DeleteKeySigningKeyErr.ConcurrentModification(x)
-      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteKeySigningKeyErr.InvalidInputError(x)
-      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidKeySigningKeyStatus" => match read_error_invalid_key_signing_key_status(resp, body) {
-      Ok(x) => return DeleteKeySigningKeyErr.InvalidKeySigningKeyStatus(x)
-      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidKMSArn" => match read_error_invalid_kms_arn(resp, body) {
-      Ok(x) => return DeleteKeySigningKeyErr.InvalidKMSArn(x)
-      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
-    }
-    "InvalidSigningStatus" => match read_error_invalid_signing_status(resp, body) {
-      Ok(x) => return DeleteKeySigningKeyErr.InvalidSigningStatus(x)
-      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
-    }
-    "NoSuchKeySigningKey" => match read_error_no_such_key_signing_key(resp, body) {
-      Ok(x) => return DeleteKeySigningKeyErr.NoSuchKeySigningKey(x)
-      Err(msg) => return DeleteKeySigningKeyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteKeySigningKeyErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a key-signing key (KSK). Before you can delete a KSK, you must
-/// deactivate it. The KSK must be deactivated before you can delete it
-/// regardless of whether the hosted zone is enabled for DNSSEC signing. You
-/// can use DeactivateKeySigningKey to deactivate the key before you delete
-/// it. Use GetDNSSEC to verify that the KSK is in an INACTIVE status.
-pub fn (c: Client) delete_key_signing_key(input: DeleteKeySigningKeyRequest) -> DeleteKeySigningKeyResponse ! DeleteKeySigningKeyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_key_signing_key(c.params, input)) ?? e => return Err(DeleteKeySigningKeyErr.InvalidInput(e))
-  var req = serialize_delete_key_signing_key(ep, input, "") ?? e => return Err(DeleteKeySigningKeyErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteKeySigningKeyErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_key_signing_key_error(resp))
-  }
-  deserialize_delete_key_signing_key(resp) ?? e => Err(DeleteKeySigningKeyErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_query_logging_config(base: EndpointParameters, input: DeleteQueryLoggingConfigRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteQueryLoggingConfig.
-pub fn serialize_delete_query_logging_config(ep: rest.Endpoint, input: DeleteQueryLoggingConfigRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member Id is required")
-  }
-  if label_id == "" {
-    return Err("input member Id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/queryloggingconfig/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_query_logging_config(resp: http.Response) -> DeleteQueryLoggingConfigResponse ! Str {
-  var out = DeleteQueryLoggingConfigResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteQueryLoggingConfig.
-pub enum DeleteQueryLoggingConfigErr {
-  ConcurrentModification(e: ConcurrentModification)
-  InvalidInputError(e: InvalidInput)
-  NoSuchQueryLoggingConfig(e: NoSuchQueryLoggingConfig)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteQueryLoggingConfigErr) display() -> Str {
-  match e {
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchQueryLoggingConfig(x) => "NoSuchQueryLoggingConfig: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_query_logging_config_error(resp: http.Response) -> DeleteQueryLoggingConfigErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DeleteQueryLoggingConfigErr.ConcurrentModification(x)
-      Err(msg) => return DeleteQueryLoggingConfigErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteQueryLoggingConfigErr.InvalidInputError(x)
-      Err(msg) => return DeleteQueryLoggingConfigErr.Deserialize(msg)
-    }
-    "NoSuchQueryLoggingConfig" => match read_error_no_such_query_logging_config(resp, body) {
-      Ok(x) => return DeleteQueryLoggingConfigErr.NoSuchQueryLoggingConfig(x)
-      Err(msg) => return DeleteQueryLoggingConfigErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteQueryLoggingConfigErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a configuration for DNS query logging. If you delete a
-/// configuration, Amazon Route 53 stops sending query logs to CloudWatch
-/// Logs. Route 53 doesn't delete any logs that are already in CloudWatch
-/// Logs. For more information about DNS query logs, see
-/// CreateQueryLoggingConfig .
-pub fn (c: Client) delete_query_logging_config(input: DeleteQueryLoggingConfigRequest) -> DeleteQueryLoggingConfigResponse ! DeleteQueryLoggingConfigErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_query_logging_config(c.params, input)) ?? e => return Err(DeleteQueryLoggingConfigErr.InvalidInput(e))
-  var req = serialize_delete_query_logging_config(ep, input, "") ?? e => return Err(DeleteQueryLoggingConfigErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteQueryLoggingConfigErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_query_logging_config_error(resp))
-  }
-  deserialize_delete_query_logging_config(resp) ?? e => Err(DeleteQueryLoggingConfigErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_reusable_delegation_set(base: EndpointParameters, input: DeleteReusableDelegationSetRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteReusableDelegationSet.
-pub fn serialize_delete_reusable_delegation_set(ep: rest.Endpoint, given: DeleteReusableDelegationSetRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {id: given.id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member Id is required")
-  }
-  if label_id == "" {
-    return Err("input member Id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/delegationset/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_reusable_delegation_set(resp: http.Response) -> DeleteReusableDelegationSetResponse ! Str {
-  var out = DeleteReusableDelegationSetResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteReusableDelegationSet.
-pub enum DeleteReusableDelegationSetErr {
-  DelegationSetInUse(e: DelegationSetInUse)
-  DelegationSetNotReusable(e: DelegationSetNotReusable)
-  InvalidInputError(e: InvalidInput)
-  NoSuchDelegationSet(e: NoSuchDelegationSet)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteReusableDelegationSetErr) display() -> Str {
-  match e {
-    DelegationSetInUse(x) => "DelegationSetInUse: ${x:?}"
-    DelegationSetNotReusable(x) => "DelegationSetNotReusable: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchDelegationSet(x) => "NoSuchDelegationSet: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_reusable_delegation_set_error(resp: http.Response) -> DeleteReusableDelegationSetErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "DelegationSetInUse" => match read_error_delegation_set_in_use(resp, body) {
-      Ok(x) => return DeleteReusableDelegationSetErr.DelegationSetInUse(x)
-      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
-    }
-    "DelegationSetNotReusable" => match read_error_delegation_set_not_reusable(resp, body) {
-      Ok(x) => return DeleteReusableDelegationSetErr.DelegationSetNotReusable(x)
-      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteReusableDelegationSetErr.InvalidInputError(x)
-      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
-    }
-    "NoSuchDelegationSet" => match read_error_no_such_delegation_set(resp, body) {
-      Ok(x) => return DeleteReusableDelegationSetErr.NoSuchDelegationSet(x)
-      Err(msg) => return DeleteReusableDelegationSetErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteReusableDelegationSetErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a reusable delegation set. You can delete a reusable delegation
-/// set only if it isn't associated with any hosted zones. To verify that
-/// the reusable delegation set is not associated with any hosted zones,
-/// submit a GetReusableDelegationSet request and specify the ID of the
-/// reusable delegation set that you want to delete.
-pub fn (c: Client) delete_reusable_delegation_set(input: DeleteReusableDelegationSetRequest) -> DeleteReusableDelegationSetResponse ! DeleteReusableDelegationSetErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_reusable_delegation_set(c.params, input)) ?? e => return Err(DeleteReusableDelegationSetErr.InvalidInput(e))
-  var req = serialize_delete_reusable_delegation_set(ep, input, "") ?? e => return Err(DeleteReusableDelegationSetErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteReusableDelegationSetErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_reusable_delegation_set_error(resp))
-  }
-  deserialize_delete_reusable_delegation_set(resp) ?? e => Err(DeleteReusableDelegationSetErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_traffic_policy(base: EndpointParameters, input: DeleteTrafficPolicyRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteTrafficPolicy.
-pub fn serialize_delete_traffic_policy(ep: rest.Endpoint, input: DeleteTrafficPolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member Id is required")
-  }
-  if label_id == "" {
-    return Err("input member Id must not be empty")
-  }
-  let label_version = match input.version {
-    Some(v) => "${v}"
-    None => return Err("input member Version is required")
-  }
-  if label_version == "" {
-    return Err("input member Version must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/trafficpolicy/${rest.escape(label_id, false)}/${rest.escape(label_version, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_traffic_policy(resp: http.Response) -> DeleteTrafficPolicyResponse ! Str {
-  var out = DeleteTrafficPolicyResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteTrafficPolicy.
-pub enum DeleteTrafficPolicyErr {
-  ConcurrentModification(e: ConcurrentModification)
-  InvalidInputError(e: InvalidInput)
-  NoSuchTrafficPolicy(e: NoSuchTrafficPolicy)
-  TrafficPolicyInUse(e: TrafficPolicyInUse)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteTrafficPolicyErr) display() -> Str {
-  match e {
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchTrafficPolicy(x) => "NoSuchTrafficPolicy: ${x:?}"
-    TrafficPolicyInUse(x) => "TrafficPolicyInUse: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_traffic_policy_error(resp: http.Response) -> DeleteTrafficPolicyErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyErr.ConcurrentModification(x)
-      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyErr.InvalidInputError(x)
-      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
-    }
-    "NoSuchTrafficPolicy" => match read_error_no_such_traffic_policy(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyErr.NoSuchTrafficPolicy(x)
-      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
-    }
-    "TrafficPolicyInUse" => match read_error_traffic_policy_in_use(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyErr.TrafficPolicyInUse(x)
-      Err(msg) => return DeleteTrafficPolicyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteTrafficPolicyErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a traffic policy. When you delete a traffic policy, Route 53
-/// sets a flag on the policy to indicate that it has been deleted. However,
-/// Route 53 never fully deletes the traffic policy. Note the following:
-/// Deleted traffic policies aren't listed if you run ListTrafficPolicies .
-/// There's no way to get a list of deleted policies. If you retain the ID
-/// of the policy, you can get information about the policy, including the
-/// traffic policy document, by running GetTrafficPolicy .
-pub fn (c: Client) delete_traffic_policy(input: DeleteTrafficPolicyRequest) -> DeleteTrafficPolicyResponse ! DeleteTrafficPolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_traffic_policy(c.params, input)) ?? e => return Err(DeleteTrafficPolicyErr.InvalidInput(e))
-  var req = serialize_delete_traffic_policy(ep, input, "") ?? e => return Err(DeleteTrafficPolicyErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteTrafficPolicyErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_traffic_policy_error(resp))
-  }
-  deserialize_delete_traffic_policy(resp) ?? e => Err(DeleteTrafficPolicyErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_traffic_policy_instance(base: EndpointParameters, input: DeleteTrafficPolicyInstanceRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteTrafficPolicyInstance.
-pub fn serialize_delete_traffic_policy_instance(ep: rest.Endpoint, input: DeleteTrafficPolicyInstanceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member Id is required")
-  }
-  if label_id == "" {
-    return Err("input member Id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/trafficpolicyinstance/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_traffic_policy_instance(resp: http.Response) -> DeleteTrafficPolicyInstanceResponse ! Str {
-  var out = DeleteTrafficPolicyInstanceResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteTrafficPolicyInstance.
-pub enum DeleteTrafficPolicyInstanceErr {
-  InvalidInputError(e: InvalidInput)
-  NoSuchTrafficPolicyInstance(e: NoSuchTrafficPolicyInstance)
-  PriorRequestNotComplete(e: PriorRequestNotComplete)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteTrafficPolicyInstanceErr) display() -> Str {
-  match e {
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    NoSuchTrafficPolicyInstance(x) => "NoSuchTrafficPolicyInstance: ${x:?}"
-    PriorRequestNotComplete(x) => "PriorRequestNotComplete: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_traffic_policy_instance_error(resp: http.Response) -> DeleteTrafficPolicyInstanceErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyInstanceErr.InvalidInputError(x)
-      Err(msg) => return DeleteTrafficPolicyInstanceErr.Deserialize(msg)
-    }
-    "NoSuchTrafficPolicyInstance" => match read_error_no_such_traffic_policy_instance(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyInstanceErr.NoSuchTrafficPolicyInstance(x)
-      Err(msg) => return DeleteTrafficPolicyInstanceErr.Deserialize(msg)
-    }
-    "PriorRequestNotComplete" => match read_error_prior_request_not_complete(resp, body) {
-      Ok(x) => return DeleteTrafficPolicyInstanceErr.PriorRequestNotComplete(x)
-      Err(msg) => return DeleteTrafficPolicyInstanceErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteTrafficPolicyInstanceErr.Api(restxml.api_error(resp))
-}
-
-/// Deletes a traffic policy instance and all of the resource record sets
-/// that Amazon Route 53 created when you created the instance. In the Route
-/// 53 console, traffic policy instances are known as policy records.
-pub fn (c: Client) delete_traffic_policy_instance(input: DeleteTrafficPolicyInstanceRequest) -> DeleteTrafficPolicyInstanceResponse ! DeleteTrafficPolicyInstanceErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_traffic_policy_instance(c.params, input)) ?? e => return Err(DeleteTrafficPolicyInstanceErr.InvalidInput(e))
-  var req = serialize_delete_traffic_policy_instance(ep, input, "") ?? e => return Err(DeleteTrafficPolicyInstanceErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteTrafficPolicyInstanceErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_traffic_policy_instance_error(resp))
-  }
-  deserialize_delete_traffic_policy_instance(resp) ?? e => Err(DeleteTrafficPolicyInstanceErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_vpc_association_authorization(base: EndpointParameters, input: DeleteVPCAssociationAuthorizationRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteVPCAssociationAuthorization.
-pub fn serialize_delete_vpc_association_authorization(ep: rest.Endpoint, given: DeleteVPCAssociationAuthorizationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_hosted_zone_id = match input.hosted_zone_id {
-    Some(v) => v
-    None => return Err("input member HostedZoneId is required")
-  }
-  if label_hosted_zone_id == "" {
-    return Err("input member HostedZoneId must not be empty")
-  }
-  var body = b""
-  var w = xmlv.writer()
-  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
-  xmlv.start(w, "DeleteVPCAssociationAuthorizationRequest", attrs)
-  if let Some(x) = input.vpc {
-    xml_write_vpc(w, x, "VPC", [])
-  }
-  xmlv.end(w, "DeleteVPCAssociationAuthorizationRequest")
-  body = xmlv.finish(w)
-  headers.push(("Content-Type", "application/xml"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/deauthorizevpcassociation"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_vpc_association_authorization(resp: http.Response) -> DeleteVPCAssociationAuthorizationResponse ! Str {
-  var out = DeleteVPCAssociationAuthorizationResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteVPCAssociationAuthorization.
-pub enum DeleteVPCAssociationAuthorizationErr {
-  ConcurrentModification(e: ConcurrentModification)
-  InvalidInputError(e: InvalidInput)
-  InvalidVPCId(e: InvalidVPCId)
-  NoSuchHostedZone(e: NoSuchHostedZone)
-  VPCAssociationAuthorizationNotFound(e: VPCAssociationAuthorizationNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteVPCAssociationAuthorizationErr) display() -> Str {
-  match e {
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    InvalidVPCId(x) => "InvalidVPCId: ${x:?}"
-    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
-    VPCAssociationAuthorizationNotFound(x) => "VPCAssociationAuthorizationNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_vpc_association_authorization_error(resp: http.Response) -> DeleteVPCAssociationAuthorizationErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DeleteVPCAssociationAuthorizationErr.ConcurrentModification(x)
-      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DeleteVPCAssociationAuthorizationErr.InvalidInputError(x)
-      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
-    }
-    "InvalidVPCId" => match read_error_invalid_vpc_id(resp, body) {
-      Ok(x) => return DeleteVPCAssociationAuthorizationErr.InvalidVPCId(x)
-      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
-    }
-    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
-      Ok(x) => return DeleteVPCAssociationAuthorizationErr.NoSuchHostedZone(x)
-      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
-    }
-    "VPCAssociationAuthorizationNotFound" => match read_error_vpc_association_authorization_not_found(resp, body) {
-      Ok(x) => return DeleteVPCAssociationAuthorizationErr.VPCAssociationAuthorizationNotFound(x)
-      Err(msg) => return DeleteVPCAssociationAuthorizationErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DeleteVPCAssociationAuthorizationErr.Api(restxml.api_error(resp))
-}
-
-/// Removes authorization to submit an AssociateVPCWithHostedZone request to
-/// associate a specified VPC with a hosted zone that was created by a
-/// different account. You must use the account that created the hosted zone
-/// to submit a DeleteVPCAssociationAuthorization request. Sending this
-/// request only prevents the Amazon Web Services account that created the
-/// VPC from associating the VPC with the Amazon Route 53 hosted zone in the
-/// future. If the VPC is already associated with the hosted zone,
-/// DeleteVPCAssociationAuthorization won't disassociate the VPC from the
-/// hosted zone. If you want to delete an existing association, use
-/// DisassociateVPCFromHostedZone .
-pub fn (c: Client) delete_vpc_association_authorization(input: DeleteVPCAssociationAuthorizationRequest) -> DeleteVPCAssociationAuthorizationResponse ! DeleteVPCAssociationAuthorizationErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_vpc_association_authorization(c.params, input)) ?? e => return Err(DeleteVPCAssociationAuthorizationErr.InvalidInput(e))
-  var req = serialize_delete_vpc_association_authorization(ep, input, "") ?? e => return Err(DeleteVPCAssociationAuthorizationErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DeleteVPCAssociationAuthorizationErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_vpc_association_authorization_error(resp))
-  }
-  deserialize_delete_vpc_association_authorization(resp) ?? e => Err(DeleteVPCAssociationAuthorizationErr.Deserialize(e))
-}
-
-pub fn endpoint_params_disable_hosted_zone_dnssec(base: EndpointParameters, input: DisableHostedZoneDNSSECRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DisableHostedZoneDNSSEC.
-pub fn serialize_disable_hosted_zone_dnssec(ep: rest.Endpoint, given: DisableHostedZoneDNSSECRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_hosted_zone_id = match input.hosted_zone_id {
-    Some(v) => v
-    None => return Err("input member HostedZoneId is required")
-  }
-  if label_hosted_zone_id == "" {
-    return Err("input member HostedZoneId must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/disable-dnssec"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_disable_hosted_zone_dnssec(resp: http.Response) -> DisableHostedZoneDNSSECResponse ! Str {
-  var out = DisableHostedZoneDNSSECResponse{}
-  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DisableHostedZoneDNSSEC.
-pub enum DisableHostedZoneDNSSECErr {
-  ConcurrentModification(e: ConcurrentModification)
-  DNSSECNotFound(e: DNSSECNotFound)
-  InvalidArgument(e: InvalidArgument)
-  InvalidInputError(e: InvalidInput)
-  InvalidKeySigningKeyStatus(e: InvalidKeySigningKeyStatus)
-  InvalidKMSArn(e: InvalidKMSArn)
-  KeySigningKeyInParentDSRecord(e: KeySigningKeyInParentDSRecord)
-  NoSuchHostedZone(e: NoSuchHostedZone)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DisableHostedZoneDNSSECErr) display() -> Str {
-  match e {
-    ConcurrentModification(x) => "ConcurrentModification: ${x:?}"
-    DNSSECNotFound(x) => "DNSSECNotFound: ${x:?}"
-    InvalidArgument(x) => "InvalidArgument: ${x:?}"
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    InvalidKeySigningKeyStatus(x) => "InvalidKeySigningKeyStatus: ${x:?}"
-    InvalidKMSArn(x) => "InvalidKMSArn: ${x:?}"
-    KeySigningKeyInParentDSRecord(x) => "KeySigningKeyInParentDSRecord: ${x:?}"
-    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_disable_hosted_zone_dnssec_error(resp: http.Response) -> DisableHostedZoneDNSSECErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "ConcurrentModification" => match read_error_concurrent_modification(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.ConcurrentModification(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "DNSSECNotFound" => match read_error_dnssec_not_found(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.DNSSECNotFound(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "InvalidArgument" => match read_error_invalid_argument(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidArgument(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidInputError(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "InvalidKeySigningKeyStatus" => match read_error_invalid_key_signing_key_status(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidKeySigningKeyStatus(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "InvalidKMSArn" => match read_error_invalid_kms_arn(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.InvalidKMSArn(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "KeySigningKeyInParentDSRecord" => match read_error_key_signing_key_in_parent_ds_record(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.KeySigningKeyInParentDSRecord(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
-      Ok(x) => return DisableHostedZoneDNSSECErr.NoSuchHostedZone(x)
-      Err(msg) => return DisableHostedZoneDNSSECErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DisableHostedZoneDNSSECErr.Api(restxml.api_error(resp))
-}
-
-/// Disables DNSSEC signing in a specific hosted zone. This action does not
-/// deactivate any key-signing keys (KSKs) that are active in the hosted
-/// zone.
-pub fn (c: Client) disable_hosted_zone_dnssec(input: DisableHostedZoneDNSSECRequest) -> DisableHostedZoneDNSSECResponse ! DisableHostedZoneDNSSECErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_disable_hosted_zone_dnssec(c.params, input)) ?? e => return Err(DisableHostedZoneDNSSECErr.InvalidInput(e))
-  var req = serialize_disable_hosted_zone_dnssec(ep, input, "") ?? e => return Err(DisableHostedZoneDNSSECErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DisableHostedZoneDNSSECErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_disable_hosted_zone_dnssec_error(resp))
-  }
-  deserialize_disable_hosted_zone_dnssec(resp) ?? e => Err(DisableHostedZoneDNSSECErr.Deserialize(e))
-}
-
-pub fn endpoint_params_disassociate_vpc_from_hosted_zone(base: EndpointParameters, input: DisassociateVPCFromHostedZoneRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DisassociateVPCFromHostedZone.
-pub fn serialize_disassociate_vpc_from_hosted_zone(ep: rest.Endpoint, given: DisassociateVPCFromHostedZoneRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_hosted_zone_id = match input.hosted_zone_id {
-    Some(v) => v
-    None => return Err("input member HostedZoneId is required")
-  }
-  if label_hosted_zone_id == "" {
-    return Err("input member HostedZoneId must not be empty")
-  }
-  var body = b""
-  var w = xmlv.writer()
-  var attrs: List[(Str, Str)] = [("xmlns", "https://route53.amazonaws.com/doc/2013-04-01/")]
-  xmlv.start(w, "DisassociateVPCFromHostedZoneRequest", attrs)
-  if let Some(x) = input.vpc {
-    xml_write_vpc(w, x, "VPC", [])
-  }
-  if let Some(x) = input.comment {
-    xmlv.elem(w, "Comment", x, [])
-  }
-  xmlv.end(w, "DisassociateVPCFromHostedZoneRequest")
-  body = xmlv.finish(w)
-  headers.push(("Content-Type", "application/xml"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/disassociatevpc"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_disassociate_vpc_from_hosted_zone(resp: http.Response) -> DisassociateVPCFromHostedZoneResponse ! Str {
-  var out = DisassociateVPCFromHostedZoneResponse{}
-  let body = if resp.body.is_empty() { xmlv.empty() } else { xmlv.parse_body(resp.body)? }
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "ChangeInfo" => out.change_info = xml_read_change_info(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DisassociateVPCFromHostedZone.
-pub enum DisassociateVPCFromHostedZoneErr {
-  InvalidInputError(e: InvalidInput)
-  InvalidVPCId(e: InvalidVPCId)
-  LastVPCAssociation(e: LastVPCAssociation)
-  NoSuchHostedZone(e: NoSuchHostedZone)
-  VPCAssociationNotFound(e: VPCAssociationNotFound)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DisassociateVPCFromHostedZoneErr) display() -> Str {
-  match e {
-    InvalidInputError(x) => "InvalidInput: ${x:?}"
-    InvalidVPCId(x) => "InvalidVPCId: ${x:?}"
-    LastVPCAssociation(x) => "LastVPCAssociation: ${x:?}"
-    NoSuchHostedZone(x) => "NoSuchHostedZone: ${x:?}"
-    VPCAssociationNotFound(x) => "VPCAssociationNotFound: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_disassociate_vpc_from_hosted_zone_error(resp: http.Response) -> DisassociateVPCFromHostedZoneErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "InvalidInput" => match read_error_invalid_input(resp, body) {
-      Ok(x) => return DisassociateVPCFromHostedZoneErr.InvalidInputError(x)
-      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
-    }
-    "InvalidVPCId" => match read_error_invalid_vpc_id(resp, body) {
-      Ok(x) => return DisassociateVPCFromHostedZoneErr.InvalidVPCId(x)
-      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
-    }
-    "LastVPCAssociation" => match read_error_last_vpc_association(resp, body) {
-      Ok(x) => return DisassociateVPCFromHostedZoneErr.LastVPCAssociation(x)
-      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
-    }
-    "NoSuchHostedZone" => match read_error_no_such_hosted_zone(resp, body) {
-      Ok(x) => return DisassociateVPCFromHostedZoneErr.NoSuchHostedZone(x)
-      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
-    }
-    "VPCAssociationNotFound" => match read_error_vpc_association_not_found(resp, body) {
-      Ok(x) => return DisassociateVPCFromHostedZoneErr.VPCAssociationNotFound(x)
-      Err(msg) => return DisassociateVPCFromHostedZoneErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DisassociateVPCFromHostedZoneErr.Api(restxml.api_error(resp))
-}
-
-/// Disassociates an Amazon Virtual Private Cloud (Amazon VPC) from an
-/// Amazon Route 53 private hosted zone. Note the following: You can't
-/// disassociate the last Amazon VPC from a private hosted zone. You can't
-/// convert a private hosted zone into a public hosted zone. You can submit
-/// a DisassociateVPCFromHostedZone request using either the account that
-/// created the hosted zone or the account that created the Amazon VPC. Some
-/// services, such as Cloud Map and Amazon Elastic File System (Amazon EFS)
-/// automatically create hosted zones and associate VPCs with the hosted
-/// zones. A service can create a hosted zone using your account or using
-/// its own account. You can disassociate a VPC from a hosted zone only if
-/// the service created the hosted zone using your account. When you run
-/// DisassociateVPCFromHostedZone , if the hosted zone has a value for
-/// OwningAccount , you can use DisassociateVPCFromHostedZone . If the
-/// hosted zone has a value for OwningService , you can't use
-/// DisassociateVPCFromHostedZone . When revoking access, the hosted zone
-/// and the Amazon VPC must belong to the same partition. A partition is a
-/// group of Amazon Web Services Regions. Each Amazon Web Services account
-/// is scoped to one partition. The following are the supported partitions:
-/// aws - Amazon Web Services Regions aws-cn - China Regions aws-us-gov -
-/// Amazon Web Services GovCloud (US) Region For more information, see
-/// Access Management in the Amazon Web Services General Reference .
-pub fn (c: Client) disassociate_vpc_from_hosted_zone(input: DisassociateVPCFromHostedZoneRequest) -> DisassociateVPCFromHostedZoneResponse ! DisassociateVPCFromHostedZoneErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_disassociate_vpc_from_hosted_zone(c.params, input)) ?? e => return Err(DisassociateVPCFromHostedZoneErr.InvalidInput(e))
-  var req = serialize_disassociate_vpc_from_hosted_zone(ep, input, "") ?? e => return Err(DisassociateVPCFromHostedZoneErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(DisassociateVPCFromHostedZoneErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_disassociate_vpc_from_hosted_zone_error(resp))
-  }
-  deserialize_disassociate_vpc_from_hosted_zone(resp) ?? e => Err(DisassociateVPCFromHostedZoneErr.Deserialize(e))
-}
-
-pub fn endpoint_params_enable_hosted_zone_dnssec(base: EndpointParameters, input: EnableHostedZoneDNSSECRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of EnableHostedZoneDNSSEC.
-pub fn serialize_enable_hosted_zone_dnssec(ep: rest.Endpoint, given: EnableHostedZoneDNSSECRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  let input = given with {hosted_zone_id: given.hosted_zone_id.map(fn(v: Str) -> Str { v.split("/").last() ?? v })}
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_hosted_zone_id = match input.hosted_zone_id {
-    Some(v) => v
-    None => return Err("input member HostedZoneId is required")
-  }
-  if label_hosted_zone_id == "" {
-    return Err("input member HostedZoneId must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/2013-04-01/hostedzone/${rest.escape(label_hosted_zone_id, false)}/enable-dnssec"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

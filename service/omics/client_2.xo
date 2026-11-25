@@ -8,6 +8,46 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_create_run_cache_error(resp: http.Response) -> CreateRunCacheErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.AccessDeniedException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.ConflictException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.InternalServerException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "RequestTimeoutException" => match read_error_request_timeout_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.RequestTimeoutException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.ResourceNotFoundException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.ThrottlingException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateRunCacheErr.ValidationException(x)
+      Err(msg) => return CreateRunCacheErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateRunCacheErr.Api(restjson.api_error(resp, body))
+}
+
 /// Creates a run cache to store and reference task outputs from completed
 /// private runs. Specify an Amazon S3 location where Amazon Web Services
 /// HealthOmics saves the cached data. This data must be immediately
@@ -5316,6 +5356,8 @@ pub fn deserialize_get_run(resp: http.Response) -> GetRunResponse ! Str {
       "engineSettings" => out.engine_settings = fv
       "sessionPolicy" => out.session_policy = jsonv.read_str(fv)?
       "outputUriPrefixMode" => out.output_uri_prefix_mode = jsonv.read_str(fv)?
+      "requesterPaysEnabled" => out.requester_pays_enabled = jsonv.read_bool(fv)?
+      "parametersUri" => out.parameters_uri = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -10655,56 +10697,4 @@ pub fn serialize_put_s3_access_policy(ep: rest.Endpoint, input: PutS3AccessPolic
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_put_s3_access_policy(resp: http.Response) -> PutS3AccessPolicyResponse ! Str {
-  var out = PutS3AccessPolicyResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "s3AccessPointArn" => out.s3_access_point_arn = jsonv.read_str(fv)?
-      "storeId" => out.store_id = jsonv.read_str(fv)?
-      "storeType" => out.store_type = StoreType.from(jsonv.read_str(fv)?)
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of PutS3AccessPolicy.
-pub enum PutS3AccessPolicyErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  NotSupportedOperationException(e: NotSupportedOperationException)
-  RequestTimeoutException(e: RequestTimeoutException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: PutS3AccessPolicyErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    NotSupportedOperationException(x) => "NotSupportedOperationException: ${x:?}"
-    RequestTimeoutException(x) => "RequestTimeoutException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
 }

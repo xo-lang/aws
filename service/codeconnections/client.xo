@@ -205,6 +205,9 @@ fn json_of_connection(v: Connection) -> json.Value {
   if let Some(x) = v.host_arn {
     fs.push(("HostArn", json.Value.Str(x)))
   }
+  if let Some(x) = v.provider_endpoint {
+    fs.push(("ProviderEndpoint", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -221,6 +224,7 @@ fn from_json_connection(v: json.Value) -> Connection ! Str {
       "OwnerAccountId" => out.owner_account_id = jsonv.read_str(fv)?
       "ConnectionStatus" => out.connection_status = ConnectionStatus.from(jsonv.read_str(fv)?)
       "HostArn" => out.host_arn = jsonv.read_str(fv)?
+      "ProviderEndpoint" => out.provider_endpoint = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -257,6 +261,9 @@ fn json_of_create_connection_input(v: CreateConnectionInput) -> json.Value {
   if let Some(x) = v.host_arn {
     fs.push(("HostArn", json.Value.Str(x)))
   }
+  if let Some(x) = v.provider_endpoint {
+    fs.push(("ProviderEndpoint", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -271,6 +278,7 @@ fn from_json_create_connection_input(v: json.Value) -> CreateConnectionInput ! S
       "ConnectionName" => out.connection_name = jsonv.read_str(fv)?
       "Tags" => out.tags = from_json_tag_list(fv)?
       "HostArn" => out.host_arn = jsonv.read_str(fv)?
+      "ProviderEndpoint" => out.provider_endpoint = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1137,11 +1145,11 @@ fn from_json_limit_exceeded_exception(v: json.Value) -> LimitExceededException !
 
 fn json_of_list_connections_input(v: ListConnectionsInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.provider_type_filter {
-    fs.push(("ProviderTypeFilter", json.Value.Str(x.value())))
-  }
   if let Some(x) = v.host_arn_filter {
     fs.push(("HostArnFilter", json.Value.Str(x)))
+  }
+  if let Some(x) = v.provider_type_filter {
+    fs.push(("ProviderTypeFilter", json.Value.Str(x.value())))
   }
   if let Some(x) = v.max_results {
     fs.push(("MaxResults", json.Value.Int(x)))
@@ -1159,8 +1167,8 @@ fn from_json_list_connections_input(v: json.Value) -> ListConnectionsInput ! Str
       continue
     }
     match k {
-      "ProviderTypeFilter" => out.provider_type_filter = ProviderType.from(jsonv.read_str(fv)?)
       "HostArnFilter" => out.host_arn_filter = jsonv.read_str(fv)?
+      "ProviderTypeFilter" => out.provider_type_filter = ProviderType.from(jsonv.read_str(fv)?)
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
       "NextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -2915,6 +2923,9 @@ pub fn serialize_create_connection(ep: rest.Endpoint, input: CreateConnectionInp
   if let Some(x) = input.host_arn {
     fs.push(("HostArn", json.Value.Str(x)))
   }
+  if let Some(x) = input.provider_endpoint {
+    fs.push(("ProviderEndpoint", json.Value.Str(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.0"))
   headers.push(("X-Amz-Target", "CodeConnections_20231201.CreateConnection"))
@@ -2951,9 +2962,11 @@ pub fn deserialize_create_connection(resp: http.Response) -> CreateConnectionOut
 
 /// The errors of CreateConnection.
 pub enum CreateConnectionErr {
+  InvalidInputException(e: InvalidInputException)
   LimitExceededException(e: LimitExceededException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ResourceUnavailableException(e: ResourceUnavailableException)
+  UnsupportedProviderTypeException(e: UnsupportedProviderTypeException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
   /// The request was not sent or no response came (after retries).
@@ -2966,9 +2979,11 @@ pub enum CreateConnectionErr {
 
 pub fn (e: CreateConnectionErr) display() -> Str {
   match e {
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
     LimitExceededException(x) => "LimitExceededException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ResourceUnavailableException(x) => "ResourceUnavailableException: ${x:?}"
+    UnsupportedProviderTypeException(x) => "UnsupportedProviderTypeException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
     InvalidInput(msg) => "invalid input: ${msg}"
@@ -2979,6 +2994,10 @@ pub fn (e: CreateConnectionErr) display() -> Str {
 pub fn deserialize_create_connection_error(resp: http.Response) -> CreateConnectionErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return CreateConnectionErr.InvalidInputException(x)
+      Err(msg) => return CreateConnectionErr.Deserialize(msg)
+    }
     "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
       Ok(x) => return CreateConnectionErr.LimitExceededException(x)
       Err(msg) => return CreateConnectionErr.Deserialize(msg)
@@ -2989,6 +3008,10 @@ pub fn deserialize_create_connection_error(resp: http.Response) -> CreateConnect
     }
     "ResourceUnavailableException" => match read_error_resource_unavailable_exception(resp, body) {
       Ok(x) => return CreateConnectionErr.ResourceUnavailableException(x)
+      Err(msg) => return CreateConnectionErr.Deserialize(msg)
+    }
+    "UnsupportedProviderTypeException" => match read_error_unsupported_provider_type_exception(resp, body) {
+      Ok(x) => return CreateConnectionErr.UnsupportedProviderTypeException(x)
       Err(msg) => return CreateConnectionErr.Deserialize(msg)
     }
     _ => {}
@@ -3197,6 +3220,7 @@ pub enum CreateRepositoryLinkErr {
   InvalidInputException(e: InvalidInputException)
   LimitExceededException(e: LimitExceededException)
   ResourceAlreadyExistsException(e: ResourceAlreadyExistsException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
@@ -3216,6 +3240,7 @@ pub fn (e: CreateRepositoryLinkErr) display() -> Str {
     InvalidInputException(x) => "InvalidInputException: ${x:?}"
     LimitExceededException(x) => "LimitExceededException: ${x:?}"
     ResourceAlreadyExistsException(x) => "ResourceAlreadyExistsException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
@@ -3249,6 +3274,10 @@ pub fn deserialize_create_repository_link_error(resp: http.Response) -> CreateRe
     }
     "ResourceAlreadyExistsException" => match read_error_resource_already_exists_exception(resp, body) {
       Ok(x) => return CreateRepositoryLinkErr.ResourceAlreadyExistsException(x)
+      Err(msg) => return CreateRepositoryLinkErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateRepositoryLinkErr.ResourceNotFoundException(x)
       Err(msg) => return CreateRepositoryLinkErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -3356,6 +3385,7 @@ pub enum CreateSyncConfigurationErr {
   InvalidInputException(e: InvalidInputException)
   LimitExceededException(e: LimitExceededException)
   ResourceAlreadyExistsException(e: ResourceAlreadyExistsException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
@@ -3375,6 +3405,7 @@ pub fn (e: CreateSyncConfigurationErr) display() -> Str {
     InvalidInputException(x) => "InvalidInputException: ${x:?}"
     LimitExceededException(x) => "LimitExceededException: ${x:?}"
     ResourceAlreadyExistsException(x) => "ResourceAlreadyExistsException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
@@ -3408,6 +3439,10 @@ pub fn deserialize_create_sync_configuration_error(resp: http.Response) -> Creat
     }
     "ResourceAlreadyExistsException" => match read_error_resource_already_exists_exception(resp, body) {
       Ok(x) => return CreateSyncConfigurationErr.ResourceAlreadyExistsException(x)
+      Err(msg) => return CreateSyncConfigurationErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateSyncConfigurationErr.ResourceNotFoundException(x)
       Err(msg) => return CreateSyncConfigurationErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -4728,11 +4763,11 @@ pub fn serialize_list_connections(ep: rest.Endpoint, input: ListConnectionsInput
   var qs: List[(Str, Str)] = []
   var body = b""
   var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.provider_type_filter {
-    fs.push(("ProviderTypeFilter", json.Value.Str(x.value())))
-  }
   if let Some(x) = input.host_arn_filter {
     fs.push(("HostArnFilter", json.Value.Str(x)))
+  }
+  if let Some(x) = input.provider_type_filter {
+    fs.push(("ProviderTypeFilter", json.Value.Str(x.value())))
   }
   if let Some(x) = input.max_results {
     fs.push(("MaxResults", json.Value.Int(x)))

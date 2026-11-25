@@ -71,6 +71,64 @@ pub struct AgentCardDefinition {
   pub inline_content: Str? = None
 }
 
+pub enum AgentInsightStoreEnablementStatus: Str {
+  Enabled = "ENABLED"
+  Disabled = "DISABLED"
+  Unknown(value: Str)
+}
+
+/// Contains the encryption mode and key configuration used to encrypt new
+/// Agent Insights in an Agent Insight Store.
+pub struct AgentInsightStoreEncryptionConfiguration {
+  /// Specifies the encryption mode used to protect new Agent Insights.
+  pub mode: AgentInsightStoreEncryptionMode? = None
+  /// Specifies the Amazon Resource Name (ARN) of the customer managed AWS KMS
+  /// key that you use to encrypt new Agent Insights. This field is required
+  /// when mode is CUSTOMER_MANAGED_KMS and cannot be specified when mode is
+  /// AWS_OWNED_KMS_KEY .
+  pub kms_key_arn: Str? = None
+}
+
+/// Specifies the encryption mode used to protect new Agent Insights. Valid
+/// values: AWS_OWNED_KMS_KEY Uses an AWS owned key. CUSTOMER_MANAGED_KMS
+/// Uses a customer managed AWS Key Management Service (AWS KMS) key.
+pub enum AgentInsightStoreEncryptionMode: Str {
+  AwsOwnedKmsKey = "AWS_OWNED_KMS_KEY"
+  CustomerManagedKms = "CUSTOMER_MANAGED_KMS"
+  Unknown(value: Str)
+}
+
+pub enum AgentInsightStoreStatus: Str {
+  Active = "ACTIVE"
+  Updating = "UPDATING"
+  Inactive = "INACTIVE"
+  Error = "ERROR"
+  Unknown(value: Str)
+}
+
+/// Contains summary information about an Agent Insight Store.
+pub struct AgentInsightStoreSummary {
+  /// The Amazon Resource Name (ARN) of the Agent Insight Store.
+  pub agent_insight_store_arn: Str? = None
+  /// The unique identifier of the Agent Insight Store.
+  pub agent_insight_store_id: Str? = None
+  /// The current lifecycle status of the Agent Insight Store. Valid values:
+  /// ACTIVE The store is available. UPDATING The service is applying a
+  /// requested change. INACTIVE The store does not accept new Agent Insights.
+  /// ERROR The store requires intervention.
+  pub status: AgentInsightStoreStatus? = None
+  /// Specifies whether the Agent Insight Store accepts new Agent Insights.
+  /// The default value is enabled.
+  pub enablement_status: AgentInsightStoreEnablementStatus? = None
+  /// Specifies the encryption mode and key configuration that encrypts new
+  /// Agent Insights and protects the data at rest.
+  pub encryption_configuration: AgentInsightStoreEncryptionConfiguration? = None
+  /// The date and time when the Agent Insight Store was created.
+  pub created_at: Time? = None
+  /// The date and time when the Agent Insight Store was last updated.
+  pub updated_at: Time? = None
+}
+
 pub enum AgentManagedRuntimeType: Str {
   Python310 = "PYTHON_3_10"
   Python311 = "PYTHON_3_11"
@@ -354,6 +412,17 @@ pub struct AuthorizingClaimMatchValueType {
   pub claim_match_operator: ClaimMatchOperatorType? = None
 }
 
+/// The configuration for an AWS Billing payment connector. Payments made
+/// through an AWS Billing payment connector are charged to the AWS account
+/// that owns the payment manager, and appear on that account's AWS bill as
+/// AWS Marketplace charges.
+pub struct AwsBillingConnectorConfiguration {
+  /// The Amazon Resource Name (ARN) of the AWS Marketplace service-linked
+  /// role in the account that owns the payment manager. The service sets this
+  /// value when it creates the connector.
+  pub iam_role_arn: Str? = None
+}
+
 pub struct BatchPutGatewayRateLimitsRequest {
   /// The unique identifier of the gateway.
   pub gateway_identifier: Str? = None
@@ -541,6 +610,9 @@ pub struct CapacityProviderConfiguration {
   /// The Amazon Resource Name (ARN) of the capacity provider to use for the
   /// AgentCore Runtime.
   pub capacity_provider_arn: Str? = None
+  /// The operating system configuration of the agents that Amazon Bedrock
+  /// AgentCore Runtime runs on the capacity provider.
+  pub operating_system_configuration: OperatingSystemConfiguration? = None
 }
 
 /// The status of a capacity provider. Possible values: CREATING – The
@@ -664,12 +736,12 @@ pub struct Certificate {
   pub location: CertificateLocation? = None
 }
 
-/// A reference to a private certificate authority (CA) certificate that the
-/// gateway uses to verify TLS connections to the target endpoint. Use this
-/// when the target presents a certificate issued by a private CA that is
-/// not trusted by default. Specify exactly one certificate source. The
-/// configuration is a reference only and never contains the certificate
-/// content.
+/// A reference to a private certificate authority (CA) certificate that
+/// AgentCore uses to verify TLS connections to an endpoint, such as a
+/// gateway target or an identity provider, that presents a certificate
+/// issued by a private CA that is not trusted by default. Specify exactly
+/// one certificate source. The configuration is a reference only and never
+/// contains the certificate content.
 pub enum CertificateConfiguration {
   S3(value: S3CertificateConfiguration)
   SecretsManager(value: SecretsManagerCertificateConfiguration)
@@ -1175,6 +1247,18 @@ pub enum ContentLevel: Str {
 pub enum ContentType: Str {
   MemoryRecords = "MEMORY_RECORDS"
   Unknown(value: Str)
+}
+
+/// The CPU configuration for capacity provider instances, including nested
+/// virtualization.
+pub struct CpuOptions {
+  /// Specifies whether your agents can use hardware virtualization on their
+  /// instances. The following values are possible: ENABLED – Your agents
+  /// can use hardware virtualization on their instances. To use this value,
+  /// choose the LINUX_X86_64 operating system and instance types that support
+  /// nested virtualization. DISABLED – Your agents can't use hardware
+  /// virtualization on their instances. This is the default.
+  pub nested_virtualization: NestedVirtualization? = None
 }
 
 pub struct CreateAgentRuntimeEndpointRequest {
@@ -2203,7 +2287,10 @@ pub struct CreatePaymentConnectorRequest {
   pub type_value: PaymentConnectorType? = None
   /// The credential provider configurations for the payment connector. These
   /// configurations specify how the connector authenticates with the payment
-  /// provider.
+  /// provider. For an AwsBilling payment connector, omit this parameter or
+  /// specify an empty list. The service uses the AWS Marketplace
+  /// service-linked role in your account, which must exist before you create
+  /// the connector, and you must have permission to call iam:GetRole on it.
   pub credential_provider_configurations: List[CredentialsProviderConfiguration]? = None
   /// The provision mode for creating the payment connector. If you don't
   /// specify a value, the default is MANUAL . MANUAL - You provide the
@@ -2640,11 +2727,13 @@ pub enum CredentialRotationConfig {
   Unknown(tag: Str)
 }
 
-/// The credential provider configuration for a payment connector. Specifies
-/// the payment provider type and its associated credential provider.
+/// The configuration for a payment connector. Specifies the payment
+/// provider type and either its associated credential provider or, for an
+/// AWS Billing payment connector, its billing configuration.
 pub enum CredentialsProviderConfiguration {
   CoinbaseCdp(value: PaymentCredentialProviderConfiguration)
   StripePrivy(value: PaymentCredentialProviderConfiguration)
+  AwsBilling(value: AwsBillingConnectorConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -2751,6 +2840,14 @@ pub struct CustomJWTAuthorizerConfiguration {
   /// The private endpoint overrides for the custom JWT authorizer
   /// configuration.
   pub private_endpoint_overrides: List[PrivateEndpointOverride]? = None
+  /// The private certificate authority (CA) configurations for the identity
+  /// provider. Use this to have AgentCore Identity trust a private CA when
+  /// establishing TLS connections to identity provider endpoints. You can
+  /// specify only one certificate authority configuration in this list.
+  /// Provide the certificate by reference to an Amazon S3 object or an Amazon
+  /// Web Services Secrets Manager secret. You can use this only together with
+  /// privateEndpoint .
+  pub certificate_configurations: List[CertificateConfiguration]? = None
   /// The configuration that restricts which workloads in the request's
   /// identity chain are allowed to invoke the target, identified by their
   /// hosting environments and workload identities. At launch, this is
@@ -2815,6 +2912,14 @@ pub struct CustomOauth2ProviderConfigInput {
   /// The private endpoint overrides for the custom OAuth2 provider
   /// configuration.
   pub private_endpoint_overrides: List[PrivateEndpointOverride]? = None
+  /// The private certificate authority (CA) configurations for the identity
+  /// provider. Use this to have AgentCore Identity trust a private CA when
+  /// establishing TLS connections to identity provider endpoints. You can
+  /// specify only one certificate authority configuration in this list.
+  /// Provide the certificate by reference to an Amazon S3 object or an Amazon
+  /// Web Services Secrets Manager secret. You can use this only together with
+  /// privateEndpoint .
+  pub certificate_configurations: List[CertificateConfiguration]? = None
 }
 
 /// Output configuration for a custom OAuth2 provider.
@@ -2834,6 +2939,14 @@ pub struct CustomOauth2ProviderConfigOutput {
   /// The private endpoint overrides for the custom OAuth2 provider
   /// configuration.
   pub private_endpoint_overrides: List[PrivateEndpointOverride]? = None
+  /// The private certificate authority (CA) configurations for the identity
+  /// provider. Use this to have AgentCore Identity trust a private CA when
+  /// establishing TLS connections to identity provider endpoints. You can
+  /// specify only one certificate authority configuration in this list.
+  /// Provide the certificate by reference to an Amazon S3 object or an Amazon
+  /// Web Services Secrets Manager secret. You can use this only together with
+  /// privateEndpoint .
+  pub certificate_configurations: List[CertificateConfiguration]? = None
   /// The configuration for private_key_jwt client authentication used by this
   /// OAuth2 credential provider.
   pub private_key_jwt_config: PrivateKeyJwtConfig? = None
@@ -2917,6 +3030,9 @@ pub struct DatasetSummary {
   pub schema_type: DatasetSchemaType? = None
   /// The number of examples in the dataset.
   pub example_count: Int? = None
+  /// The number of examples that have each field, for the DRAFT. Absent when
+  /// the counts are unknown.
+  pub example_count_by_field: ExampleCountByField? = None
   /// The timestamp when the dataset was created.
   pub created_at: Time? = None
   /// The timestamp when the dataset was last updated.
@@ -2929,6 +3045,9 @@ pub struct DatasetVersionSummary {
   pub dataset_version: Str? = None
   /// The number of examples in this version.
   pub example_count: Int? = None
+  /// The number of examples that have each field, for this version. Absent
+  /// when the counts are unknown.
+  pub example_count_by_field: ExampleCountByField? = None
   /// The timestamp when this version was published.
   pub created_at: Time? = None
 }
@@ -3940,6 +4059,45 @@ pub enum EvaluatorType: Str {
   Unknown(value: Str)
 }
 
+/// The number of examples that have each field. An example can have more
+/// than one of these fields, so the counts can add up to more than
+/// exampleCount .
+pub struct ExampleCountByField {
+  /// The number of examples that have turns .
+  pub turns: Int? = None
+  /// The number of examples that have input .
+  pub input: Int? = None
+  /// The number of examples that have actor_profile .
+  pub actor_profile: Int? = None
+}
+
+/// A condition on the number of examples that have the given fields. The
+/// count includes each example that has at least one of the fields in anyOf
+/// .
+pub struct ExampleCountByFieldCondition {
+  /// The fields to count. An example counts if it has at least one of these
+  /// fields. Required.
+  pub any_of: List[ExampleField]? = None
+  /// The minimum count, inclusive.
+  pub min: Int? = None
+  /// The maximum count, inclusive.
+  pub max: Int? = None
+}
+
+/// A field that a dataset example can have.
+pub enum ExampleField: Str {
+  Turns = "TURNS"
+  Input = "INPUT"
+  ActorProfile = "ACTOR_PROFILE"
+  Unknown(value: Str)
+}
+
+/// A condition on the fields of an example.
+pub struct ExampleFieldCondition {
+  /// Matches examples that have at least one of these fields. Required.
+  pub any_of: List[ExampleField]? = None
+}
+
 pub enum ExceptionLevel: Str {
   Debug = "DEBUG"
   Unknown(value: Str)
@@ -4066,6 +4224,7 @@ pub enum FilesystemConfiguration {
   S3FilesAccessPoint(value: S3FilesAccessPointConfiguration)
   EfsAccessPoint(value: EfsAccessPointConfiguration)
   CapacityProviderVolume(value: CapacityProviderVolumeConfiguration)
+  S3BucketMount(value: S3BucketMountConfiguration)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -4183,6 +4342,21 @@ pub struct GatewayInterceptorConfiguration {
   /// The configuration for the input of the interceptor. This field specifies
   /// how the input to the interceptor is constructed
   pub input_configuration: InterceptorInputConfiguration? = None
+  /// Specifies how the interceptor processes streamed target responses. You
+  /// can set this field only on an interceptor that includes the RESPONSE
+  /// interception point. Valid values include: BUFFERED - The gateway
+  /// collects the complete target response and then invokes the interceptor
+  /// once. This is the default. STREAM - The gateway sends a streamed target
+  /// response to the interceptor in batches of events and returns each
+  /// processed batch to the client as soon as it's ready. Non-streamed
+  /// responses still use BUFFERED processing. If you specify STREAM , you
+  /// must also specify responseStreamingConfiguration , and the input
+  /// configuration can't exclude the response body.
+  pub response_interception_mode: ResponseInterceptionMode? = None
+  /// Specifies the batching settings for a streamed response. Specify this
+  /// field only when responseInterceptionMode is STREAM . You must specify it
+  /// for STREAM .
+  pub response_streaming_configuration: ResponseStreamingConfiguration? = None
 }
 
 /// The configuration for a policy engine associated with a gateway. A
@@ -4362,6 +4536,36 @@ pub struct GatewayTarget {
   /// The private certificate authority (CA) configurations for the gateway
   /// target.
   pub certificate_configurations: List[CertificateConfiguration]? = None
+}
+
+pub struct GetAgentInsightStoreRequest {
+  /// Specifies the unique identifier of the Agent Insight Store to retrieve.
+  pub agent_insight_store_id: Str? = None
+}
+
+pub struct GetAgentInsightStoreResponse {
+  /// The Amazon Resource Name (ARN) of the Agent Insight Store.
+  pub agent_insight_store_arn: Str? = None
+  /// The unique identifier of the Agent Insight Store.
+  pub agent_insight_store_id: Str? = None
+  /// The current lifecycle status of the Agent Insight Store. Valid values:
+  /// ACTIVE The store is available. UPDATING The service is applying a
+  /// requested change. INACTIVE The store does not accept new Agent Insights.
+  /// ERROR The store requires intervention.
+  pub status: AgentInsightStoreStatus? = None
+  /// Specifies whether the Agent Insight Store accepts new Agent Insights.
+  /// The default value is enabled.
+  pub enablement_status: AgentInsightStoreEnablementStatus? = None
+  /// Specifies the encryption mode and key configuration that encrypts new
+  /// Agent Insights and protects the data at rest.
+  pub encryption_configuration: AgentInsightStoreEncryptionConfiguration? = None
+  /// The date and time when the Agent Insight Store was created.
+  pub created_at: Time? = None
+  /// The date and time when the Agent Insight Store was last updated.
+  pub updated_at: Time? = None
+  /// Describes the failure that prevented the Agent Insight Store from
+  /// reaching its requested lifecycle status.
+  pub failure_reason: Str? = None
 }
 
 pub struct GetAgentRuntimeEndpointRequest {
@@ -4758,6 +4962,9 @@ pub struct GetDatasetResponse {
   pub kms_key_arn: Str? = None
   /// The number of examples in the DRAFT.
   pub example_count: Int? = None
+  /// The number of examples that have each field, for the resolved version.
+  /// Absent when the counts are unknown.
+  pub example_count_by_field: ExampleCountByField? = None
   /// Presigned Amazon S3 URL to download the consolidated dataset file for
   /// the resolved version. Expires after 5 minutes. Omitted if the file does
   /// not yet exist.
@@ -5751,6 +5958,10 @@ pub struct HarnessAgentCoreRuntimeEnvironment {
   pub agent_runtime_name: Str? = None
   /// The ID of the underlying AgentCore Runtime.
   pub agent_runtime_id: Str? = None
+  /// The lifecycle configuration for the harness's runtime environment. For a
+  /// harness, idleRuntimeSessionTimeout and maxLifetime each accept a value
+  /// between 60 and 28800 seconds (8 hours), and idleRuntimeSessionTimeout
+  /// must be less than or equal to maxLifetime .
   pub lifecycle_configuration: LifecycleConfiguration? = None
   pub network_configuration: NetworkConfiguration? = None
   /// The filesystem configurations for the runtime environment.
@@ -5759,6 +5970,11 @@ pub struct HarnessAgentCoreRuntimeEnvironment {
 
 /// The AgentCore Runtime environment request configuration.
 pub struct HarnessAgentCoreRuntimeEnvironmentRequest {
+  /// The lifecycle configuration for the harness's runtime environment. For a
+  /// harness, idleRuntimeSessionTimeout and maxLifetime each accept a value
+  /// between 60 and 28800 seconds (8 hours), and idleRuntimeSessionTimeout
+  /// must be less than or equal to maxLifetime . Values above 28800 seconds
+  /// are rejected with a ValidationException .
   pub lifecycle_configuration: LifecycleConfiguration? = None
   pub network_configuration: NetworkConfiguration? = None
   /// The filesystem configurations for the runtime environment.
@@ -6061,6 +6277,17 @@ pub struct HarnessRemoteMcpConfig {
   pub url: Str? = None
   /// Custom headers to include when connecting to the remote MCP server.
   pub headers: Map[Str, Str]? = None
+  /// How the harness authenticates to this MCP server. Defaults to no
+  /// authentication.
+  pub outbound_auth: HarnessRemoteMcpOutboundAuth? = None
+}
+
+/// Authentication method for calling a remote MCP server.
+pub enum HarnessRemoteMcpOutboundAuth {
+  AwsIam(value: IamCredentialProvider)
+  None
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// A skill available to the agent.
@@ -6625,6 +6852,9 @@ pub struct LaunchParameters {
   /// The tags to propagate to all Amazon EC2 resources (instances, volumes,
   /// and network interfaces) that the capacity provider creates.
   pub propagated_tags: Map[Str, Str]? = None
+  /// The central processing unit (CPU) options for the instances that the
+  /// capacity provider launches.
+  pub cpu_options: CpuOptions? = None
 }
 
 /// The source of the launch template configuration for a capacity provider.
@@ -6721,6 +6951,40 @@ pub struct LinkedinOauth2ProviderConfigOutput {
   pub oauth_discovery: Oauth2Discovery? = None
   /// The client ID for the LinkedIn OAuth2 provider.
   pub client_id: Str? = None
+}
+
+/// Contains the operating system configuration of agents that run on Linux
+/// instances, such as the privilege mode.
+pub struct LinuxOperatingSystemConfiguration {
+  /// The privilege mode of the agents. If you omit this field, the agents run
+  /// in STANDARD privilege mode. The following values are possible: STANDARD
+  /// – The agent runs without elevated privileges. This is the default.
+  /// PRIVILEGED – The agent runs with elevated privileges on its instance.
+  /// Use this mode for agents that build container images, run containers, or
+  /// install system packages. A session that runs a PRIVILEGED agent runs
+  /// only that agent.
+  pub privilege_mode: PrivilegeMode? = None
+}
+
+pub struct ListAgentInsightStoresRequest {
+  /// If the total number of results is greater than the maxResults value
+  /// provided in the request, enter the token returned in the nextToken field
+  /// in the response in this field to return the next batch of results.
+  pub next_token: Str? = None
+  /// The maximum number of results to return in the response. If the total
+  /// number of results is greater than this value, use the token returned in
+  /// the response in the nextToken field when making another request to
+  /// return the next batch of results.
+  pub max_results: Int? = None
+}
+
+pub struct ListAgentInsightStoresResponse {
+  /// The Agent Insight Store summaries.
+  pub agent_insight_stores: List[AgentInsightStoreSummary]? = None
+  /// If the total number of results is greater than the maxResults value
+  /// provided in the request, use this token when making another request in
+  /// the nextToken field to return the next batch of results.
+  pub next_token: Str? = None
 }
 
 pub struct ListAgentRuntimeEndpointsRequest {
@@ -6943,13 +7207,27 @@ pub struct ListConsentPortalsResponse {
   pub next_token: Str? = None
 }
 
+/// A filter for ListDatasetExamples .
+pub struct ListDatasetExamplesFilter {
+  /// Returns only examples created by this dataset generation. Specify one
+  /// ID.
+  pub generation_ids: List[Str]? = None
+  /// Returns only examples that meet at least one of these conditions.
+  /// Examples last written before example field filtering was available never
+  /// match.
+  pub example_fields: List[ExampleFieldCondition]? = None
+}
+
 pub struct ListDatasetExamplesRequest {
   /// The unique identifier of the dataset.
   pub dataset_id: Str? = None
   /// Version to paginate: "DRAFT" or a version number. Defaults to DRAFT if
-  /// absent. Only used on the first request; for subsequent pages, the
-  /// version is extracted from the pagination token.
+  /// absent on the first request. With a pagination token, the version comes
+  /// from the token: you can omit this member, and a value that differs from
+  /// the token's version is rejected with a ValidationException .
   pub dataset_version: Str? = None
+  /// A filter to apply to the examples.
+  pub filter: ListDatasetExamplesFilter? = None
   /// Maximum number of examples to return per page.
   pub max_results: Int? = None
   /// The token for the next page of results.
@@ -6971,9 +7249,18 @@ pub struct ListDatasetExamplesResponse {
   pub next_token: Str? = None
 }
 
+/// A filter for ListDatasetVersions .
+pub struct ListDatasetVersionsFilter {
+  /// Returns only versions whose example counts meet at least one of these
+  /// conditions.
+  pub example_count_by_field: List[ExampleCountByFieldCondition]? = None
+}
+
 pub struct ListDatasetVersionsRequest {
   /// The unique identifier of the dataset.
   pub dataset_id: Str? = None
+  /// A filter to apply to the dataset versions.
+  pub filter: ListDatasetVersionsFilter? = None
   /// The token for the next page of results.
   pub next_token: Str? = None
   /// The maximum number of versions to return per page.
@@ -6988,7 +7275,16 @@ pub struct ListDatasetVersionsResponse {
   pub next_token: Str? = None
 }
 
+/// A filter for ListDatasets .
+pub struct ListDatasetsFilter {
+  /// Returns only datasets whose DRAFT example counts meet at least one of
+  /// these conditions.
+  pub example_count_by_field: List[ExampleCountByFieldCondition]? = None
+}
+
 pub struct ListDatasetsRequest {
+  /// A filter to apply to the datasets.
+  pub filter: ListDatasetsFilter? = None
   /// The token for the next page of results.
   pub next_token: Str? = None
   /// The maximum number of datasets to return per page.
@@ -8079,6 +8375,12 @@ pub struct NamespaceKeyValidation {
   pub regex_pattern: Str? = None
 }
 
+pub enum NestedVirtualization: Str {
+  Enabled = "ENABLED"
+  Disabled = "DISABLED"
+  Unknown(value: Str)
+}
+
 /// SecurityConfig for the Agent.
 pub struct NetworkConfiguration {
   /// The network mode for the AgentCore Runtime.
@@ -8333,6 +8635,15 @@ pub enum OperatingSystem: Str {
   Unknown(value: Str)
 }
 
+/// Contains the operating system configuration of the agents that AgentCore
+/// Runtime runs on a capacity provider. Specify the member for the
+/// operating system of the capacity provider.
+pub enum OperatingSystemConfiguration {
+  Linux(value: LinuxOperatingSystemConfiguration)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
 /// The configuration that specifies where evaluation results should be
 /// written for monitoring and analysis.
 pub struct OutputConfig {
@@ -8440,6 +8751,7 @@ pub struct PaymentConnectorSummary {
 pub enum PaymentConnectorType: Str {
   CoinbaseCdp = "CoinbaseCDP"
   StripePrivy = "StripePrivy"
+  AwsBilling = "AwsBilling"
   Unknown(value: Str)
 }
 
@@ -8921,6 +9233,14 @@ pub enum PrivateKeySource {
   Unknown(tag: Str)
 }
 
+/// The privilege mode of the agents, either STANDARD (the default) or
+/// PRIVILEGED .
+pub enum PrivilegeMode: Str {
+  Standard = "STANDARD"
+  Privileged = "PRIVILEGED"
+  Unknown(value: Str)
+}
+
 /// The protocol configuration for an agent runtime. This structure defines
 /// how the agent runtime communicates with clients.
 pub struct ProtocolConfiguration {
@@ -9251,6 +9571,23 @@ pub enum ResourceType: Str {
   Unknown(value: Str)
 }
 
+pub enum ResponseInterceptionMode: Str {
+  Buffered = "BUFFERED"
+  Stream = "STREAM"
+  Unknown(value: Str)
+}
+
+/// Specifies the settings that the gateway uses to send a streamed target
+/// response to the interceptor in batches.
+pub struct ResponseStreamingConfiguration {
+  /// Specifies the maximum number of response events that the gateway sends
+  /// to the interceptor in one invocation. The interceptor's output for the
+  /// first batch determines the status code and headers of the response. The
+  /// gateway ignores the status code and headers that the interceptor returns
+  /// for later batches.
+  pub max_events_per_invocation: Int? = None
+}
+
 pub enum RestApiMethod: Str {
   Get = "GET"
   Delete = "DELETE"
@@ -9387,6 +9724,29 @@ pub struct RuntimeTargetConfiguration {
   /// The API schema configuration that defines the structure of the runtime
   /// target's API.
   pub schema: HttpApiSchemaConfiguration? = None
+}
+
+/// Mounts an Amazon S3 bucket in the AgentCore Runtime with Mountpoint for
+/// Amazon S3. Files under the mount path map to objects in the bucket.
+pub struct S3BucketMountConfiguration {
+  /// The name of the S3 bucket to mount. You can specify a general purpose
+  /// bucket or a directory bucket.
+  pub bucket: Str? = None
+  /// The mount path for the S3 bucket inside the AgentCore Runtime. The path
+  /// must be under /mnt with exactly one subdirectory level (for example,
+  /// /mnt/data ).
+  pub mount_path: Str? = None
+  /// The key prefix to mount. Only objects under this prefix are visible at
+  /// the mount path. To give each session its own prefix, include
+  /// {runtimeSessionId} (for example, data/{runtimeSessionId}/ ). If you omit
+  /// the prefix, the whole bucket is mounted.
+  pub prefix: Str? = None
+  /// The AWS account ID that must own the bucket. If you omit it, the bucket
+  /// must be owned by the account that owns the AgentCore Runtime.
+  pub s3_bucket_owner: Str? = None
+  /// The AWS Region of the S3 bucket. If you omit it, the bucket must be in
+  /// the same Region as the AgentCore Runtime.
+  pub s3_bucket_region: Str? = None
 }
 
 /// A reference to a PEM-encoded private CA certificate stored as an Amazon
@@ -10349,6 +10709,45 @@ pub struct UntagResourceRequest {
 pub struct UntagResourceResponse {
 }
 
+pub struct UpdateAgentInsightStoreRequest {
+  /// A unique, case-sensitive identifier to ensure that the API request
+  /// completes no more than one time. If you don't specify this field, a
+  /// value is randomly generated for you. If this token matches a previous
+  /// request, the service ignores the request, but doesn't return an error.
+  /// For more information, see Ensuring idempotency .
+  pub client_token: Str? = None
+  /// Specifies the unique identifier of the Agent Insight Store to update.
+  pub agent_insight_store_id: Str? = None
+  /// Specifies whether the Agent Insight Store accepts new Agent Insights. If
+  /// you don't specify this parameter, the store's current enablement setting
+  /// remains unchanged.
+  pub enablement_status: AgentInsightStoreEnablementStatus? = None
+  /// Specifies the encryption mode and key configuration to use for new Agent
+  /// Insights. If you don't specify this parameter, the store's current
+  /// encryption configuration remains unchanged.
+  pub encryption_configuration: AgentInsightStoreEncryptionConfiguration? = None
+}
+
+pub struct UpdateAgentInsightStoreResponse {
+  /// The Amazon Resource Name (ARN) of the updated Agent Insight Store.
+  pub agent_insight_store_arn: Str? = None
+  /// The unique identifier of the updated Agent Insight Store.
+  pub agent_insight_store_id: Str? = None
+  /// The lifecycle status of the Agent Insight Store after the update
+  /// request. Valid values: ACTIVE The store is available. UPDATING The
+  /// service is applying a requested change. INACTIVE The store does not
+  /// accept new Agent Insights. ERROR The store requires intervention.
+  pub status: AgentInsightStoreStatus? = None
+  /// Specifies whether the Agent Insight Store accepts new Agent Insights
+  /// after the update request.
+  pub enablement_status: AgentInsightStoreEnablementStatus? = None
+  /// The date and time when the Agent Insight Store was last updated.
+  pub updated_at: Time? = None
+  /// Describes the failure that prevented the Agent Insight Store from
+  /// reaching its requested lifecycle status.
+  pub failure_reason: Str? = None
+}
+
 pub struct UpdateAgentRuntimeEndpointRequest {
   /// The unique identifier of the AgentCore Runtime associated with the
   /// endpoint.
@@ -10448,397 +10847,4 @@ pub struct UpdateAgentRuntimeResponse {
   pub last_updated_at: Time? = None
   /// The current status of the updated AgentCore Runtime.
   pub status: AgentRuntimeStatus? = None
-}
-
-pub struct UpdateApiKeyCredentialProviderRequest {
-  /// The name of the API key credential provider to update.
-  pub name: Str? = None
-  /// The new API key to use for authentication. This value replaces the
-  /// existing API key and is encrypted and stored securely.
-  pub api_key: Str? = None
-  /// A reference to the Amazon Web Services Secrets Manager secret that
-  /// stores the API key. This includes the secret ID and the JSON key used to
-  /// extract the API key value from the secret. Required when
-  /// apiKeySecretSource is set to EXTERNAL .
-  pub api_key_secret_config: SecretReference? = None
-  /// The source type of the API key secret. Use MANAGED if the secret is
-  /// managed by the service, or EXTERNAL if you manage the secret yourself in
-  /// Amazon Web Services Secrets Manager.
-  pub api_key_secret_source: SecretSourceType? = None
-}
-
-pub struct UpdateApiKeyCredentialProviderResponse {
-  /// The Amazon Resource Name (ARN) of the API key secret in Amazon Web
-  /// Services Secrets Manager.
-  pub api_key_secret_arn: SecretShape? = None
-  /// The JSON key used to extract the API key value from the Amazon Web
-  /// Services Secrets Manager secret.
-  pub api_key_secret_json_key: Str? = None
-  /// The source type of the API key secret. Either MANAGED if the secret is
-  /// managed by the service, or EXTERNAL if managed by the user in Amazon Web
-  /// Services Secrets Manager.
-  pub api_key_secret_source: SecretSourceType? = None
-  /// The name of the API key credential provider.
-  pub name: Str? = None
-  /// The Amazon Resource Name (ARN) of the API key credential provider.
-  pub credential_provider_arn: Str? = None
-  /// The timestamp when the API key credential provider was created.
-  pub created_time: Time? = None
-  /// The timestamp when the API key credential provider was last updated.
-  pub last_updated_time: Time? = None
-}
-
-pub struct UpdateCapacityProviderInput {
-  /// The unique identifier of the capacity provider to update.
-  pub capacity_provider_id: Str? = None
-  /// The updated description of the capacity provider.
-  pub description: UpdatedDescription? = None
-  /// A unique, case-sensitive identifier to ensure that the API request
-  /// completes no more than one time. If you don't specify this field, a
-  /// value is randomly generated for you. If this token matches a previous
-  /// request, the service ignores the request, but doesn't return an error.
-  /// For more information, see Ensuring idempotency .
-  pub client_token: Str? = None
-}
-
-pub struct UpdateCapacityProviderOutput {
-  /// The unique identifier of the capacity provider.
-  pub capacity_provider_id: Str? = None
-  /// The Amazon Resource Name (ARN) of the capacity provider.
-  pub capacity_provider_arn: Str? = None
-  /// The name of the capacity provider.
-  pub name: Str? = None
-  /// The current status of the capacity provider. For possible values, see
-  /// CapacityProviderStatus .
-  pub status: CapacityProviderStatus? = None
-  /// The timestamp when the capacity provider was created.
-  pub created_at: Time? = None
-  /// The timestamp when the capacity provider was last updated.
-  pub last_updated_at: Time? = None
-}
-
-pub struct UpdateConfigurationBundleRequest {
-  /// A unique, case-sensitive identifier to ensure that the API request
-  /// completes no more than one time. If you don't specify this field, a
-  /// value is randomly generated for you. If this token matches a previous
-  /// request, the service ignores the request, but doesn't return an error.
-  /// For more information, see Ensuring idempotency .
-  pub client_token: Str? = None
-  /// The unique identifier of the configuration bundle to update.
-  pub bundle_id: Str? = None
-  /// The updated name for the configuration bundle.
-  pub bundle_name: Str? = None
-  /// The updated description for the configuration bundle.
-  pub description: Str? = None
-  /// The updated component configurations. Creates a new version of the
-  /// bundle.
-  pub components: Map[Str, ComponentConfiguration]? = None
-  /// A list of parent version identifiers for lineage tracking. Regular
-  /// commits have a single parent. Merge commits have two parents: the target
-  /// branch parent and the source branch parent. If the branch already
-  /// exists, the first parent must be the latest version on that branch.
-  pub parent_version_ids: List[Str]? = None
-  /// The branch name for this version. If not specified, inherits the
-  /// parent's branch or defaults to mainline .
-  pub branch_name: Str? = None
-  /// A commit message describing the changes in this version.
-  pub commit_message: Str? = None
-  /// The source that created this version, including the source name and
-  /// optional ARN.
-  pub created_by: VersionCreatedBySource? = None
-  /// Optional KMS key ARN for encrypting component configurations. If
-  /// provided, components will be encrypted with this key. If the bundle
-  /// already has a KMS key, this rotates to the new key.
-  pub kms_key_arn: Str? = None
-}
-
-pub struct UpdateConfigurationBundleResponse {
-  /// The Amazon Resource Name (ARN) of the updated configuration bundle.
-  pub bundle_arn: Str? = None
-  /// The unique identifier of the updated configuration bundle.
-  pub bundle_id: Str? = None
-  /// The new version identifier created by this update.
-  pub version_id: Str? = None
-  /// The timestamp when the configuration bundle was updated.
-  pub updated_at: Time? = None
-}
-
-pub struct UpdateConsentPortalRequest {
-  /// The identifier of the consent portal. You can specify either the consent
-  /// portal ID or its Amazon Resource Name (ARN).
-  pub consent_portal_identifier: Str? = None
-  /// The Amazon Resource Name (ARN) of the IAM role that the consent portal
-  /// assumes to access the resources defined in its sources.
-  pub execution_role_arn: Str? = None
-  /// The identity provider configuration that the consent portal uses to
-  /// authenticate end users.
-  pub idp_config: ConsentPortalIdpConfig? = None
-  /// The description of the consent portal.
-  pub description: Str? = None
-}
-
-pub struct UpdateConsentPortalResponse {
-  /// The resources served by the consent portal.
-  pub sources: List[ConsentPortalSource]? = None
-  /// The Amazon Resource Name (ARN) of the consent portal.
-  pub consent_portal_arn: Str? = None
-  /// The unique identifier of the consent portal.
-  pub consent_portal_id: Str? = None
-  /// The timestamp for when the consent portal was created.
-  pub created_at: Time? = None
-  /// The description of the consent portal.
-  pub description: Str? = None
-  /// The Amazon Resource Name (ARN) of the IAM role that the consent portal
-  /// assumes to access the resources defined in its sources.
-  pub execution_role_arn: Str? = None
-  /// The identity provider configuration that the consent portal uses to
-  /// authenticate end users.
-  pub idp_config: ConsentPortalIdpConfig? = None
-  /// The name of the consent portal.
-  pub name: Str? = None
-  /// The URL used to access the consent portal.
-  pub portal_url: Str? = None
-  /// The current status of the consent portal.
-  pub status: ConsentPortalStatus? = None
-  /// A message that provides additional information about the current status
-  /// of the consent portal.
-  pub status_reason: Str? = None
-  /// The timestamp for when the consent portal was last updated.
-  pub updated_at: Time? = None
-}
-
-pub struct UpdateDatasetExamplesRequest {
-  /// The unique identifier of the dataset.
-  pub dataset_id: Str? = None
-  /// A unique, case-sensitive identifier to ensure that the API request
-  /// completes no more than one time. If you don't specify this field, a
-  /// value is randomly generated for you. If this token matches a previous
-  /// request, the service ignores the request, but doesn't return an error.
-  /// For more information, see Ensuring idempotency .
-  pub client_token: Str? = None
-  /// Examples to update. Each element is a JSON object containing a required
-  /// exampleId field identifying the existing example, plus the replacement
-  /// fields. Maximum 1000 examples per call.
-  pub examples: List[json.Value]? = None
-}
-
-pub struct UpdateDatasetExamplesResponse {
-  /// The Amazon Resource Name (ARN) of the dataset.
-  pub dataset_arn: Str? = None
-  /// The unique identifier of the dataset.
-  pub dataset_id: Str? = None
-  /// The current status of the dataset.
-  pub status: DatasetStatus? = None
-  /// The number of examples updated.
-  pub updated_count: Int? = None
-  /// The timestamp when the examples were updated.
-  pub updated_at: Time? = None
-}
-
-pub struct UpdateDatasetRequest {
-  /// The unique identifier of the dataset to update.
-  pub dataset_id: Str? = None
-  /// A unique, case-sensitive identifier to ensure that the API request
-  /// completes no more than one time. If you don't specify this field, a
-  /// value is randomly generated for you. If this token matches a previous
-  /// request, the service ignores the request, but doesn't return an error.
-  /// For more information, see Ensuring idempotency .
-  pub client_token: Str? = None
-  /// The updated description for the dataset.
-  pub description: Str? = None
-}
-
-pub struct UpdateDatasetResponse {
-  /// The Amazon Resource Name (ARN) of the updated dataset.
-  pub dataset_arn: Str? = None
-  /// The unique identifier of the updated dataset.
-  pub dataset_id: Str? = None
-  /// The timestamp when the dataset was updated.
-  pub updated_at: Time? = None
-}
-
-pub struct UpdateEvaluatorRequest {
-  /// A unique, case-sensitive identifier to ensure that the API request
-  /// completes no more than one time. If you don't specify this field, a
-  /// value is randomly generated for you. If this token matches a previous
-  /// request, the service ignores the request, but doesn't return an error.
-  /// For more information, see Ensuring idempotency .
-  pub client_token: Str? = None
-  /// The unique identifier of the evaluator to update.
-  pub evaluator_id: Str? = None
-  /// The updated description of the evaluator.
-  pub description: Str? = None
-  /// The updated configuration for the evaluator. Specify either
-  /// LLM-as-a-Judge settings with instructions, rating scale, and model
-  /// configuration, or code-based settings with a customer-managed Lambda
-  /// function.
-  pub evaluator_config: EvaluatorConfig? = None
-  /// The updated evaluation level ( TOOL_CALL , TRACE , or SESSION ) that
-  /// determines the scope of evaluation.
-  pub level: EvaluatorLevel? = None
-  /// The Amazon Resource Name (ARN) of a customer managed KMS key to use for
-  /// encrypting sensitive evaluator data. Specify a new key ARN to rotate the
-  /// encryption key, or specify a key ARN to add encryption to an evaluator
-  /// that was previously created without one. When you rotate to a new key,
-  /// the service decrypts the existing data with the old key and re-encrypts
-  /// it with the new key. Only symmetric encryption KMS keys are supported.
-  /// For more information, see Encryption at rest for AgentCore Evaluations .
-  pub kms_key_arn: Str? = None
-}
-
-pub struct UpdateEvaluatorResponse {
-  /// The Amazon Resource Name (ARN) of the updated evaluator.
-  pub evaluator_arn: Str? = None
-  /// The unique identifier of the updated evaluator.
-  pub evaluator_id: Str? = None
-  /// The timestamp when the evaluator was last updated.
-  pub updated_at: Time? = None
-  /// The status of the evaluator update operation.
-  pub status: EvaluatorStatus? = None
-}
-
-pub struct UpdateGatewayRateLimitRequest {
-  /// The unique identifier of the gateway.
-  pub gateway_identifier: Str? = None
-  /// The unique identifier of the rate limit to update.
-  pub rate_limit_id: Str? = None
-  /// The updated human-readable description for this rate limit.
-  pub description: Str? = None
-  /// The updated rule entries. The dimension keys are immutable after
-  /// creation and cannot be changed.
-  pub entries: List[LimitEntry]? = None
-}
-
-/// Shared fields for GatewayRateLimit responses.
-pub struct UpdateGatewayRateLimitResponse {
-  /// The unique identifier of the rate limit.
-  pub rate_limit_id: Str? = None
-  /// The unique identifier of the gateway.
-  pub gateway_identifier: Str? = None
-  /// The human-readable description of the rate limit.
-  pub description: Str? = None
-  /// The ordered list of dimension key names that define the scope of this
-  /// rate limit.
-  pub dimension_keys: List[Str]? = None
-  /// The list of rule entries that map dimension values to rate
-  /// configurations.
-  pub entries: List[LimitEntry]? = None
-  /// The current status of the rate limit.
-  pub status: GatewayRateLimitStatus? = None
-  /// The timestamp when the rate limit was created.
-  pub created_at: Time? = None
-  /// The timestamp when the rate limit was last updated.
-  pub updated_at: Time? = None
-}
-
-pub struct UpdateGatewayRequest {
-  /// The identifier of the gateway to update.
-  pub gateway_identifier: Str? = None
-  /// The name of the gateway. This name must be the same as the one when the
-  /// gateway was created.
-  pub name: Str? = None
-  /// The updated description for the gateway.
-  pub description: Str? = None
-  /// The updated IAM role ARN that provides permissions for the gateway.
-  pub role_arn: Str? = None
-  /// The updated protocol type for the gateway.
-  pub protocol_type: GatewayProtocolType? = None
-  pub protocol_configuration: GatewayProtocolConfiguration? = None
-  /// The updated authorizer type for the gateway.
-  pub authorizer_type: AuthorizerType? = None
-  /// The updated authorizer configuration for the gateway.
-  pub authorizer_configuration: AuthorizerConfiguration? = None
-  /// The updated ARN of the KMS key used to encrypt the gateway.
-  pub kms_key_arn: Str? = None
-  /// The updated custom transformation configuration for the gateway. This
-  /// configuration defines how the gateway transforms requests and responses.
-  pub custom_transform_configuration: CustomTransformConfiguration? = None
-  /// The updated interceptor configurations for the gateway.
-  pub interceptor_configurations: List[GatewayInterceptorConfiguration]? = None
-  /// The updated policy engine configuration for the gateway. A policy engine
-  /// is a collection of policies that evaluates and authorizes agent tool
-  /// calls. When associated with a gateway, the policy engine intercepts all
-  /// agent requests and determines whether to allow or deny each action based
-  /// on the defined policies.
-  pub policy_engine_configuration: GatewayPolicyEngineConfiguration? = None
-  /// The level of detail in error messages returned when invoking the
-  /// gateway. If the value is DEBUG , granular exception messages are
-  /// returned to help a user debug the gateway. If the value is omitted, a
-  /// generic error message is returned to the end user.
-  pub exception_level: ExceptionLevel? = None
-  /// The updated Amazon Web Services WAF configuration for the gateway.
-  pub waf_configuration: WafConfiguration? = None
-  /// The updated public domain names that the gateway advertises in its OAuth
-  /// discovery URLs instead of the inbound Host header. Specify this when
-  /// clients reach the gateway through your own proxy or custom domain.
-  pub domain_override: DomainOverride? = None
-}
-
-pub struct UpdateGatewayResponse {
-  /// The Amazon Resource Name (ARN) of the updated gateway.
-  pub gateway_arn: Str? = None
-  /// The unique identifier of the updated gateway.
-  pub gateway_id: Str? = None
-  /// An endpoint for invoking the updated gateway.
-  pub gateway_url: Str? = None
-  /// The timestamp when the gateway was created.
-  pub created_at: Time? = None
-  /// The timestamp when the gateway was last updated.
-  pub updated_at: Time? = None
-  /// The current status of the updated gateway.
-  pub status: GatewayStatus? = None
-  /// The reasons for the current status of the updated gateway.
-  pub status_reasons: List[Str]? = None
-  /// The name of the gateway.
-  pub name: Str? = None
-  /// The updated description of the gateway.
-  pub description: Str? = None
-  /// The updated IAM role ARN that provides permissions for the gateway.
-  pub role_arn: Str? = None
-  /// The updated protocol type for the gateway.
-  pub protocol_type: GatewayProtocolType? = None
-  pub protocol_configuration: GatewayProtocolConfiguration? = None
-  /// The updated authorizer type for the gateway.
-  pub authorizer_type: AuthorizerType? = None
-  /// The updated authorizer configuration for the gateway.
-  pub authorizer_configuration: AuthorizerConfiguration? = None
-  /// The updated ARN of the KMS key used to encrypt the gateway.
-  pub kms_key_arn: Str? = None
-  /// The custom transformation configuration for the gateway. This
-  /// configuration defines how the gateway transforms requests and responses.
-  pub custom_transform_configuration: CustomTransformConfiguration? = None
-  /// The updated interceptor configurations for the gateway.
-  pub interceptor_configurations: List[GatewayInterceptorConfiguration]? = None
-  /// The updated policy engine configuration for the gateway.
-  pub policy_engine_configuration: GatewayPolicyEngineConfiguration? = None
-  /// The workload identity details for the updated gateway.
-  pub workload_identity_details: WorkloadIdentityDetails? = None
-  /// The level of detail in error messages returned when invoking the
-  /// gateway. If the value is DEBUG , granular exception messages are
-  /// returned to help a user debug the gateway. If the value is omitted, a
-  /// generic error message is returned to the end user.
-  pub exception_level: ExceptionLevel? = None
-  /// The Amazon Resource Name (ARN) of the Amazon Web Services WAF web ACL
-  /// associated with the gateway.
-  pub web_acl_arn: Str? = None
-  /// The Amazon Web Services WAF configuration for the gateway.
-  pub waf_configuration: WafConfiguration? = None
-  /// The public domain names that the gateway advertises in its OAuth
-  /// discovery URLs instead of the inbound Host header.
-  pub domain_override: DomainOverride? = None
-}
-
-pub struct UpdateGatewayRuleRequest {
-  /// The identifier of the gateway containing the rule.
-  pub gateway_identifier: Str? = None
-  /// The unique identifier of the rule to update.
-  pub rule_id: Str? = None
-  /// The updated priority of the rule.
-  pub priority: Int? = None
-  /// The updated conditions for the rule.
-  pub conditions: List[Condition]? = None
-  /// The updated actions for the rule.
-  pub actions: List[Action]? = None
-  /// The updated description of the rule.
-  pub description: Str? = None
 }

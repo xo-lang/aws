@@ -343,6 +343,7 @@ fn from_json_cspm_health_check(v: json.Value) -> CspmHealthCheck ! Str {
 fn json_of_cspm_provider_configuration(v: CspmProviderConfiguration) -> json.Value {
   match v {
     Azure(x) => json.Value.Object([("Azure", json_of_azure_provider_configuration(x))])
+    Gcp(x) => json.Value.Object([("GCP", json_of_gcp_provider_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -354,6 +355,7 @@ fn from_json_cspm_provider_configuration(v: json.Value) -> CspmProviderConfigura
     }
     return match k {
       "Azure" => Ok(CspmProviderConfiguration.Azure(from_json_azure_provider_configuration(fv)?))
+      "GCP" => Ok(CspmProviderConfiguration.Gcp(from_json_gcp_provider_configuration(fv)?))
       _ => Ok(CspmProviderConfiguration.Unknown(k))
     }
   }
@@ -363,6 +365,7 @@ fn from_json_cspm_provider_configuration(v: json.Value) -> CspmProviderConfigura
 fn json_of_cspm_provider_detail(v: CspmProviderDetail) -> json.Value {
   match v {
     Azure(x) => json.Value.Object([("Azure", json_of_azure_detail(x))])
+    Gcp(x) => json.Value.Object([("GCP", json_of_gcp_detail(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -374,6 +377,7 @@ fn from_json_cspm_provider_detail(v: json.Value) -> CspmProviderDetail ! Str {
     }
     return match k {
       "Azure" => Ok(CspmProviderDetail.Azure(from_json_azure_detail(fv)?))
+      "GCP" => Ok(CspmProviderDetail.Gcp(from_json_gcp_detail(fv)?))
       _ => Ok(CspmProviderDetail.Unknown(k))
     }
   }
@@ -413,6 +417,7 @@ fn from_json_cspm_provider_summary(v: json.Value) -> CspmProviderSummary ! Str {
 fn json_of_cspm_provider_update_configuration(v: CspmProviderUpdateConfiguration) -> json.Value {
   match v {
     Azure(x) => json.Value.Object([("Azure", json_of_azure_update_configuration(x))])
+    Gcp(x) => json.Value.Object([("GCP", json_of_gcp_update_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -424,6 +429,7 @@ fn from_json_cspm_provider_update_configuration(v: json.Value) -> CspmProviderUp
     }
     return match k {
       "Azure" => Ok(CspmProviderUpdateConfiguration.Azure(from_json_azure_update_configuration(fv)?))
+      "GCP" => Ok(CspmProviderUpdateConfiguration.Gcp(from_json_gcp_update_configuration(fv)?))
       _ => Ok(CspmProviderUpdateConfiguration.Unknown(k))
     }
   }
@@ -3178,6 +3184,134 @@ fn from_json_free_trial_status_value_list(v: json.Value) -> List[FreeTrialStatus
       continue
     }
     out.push(FreeTrialStatusValue.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_detail(v: GcpDetail) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.aws_config_connector_arn {
+    fs.push(("AWSConfigConnectorArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.scope_configuration {
+    fs.push(("ScopeConfiguration", json_of_gcp_scope_configuration(x)))
+  }
+  if let Some(x) = v.gcp_regions {
+    fs.push(("GCPRegions", json_of_gcp_region_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_detail(v: json.Value) -> GcpDetail ! Str {
+  var out = GcpDetail{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AWSConfigConnectorArn" => out.aws_config_connector_arn = jsonv.read_str(fv)?
+      "ScopeConfiguration" => out.scope_configuration = from_json_gcp_scope_configuration(fv)?
+      "GCPRegions" => out.gcp_regions = from_json_gcp_region_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_provider_configuration(v: GcpProviderConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.aws_config_connector_arn {
+    fs.push(("AWSConfigConnectorArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.scope_configuration {
+    fs.push(("ScopeConfiguration", json_of_gcp_scope_configuration(x)))
+  }
+  if let Some(x) = v.gcp_regions {
+    fs.push(("GCPRegions", json_of_gcp_region_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_provider_configuration(v: json.Value) -> GcpProviderConfiguration ! Str {
+  var out = GcpProviderConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AWSConfigConnectorArn" => out.aws_config_connector_arn = jsonv.read_str(fv)?
+      "ScopeConfiguration" => out.scope_configuration = from_json_gcp_scope_configuration(fv)?
+      "GCPRegions" => out.gcp_regions = from_json_gcp_region_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_region_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_gcp_region_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_scope_configuration(v: GcpScopeConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.scope_type {
+    fs.push(("ScopeType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.scope_values {
+    fs.push(("ScopeValues", json_of_scope_value_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_scope_configuration(v: json.Value) -> GcpScopeConfiguration ! Str {
+  var out = GcpScopeConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ScopeType" => out.scope_type = GcpScopeType.from(jsonv.read_str(fv)?)
+      "ScopeValues" => out.scope_values = from_json_scope_value_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_update_configuration(v: GcpUpdateConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.scope_configuration {
+    fs.push(("ScopeConfiguration", json_of_gcp_scope_configuration(x)))
+  }
+  if let Some(x) = v.gcp_regions {
+    fs.push(("GCPRegions", json_of_gcp_region_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_update_configuration(v: json.Value) -> GcpUpdateConfiguration ! Str {
+  var out = GcpUpdateConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ScopeConfiguration" => out.scope_configuration = from_json_gcp_scope_configuration(fv)?
+      "GCPRegions" => out.gcp_regions = from_json_gcp_region_list(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -8883,6 +9017,7 @@ fn json_of_provider_configuration(v: ProviderConfiguration) -> json.Value {
     JiraCloud(x) => json.Value.Object([("JiraCloud", json_of_jira_cloud_provider_configuration(x))])
     ServiceNow(x) => json.Value.Object([("ServiceNow", json_of_service_now_provider_configuration(x))])
     Azure(x) => json.Value.Object([("Azure", json_of_azure_provider_configuration(x))])
+    Gcp(x) => json.Value.Object([("GCP", json_of_gcp_provider_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -8896,6 +9031,7 @@ fn from_json_provider_configuration(v: json.Value) -> ProviderConfiguration ! St
       "JiraCloud" => Ok(ProviderConfiguration.JiraCloud(from_json_jira_cloud_provider_configuration(fv)?))
       "ServiceNow" => Ok(ProviderConfiguration.ServiceNow(from_json_service_now_provider_configuration(fv)?))
       "Azure" => Ok(ProviderConfiguration.Azure(from_json_azure_provider_configuration(fv)?))
+      "GCP" => Ok(ProviderConfiguration.Gcp(from_json_gcp_provider_configuration(fv)?))
       _ => Ok(ProviderConfiguration.Unknown(k))
     }
   }
@@ -8907,6 +9043,7 @@ fn json_of_provider_detail(v: ProviderDetail) -> json.Value {
     JiraCloud(x) => json.Value.Object([("JiraCloud", json_of_jira_cloud_detail(x))])
     ServiceNow(x) => json.Value.Object([("ServiceNow", json_of_service_now_detail(x))])
     Azure(x) => json.Value.Object([("Azure", json_of_azure_detail(x))])
+    Gcp(x) => json.Value.Object([("GCP", json_of_gcp_detail(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -8920,6 +9057,7 @@ fn from_json_provider_detail(v: json.Value) -> ProviderDetail ! Str {
       "JiraCloud" => Ok(ProviderDetail.JiraCloud(from_json_jira_cloud_detail(fv)?))
       "ServiceNow" => Ok(ProviderDetail.ServiceNow(from_json_service_now_detail(fv)?))
       "Azure" => Ok(ProviderDetail.Azure(from_json_azure_detail(fv)?))
+      "GCP" => Ok(ProviderDetail.Gcp(from_json_gcp_detail(fv)?))
       _ => Ok(ProviderDetail.Unknown(k))
     }
   }
@@ -8961,6 +9099,7 @@ fn json_of_provider_update_configuration(v: ProviderUpdateConfiguration) -> json
     JiraCloud(x) => json.Value.Object([("JiraCloud", json_of_jira_cloud_update_configuration(x))])
     ServiceNow(x) => json.Value.Object([("ServiceNow", json_of_service_now_update_configuration(x))])
     Azure(x) => json.Value.Object([("Azure", json_of_azure_update_configuration(x))])
+    Gcp(x) => json.Value.Object([("GCP", json_of_gcp_update_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -8974,6 +9113,7 @@ fn from_json_provider_update_configuration(v: json.Value) -> ProviderUpdateConfi
       "JiraCloud" => Ok(ProviderUpdateConfiguration.JiraCloud(from_json_jira_cloud_update_configuration(fv)?))
       "ServiceNow" => Ok(ProviderUpdateConfiguration.ServiceNow(from_json_service_now_update_configuration(fv)?))
       "Azure" => Ok(ProviderUpdateConfiguration.Azure(from_json_azure_update_configuration(fv)?))
+      "GCP" => Ok(ProviderUpdateConfiguration.Gcp(from_json_gcp_update_configuration(fv)?))
       _ => Ok(ProviderUpdateConfiguration.Unknown(k))
     }
   }
@@ -10381,6 +10521,9 @@ fn json_of_resource_details(v: ResourceDetails) -> json.Value {
   if let Some(x) = v.azure_resource {
     fs.push(("AzureResource", x))
   }
+  if let Some(x) = v.gcp_resource {
+    fs.push(("GcpResource", x))
+  }
   json.Value.Object(fs)
 }
 
@@ -10492,6 +10635,7 @@ fn from_json_resource_details(v: json.Value) -> ResourceDetails ! Str {
       "AwsEc2ClientVpnEndpoint" => out.aws_ec2_client_vpn_endpoint = from_json_aws_ec2_client_vpn_endpoint_details(fv)?
       "CodeRepository" => out.code_repository = from_json_code_repository_details(fv)?
       "AzureResource" => out.azure_resource = fv
+      "GcpResource" => out.gcp_resource = fv
       _ => {}
     }
   }
@@ -14477,188 +14621,4 @@ fn from_json_string_list(v: json.Value) -> List[Str] ! Str {
     out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
-}
-
-fn json_of_string_list_configuration_options(v: StringListConfigurationOptions) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.default_value {
-    fs.push(("DefaultValue", json_of_string_list(x)))
-  }
-  if let Some(x) = v.re2_expression {
-    fs.push(("Re2Expression", json.Value.Str(x)))
-  }
-  if let Some(x) = v.max_items {
-    fs.push(("MaxItems", json.Value.Int(x)))
-  }
-  if let Some(x) = v.expression_description {
-    fs.push(("ExpressionDescription", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_string_list_configuration_options(v: json.Value) -> StringListConfigurationOptions ! Str {
-  var out = StringListConfigurationOptions{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "DefaultValue" => out.default_value = from_json_string_list(fv)?
-      "Re2Expression" => out.re2_expression = jsonv.read_str(fv)?
-      "MaxItems" => out.max_items = jsonv.read_int(fv)?
-      "ExpressionDescription" => out.expression_description = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_tag_key_list(v: List[Str]) -> json.Value {
-  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
-}
-
-fn from_json_tag_key_list(v: json.Value) -> List[Str] ! Str {
-  var out: List[Str] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(jsonv.read_str(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_tag_map(v: Map[Str, Str]) -> json.Value {
-  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
-}
-
-fn from_json_tag_map(v: json.Value) -> Map[Str, Str] ! Str {
-  var out: Map[Str, Str] = {}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      // a dense map skips nulls
-      continue
-    }
-    out.put(k, jsonv.read_str(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_tag_resource_request(v: TagResourceRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.resource_arn {
-    fs.push(("ResourceArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.tags {
-    fs.push(("Tags", json_of_tag_map(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_tag_resource_request(v: json.Value) -> TagResourceRequest ! Str {
-  var out = TagResourceRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ResourceArn" => out.resource_arn = jsonv.read_str(fv)?
-      "Tags" => out.tags = from_json_tag_map(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_tag_resource_response(v: TagResourceResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  json.Value.Object(fs)
-}
-
-fn from_json_tag_resource_response(v: json.Value) -> TagResourceResponse ! Str {
-  var out = TagResourceResponse{}
-  let _ = jsonv.fields(v)?
-  Ok(out)
-}
-
-fn json_of_target_value(v: Target) -> json.Value {
-  match v {
-    AccountId(x) => json.Value.Object([("AccountId", json.Value.Str(x))])
-    OrganizationalUnitId(x) => json.Value.Object([("OrganizationalUnitId", json.Value.Str(x))])
-    RootId(x) => json.Value.Object([("RootId", json.Value.Str(x))])
-    Unknown(_) => json.Value.Object([])
-  }
-}
-
-fn from_json_target_value(v: json.Value) -> Target ! Str {
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null || k == "__type" {
-      continue
-    }
-    return match k {
-      "AccountId" => Ok(Target.AccountId(jsonv.read_str(fv)?))
-      "OrganizationalUnitId" => Ok(Target.OrganizationalUnitId(jsonv.read_str(fv)?))
-      "RootId" => Ok(Target.RootId(jsonv.read_str(fv)?))
-      _ => Ok(Target.Unknown(k))
-    }
-  }
-  Err("Target: no member set")
-}
-
-fn json_of_threat(v: Threat) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.severity {
-    fs.push(("Severity", json.Value.Str(x)))
-  }
-  if let Some(x) = v.item_count {
-    fs.push(("ItemCount", json.Value.Int(x)))
-  }
-  if let Some(x) = v.file_paths {
-    fs.push(("FilePaths", json_of_file_path_list(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_threat(v: json.Value) -> Threat ! Str {
-  var out = Threat{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Name" => out.name = jsonv.read_str(fv)?
-      "Severity" => out.severity = jsonv.read_str(fv)?
-      "ItemCount" => out.item_count = jsonv.read_int(fv)?
-      "FilePaths" => out.file_paths = from_json_file_path_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_threat_intel_indicator(v: ThreatIntelIndicator) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.type_value {
-    fs.push(("Type", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.value {
-    fs.push(("Value", json.Value.Str(x)))
-  }
-  if let Some(x) = v.category {
-    fs.push(("Category", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.last_observed_at {
-    fs.push(("LastObservedAt", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source {
-    fs.push(("Source", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source_url {
-    fs.push(("SourceUrl", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
 }

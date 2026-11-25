@@ -2338,6 +2338,15 @@ fn json_of_conformance_pack_detail(v: ConformancePackDetail) -> json.Value {
   if let Some(x) = v.template_ssm_document_details {
     fs.push(("TemplateSSMDocumentDetails", json_of_template_ssm_document_details(x)))
   }
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.source {
+    fs.push(("Source", json_of_conformance_pack_source(x)))
+  }
+  if let Some(x) = v.scope {
+    fs.push(("Scope", json_of_conformance_pack_scope(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2357,6 +2366,9 @@ fn from_json_conformance_pack_detail(v: json.Value) -> ConformancePackDetail ! S
       "LastUpdateRequestedTime" => out.last_update_requested_time = jsonv.read_time(fv, "epoch-seconds")?
       "CreatedBy" => out.created_by = jsonv.read_str(fv)?
       "TemplateSSMDocumentDetails" => out.template_ssm_document_details = from_json_template_ssm_document_details(fv)?
+      "Type" => out.type_value = ConformancePackType.from(jsonv.read_str(fv)?)
+      "Source" => out.source = from_json_conformance_pack_source(fv)?
+      "Scope" => out.scope = from_json_conformance_pack_scope(fv)?
       _ => {}
     }
   }
@@ -2603,6 +2615,54 @@ fn from_json_conformance_pack_rule_evaluation_results_list(v: json.Value) -> Lis
   Ok(out)
 }
 
+fn json_of_conformance_pack_scope(v: ConformancePackScope) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tag_key {
+    fs.push(("TagKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tag_value {
+    fs.push(("TagValue", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_conformance_pack_scope(v: json.Value) -> ConformancePackScope ! Str {
+  var out = ConformancePackScope{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "TagKey" => out.tag_key = jsonv.read_str(fv)?
+      "TagValue" => out.tag_value = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_conformance_pack_source(v: ConformancePackSource) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_identifier {
+    fs.push(("SourceIdentifier", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_conformance_pack_source(v: json.Value) -> ConformancePackSource ! Str {
+  var out = ConformancePackSource{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SourceIdentifier" => out.source_identifier = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_conformance_pack_status_detail(v: ConformancePackStatusDetail) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.conformance_pack_name {
@@ -2629,6 +2689,9 @@ fn json_of_conformance_pack_status_detail(v: ConformancePackStatusDetail) -> jso
   if let Some(x) = v.last_update_completed_time {
     fs.push(("LastUpdateCompletedTime", jsonv.time(x, "epoch-seconds")))
   }
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -2647,6 +2710,7 @@ fn from_json_conformance_pack_status_detail(v: json.Value) -> ConformancePackSta
       "ConformancePackStatusReason" => out.conformance_pack_status_reason = jsonv.read_str(fv)?
       "LastUpdateRequestedTime" => out.last_update_requested_time = jsonv.read_time(fv, "epoch-seconds")?
       "LastUpdateCompletedTime" => out.last_update_completed_time = jsonv.read_time(fv, "epoch-seconds")?
+      "Type" => out.type_value = ConformancePackType.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -2691,6 +2755,22 @@ fn from_json_conformance_pack_template_validation_exception(v: json.Value) -> Co
   Ok(out)
 }
 
+fn json_of_conformance_pack_type_list(v: List[ConformancePackType]) -> json.Value {
+  json.Value.List(v.map(fn(x: ConformancePackType) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_conformance_pack_type_list(v: json.Value) -> List[ConformancePackType] ! Str {
+  var out: List[ConformancePackType] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(ConformancePackType.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
 fn json_of_connector(v: Connector) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.name {
@@ -2730,6 +2810,9 @@ fn json_of_connector_configuration(v: ConnectorConfiguration) -> json.Value {
   if let Some(x) = v.azure {
     fs.push(("azure", json_of_azure_connector_configuration(x)))
   }
+  if let Some(x) = v.gcp {
+    fs.push(("gcp", json_of_gcp_connector_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2741,6 +2824,7 @@ fn from_json_connector_configuration(v: json.Value) -> ConnectorConfiguration ! 
     }
     match k {
       "azure" => out.azure = from_json_azure_connector_configuration(fv)?
+      "gcp" => out.gcp = from_json_gcp_connector_configuration(fv)?
       _ => {}
     }
   }
@@ -2819,6 +2903,12 @@ fn json_of_connector_summary(v: ConnectorSummary) -> json.Value {
   if let Some(x) = v.tenant_identifier {
     fs.push(("tenantIdentifier", json.Value.Str(x)))
   }
+  if let Some(x) = v.gcp_organization_id {
+    fs.push(("gcpOrganizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.service_account_email {
+    fs.push(("serviceAccountEmail", json.Value.Str(x)))
+  }
   if let Some(x) = v.created_time {
     fs.push(("createdTime", jsonv.time(x, "epoch-seconds")))
   }
@@ -2836,6 +2926,8 @@ fn from_json_connector_summary(v: json.Value) -> ConnectorSummary ! Str {
       "name" => out.name = jsonv.read_str(fv)?
       "provider" => out.provider = Provider.from(jsonv.read_str(fv)?)
       "tenantIdentifier" => out.tenant_identifier = jsonv.read_str(fv)?
+      "gcpOrganizationId" => out.gcp_organization_id = jsonv.read_str(fv)?
+      "serviceAccountEmail" => out.service_account_email = jsonv.read_str(fv)?
       "createdTime" => out.created_time = jsonv.read_time(fv, "epoch-seconds")?
       _ => {}
     }
@@ -4271,6 +4363,9 @@ fn json_of_describe_conformance_pack_status_request(v: DescribeConformancePackSt
   if let Some(x) = v.conformance_pack_names {
     fs.push(("ConformancePackNames", json_of_conformance_pack_names_list(x)))
   }
+  if let Some(x) = v.filters {
+    fs.push(("Filters", json_of_describe_conformance_packs_filters(x)))
+  }
   if let Some(x) = v.limit {
     fs.push(("Limit", json.Value.Int(x)))
   }
@@ -4288,6 +4383,7 @@ fn from_json_describe_conformance_pack_status_request(v: json.Value) -> Describe
     }
     match k {
       "ConformancePackNames" => out.conformance_pack_names = from_json_conformance_pack_names_list(fv)?
+      "Filters" => out.filters = from_json_describe_conformance_packs_filters(fv)?
       "Limit" => out.limit = jsonv.read_int(fv)?
       "NextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -4322,10 +4418,35 @@ fn from_json_describe_conformance_pack_status_response(v: json.Value) -> Describ
   Ok(out)
 }
 
+fn json_of_describe_conformance_packs_filters(v: DescribeConformancePacksFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.types {
+    fs.push(("Types", json_of_conformance_pack_type_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_describe_conformance_packs_filters(v: json.Value) -> DescribeConformancePacksFilters ! Str {
+  var out = DescribeConformancePacksFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Types" => out.types = from_json_conformance_pack_type_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_describe_conformance_packs_request(v: DescribeConformancePacksRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.conformance_pack_names {
     fs.push(("ConformancePackNames", json_of_conformance_pack_names_list(x)))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("Filters", json_of_describe_conformance_packs_filters(x)))
   }
   if let Some(x) = v.limit {
     fs.push(("Limit", json.Value.Int(x)))
@@ -4344,6 +4465,7 @@ fn from_json_describe_conformance_packs_request(v: json.Value) -> DescribeConfor
     }
     match k {
       "ConformancePackNames" => out.conformance_pack_names = from_json_conformance_pack_names_list(fv)?
+      "Filters" => out.filters = from_json_describe_conformance_packs_filters(fv)?
       "Limit" => out.limit = jsonv.read_int(fv)?
       "NextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -5558,6 +5680,36 @@ fn from_json_filter_value_list(v: json.Value) -> List[Str] ! Str {
       continue
     }
     out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_connector_configuration(v: GcpConnectorConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.gcp_organization_id {
+    fs.push(("gcpOrganizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.service_account_email {
+    fs.push(("serviceAccountEmail", json.Value.Str(x)))
+  }
+  if let Some(x) = v.workload_identity_pool_provider {
+    fs.push(("workloadIdentityPoolProvider", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_connector_configuration(v: json.Value) -> GcpConnectorConfiguration ! Str {
+  var out = GcpConnectorConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "gcpOrganizationId" => out.gcp_organization_id = jsonv.read_str(fv)?
+      "serviceAccountEmail" => out.service_account_email = jsonv.read_str(fv)?
+      "workloadIdentityPoolProvider" => out.workload_identity_pool_provider = jsonv.read_str(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -9184,6 +9336,12 @@ fn json_of_put_conformance_pack_request(v: PutConformancePackRequest) -> json.Va
   if let Some(x) = v.tags {
     fs.push(("Tags", json_of_tags_list(x)))
   }
+  if let Some(x) = v.source {
+    fs.push(("Source", json_of_conformance_pack_source(x)))
+  }
+  if let Some(x) = v.scope {
+    fs.push(("Scope", json_of_conformance_pack_scope(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -9202,6 +9360,8 @@ fn from_json_put_conformance_pack_request(v: json.Value) -> PutConformancePackRe
       "ConformancePackInputParameters" => out.conformance_pack_input_parameters = from_json_conformance_pack_input_parameters(fv)?
       "TemplateSSMDocumentDetails" => out.template_ssm_document_details = from_json_template_ssm_document_details(fv)?
       "Tags" => out.tags = from_json_tags_list(fv)?
+      "Source" => out.source = from_json_conformance_pack_source(fv)?
+      "Scope" => out.scope = from_json_conformance_pack_scope(fv)?
       _ => {}
     }
   }
@@ -13833,128 +13993,4 @@ pub fn (c: Client) delete_connector(input: DeleteConnectorRequest) -> () ! Delet
 pub fn endpoint_params_delete_delivery_channel(base: EndpointParameters, input: DeleteDeliveryChannelRequest) -> EndpointParameters {
   let _ = input
   base
-}
-
-/// The HTTP request of DeleteDeliveryChannel.
-pub fn serialize_delete_delivery_channel(ep: rest.Endpoint, input: DeleteDeliveryChannelRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.delivery_channel_name {
-    fs.push(("DeliveryChannelName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "StarlingDoveService.DeleteDeliveryChannel"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_delivery_channel(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of DeleteDeliveryChannel.
-pub enum DeleteDeliveryChannelErr {
-  LastDeliveryChannelDeleteFailedException(e: LastDeliveryChannelDeleteFailedException)
-  NoSuchDeliveryChannelException(e: NoSuchDeliveryChannelException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteDeliveryChannelErr) display() -> Str {
-  match e {
-    LastDeliveryChannelDeleteFailedException(x) => "LastDeliveryChannelDeleteFailedException: ${x:?}"
-    NoSuchDeliveryChannelException(x) => "NoSuchDeliveryChannelException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_delivery_channel_error(resp: http.Response) -> DeleteDeliveryChannelErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "LastDeliveryChannelDeleteFailedException" => match read_error_last_delivery_channel_delete_failed_exception(resp, body) {
-      Ok(x) => return DeleteDeliveryChannelErr.LastDeliveryChannelDeleteFailedException(x)
-      Err(msg) => return DeleteDeliveryChannelErr.Deserialize(msg)
-    }
-    "NoSuchDeliveryChannelException" => match read_error_no_such_delivery_channel_exception(resp, body) {
-      Ok(x) => return DeleteDeliveryChannelErr.NoSuchDeliveryChannelException(x)
-      Err(msg) => return DeleteDeliveryChannelErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteDeliveryChannelErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes the delivery channel. Before you can delete the delivery
-/// channel, you must stop the customer managed configuration recorder. You
-/// can use the StopConfigurationRecorder operation to stop the customer
-/// managed configuration recorder.
-pub fn (c: Client) delete_delivery_channel(input: DeleteDeliveryChannelRequest) -> () ! DeleteDeliveryChannelErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_delivery_channel(c.params, input)) ?? e => return Err(DeleteDeliveryChannelErr.InvalidInput(e))
-  var req = serialize_delete_delivery_channel(ep, input, "") ?? e => return Err(DeleteDeliveryChannelErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteDeliveryChannelErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_delivery_channel_error(resp))
-  }
-  deserialize_delete_delivery_channel(resp) ?? e => Err(DeleteDeliveryChannelErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_evaluation_results(base: EndpointParameters, input: DeleteEvaluationResultsRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteEvaluationResults.
-pub fn serialize_delete_evaluation_results(ep: rest.Endpoint, input: DeleteEvaluationResultsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.config_rule_name {
-    fs.push(("ConfigRuleName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "StarlingDoveService.DeleteEvaluationResults"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
 }

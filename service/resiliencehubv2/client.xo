@@ -4726,12 +4726,27 @@ fn from_json_list_test_sources_response(v: json.Value) -> ListTestSourcesRespons
 
 fn json_of_list_test_templates_request(v: ListTestTemplatesRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
 fn from_json_list_test_templates_request(v: json.Value) -> ListTestTemplatesRequest ! Str {
   var out = ListTestTemplatesRequest{}
-  let _ = jsonv.fields(v)?
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
   Ok(out)
 }
 
@@ -4739,6 +4754,9 @@ fn json_of_list_test_templates_response(v: ListTestTemplatesResponse) -> json.Va
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.test_templates {
     fs.push(("testTemplates", json_of_test_template_summary_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -4751,6 +4769,7 @@ fn from_json_list_test_templates_response(v: json.Value) -> ListTestTemplatesRes
     }
     match k {
       "testTemplates" => out.test_templates = from_json_test_template_summary_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -8336,6 +8355,9 @@ fn json_of_test_run(v: TestRun) -> json.Value {
   if let Some(x) = v.policy {
     fs.push(("policy", json_of_test_run_policy_snapshot(x)))
   }
+  if let Some(x) = v.effective_policy_values {
+    fs.push(("effectivePolicyValues", json_of_test_run_effective_policy_values(x)))
+  }
   if let Some(x) = v.report_output {
     fs.push(("reportOutput", json_of_report_generation_result(x)))
   }
@@ -8383,6 +8405,7 @@ fn from_json_test_run(v: json.Value) -> TestRun ! Str {
       "testTemplateArn" => out.test_template_arn = jsonv.read_str(fv)?
       "reportConfiguration" => out.report_configuration = from_json_test_run_report_configuration(fv)?
       "policy" => out.policy = from_json_test_run_policy_snapshot(fv)?
+      "effectivePolicyValues" => out.effective_policy_values = from_json_test_run_effective_policy_values(fv)?
       "reportOutput" => out.report_output = from_json_report_generation_result(fv)?
       "regionSwitchPlanArn" => out.region_switch_plan_arn = jsonv.read_str(fv)?
       "regionSwitchExecutionId" => out.region_switch_execution_id = jsonv.read_str(fv)?
@@ -8458,6 +8481,56 @@ fn from_json_test_run_dependency_summary_list(v: json.Value) -> List[TestRunDepe
       continue
     }
     out.push(from_json_test_run_dependency_summary(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_test_run_effective_policy_values(v: TestRunEffectivePolicyValues) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.availability_slo {
+    fs.push(("availabilitySlo", json_of_slo_source(x)))
+  }
+  if let Some(x) = v.multi_az_rto {
+    fs.push(("multiAzRto", json_of_target_source(x)))
+  }
+  if let Some(x) = v.multi_az_rpo {
+    fs.push(("multiAzRpo", json_of_target_source(x)))
+  }
+  if let Some(x) = v.multi_az_dr_approach {
+    fs.push(("multiAzDrApproach", json_of_disaster_recovery_source(x)))
+  }
+  if let Some(x) = v.multi_region_rto {
+    fs.push(("multiRegionRto", json_of_target_source(x)))
+  }
+  if let Some(x) = v.multi_region_rpo {
+    fs.push(("multiRegionRpo", json_of_target_source(x)))
+  }
+  if let Some(x) = v.multi_region_dr_approach {
+    fs.push(("multiRegionDrApproach", json_of_disaster_recovery_source(x)))
+  }
+  if let Some(x) = v.data_recovery_time_between_backups {
+    fs.push(("dataRecoveryTimeBetweenBackups", json_of_target_source(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_test_run_effective_policy_values(v: json.Value) -> TestRunEffectivePolicyValues ! Str {
+  var out = TestRunEffectivePolicyValues{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "availabilitySlo" => out.availability_slo = from_json_slo_source(fv)?
+      "multiAzRto" => out.multi_az_rto = from_json_target_source(fv)?
+      "multiAzRpo" => out.multi_az_rpo = from_json_target_source(fv)?
+      "multiAzDrApproach" => out.multi_az_dr_approach = from_json_disaster_recovery_source(fv)?
+      "multiRegionRto" => out.multi_region_rto = from_json_target_source(fv)?
+      "multiRegionRpo" => out.multi_region_rpo = from_json_target_source(fv)?
+      "multiRegionDrApproach" => out.multi_region_dr_approach = from_json_disaster_recovery_source(fv)?
+      "dataRecoveryTimeBetweenBackups" => out.data_recovery_time_between_backups = from_json_target_source(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -13621,6 +13694,7 @@ pub enum GetTestTemplateErr {
   AccessDeniedException(e: AccessDeniedException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
@@ -13637,6 +13711,7 @@ pub fn (e: GetTestTemplateErr) display() -> Str {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
@@ -13658,6 +13733,10 @@ pub fn deserialize_get_test_template_error(resp: http.Response) -> GetTestTempla
     }
     "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
       Ok(x) => return GetTestTemplateErr.ResourceNotFoundException(x)
+      Err(msg) => return GetTestTemplateErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetTestTemplateErr.ThrottlingException(x)
       Err(msg) => return GetTestTemplateErr.Deserialize(msg)
     }
     "ValidationException" => match read_error_validation_exception(resp, body) {
@@ -13682,104 +13761,4 @@ pub fn (c: Client) get_test_template(input: GetTestTemplateRequest) -> GetTestTe
     return Err(deserialize_get_test_template_error(resp))
   }
   deserialize_get_test_template(resp) ?? e => Err(GetTestTemplateErr.Deserialize(e))
-}
-
-pub fn endpoint_params_get_user_journey(base: EndpointParameters, input: GetUserJourneyRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of GetUserJourney.
-pub fn serialize_get_user_journey(ep: rest.Endpoint, input: GetUserJourneyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.system_arn {
-    qs.push(("systemArn", v))
-  }
-  if let Some(v) = input.user_journey_id {
-    qs.push(("userJourneyId", v))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/v2/get-user-journey"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_get_user_journey(resp: http.Response) -> GetUserJourneyResponse ! Str {
-  var out = GetUserJourneyResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "userJourney" => out.user_journey = from_json_user_journey(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of GetUserJourney.
-pub enum GetUserJourneyErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: GetUserJourneyErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_get_user_journey_error(resp: http.Response) -> GetUserJourneyErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return GetUserJourneyErr.AccessDeniedException(x)
-      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return GetUserJourneyErr.InternalServerException(x)
-      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return GetUserJourneyErr.ResourceNotFoundException(x)
-      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return GetUserJourneyErr.ValidationException(x)
-      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  GetUserJourneyErr.Api(restjson.api_error(resp, body))
 }

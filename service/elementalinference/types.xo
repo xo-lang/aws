@@ -45,6 +45,61 @@ pub struct AssociateFeedResponse {
   pub id: Str? = None
 }
 
+pub enum BedrockApi: Str {
+  InvokeModel = "INVOKE_MODEL"
+  Unknown(value: Str)
+}
+
+/// An Amazon Bedrock model to invoke. Elemental Inference invokes the model
+/// in your account by assuming the feed's access role, so a feed that runs
+/// this function must specify an accessRoleArn. The invocation is subject
+/// to your Amazon Bedrock quotas and appears on your bill.
+pub struct BedrockFunctionTarget {
+  /// The Amazon Bedrock API to call. The only valid value is INVOKE_MODEL.
+  pub api: BedrockApi? = None
+  /// The model to invoke. Specify one of the following: A model ID. An
+  /// inference profile ID. The ARN of a custom model. The ARN of a
+  /// provisioned model. Elemental Inference invokes the model in the Region
+  /// of the feed. To use a model in other Regions, specify a cross-Region
+  /// inference profile ID. A custom or provisioned model must be in the
+  /// Region of the feed. The request expression must produce a request body
+  /// that this model accepts, and the model must accept the kind of media
+  /// that the request expression references. For example, a text-only model
+  /// can't accept a request that references media.frames.
+  pub model: Str? = None
+}
+
+/// A question that you ask Elemental Inference, which answers by choosing
+/// one of its options. You specify it in the chooseOne array of a question
+/// set.
+pub struct ChooseOneQuestion {
+  /// A name for the question. The name must be unique among all the questions
+  /// in the version, across all question types. The name can be up to 64
+  /// characters. It must start with a letter or an underscore, and can
+  /// contain only the letters A-Z and a-z, the digits 0-9, and underscores.
+  pub name: Str? = None
+  /// The text of the question. The text can be up to 256 bytes, encoded in
+  /// UTF-8. It can contain letters in any language, combining marks, digits,
+  /// spaces, and the following characters: . , ? ! ' " ( ) - : ; / &amp; % ,
+  /// plus the curly apostrophe and quotation marks (U+2019, U+201C, and
+  /// U+201D).
+  pub question: Str? = None
+  /// The options that Elemental Inference chooses from. You can specify from
+  /// 2 to 26 options. The question counts as one item toward the limit of 100
+  /// scored items in a version, regardless of how many options it has.
+  pub options: List[QuestionOption]? = None
+}
+
+/// The perClip trigger, which runs the function each time an event clipping
+/// output reports events. Events that the output reports together share one
+/// run, and media.clip.events contains all of them. To choose this trigger,
+/// set perClip to an empty object. Specify clippingSettings to name the
+/// event clipping output that reports the events. You can't use this
+/// trigger with a function that references media.transcript or
+/// media.contextual.
+pub struct ClipTrigger {
+}
+
 /// A type of OutputConfig, used when the output in a feed is for the clip
 /// feature.
 pub struct ClippingConfig {
@@ -58,6 +113,16 @@ pub struct ClippingConfig {
   /// the event clipping metadata for this output. If you omit this parameter,
   /// Elemental Inference doesn't map a data source onto this output.
   pub data_source_configuration: DataSourceConfiguration? = None
+}
+
+/// The event clipping output on this feed that provides events for a
+/// perClip trigger and media.clip for a function. Specify this structure
+/// for a perClip trigger, and for a function that references media.clip on
+/// a fixedInterval trigger. If the function output is ENABLED, the output
+/// that you name must also be ENABLED.
+pub struct ClippingSettings {
+  /// The name of an ENABLED event clipping output on this feed.
+  pub output_name: Str? = None
 }
 
 /// Contains information about one competitor in a fixture. It is used in
@@ -74,6 +139,21 @@ pub struct Competitor {
 /// The request could not be completed due to a conflict.
 pub struct ConflictException {
   pub message: Str? = None
+}
+
+/// One kind of media context that a function reads. Elemental Inference
+/// derives this value from the media paths that the request expression
+/// references: FRAMES – Derived from media.frames. SUBTITLES – Derived
+/// from media.transcript. CONTEXTUAL_METADATA – Derived from
+/// media.contextual. CLIP_METADATA – Derived from media.clip. A request
+/// expression can reference at most one of SUBTITLES, CONTEXTUAL_METADATA,
+/// and CLIP_METADATA, in addition to FRAMES.
+pub enum ContextType: Str {
+  Frames = "FRAMES"
+  Subtitles = "SUBTITLES"
+  ContextualMetadata = "CONTEXTUAL_METADATA"
+  ClipMetadata = "CLIP_METADATA"
+  Unknown(value: Str)
 }
 
 /// The output configuration settings for the contextual metadata feature.
@@ -95,16 +175,35 @@ pub struct ContextualMetadataConfig {
   /// (default) – Elemental Inference populates the people, environments,
   /// brands, and on-screen text fields. DISABLED – Elemental Inference
   /// doesn't populate the people, environments, brands, and on-screen text
-  /// fields.
+  /// fields. If you specify customQuestions , you must set this property to
+  /// DISABLED.
   pub extended_analysis: ExtendedAnalysisMode? = None
+  /// The question sets that you ask Elemental Inference about each shot, each
+  /// scene, or both, in this output. If you specify customQuestions, you must
+  /// also set extendedAnalysis to DISABLED. If you omit extendedAnalysis, it
+  /// defaults to ENABLED, and the request fails. While a feed references a
+  /// version of a question set, you can't delete that version or the question
+  /// set.
+  pub custom_questions: CustomQuestionsConfig? = None
+}
+
+/// The contextual metadata output on this feed that provides scenes for a
+/// perScene trigger and media.contextual for a function. Specify this
+/// structure for a perScene trigger, and for a function that references
+/// media.contextual on a perShot trigger. If the function output is
+/// ENABLED, the output that you name must also be ENABLED.
+pub struct ContextualMetadataSettings {
+  /// The name of an ENABLED contextual metadata output on this feed.
+  pub output_name: Str? = None
 }
 
 pub struct CreateDictionaryRequest {
   /// A user-friendly name for this dictionary.
   pub name: Str? = None
   /// The language of the dictionary entries. Specify the language using an
-  /// ISO 639-2/T three-letter code. Supported values: eng, fra, ita, deu,
-  /// spa, por.
+  /// ISO 639-2/T three-letter code. Supported values: eng – English fra –
+  /// French ita – Italian deu – German spa – Spanish por – Portuguese
+  /// ara – Arabic
   pub language: DictionaryLanguage? = None
   /// The dictionary entries payload. Contains the custom words and phrases
   /// for the dictionary. Maximum size is 40,960 characters.
@@ -178,6 +277,95 @@ pub struct CreateFeedResponse {
   pub tags: Map[Str, Str]? = None
 }
 
+pub struct CreateFunctionRequest {
+  /// A name for this function.
+  pub name: Str? = None
+  /// The destination for the request that the function builds.
+  pub target_value: FunctionTarget? = None
+  /// The JSONata expression that builds the request. Elemental Inference
+  /// evaluates it against the media object of the feed, which holds the media
+  /// and metadata that the function asked for. Maximum length: 5,120
+  /// characters. When you save the function, Elemental Inference evaluates
+  /// the expression against sample media and rejects it if the evaluation
+  /// fails. For a Bedrock target, the result must be a JSON object; Elemental
+  /// Inference doesn't check that the object is a valid request body for the
+  /// model. The expression can reference at most one of media.transcript,
+  /// media.contextual, and media.clip. For a passthrough target, it can't
+  /// reference media.frames.
+  pub request_expression: Str? = None
+  /// The JSONata expression that selects what to store. Elemental Inference
+  /// evaluates it against the result as its root: the model response for a
+  /// Bedrock target, or the output of the request expression for a
+  /// passthrough target. If a function has no response expression, Elemental
+  /// Inference stores the entire result. Maximum length: 5,120 characters.
+  /// When you save the function, Elemental Inference checks that the
+  /// expression is valid JSONata. For a passthrough target, it also evaluates
+  /// the request and response expressions together against sample media, and
+  /// rejects them if they produce no value.
+  pub response_expression: Str? = None
+  /// The description of the function. Maximum length: 1,024 characters.
+  pub description: Str? = None
+  /// Specifies whether Elemental Inference also sends this function's results
+  /// to Amazon EventBridge. Elemental Inference sends a result only when the
+  /// result is a JSON object with a top-level eventBridge field set to true .
+  /// It sends the result, unchanged, as a Function Metadata Generated event
+  /// to the default event bus in your account, after the result is available
+  /// from GetMetadata. If the result is larger than 64 KB, the event has
+  /// resultOmitted set to true in place of the result. Valid values: ENABLED
+  /// – Elemental Inference sends each marked result as an event. DISABLED
+  /// (default) – Elemental Inference doesn't send events. For a Bedrock
+  /// target, ENABLED requires a response expression, because the model
+  /// response itself never has a top-level eventBridge field. A feed output
+  /// that runs a function with ENABLED can't use a fixedInterval trigger
+  /// shorter than 4 seconds.
+  pub event_bridge_delivery: EventBridgeDeliveryMode? = None
+  /// The tags to associate with this function.
+  pub tags: Map[Str, Str]? = None
+}
+
+pub struct CreateFunctionResponse {
+  /// The name of the function.
+  pub name: Str? = None
+  /// The destination for the request that the function builds.
+  pub target_value: FunctionTarget? = None
+  /// The JSONata expression that builds the request. Elemental Inference
+  /// evaluates it against the media object of the feed, which holds the media
+  /// and metadata that the function asked for.
+  pub request_expression: Str? = None
+  /// The JSONata expression that selects what to store. Elemental Inference
+  /// evaluates it against the result as its root: the model response for a
+  /// Bedrock target, or the output of the request expression for a
+  /// passthrough target. If a function has no response expression, Elemental
+  /// Inference stores the entire result.
+  pub response_expression: Str? = None
+  /// The description of the function.
+  pub description: Str? = None
+  /// Indicates whether Elemental Inference also sends this function's results
+  /// to Amazon EventBridge. With ENABLED, each result that is a JSON object
+  /// with a top-level eventBridge field set to true is also sent as a
+  /// Function Metadata Generated event to the default event bus in your
+  /// account.
+  pub event_bridge_delivery: EventBridgeDeliveryMode? = None
+  /// The ARN of the function.
+  pub arn: Str? = None
+  /// The ID of the function.
+  pub id: Str? = None
+  /// The status of the function. A successful request returns CREATING. The
+  /// function is ready to use as soon as the request succeeds.
+  pub status: FunctionStatus? = None
+  /// The IDs of the feeds that have a function output, enabled or disabled,
+  /// that references this function. While this list isn't empty, the function
+  /// can't be deleted, and its name and target can't be changed.
+  pub references: List[Str]? = None
+  /// The kinds of media context that this function uses. Elemental Inference
+  /// derives this field from the media paths that the request expression
+  /// references; you can't set it. An empty list means that the expression
+  /// references no media, so Elemental Inference supplies none at run time.
+  pub context_types: List[ContextType]? = None
+  /// The tags associated with the function.
+  pub tags: Map[Str, Str]? = None
+}
+
 /// Contains configuration information about one output in a feed. It is
 /// used in the AssociateFeed and the CreateFeed actions.
 pub struct CreateOutput {
@@ -192,6 +380,131 @@ pub struct CreateOutput {
   pub status: OutputStatus? = None
   /// A description for the output.
   pub description: Str? = None
+}
+
+pub struct CreateQuestionSetRequest {
+  /// An array of questions that Elemental Inference answers with yes or no.
+  /// You can specify up to 50 yesNo questions. An empty array is the same as
+  /// omitting this property.
+  pub yes_no: List[YesNoQuestion]? = None
+  /// An array of questions that you ask about each of their options.
+  /// Elemental Inference answers yes or no for each option. You can specify
+  /// up to 10 yesNoPerOption questions. An empty array is the same as
+  /// omitting this property.
+  pub yes_no_per_option: List[YesNoPerOptionQuestion]? = None
+  /// An array of questions that Elemental Inference answers by choosing one
+  /// of their options. You can specify up to 10 chooseOne questions. An empty
+  /// array is the same as omitting this property.
+  pub choose_one: List[ChooseOneQuestion]? = None
+  /// A user-friendly name for this question set.
+  pub name: Str? = None
+  /// Optional tags to associate with the question set. You can also add tags
+  /// later, using TagResource.
+  pub tags: Map[Str, Str]? = None
+}
+
+pub struct CreateQuestionSetResponse {
+  /// The yesNo questions that you specified in the request, in the order that
+  /// you specified them. Elemental Inference doesn't return this property if
+  /// the request didn't include any yesNo questions.
+  pub yes_no: List[YesNoQuestion]? = None
+  /// The yesNoPerOption questions that you specified in the request, in the
+  /// order that you specified them. Elemental Inference doesn't return this
+  /// property if the request didn't include any yesNoPerOption questions.
+  pub yes_no_per_option: List[YesNoPerOptionQuestion]? = None
+  /// The chooseOne questions that you specified in the request, in the order
+  /// that you specified them. Elemental Inference doesn't return this
+  /// property if the request didn't include any chooseOne questions.
+  pub choose_one: List[ChooseOneQuestion]? = None
+  /// The ARN of the question set.
+  pub arn: Str? = None
+  /// A unique ID that Elemental Inference assigns to the question set.
+  pub id: Str? = None
+  /// The name that you specified in the request.
+  pub name: Str? = None
+  /// The version that this response describes. For CreateQuestionSet, the
+  /// version is always DRAFT.
+  pub version: Str? = None
+  /// The description of the version. Elemental Inference doesn't return this
+  /// property for CreateQuestionSet, because the DRAFT version has no
+  /// description.
+  pub description: Str? = None
+  /// The number of the highest version that you have published for this
+  /// question set. Elemental Inference doesn't return this property for
+  /// CreateQuestionSet, because a new question set has no published versions.
+  pub latest_version: Str? = None
+  /// The SHA-256 hash of the DRAFT version, as 64 lowercase hexadecimal
+  /// characters. The hash covers the name of the question set and its
+  /// questions. You can specify this value in a CreateQuestionSetVersion
+  /// request, so that Elemental Inference publishes DRAFT only if it hasn't
+  /// changed.
+  pub sha256: Str? = None
+  /// A list of feed IDs that reference this version of the question set. For
+  /// a new question set, the list is empty.
+  pub references: List[Str]? = None
+  /// Any tags that you included when you created the question set.
+  pub tags: Map[Str, Str]? = None
+}
+
+pub struct CreateQuestionSetVersionRequest {
+  /// The ID of the question set whose DRAFT version you want to publish.
+  pub id: Str? = None
+  /// The SHA-256 hash of the DRAFT version that you want to publish, as
+  /// returned by GetQuestionSet or UpdateQuestionSet. If you specify this
+  /// value, Elemental Inference publishes DRAFT only if its current hash
+  /// matches. If it doesn't match, because DRAFT changed after you retrieved
+  /// it, the request fails with ConflictException. If you don't specify this
+  /// value, Elemental Inference publishes DRAFT as it is when it receives the
+  /// request.
+  pub sha256: Str? = None
+  /// A description of the new version. You can't change the description after
+  /// Elemental Inference publishes the version. If DRAFT hasn't changed since
+  /// the latest version, Elemental Inference ignores this value and returns
+  /// the latest version with its existing description. The description can be
+  /// up to 256 characters. It can contain the letters A-Z and a-z, the digits
+  /// 0-9, underscores, spaces, and the following characters: - . ' , @ : ; .
+  pub description: Str? = None
+}
+
+pub struct CreateQuestionSetVersionResponse {
+  /// The yesNo questions in this version. Elemental Inference doesn't return
+  /// this property if the version has no yesNo questions.
+  pub yes_no: List[YesNoQuestion]? = None
+  /// The yesNoPerOption questions in this version. Elemental Inference
+  /// doesn't return this property if the version has no yesNoPerOption
+  /// questions.
+  pub yes_no_per_option: List[YesNoPerOptionQuestion]? = None
+  /// The chooseOne questions in this version. Elemental Inference doesn't
+  /// return this property if the version has no chooseOne questions.
+  pub choose_one: List[ChooseOneQuestion]? = None
+  /// The ARN of the question set.
+  pub arn: Str? = None
+  /// The ID of the question set.
+  pub id: Str? = None
+  /// The name of the question set at this version.
+  pub name: Str? = None
+  /// The number of the version that Elemental Inference published. If DRAFT
+  /// hadn't changed since the latest version, this is the number of that
+  /// existing version.
+  pub version: Str? = None
+  /// The description of the version. For a new version, this is the
+  /// description that you specified in the request. If DRAFT hadn't changed
+  /// since the latest version, this is the description of that existing
+  /// version. Elemental Inference doesn't return this property if the version
+  /// has no description.
+  pub description: Str? = None
+  /// The number of the highest version that you have published for this
+  /// question set. It's the same as version.
+  pub latest_version: Str? = None
+  /// The SHA-256 hash of the version, as 64 lowercase hexadecimal characters.
+  /// It's the same as the hash of the DRAFT version that Elemental Inference
+  /// published.
+  pub sha256: Str? = None
+  /// A list of feed IDs that reference this version of the question set. For
+  /// a new version, the list is empty.
+  pub references: List[Str]? = None
+  /// Any tags associated with the question set.
+  pub tags: Map[Str, Str]? = None
 }
 
 pub struct CreateScheduleActionRequest {
@@ -233,6 +546,18 @@ pub struct CroppingConfig {
   /// applies to the cropped video. You can specify from 1 to 4 template
   /// groups.
   pub template_groups: List[TemplateGroup]? = None
+}
+
+/// The question sets that you ask Elemental Inference about the media in a
+/// contextual metadata output. You must specify at least one of shot or
+/// scene. They can reference the same version of the same question set.
+pub struct CustomQuestionsConfig {
+  /// The version of a question set to ask Elemental Inference about each
+  /// shot.
+  pub shot: QuestionSetReference? = None
+  /// The version of a question set to ask Elemental Inference about each
+  /// scene.
+  pub scene: QuestionSetReference? = None
 }
 
 /// Contains the data source configuration for a clipping output. It
@@ -288,6 +613,43 @@ pub struct DeleteFeedResponse {
   pub status: FeedStatus? = None
 }
 
+pub struct DeleteFunctionRequest {
+  /// The ID of the function.
+  pub id: Str? = None
+}
+
+pub struct DeleteFunctionResponse {
+  /// The ARN of the function.
+  pub arn: Str? = None
+  /// The ID of the function.
+  pub id: Str? = None
+  /// The status of the function. A successful request returns DELETING.
+  /// Elemental Inference removes the function before it returns the response.
+  pub status: FunctionStatus? = None
+}
+
+pub struct DeleteQuestionSetRequest {
+  /// The ID of the question set to delete.
+  pub id: Str? = None
+}
+
+pub struct DeleteQuestionSetResponse {
+  /// The ARN of the deleted question set.
+  pub arn: Str? = None
+  /// The ID of the deleted question set.
+  pub id: Str? = None
+}
+
+pub struct DeleteQuestionSetVersionRequest {
+  /// The ID of the question set that contains the version.
+  pub id: Str? = None
+  /// The number of the published version to delete. You can't specify DRAFT.
+  pub question_set_version: Str? = None
+}
+
+pub struct DeleteQuestionSetVersionResponse {
+}
+
 pub struct DeleteScheduleActionRequest {
   /// The ID of the feed that holds the schedule action.
   pub id: Str? = None
@@ -307,6 +669,7 @@ pub enum DictionaryLanguage: Str {
   Deu = "deu"
   Spa = "spa"
   Por = "por"
+  Ara = "ara"
   Unknown(value: Str)
 }
 
@@ -352,6 +715,16 @@ pub struct DisassociateFeedResponse {
   pub arn: Str? = None
   /// The ID of the feed.
   pub id: Str? = None
+}
+
+/// Whether Elemental Inference sends a function's marked results to Amazon
+/// EventBridge. ENABLED – Elemental Inference sends each result that is a
+/// JSON object with a top-level eventBridge field set to true as an event.
+/// DISABLED – Elemental Inference doesn't send events.
+pub enum EventBridgeDeliveryMode: Str {
+  Enabled = "ENABLED"
+  Disabled = "DISABLED"
+  Unknown(value: Str)
 }
 
 pub struct ExportDictionaryEntriesRequest {
@@ -409,6 +782,21 @@ pub enum FilterName: Str {
   Unknown(value: Str)
 }
 
+/// The settings of the fixedInterval trigger, which runs the function once
+/// for every intervalSeconds of content. A function that references
+/// media.transcript must use this trigger. You can't use this trigger with
+/// a function that references media.contextual. If the function references
+/// media.transcript, specify subtitlingSettings. If the function references
+/// media.clip, specify clippingSettings. Each run then receives the events
+/// that the event clipping output reported during the interval, in
+/// media.clip.events.
+pub struct FixedIntervalTrigger {
+  /// The amount of content, in seconds, between runs of the function. Valid
+  /// range: 1 to 60. For a function with eventBridgeDelivery set to ENABLED,
+  /// the minimum is 4.
+  pub interval_seconds: Int? = None
+}
+
 /// Sets the time at which a schedule action runs once. This is a type of
 /// ScheduleActionStartConfiguration.
 pub struct FixedModeScheduleActionStartSettings {
@@ -444,6 +832,134 @@ pub struct FixtureSummary {
   pub status: Str? = None
   /// An array of the competitors (the teams or individuals) in the fixture.
   pub competitors: List[Competitor]? = None
+}
+
+pub enum FrameSamplingMode: Str {
+  First = "FIRST"
+  Uniform = "UNIFORM"
+  Last = "LAST"
+  Unknown(value: Str)
+}
+
+/// Specifies how Elemental Inference chooses frames from the media of each
+/// run, and how many frames it chooses. The media of a run is the interval,
+/// shot, scene, or clips that the run covers.
+pub struct FrameSamplingStrategy {
+  /// Which frames of the window to send: FIRST (the first frames), UNIFORM
+  /// (frames spread evenly across the window), or LAST (the last frames).
+  pub mode: FrameSamplingMode? = None
+  /// The number of frames to send on each run. Valid range: 1 to 64. The
+  /// default is 1. Each frame adds to the size of the model request and to
+  /// what the model charges for it.
+  pub count: Int? = None
+}
+
+/// The frames that a function receives in media.frames on each run: which
+/// frames, how many, and at what size. Elemental Inference applies these
+/// settings only to a function that references media.frames. When you add
+/// or change the function output, Elemental Inference estimates the size of
+/// the frames and rejects settings whose frames won't fit in one model
+/// request. To send more frames in each request, specify a smaller
+/// frameSize.
+pub struct FrameSettings {
+  /// The method for choosing which frames to send.
+  pub frame_sampling: FrameSamplingStrategy? = None
+  /// The size to resize each frame to. If you omit this structure, frames
+  /// keep their source size. Smaller frames reduce the size of the model
+  /// request.
+  pub frame_size: FrameSize? = None
+}
+
+/// The dimensions, in pixels, of each frame that a function sends.
+/// Elemental Inference resizes each frame to exactly this width and height.
+pub struct FrameSize {
+  /// The width of each frame, in pixels. Valid range: 1 to 1280.
+  pub width_pixels: Int? = None
+  /// The height of each frame, in pixels. Valid range: 1 to 720.
+  pub height_pixels: Int? = None
+}
+
+/// The output configuration settings for a function. Use this structure to
+/// run a function on this feed. The name of the output is the name that you
+/// pass to GetMetadata to read the results. Include the settings that the
+/// function's media context and trigger require. Elemental Inference
+/// ignores settings that neither uses. It also rejects settings whose
+/// frames are estimated to exceed the size of a single model request. A
+/// feed that has an enabled function output must also have an enabled
+/// cropping, clipping, subtitling, or contextual metadata output. A feed
+/// that runs a function with a Bedrock target must specify an
+/// accessRoleArn.
+pub struct FunctionConfig {
+  /// The ARN of the function to run. The function must exist in the same
+  /// account and the same Region as the feed.
+  pub function_arn: Str? = None
+  /// Determines when the function runs.
+  pub trigger: Trigger? = None
+  /// The frames to send on each run: how many, which ones, and at what size.
+  /// Applies to a function that references media.frames. If you omit this
+  /// structure, Elemental Inference sends the first frame of the window, at
+  /// its source size.
+  pub frame_settings: FrameSettings? = None
+  /// The smart subtitles output on this feed to read the transcript from.
+  /// Required for a function that references media.transcript.
+  pub subtitling_settings: SubtitlingSettings? = None
+  /// The contextual metadata output on this feed to read scenes and
+  /// classifications from. Required for a perScene trigger, and for a
+  /// function that references media.contextual on a perShot trigger.
+  pub contextual_metadata_settings: ContextualMetadataSettings? = None
+  /// The event clipping output on this feed to read clips from. Required for
+  /// a perClip trigger, and for a function that references media.clip.
+  pub clipping_settings: ClippingSettings? = None
+}
+
+/// The status of a function. CREATING – CreateFunction returns this
+/// status. The function is ready to use as soon as the request succeeds.
+/// AVAILABLE – No feed references the function. Every property can be
+/// changed, and the function can be deleted. REFERENCED – At least one
+/// feed references the function, so the function can't be deleted. Only the
+/// expressions and the description can be changed, and eventBridgeDelivery
+/// can be set to DISABLED but not to ENABLED. The request expression must
+/// keep referencing the same media context. DELETING – DeleteFunction
+/// returns this status. The function is removed as soon as the request
+/// succeeds. DELETED – Not currently returned.
+pub enum FunctionStatus: Str {
+  Creating = "CREATING"
+  Available = "AVAILABLE"
+  Referenced = "REFERENCED"
+  Deleting = "DELETING"
+  Deleted = "DELETED"
+  Unknown(value: Str)
+}
+
+/// Contains identifying and configuration details for a function, including
+/// its name, target, status, and derived media context.
+pub struct FunctionSummary {
+  /// The ARN of the function.
+  pub arn: Str? = None
+  /// The ID of the function.
+  pub id: Str? = None
+  /// The name of the function.
+  pub name: Str? = None
+  /// The description of the function.
+  pub description: Str? = None
+  /// The status of the function.
+  pub status: FunctionStatus? = None
+  /// The destination for the request that the function builds.
+  pub target_value: FunctionTarget? = None
+  /// The kinds of media context that this function uses. Elemental Inference
+  /// derives this field from the media paths that the request expression
+  /// references; you can't set it. An empty list means that the expression
+  /// references no media, so Elemental Inference supplies none at run time.
+  pub context_types: List[ContextType]? = None
+}
+
+/// The destination for the request that a function builds. Specify exactly
+/// one member.
+pub enum FunctionTarget {
+  Bedrock(value: BedrockFunctionTarget)
+  Passthrough(value: PassthroughFunctionTarget)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// The request timed out before the service returned a response. This is a
@@ -540,6 +1056,53 @@ pub struct GetFixtureResponse {
   pub competitors: List[Competitor]? = None
 }
 
+pub struct GetFunctionRequest {
+  /// The ID of the function.
+  pub id: Str? = None
+}
+
+pub struct GetFunctionResponse {
+  /// The name of the function.
+  pub name: Str? = None
+  /// The destination for the request that the function builds.
+  pub target_value: FunctionTarget? = None
+  /// The JSONata expression that builds the request. Elemental Inference
+  /// evaluates it against the media object of the feed, which holds the media
+  /// and metadata that the function asked for.
+  pub request_expression: Str? = None
+  /// The JSONata expression that selects what to store. Elemental Inference
+  /// evaluates it against the result as its root: the model response for a
+  /// Bedrock target, or the output of the request expression for a
+  /// passthrough target. If a function has no response expression, Elemental
+  /// Inference stores the entire result.
+  pub response_expression: Str? = None
+  /// The description of the function.
+  pub description: Str? = None
+  /// Indicates whether Elemental Inference also sends this function's results
+  /// to Amazon EventBridge. With ENABLED, each result that is a JSON object
+  /// with a top-level eventBridge field set to true is also sent as a
+  /// Function Metadata Generated event to the default event bus in your
+  /// account.
+  pub event_bridge_delivery: EventBridgeDeliveryMode? = None
+  /// The ARN of the function.
+  pub arn: Str? = None
+  /// The ID of the function.
+  pub id: Str? = None
+  /// The status of the function.
+  pub status: FunctionStatus? = None
+  /// The IDs of the feeds that have a function output, enabled or disabled,
+  /// that references this function. While this list isn't empty, the function
+  /// can't be deleted, and its name and target can't be changed.
+  pub references: List[Str]? = None
+  /// The kinds of media context that this function uses. Elemental Inference
+  /// derives this field from the media paths that the request expression
+  /// references; you can't set it. An empty list means that the expression
+  /// references no media, so Elemental Inference supplies none at run time.
+  pub context_types: List[ContextType]? = None
+  /// The tags associated with the function.
+  pub tags: Map[Str, Str]? = None
+}
+
 /// Contains configuration information about one output in a feed. It is
 /// used in the GetFeed response.
 pub struct GetOutput {
@@ -559,6 +1122,59 @@ pub struct GetOutput {
   /// UpdateFeed. You will need this value if you use UpdateFeed to modify the
   /// list of outputs in the feed.
   pub from_association: Bool? = None
+}
+
+pub struct GetQuestionSetRequest {
+  /// The ID of the question set to retrieve.
+  pub id: Str? = None
+  /// The version of the question set to retrieve: DRAFT or the number of a
+  /// published version. If you don't specify a version, Elemental Inference
+  /// returns DRAFT.
+  pub question_set_version: Str? = None
+}
+
+pub struct GetQuestionSetResponse {
+  /// The yesNo questions in this version. Elemental Inference doesn't return
+  /// this property if the version has no yesNo questions.
+  pub yes_no: List[YesNoQuestion]? = None
+  /// The yesNoPerOption questions in this version. Elemental Inference
+  /// doesn't return this property if the version has no yesNoPerOption
+  /// questions.
+  pub yes_no_per_option: List[YesNoPerOptionQuestion]? = None
+  /// The chooseOne questions in this version. Elemental Inference doesn't
+  /// return this property if the version has no chooseOne questions.
+  pub choose_one: List[ChooseOneQuestion]? = None
+  /// The ARN of the question set.
+  pub arn: Str? = None
+  /// The ID of the question set.
+  pub id: Str? = None
+  /// The name of the question set at this version. For a published version,
+  /// this is the name that the question set had when the version was
+  /// published.
+  pub name: Str? = None
+  /// The version that this response describes: DRAFT or the number of a
+  /// published version.
+  pub version: Str? = None
+  /// The description that you specified when you published this version.
+  /// Elemental Inference doesn't return this property for DRAFT, or for a
+  /// version that you published without a description.
+  pub description: Str? = None
+  /// The number of the highest version that you have published for this
+  /// question set, even if you have since deleted that version. Elemental
+  /// Inference doesn't return this property if you haven't published a
+  /// version.
+  pub latest_version: Str? = None
+  /// The SHA-256 hash of this version, as 64 lowercase hexadecimal
+  /// characters. The hash covers the name of the question set and its
+  /// questions at this version. For DRAFT, you can specify this value in a
+  /// CreateQuestionSetVersion request, so that Elemental Inference publishes
+  /// DRAFT only if it hasn't changed.
+  pub sha256: Str? = None
+  /// A list of feed IDs that reference this version of the question set. The
+  /// list doesn't include feeds that reference other versions.
+  pub references: List[Str]? = None
+  /// The tags associated with the question set.
+  pub tags: Map[Str, Str]? = None
 }
 
 /// An internal server error occurred. This is a temporary condition and the
@@ -611,6 +1227,55 @@ pub struct ListFeedsResponse {
   pub next_token: Str? = None
 }
 
+pub struct ListFunctionsRequest {
+  /// The maximum number of functions to return in one response. Valid range:
+  /// 1 to 100. The default is 100.
+  pub max_results: Int? = None
+  /// The token that identifies the page of results to return. Use the
+  /// nextToken value from a previous response.
+  pub next_token: Str? = None
+}
+
+pub struct ListFunctionsResponse {
+  /// An array of function summaries.
+  pub functions: List[FunctionSummary]? = None
+  /// The token to use in a subsequent request to get the next page of
+  /// results. This field is absent when there are no more results.
+  pub next_token: Str? = None
+}
+
+pub struct ListQuestionSetVersionsRequest {
+  /// The ID of the question set whose versions you want to list.
+  pub id: Str? = None
+  /// The maximum number of results to return per API request. Valid range: 1
+  /// to 100.
+  pub max_results: Int? = None
+  /// The token that identifies the next batch of results to return.
+  pub next_token: Str? = None
+}
+
+pub struct ListQuestionSetVersionsResponse {
+  /// A list of QuestionSetVersionSummary objects.
+  pub versions: List[QuestionSetVersionSummary]? = None
+  /// The token to use to retrieve the next batch of results.
+  pub next_token: Str? = None
+}
+
+pub struct ListQuestionSetsRequest {
+  /// The maximum number of results to return per API request. Valid range: 1
+  /// to 100.
+  pub max_results: Int? = None
+  /// The token that identifies the next batch of results to return.
+  pub next_token: Str? = None
+}
+
+pub struct ListQuestionSetsResponse {
+  /// A list of QuestionSetSummary objects.
+  pub question_sets: List[QuestionSetSummary]? = None
+  /// The token to use to retrieve the next batch of results.
+  pub next_token: Str? = None
+}
+
 pub struct ListScheduleActionsRequest {
   /// The ID of the feed that you want to query.
   pub id: Str? = None
@@ -649,6 +1314,7 @@ pub enum OutputConfig {
   Clipping(value: ClippingConfig)
   Subtitling(value: SubtitlingConfig)
   ContextualMetadata(value: ContextualMetadataConfig)
+  Function(value: FunctionConfig)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -657,6 +1323,14 @@ pub enum OutputStatus: Str {
   Enabled = "ENABLED"
   Disabled = "DISABLED"
   Unknown(value: Str)
+}
+
+/// A target that invokes nothing. Elemental Inference evaluates your
+/// request expression, then evaluates your response expression against that
+/// result. If the function has no response expression, Elemental Inference
+/// stores the result of the request expression. A passthrough function
+/// can't reference media.frames. It also needs no access role on the feed.
+pub struct PassthroughFunctionTarget {
 }
 
 pub enum ProfanityFilterMode: Str {
@@ -676,6 +1350,66 @@ pub struct PutFeedPolicyRequest {
 pub struct PutFeedPolicyResponse {
 }
 
+/// An option in a yesNoPerOption question or a chooseOne question.
+pub struct QuestionOption {
+  /// A name for the option. The name must be unique among the options of the
+  /// question. The name can be up to 64 characters. It must start with a
+  /// letter or an underscore, and can contain only the letters A-Z and a-z,
+  /// the digits 0-9, and underscores.
+  pub name: Str? = None
+  /// The text of the option. The text must be unique among the options of the
+  /// question, ignoring case. The text can be up to 16 bytes, encoded in
+  /// UTF-8. It can contain the same characters as the text of a question.
+  pub text: Str? = None
+}
+
+/// Identifies one version of a question set. You specify it in
+/// CustomQuestionsConfig.
+pub struct QuestionSetReference {
+  /// The ID of the question set. The question set must be in your account.
+  pub question_set_id: Str? = None
+  /// The version of the question set: DRAFT or the number of a published
+  /// version. The version must exist. If you specify DRAFT, the output uses
+  /// the current DRAFT questions and picks up changes that you make later by
+  /// using UpdateQuestionSet. To keep the questions for the output fixed,
+  /// specify a published version.
+  pub version: Str? = None
+}
+
+/// Contains summary information about a question set. Used in the
+/// ListQuestionSets response.
+pub struct QuestionSetSummary {
+  /// The ARN of the question set.
+  pub arn: Str? = None
+  /// The ID of the question set.
+  pub id: Str? = None
+  /// The name of the question set.
+  pub name: Str? = None
+  /// The number of the highest version that you have published for this
+  /// question set, even if you have since deleted that version. Elemental
+  /// Inference doesn't return this property if you haven't published a
+  /// version.
+  pub latest_version: Str? = None
+}
+
+/// Contains summary information about one version of a question set. Used
+/// in the ListQuestionSetVersions response.
+pub struct QuestionSetVersionSummary {
+  /// The version: DRAFT or the number of a published version.
+  pub version: Str? = None
+  /// The description that you specified when you published this version.
+  /// Elemental Inference doesn't return this property for DRAFT, or for a
+  /// version that you published without a description.
+  pub description: Str? = None
+  /// The SHA-256 hash of this version, as 64 lowercase hexadecimal
+  /// characters. The hash covers the name of the question set and its
+  /// questions at this version.
+  pub sha256: Str? = None
+  /// For DRAFT, the time when you created the question set or last updated
+  /// DRAFT. For a published version, the time when you published it.
+  pub last_modified_at: Time? = None
+}
+
 /// Removes the game from an event clipping output at the action's scheduled
 /// time. This is a type of ScheduleActionOperation, and the output must be
 /// an event clipping output.
@@ -687,6 +1421,15 @@ pub struct RemoveClippingDataSourceConfiguration {
 /// The resource specified in the action doesn't exist.
 pub struct ResourceNotFoundException {
   pub message: Str? = None
+}
+
+/// The perScene trigger, which runs the function once for each scene that a
+/// contextual metadata output reports. The function runs after the scene
+/// ends, with the media of that scene. To choose this trigger, set perScene
+/// to an empty object. Specify contextualMetadataSettings to name the
+/// contextual metadata output that reports the scenes. You can't use this
+/// trigger with a function that references media.transcript or media.clip.
+pub struct SceneTrigger {
 }
 
 /// Describes one schedule action on a feed, including the changes it makes
@@ -823,6 +1566,16 @@ pub struct ServiceUnavailableException {
   pub message: Str? = None
 }
 
+/// The perShot trigger, which runs the function once for each shot that
+/// Elemental Inference detects in the video. The function runs after the
+/// shot ends, with the media of that shot. To choose this trigger, set
+/// perShot to an empty object. The feed must have a video input. You can't
+/// use this trigger with a function that references media.transcript or
+/// media.clip. If the function references media.contextual, specify
+/// contextualMetadataSettings.
+pub struct ShotTrigger {
+}
+
 /// A type of OutputConfig, used when the output in a feed is for the smart
 /// subtitling feature. Smart subtitling uses automatic speech recognition
 /// (ASR) to generate live TTML subtitles from the audio in your source
@@ -831,7 +1584,10 @@ pub struct SubtitlingConfig {
   /// The language of the audio in the source media. Elemental Inference uses
   /// this setting to optimize transcription accuracy. Specify the language
   /// using an ISO 639-2/T three-letter code, optionally with a region subtag.
-  /// Supported values: eng, eng-au, eng-gb, eng-us, fra, ita, deu, spa, por.
+  /// Supported values: eng – English eng-au – English (Australia) eng-gb
+  /// – English (United Kingdom) eng-us – English (United States) fra –
+  /// French ita – Italian deu – German spa – Spanish por – Portuguese
+  /// ara – Arabic
   pub language: TranscriptionLanguage? = None
   /// The aspect ratio of the output video, specified as width and height
   /// integer values. Elemental Inference uses the aspect ratio to determine
@@ -845,6 +1601,16 @@ pub struct SubtitlingConfig {
   /// values: DISABLED (no filtering, default), CENSOR (replace profanity with
   /// asterisks), DROP (remove profanity from the transcript).
   pub profanity_filter: ProfanityFilterMode? = None
+}
+
+/// The smart subtitles output on this feed that a function reads
+/// media.transcript from. Specify this structure for a function that
+/// references media.transcript. That function must use a fixedInterval
+/// trigger. If the function output is ENABLED, the output that you name
+/// must also be ENABLED.
+pub struct SubtitlingSettings {
+  /// The name of an ENABLED smart subtitles output on this feed.
+  pub output_name: Str? = None
 }
 
 pub enum SummaryGenerationMode: Str {
@@ -889,7 +1655,18 @@ pub enum TranscriptionLanguage: Str {
   Deu = "deu"
   Spa = "spa"
   Por = "por"
+  Ara = "ara"
   Unknown(value: Str)
+}
+
+/// Determines when a function runs. Specify exactly one member.
+pub enum Trigger {
+  FixedInterval(value: FixedIntervalTrigger)
+  PerShot(value: ShotTrigger)
+  PerScene(value: SceneTrigger)
+  PerClip(value: ClipTrigger)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 pub struct UntagResourceRequest {
@@ -979,6 +1756,75 @@ pub struct UpdateFeedResponse {
   pub tags: Map[Str, Str]? = None
 }
 
+pub struct UpdateFunctionRequest {
+  /// The ID of the function.
+  pub id: Str? = None
+  /// A new name for the function. You can't change the name while the
+  /// function is referenced by a feed.
+  pub name: Str? = None
+  /// A new target for the function. You can't change the target while the
+  /// function is referenced by a feed.
+  pub target_value: FunctionTarget? = None
+  /// A new request expression for the function. Elemental Inference derives
+  /// contextTypes again from the new expression. While a feed references the
+  /// function, the new expression must reference the same media context as
+  /// the current one.
+  pub request_expression: Str? = None
+  /// A new response expression for the function. To remove the response
+  /// expression, specify an empty string. A function with a Bedrock target
+  /// and eventBridgeDelivery set to ENABLED must keep a response expression.
+  pub response_expression: Str? = None
+  /// A new description for the function.
+  pub description: Str? = None
+  /// Specifies whether Elemental Inference also sends this function's marked
+  /// results to Amazon EventBridge, as described for CreateFunction. If you
+  /// omit this parameter, the current value is kept. While a feed references
+  /// the function, you can change this value to DISABLED, but not to ENABLED.
+  pub event_bridge_delivery: EventBridgeDeliveryMode? = None
+}
+
+pub struct UpdateFunctionResponse {
+  /// The name of the function.
+  pub name: Str? = None
+  /// The destination for the request that the function builds.
+  pub target_value: FunctionTarget? = None
+  /// The JSONata expression that builds the request. Elemental Inference
+  /// evaluates it against the media object of the feed, which holds the media
+  /// and metadata that the function asked for.
+  pub request_expression: Str? = None
+  /// The JSONata expression that selects what to store. Elemental Inference
+  /// evaluates it against the result as its root: the model response for a
+  /// Bedrock target, or the output of the request expression for a
+  /// passthrough target. If a function has no response expression, Elemental
+  /// Inference stores the entire result.
+  pub response_expression: Str? = None
+  /// The description of the function.
+  pub description: Str? = None
+  /// Indicates whether Elemental Inference also sends this function's results
+  /// to Amazon EventBridge. With ENABLED, each result that is a JSON object
+  /// with a top-level eventBridge field set to true is also sent as a
+  /// Function Metadata Generated event to the default event bus in your
+  /// account.
+  pub event_bridge_delivery: EventBridgeDeliveryMode? = None
+  /// The ARN of the function.
+  pub arn: Str? = None
+  /// The ID of the function.
+  pub id: Str? = None
+  /// The status of the function.
+  pub status: FunctionStatus? = None
+  /// The IDs of the feeds that have a function output, enabled or disabled,
+  /// that references this function. While this list isn't empty, the function
+  /// can't be deleted, and its name and target can't be changed.
+  pub references: List[Str]? = None
+  /// The kinds of media context that this function uses. Elemental Inference
+  /// derives this field from the media paths that the request expression
+  /// references; you can't set it. An empty list means that the expression
+  /// references no media, so Elemental Inference supplies none at run time.
+  pub context_types: List[ContextType]? = None
+  /// The tags associated with the function.
+  pub tags: Map[Str, Str]? = None
+}
+
 /// Contains configuration information about one output in a feed. It is
 /// used in the UpdateFeed action.
 pub struct UpdateOutput {
@@ -1013,9 +1859,115 @@ pub struct UpdateOutputStatus {
   pub status: OutputStatus? = None
 }
 
+pub struct UpdateQuestionSetRequest {
+  /// The ID of the question set to update.
+  pub id: Str? = None
+  /// An array of questions that Elemental Inference answers with yes or no,
+  /// to replace all the yesNo questions in DRAFT. You can specify up to 50
+  /// yesNo questions. If not specified, the yesNo questions are not changed.
+  /// To remove all the yesNo questions, specify an empty array.
+  pub yes_no: List[YesNoQuestion]? = None
+  /// An array of questions that you ask about each of their options, to
+  /// replace all the yesNoPerOption questions in DRAFT. You can specify up to
+  /// 10 yesNoPerOption questions. If not specified, the yesNoPerOption
+  /// questions are not changed. To remove all the yesNoPerOption questions,
+  /// specify an empty array.
+  pub yes_no_per_option: List[YesNoPerOptionQuestion]? = None
+  /// An array of questions that Elemental Inference answers by choosing one
+  /// of their options, to replace all the chooseOne questions in DRAFT. You
+  /// can specify up to 10 chooseOne questions. If not specified, the
+  /// chooseOne questions are not changed. To remove all the chooseOne
+  /// questions, specify an empty array.
+  pub choose_one: List[ChooseOneQuestion]? = None
+  /// A new name for the question set. If not specified, the name is not
+  /// changed.
+  pub name: Str? = None
+}
+
+pub struct UpdateQuestionSetResponse {
+  /// The yesNo questions in this version. Elemental Inference doesn't return
+  /// this property if the version has no yesNo questions.
+  pub yes_no: List[YesNoQuestion]? = None
+  /// The yesNoPerOption questions in this version. Elemental Inference
+  /// doesn't return this property if the version has no yesNoPerOption
+  /// questions.
+  pub yes_no_per_option: List[YesNoPerOptionQuestion]? = None
+  /// The chooseOne questions in this version. Elemental Inference doesn't
+  /// return this property if the version has no chooseOne questions.
+  pub choose_one: List[ChooseOneQuestion]? = None
+  /// The ARN of the question set.
+  pub arn: Str? = None
+  /// The ID of the question set.
+  pub id: Str? = None
+  /// The updated or original name of the question set.
+  pub name: Str? = None
+  /// The version that this response describes. For UpdateQuestionSet, the
+  /// version is always DRAFT.
+  pub version: Str? = None
+  /// The description of the version. Elemental Inference doesn't return this
+  /// property for UpdateQuestionSet, because the DRAFT version has no
+  /// description.
+  pub description: Str? = None
+  /// The number of the highest version that you have published for this
+  /// question set, even if you have since deleted that version. Elemental
+  /// Inference doesn't return this property if you haven't published a
+  /// version.
+  pub latest_version: Str? = None
+  /// The SHA-256 hash of the DRAFT version after the update, as 64 lowercase
+  /// hexadecimal characters. The hash covers the name of the question set and
+  /// its questions, so it changes when you rename the question set. You can
+  /// specify this value in a CreateQuestionSetVersion request, so that
+  /// Elemental Inference publishes DRAFT only if it hasn't changed since this
+  /// update.
+  pub sha256: Str? = None
+  /// A list of feed IDs that reference the DRAFT version of the question set.
+  pub references: List[Str]? = None
+  /// Any tags associated with the question set.
+  pub tags: Map[Str, Str]? = None
+}
+
 /// The input fails to satisfy the constraints specified by the service.
 /// Check the error message for details about which parameter or field is
 /// invalid and correct the request before retrying.
 pub struct ValidationException {
   pub message: Str? = None
+}
+
+/// A question that you ask Elemental Inference separately about each of its
+/// options. Elemental Inference answers yes or no for each option. Word the
+/// question so that it fits any of the options. For example, ask Is this
+/// overlay visible? with one option for each overlay. You specify it in the
+/// yesNoPerOption array of a question set.
+pub struct YesNoPerOptionQuestion {
+  /// A name for the question. The name must be unique among all the questions
+  /// in the version, across all question types. The name can be up to 64
+  /// characters. It must start with a letter or an underscore, and can
+  /// contain only the letters A-Z and a-z, the digits 0-9, and underscores.
+  pub name: Str? = None
+  /// The text of the question. The text can be up to 256 bytes, encoded in
+  /// UTF-8. It can contain letters in any language, combining marks, digits,
+  /// spaces, and the following characters: . , ? ! ' " ( ) - : ; / &amp; % ,
+  /// plus the curly apostrophe and quotation marks (U+2019, U+201C, and
+  /// U+201D).
+  pub question: Str? = None
+  /// The options that you ask the question about. You can specify from 1 to
+  /// 50 options. Each option counts as one item toward the limit of 100
+  /// scored items in a version.
+  pub options: List[QuestionOption]? = None
+}
+
+/// A question that you ask Elemental Inference, which answers with yes or
+/// no. You specify it in the yesNo array of a question set.
+pub struct YesNoQuestion {
+  /// A name for the question. The name must be unique among all the questions
+  /// in the version, across all question types. The name can be up to 64
+  /// characters. It must start with a letter or an underscore, and can
+  /// contain only the letters A-Z and a-z, the digits 0-9, and underscores.
+  pub name: Str? = None
+  /// The text of the question. The text can be up to 256 bytes, encoded in
+  /// UTF-8. It can contain letters in any language, combining marks, digits,
+  /// spaces, and the following characters: . , ? ! ' " ( ) - : ; / &amp; % ,
+  /// plus the curly apostrophe and quotation marks (U+2019, U+201C, and
+  /// U+201D).
+  pub question: Str? = None
 }

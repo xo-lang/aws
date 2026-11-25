@@ -513,6 +513,22 @@ fn from_json_ecs_parameters(v: json.Value) -> EcsParameters ! Str {
   Ok(out)
 }
 
+fn json_of_event_bridge_metadata_map(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_event_bridge_metadata_map(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_event_bridge_parameters(v: EventBridgeParameters) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.detail_type {
@@ -533,6 +549,54 @@ fn from_json_event_bridge_parameters(v: json.Value) -> EventBridgeParameters ! S
     match k {
       "DetailType" => out.detail_type = jsonv.read_str(fv)?
       "Source" => out.source = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_event_bridge_put_events_v2_parameters(v: EventBridgePutEventsV2Parameters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.detail_type {
+    fs.push(("DetailType", json.Value.Str(x)))
+  }
+  if let Some(x) = v.source {
+    fs.push(("Source", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_event_bridge_put_events_v2_parameters(v: json.Value) -> EventBridgePutEventsV2Parameters ! Str {
+  var out = EventBridgePutEventsV2Parameters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DetailType" => out.detail_type = jsonv.read_str(fv)?
+      "Source" => out.source = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_event_bridge_put_raw_events_parameters(v: EventBridgePutRawEventsParameters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metadata {
+    fs.push(("Metadata", json_of_event_bridge_metadata_map(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_event_bridge_put_raw_events_parameters(v: json.Value) -> EventBridgePutRawEventsParameters ! Str {
+  var out = EventBridgePutRawEventsParameters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Metadata" => out.metadata = from_json_event_bridge_metadata_map(fv)?
       _ => {}
     }
   }
@@ -1497,6 +1561,12 @@ fn json_of_target_value(v: Target) -> json.Value {
   if let Some(x) = v.event_bridge_parameters {
     fs.push(("EventBridgeParameters", json_of_event_bridge_parameters(x)))
   }
+  if let Some(x) = v.event_bridge_put_events_v2_parameters {
+    fs.push(("EventBridgePutEventsV2Parameters", json_of_event_bridge_put_events_v2_parameters(x)))
+  }
+  if let Some(x) = v.event_bridge_put_raw_events_parameters {
+    fs.push(("EventBridgePutRawEventsParameters", json_of_event_bridge_put_raw_events_parameters(x)))
+  }
   if let Some(x) = v.kinesis_parameters {
     fs.push(("KinesisParameters", json_of_kinesis_parameters(x)))
   }
@@ -1523,6 +1593,8 @@ fn from_json_target_value(v: json.Value) -> Target ! Str {
       "Input" => out.input = jsonv.read_str(fv)?
       "EcsParameters" => out.ecs_parameters = from_json_ecs_parameters(fv)?
       "EventBridgeParameters" => out.event_bridge_parameters = from_json_event_bridge_parameters(fv)?
+      "EventBridgePutEventsV2Parameters" => out.event_bridge_put_events_v2_parameters = from_json_event_bridge_put_events_v2_parameters(fv)?
+      "EventBridgePutRawEventsParameters" => out.event_bridge_put_raw_events_parameters = from_json_event_bridge_put_raw_events_parameters(fv)?
       "KinesisParameters" => out.kinesis_parameters = from_json_kinesis_parameters(fv)?
       "SageMakerPipelineParameters" => out.sage_maker_pipeline_parameters = from_json_sage_maker_pipeline_parameters(fv)?
       "SqsParameters" => out.sqs_parameters = from_json_sqs_parameters(fv)?
@@ -2168,6 +2240,7 @@ pub enum DeleteScheduleErr {
   ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -2185,6 +2258,7 @@ pub fn (e: DeleteScheduleErr) display() -> Str {
     ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -2207,6 +2281,10 @@ pub fn deserialize_delete_schedule_error(resp: http.Response) -> DeleteScheduleE
     }
     "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
       Ok(x) => return DeleteScheduleErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteScheduleErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return DeleteScheduleErr.ServiceQuotaExceededException(x)
       Err(msg) => return DeleteScheduleErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -2428,6 +2506,7 @@ pub fn deserialize_get_schedule(resp: http.Response) -> GetScheduleOutput ! Str 
 pub enum GetScheduleErr {
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -2444,6 +2523,7 @@ pub fn (e: GetScheduleErr) display() -> Str {
   match e {
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -2462,6 +2542,10 @@ pub fn deserialize_get_schedule_error(resp: http.Response) -> GetScheduleErr {
     }
     "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
       Ok(x) => return GetScheduleErr.ResourceNotFoundException(x)
+      Err(msg) => return GetScheduleErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return GetScheduleErr.ServiceQuotaExceededException(x)
       Err(msg) => return GetScheduleErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -3290,6 +3374,7 @@ pub enum UpdateScheduleErr {
   ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -3307,6 +3392,7 @@ pub fn (e: UpdateScheduleErr) display() -> Str {
     ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -3329,6 +3415,10 @@ pub fn deserialize_update_schedule_error(resp: http.Response) -> UpdateScheduleE
     }
     "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
       Ok(x) => return UpdateScheduleErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateScheduleErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateScheduleErr.ServiceQuotaExceededException(x)
       Err(msg) => return UpdateScheduleErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {

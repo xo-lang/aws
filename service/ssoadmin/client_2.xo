@@ -8,6 +8,82 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Lists the status of the Amazon Web Services account assignment deletion
+/// requests for a specified IAM Identity Center instance.
+pub fn (c: Client) list_account_assignment_deletion_status(input: ListAccountAssignmentDeletionStatusRequest) -> ListAccountAssignmentDeletionStatusResponse ! ListAccountAssignmentDeletionStatusErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_account_assignment_deletion_status(c.params, input)) ?? e => return Err(ListAccountAssignmentDeletionStatusErr.InvalidInput(e))
+  var req = serialize_list_account_assignment_deletion_status(ep, input, "") ?? e => return Err(ListAccountAssignmentDeletionStatusErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAccountAssignmentDeletionStatusErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_account_assignment_deletion_status_error(resp))
+  }
+  deserialize_list_account_assignment_deletion_status(resp) ?? e => Err(ListAccountAssignmentDeletionStatusErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_account_assignments(base: EndpointParameters, input: ListAccountAssignmentsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAccountAssignments.
+pub fn serialize_list_account_assignments(ep: rest.Endpoint, input: ListAccountAssignmentsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.instance_arn {
+    fs.push(("InstanceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.account_id {
+    fs.push(("AccountId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.permission_set_arn {
+    fs.push(("PermissionSetArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "SWBExternalService.ListAccountAssignments"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_account_assignments(resp: http.Response) -> ListAccountAssignmentsResponse ! Str {
+  var out = ListAccountAssignmentsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AccountAssignments" => out.account_assignments = from_json_account_assignment_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 /// The errors of ListAccountAssignments.
 pub enum ListAccountAssignmentsErr {
   AccessDeniedException(e: AccessDeniedException)
@@ -4004,6 +4080,9 @@ pub fn serialize_update_instance(ep: rest.Endpoint, input: UpdateInstanceRequest
   if let Some(x) = input.permission_sets_enabled {
     fs.push(("PermissionSetsEnabled", json.Value.Bool(x)))
   }
+  if let Some(x) = input.network_configuration {
+    fs.push(("NetworkConfiguration", json_of_network_configuration_info(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))
   headers.push(("X-Amz-Target", "SWBExternalService.UpdateInstance"))
@@ -4097,11 +4176,12 @@ pub fn deserialize_update_instance_error(resp: http.Response) -> UpdateInstanceE
 /// you can perform only one of the following operations: Update the
 /// encryption configuration of the instance by specifying
 /// EncryptionConfiguration . Enable permission sets for the instance by
-/// specifying PermissionSetsEnabled . If you specify both
-/// EncryptionConfiguration and PermissionSetsEnabled in a request, the
-/// request returns a ValidationException . To perform both operations, call
-/// UpdateInstance separately for each. You can make the two calls in
-/// parallel.
+/// specifying PermissionSetsEnabled . Update the network configuration of
+/// the instance by specifying NetworkConfiguration . A request that
+/// specifies more than one of EncryptionConfiguration ,
+/// PermissionSetsEnabled , and NetworkConfiguration returns a
+/// ValidationException . To perform more than one of these operations, call
+/// UpdateInstance separately for each. The calls can be made in parallel.
 pub fn (c: Client) update_instance(input: UpdateInstanceRequest) -> UpdateInstanceResponse ! UpdateInstanceErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_instance(c.params, input)) ?? e => return Err(UpdateInstanceErr.InvalidInput(e))
   var req = serialize_update_instance(ep, input, "") ?? e => return Err(UpdateInstanceErr.InvalidInput(e))

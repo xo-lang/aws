@@ -69,15 +69,18 @@ pub struct AgentProfileSummary {
   pub description: Str? = None
   /// The business overview for this profile.
   pub business_overview: Str? = None
-  /// The Well-Architected Tool Framework pillars associated with this
-  /// profile.
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with this profile. Not present for basic profiles.
   pub pillars: List[Pillar]? = None
   /// Indicates whether deletion protection is enabled for the profile.
   pub deletion_protection: Bool? = None
-  /// The ARN of the IAM execution role used for recommendation actions.
+  /// The type of the profile.
+  pub profile_type: ProfileType? = None
+  /// The ARN of the IAM execution role used for recommendation actions. Not
+  /// present for basic profiles.
   pub execution_role_arn: Str? = None
   /// The aggregation configuration that defines which Amazon Web Services
-  /// accounts and Regions to analyze.
+  /// accounts and Regions to analyze. Not present for basic profiles.
   pub aggregation_configuration: List[AggregationConfiguration]? = None
   /// The Amazon Resource Name (ARN) of the optimization profile.
   pub arn: Str? = None
@@ -90,8 +93,6 @@ pub struct AgentProfileSummary {
   /// A map of field paths to error messages for invalid or missing input
   /// fields.
   pub field_errors: Map[Str, Str]? = None
-  /// The tags associated with the profile.
-  pub tags: List[Tag]? = None
   /// The identifier of the user or system that created this profile.
   pub created_by: Str? = None
   /// The timestamp when the profile was created.
@@ -100,6 +101,9 @@ pub struct AgentProfileSummary {
   pub last_modified_by: Str? = None
   /// The timestamp when the profile was last modified.
   pub last_modified_at: Time? = None
+  /// The organizational monitoring boundary. Present only for organizational
+  /// profiles.
+  pub organizational_aggregation_configuration: OrganizationalAggregationConfiguration? = None
 }
 
 /// Summary of a recommendation generation process initiated through the
@@ -123,6 +127,16 @@ pub struct AgentRecommendationGenerationSummary {
   pub last_modified_by: Str? = None
   /// The timestamp when the generation was last modified.
   pub last_modified_at: Time? = None
+  /// How the generation was started.
+  pub generation_type: GenerationType? = None
+  /// The recommendation types the generation covers.
+  pub generation_recommendation_types: List[RecommendationType]? = None
+  /// The timestamp when the recommendation generation process started.
+  pub started_at: Time? = None
+  /// The timestamp when the recommendation generation process completed.
+  pub ended_at: Time? = None
+  /// Details about the error if the generation status is ERROR.
+  pub error_details: ErrorDetails? = None
 }
 
 /// Summary of an agent recommendation item, representing an Amazon Web
@@ -148,6 +162,10 @@ pub struct AgentRecommendationItemSummary {
   pub last_modified_by: Str? = None
   /// The timestamp when the recommendation item was last modified.
   pub last_modified_at: Time? = None
+  /// The optional per-resource auto-remediation for this affected resource,
+  /// representing an SSM runbook execution. Present only when the item's
+  /// check is backed by an SSM automation runbook.
+  pub auto_remediation: AutoRemediation? = None
 }
 
 /// The core fields for a remediation.
@@ -178,8 +196,7 @@ pub struct AgentRecommendationSummary {
   pub recommendation_arn: Str? = None
   /// The Amazon Resource Name (ARN) of the associated profile.
   pub profile_arn: Str? = None
-  /// The identifier of the generation process that produced this
-  /// recommendation.
+  /// The identifier of the generation that produced this recommendation.
   pub generation_id: Str? = None
   /// The title of the recommendation.
   pub title: Str? = None
@@ -187,8 +204,8 @@ pub struct AgentRecommendationSummary {
   pub description: Str? = None
   /// The type of the recommendation.
   pub type_value: RecommendationType? = None
-  /// The Well-Architected Tool Framework pillar that the recommendation
-  /// addresses.
+  /// The Amazon Web Services Well-Architected Framework pillar that the
+  /// recommendation addresses.
   pub pillar: Pillar? = None
   /// The priority of the recommendation.
   pub priority: Priority? = None
@@ -288,6 +305,7 @@ pub struct AnswerSummary {
   pub jira_configuration: JiraConfiguration? = None
 }
 
+/// The type of application described by an application context.
 pub enum ApplicationType: Str {
   Sas = "SAS"
   DesktopApplication = "DESKTOP_APPLICATION"
@@ -305,6 +323,19 @@ pub struct AssociateProfilesInput {
   pub workload_id: Str? = None
   /// The list of profile ARNs to associate with the workload.
   pub profile_arns: List[Str]? = None
+}
+
+/// The per-resource auto-remediation for a single affected resource.
+/// Represents one AWS Systems Manager (SSM) runbook execution that targets
+/// the resource. Present only when the resource's check is backed by an SSM
+/// automation runbook.
+pub struct AutoRemediation {
+  /// A deep link to the SSM runbook execution page in the AWS Management
+  /// Console for this resource, with the execution parameters prefilled.
+  pub deep_link: Str? = None
+  /// The AWS CLI command that triggers the same SSM runbook execution for
+  /// this resource. You can copy and run this command as-is.
+  pub cli_command: Str? = None
 }
 
 /// A best practice, or question choice, that has been identified as a risk
@@ -510,6 +541,10 @@ pub struct ContextContent {
   pub resource_types: List[Str]? = None
   /// Resource tags used to scope this application context.
   pub resource_tags: List[ContextResourceTag]? = None
+  /// The AWS Organizations organizational unit (OU) IDs associated with this
+  /// application context. Valid only for organizational profiles; rejected
+  /// for standard profiles.
+  pub organizational_unit_ids: List[Str]? = None
   /// A free-form overview of the application.
   pub application_overview: Str? = None
   /// The industry vertical for this application.
@@ -561,9 +596,69 @@ pub struct ContextSummary {
   pub last_modified_at: Time? = None
 }
 
+/// The type of a context, describing the kind of application or environment
+/// metadata it carries.
 pub enum ContextType: Str {
   Application = "APPLICATION"
   Unknown(value: Str)
+}
+
+/// Counts describing the coverage of a completed Organizational Report.
+/// Includes the number of accounts in scope, how many had a profile, how
+/// many failed, and aggregated recommendation counts by pillar and
+/// priority. Returned only by GetAgentOrganizationalReport after the report
+/// reaches COMPLETED status. Not returned on the list response.
+pub struct CoverageSummary {
+  /// Total number of accounts that were in scope for the report after
+  /// applying all filters and AWS Organizations membership validation.
+  pub total_accounts_in_scope: Int? = None
+  /// Number of in-scope accounts that had an Agent Profile and were
+  /// successfully processed.
+  pub accounts_with_profile: Int? = None
+  /// Number of in-scope accounts that had no Agent Profile at the time of the
+  /// snapshot.
+  pub accounts_without_profile: Int? = None
+  /// Number of in-scope accounts that errored during processing. Equal to the
+  /// length of failedAccounts.
+  pub failed_account_count: Int? = None
+  /// Total number of Agent Profiles contributing to the report.
+  pub total_profiles: Int? = None
+  /// Total number of recommendations included in the report across all
+  /// profiles and all pillars.
+  pub total_recommendations: Int? = None
+  /// Recommendation count grouped by Well-Architected pillar. Each entry
+  /// pairs a Pillar enum value with a non-negative long. The counts sum to
+  /// totalRecommendations.
+  pub recommendation_count_by_pillar: List[PillarCount]? = None
+  /// Recommendation count grouped by Priority. Each entry pairs a Priority
+  /// enum value with a non-negative long. The counts sum to
+  /// totalRecommendations.
+  pub recommendation_count_by_priority: List[PriorityCount]? = None
+  /// Accounts that errored during processing and the reason they failed.
+  pub failed_accounts: List[FailedAccount]? = None
+  /// Organizational units named in the report's filters that could not be
+  /// expanded into their member accounts, along with the reason each failed.
+  /// A failed OU means the report is missing whatever accounts it contained.
+  /// Absent or empty when every requested OU expanded successfully.
+  pub failed_organizational_units: List[FailedOrganizationalUnit]? = None
+}
+
+pub struct CreateAgentBasicProfileRequest {
+  /// Tags to apply to the Basic profile at creation time.
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateAgentBasicProfileResponse {
+  /// The identifier of the user or system that created this resource.
+  pub created_by: Str? = None
+  /// The timestamp when the resource was created.
+  pub created_at: Time? = None
+  /// The identifier of the user or system that last modified this resource.
+  pub last_modified_by: Str? = None
+  /// The timestamp when the resource was last modified.
+  pub last_modified_at: Time? = None
+  /// The Amazon Resource Name (ARN) of the created Basic profile.
+  pub arn: Str? = None
 }
 
 pub struct CreateAgentContextRequest {
@@ -595,7 +690,8 @@ pub struct CreateAgentGoalRequest {
   /// The Amazon Resource Name (ARN) of the profile to associate the goal
   /// with.
   pub profile_arn: Str? = None
-  /// The Well-Architected Tool Framework pillars to associate with this goal.
+  /// The Amazon Web Services Well-Architected Framework pillars to associate
+  /// with this goal.
   pub pillars: List[Pillar]? = None
   /// The title of the goal.
   pub title: Str? = None
@@ -608,6 +704,98 @@ pub struct CreateAgentGoalResponse {
   pub goal: GoalSummary? = None
 }
 
+pub struct CreateAgentOrganizationalProfileRequest {
+  /// The system name of the organizational profile.
+  pub name: Str? = None
+  /// The display name of the organizational profile shown to users.
+  pub display_name: Str? = None
+  /// A description of the organizational profile.
+  pub description: Str? = None
+  /// The business overview for this organizational profile.
+  pub business_overview: Str? = None
+  /// The Amazon Web Services Well-Architected Framework pillars to associate
+  /// with this organizational profile.
+  pub pillars: List[Pillar]? = None
+  /// Indicates whether deletion protection is enabled for the organizational
+  /// profile.
+  pub deletion_protection: Bool? = None
+  /// A unique, case-sensitive identifier that you provide to ensure the
+  /// idempotency of the request.
+  pub client_token: Str? = None
+  /// The organizational monitoring boundary. Contains organizational unit or
+  /// root entries and individual account entries that define the scope for
+  /// the profile.
+  pub organizational_aggregation_configuration: OrganizationalAggregationConfiguration? = None
+  /// The tags to associate with the organizational profile.
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateAgentOrganizationalProfileResponse {
+  /// The system name of the created organizational profile.
+  pub name: Str? = None
+  /// The display name of the created organizational profile.
+  pub display_name: Str? = None
+  /// A description of the created organizational profile.
+  pub description: Str? = None
+  /// The business overview of the created organizational profile.
+  pub business_overview: Str? = None
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with the created organizational profile.
+  pub pillars: List[Pillar]? = None
+  /// Indicates whether deletion protection is enabled.
+  pub deletion_protection: Bool? = None
+  /// The identifier of the Amazon Web Services Organization this profile
+  /// belongs to.
+  pub organization_id: Str? = None
+  /// The organizational monitoring boundary for the created profile. Present
+  /// only for organizational profiles.
+  pub organizational_aggregation_configuration: OrganizationalAggregationConfiguration? = None
+  /// The Amazon Resource Name (ARN) of the created organizational profile.
+  pub arn: Str? = None
+  /// Indicates whether the profile is valid for scheduled recommendation
+  /// generation.
+  pub eligible_for_scheduled_generation: Bool? = None
+  /// Indicates whether the profile is valid for manual architecture
+  /// generation.
+  pub eligible_for_architecture_generation: Bool? = None
+  /// A map of field paths to error messages for invalid or missing input
+  /// fields.
+  pub field_errors: Map[Str, Str]? = None
+  /// The tags associated with the created organizational profile.
+  pub tags: List[Tag]? = None
+  /// The identifier of the user or system that created this organizational
+  /// profile.
+  pub created_by: Str? = None
+  /// The timestamp when the organizational profile was created.
+  pub created_at: Time? = None
+  /// The identifier of the user or system that last modified this
+  /// organizational profile.
+  pub last_modified_by: Str? = None
+  /// The timestamp when the organizational profile was last modified.
+  pub last_modified_at: Time? = None
+}
+
+pub struct CreateAgentOrganizationalReportRequest {
+  /// A caller-supplied idempotency token. Two create calls sharing the same
+  /// token within the service's idempotency window return the same reportId.
+  pub client_token: Str? = None
+  /// Optional human-readable label (1-500 characters) that helps callers
+  /// distinguish reports created with the same filters. Carried through list
+  /// and get responses.
+  pub label: Str? = None
+  /// Optional filters narrowing the report's scope. Absent means the report
+  /// covers the whole organization.
+  pub filters: OrganizationalReportFilters? = None
+}
+
+pub struct CreateAgentOrganizationalReportResponse {
+  /// Unique identifier assigned to the newly-created report.
+  pub report_id: Str? = None
+  /// Lifecycle state of the report at the moment the create call returned.
+  /// For a freshly-created report this is typically DISCOVERING.
+  pub state: OrganizationalReportState? = None
+}
+
 pub struct CreateAgentProfileRequest {
   /// The system name of the profile.
   pub name: Str? = None
@@ -617,8 +805,8 @@ pub struct CreateAgentProfileRequest {
   pub description: Str? = None
   /// The business overview for this profile.
   pub business_overview: Str? = None
-  /// The Well-Architected Tool Framework pillars to associate with this
-  /// profile.
+  /// The Amazon Web Services Well-Architected Framework pillars to associate
+  /// with this profile.
   pub pillars: List[Pillar]? = None
   /// Indicates whether deletion protection is enabled for the profile.
   pub deletion_protection: Bool? = None
@@ -643,8 +831,8 @@ pub struct CreateAgentProfileResponse {
   pub description: Str? = None
   /// The business overview of the created profile.
   pub business_overview: Str? = None
-  /// The Well-Architected Tool Framework pillars associated with the created
-  /// profile.
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with the created profile.
   pub pillars: List[Pillar]? = None
   /// Indicates whether deletion protection is enabled.
   pub deletion_protection: Bool? = None
@@ -828,6 +1016,7 @@ pub struct CreateWorkloadShareOutput {
   pub share_id: Str? = None
 }
 
+/// The business criticality of an application context.
 pub enum Criticality: Str {
   MissionCritical = "MISSION_CRITICAL"
   BusinessCritical = "BUSINESS_CRITICAL"
@@ -874,12 +1063,36 @@ pub struct DeleteAgentGoalRequest {
 pub struct DeleteAgentGoalResponse {
 }
 
+pub struct DeleteAgentOrganizationalReportRequest {
+  /// Identifier of the report to delete.
+  pub report_id: Str? = None
+}
+
+pub struct DeleteAgentOrganizationalReportResponse {
+}
+
+pub struct DeleteAgentProfilePolicyRequest {
+  /// The ARN of the Agent Profile whose policy to delete.
+  pub profile_arn: Str? = None
+}
+
+pub struct DeleteAgentProfilePolicyResponse {
+}
+
 pub struct DeleteAgentProfileRequest {
   /// The Amazon Resource Name (ARN) of the profile to delete.
   pub profile_arn: Str? = None
 }
 
 pub struct DeleteAgentProfileResponse {
+}
+
+pub struct DeleteAgentRecommendationPolicyRequest {
+  /// The ARN of the Agent Recommendation whose policy to delete.
+  pub recommendation_arn: Str? = None
+}
+
+pub struct DeleteAgentRecommendationPolicyResponse {
 }
 
 pub struct DeleteLensInput {
@@ -959,6 +1172,7 @@ pub enum DiscoveryIntegrationStatus: Str {
   Unknown(value: Str)
 }
 
+/// The level of effort required to implement a recommendation.
 pub enum Effort: Str {
   Large = "LARGE"
   Medium = "MEDIUM"
@@ -985,6 +1199,29 @@ pub struct ExportLensOutput {
   pub lens_json: Str? = None
 }
 
+/// An account that was in scope for an Organizational Report but could not
+/// be processed, along with the reason for the failure.
+pub struct FailedAccount {
+  /// The AWS account ID that failed.
+  pub account_id: Str? = None
+  /// A human-readable explanation of why the account could not be processed.
+  pub reason: Str? = None
+}
+
+/// An organizational unit that was requested in an Organizational Report's
+/// filters but could not be expanded into its member accounts. A failed OU
+/// means the report is missing the accounts it contained.
+pub struct FailedOrganizationalUnit {
+  /// The AWS Organizations OU ID that could not be expanded.
+  pub organizational_unit_id: Str? = None
+  /// A human-readable explanation of why the organizational unit could not be
+  /// expanded.
+  pub reason: Str? = None
+}
+
+/// A category that classifies the specific nature of recommendation
+/// feedback. Used to provide structured feedback that the recommendation
+/// engine can act upon in subsequent generation cycles.
 pub enum FeedbackCategory: Str {
   Other = "OTHER"
   RecommendationNotRelevant = "RECOMMENDATION_NOT_RELEVANT"
@@ -994,11 +1231,20 @@ pub enum FeedbackCategory: Str {
   Unknown(value: Str)
 }
 
+/// The status of a recommendation generation process.
 pub enum GenerationStatus: Str {
   Queued = "QUEUED"
   InProgress = "IN_PROGRESS"
   Completed = "COMPLETED"
   Error = "ERROR"
+  Unknown(value: Str)
+}
+
+/// How a recommendation generation was started.
+pub enum GenerationType: Str {
+  Ondemand = "ONDEMAND"
+  Scheduled = "SCHEDULED"
+  Basic = "BASIC"
   Unknown(value: Str)
 }
 
@@ -1026,6 +1272,71 @@ pub struct GetAgentGoalResponse {
   pub goal: GoalSummary? = None
 }
 
+pub struct GetAgentOrganizationalReportDataRequest {
+  /// Identifier of the report whose data is being retrieved.
+  pub report_id: Str? = None
+  /// Format of the returned artifact (CSV, JSON, or PARQUET).
+  pub format: OrganizationalReportFormat? = None
+}
+
+pub struct GetAgentOrganizationalReportDataResponse {
+  /// Presigned URL that can be used to download the artifact.
+  pub download_url: Str? = None
+  /// Expiration time of downloadUrl.
+  pub expires_at: Time? = None
+}
+
+pub struct GetAgentOrganizationalReportRequest {
+  /// Identifier of the report to retrieve.
+  pub report_id: Str? = None
+}
+
+pub struct GetAgentOrganizationalReportResponse {
+  /// Unique identifier of the Organizational Report assigned by the service
+  /// at creation time.
+  pub report_id: Str? = None
+  /// AWS account ID of the caller that created the report. Only this account
+  /// or a delegated administrator of the same organization may retrieve or
+  /// delete the report.
+  pub owner_account_id: Str? = None
+  /// Identifier of the AWS Organization the report belongs to. Derived from
+  /// the caller's authorization context at creation time and not accepted as
+  /// a client-supplied input.
+  pub organization_id: Str? = None
+  /// Optional human-readable label supplied by the caller at creation time.
+  pub label: Str? = None
+  /// Current lifecycle state of the report.
+  pub state: OrganizationalReportState? = None
+  /// Timestamp at which the report was created.
+  pub created_at: Time? = None
+  /// Filters captured when the report was created. Absent when no filters
+  /// were supplied (meaning the report covered the whole organization).
+  pub filters: OrganizationalReportFilters? = None
+  /// Coverage and aggregate counts for the report. Present only after the
+  /// report reaches COMPLETED.
+  pub coverage_summary: CoverageSummary? = None
+}
+
+pub struct GetAgentPreferencesRequest {
+}
+
+pub struct GetAgentPreferencesResponse {
+  /// The caller's complete set of preferences.
+  pub preferences: List[PreferenceEntry]? = None
+}
+
+pub struct GetAgentProfilePolicyRequest {
+  /// The ARN of the Agent Profile whose policy to retrieve.
+  pub profile_arn: Str? = None
+}
+
+pub struct GetAgentProfilePolicyResponse {
+  /// The ARN of the Agent Profile.
+  pub profile_arn: Str? = None
+  /// The IAM resource-based policy document in JSON format.
+  pub policy: Str? = None
+}
+
 pub struct GetAgentProfileRequest {
   /// The Amazon Resource Name (ARN) of the optimization profile to retrieve.
   pub profile_arn: Str? = None
@@ -1040,13 +1351,16 @@ pub struct GetAgentProfileResponse {
   pub description: Str? = None
   /// The business overview of the profile.
   pub business_overview: Str? = None
-  /// The Well-Architected Tool Framework pillars associated with the profile.
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with the profile. Not present for basic profiles.
   pub pillars: List[Pillar]? = None
   /// Indicates whether deletion protection is enabled.
   pub deletion_protection: Bool? = None
-  /// The ARN of the IAM execution role.
+  /// The type of the profile.
+  pub profile_type: ProfileType? = None
+  /// The ARN of the IAM execution role. Not present for basic profiles.
   pub execution_role_arn: Str? = None
-  /// The aggregation configuration.
+  /// The aggregation configuration. Not present for basic profiles.
   pub aggregation_configuration: List[AggregationConfiguration]? = None
   /// The Amazon Resource Name (ARN) of the profile.
   pub arn: Str? = None
@@ -1069,6 +1383,9 @@ pub struct GetAgentProfileResponse {
   pub last_modified_by: Str? = None
   /// The timestamp when the profile was last modified.
   pub last_modified_at: Time? = None
+  /// The organizational monitoring boundary. Present only for organizational
+  /// profiles.
+  pub organizational_aggregation_configuration: OrganizationalAggregationConfiguration? = None
 }
 
 pub struct GetAgentRecommendationGenerationRequest {
@@ -1097,21 +1414,38 @@ pub struct GetAgentRecommendationGenerationResponse {
   pub last_modified_by: Str? = None
   /// The timestamp when the generation was last modified.
   pub last_modified_at: Time? = None
-  /// Additional context information provided to guide the recommendation
-  /// generation process.
-  pub additional_context: json.Value? = None
-  /// The scope configuration that defines which pillars and goals to focus on
-  /// during generation.
-  pub scope: Scope? = None
+  /// How the generation was started.
+  pub generation_type: GenerationType? = None
+  /// The recommendation types the generation covers.
+  pub generation_recommendation_types: List[RecommendationType]? = None
   /// The timestamp when the recommendation generation process started.
   pub started_at: Time? = None
   /// The timestamp when the recommendation generation process completed.
   pub ended_at: Time? = None
+  /// Details about the error if the generation status is ERROR.
+  pub error_details: ErrorDetails? = None
+  /// The additional context that was provided when the generation was
+  /// started. For ARCHITECTURE generations, this includes the location of the
+  /// reviewed IaC template and the lenses used.
+  pub additional_context: json.Value? = None
+  /// The scope configuration that defines which pillars and goals to focus on
+  /// during generation.
+  pub scope: Scope? = None
   /// Current progress information including steps completed and completion
   /// percentage.
   pub progress: Progress? = None
-  /// Details about the error if the generation status is ERROR.
-  pub error_details: ErrorDetails? = None
+}
+
+pub struct GetAgentRecommendationPolicyRequest {
+  /// The ARN of the Agent Recommendation whose policy to retrieve.
+  pub recommendation_arn: Str? = None
+}
+
+pub struct GetAgentRecommendationPolicyResponse {
+  /// The ARN of the Agent Recommendation.
+  pub recommendation_arn: Str? = None
+  /// The IAM resource-based policy document in JSON format.
+  pub policy: Str? = None
 }
 
 pub struct GetAgentRecommendationRequest {
@@ -1126,8 +1460,7 @@ pub struct GetAgentRecommendationResponse {
   pub recommendation_arn: Str? = None
   /// The Amazon Resource Name (ARN) of the associated profile.
   pub profile_arn: Str? = None
-  /// The identifier of the generation process that produced this
-  /// recommendation.
+  /// The identifier of the generation that produced this recommendation.
   pub generation_id: Str? = None
   /// The title of the recommendation.
   pub title: Str? = None
@@ -1135,8 +1468,8 @@ pub struct GetAgentRecommendationResponse {
   pub description: Str? = None
   /// The type of the recommendation.
   pub type_value: RecommendationType? = None
-  /// The Well-Architected Tool Framework pillar that the recommendation
-  /// addresses.
+  /// The Amazon Web Services Well-Architected Framework pillar that the
+  /// recommendation addresses.
   pub pillar: Pillar? = None
   /// The priority of the recommendation.
   pub priority: Priority? = None
@@ -1385,7 +1718,8 @@ pub struct GoalSummary {
   pub id: Str? = None
   /// The Amazon Resource Name (ARN) of the associated profile.
   pub profile_arn: Str? = None
-  /// The Well-Architected Tool Framework pillars associated with this goal.
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with this goal.
   pub pillars: List[Pillar]? = None
   /// The title of the goal.
   pub title: Str? = None
@@ -1401,6 +1735,7 @@ pub struct GoalSummary {
   pub last_modified_at: Time? = None
 }
 
+/// The severity of a recommendation's impact.
 pub enum ImpactCategory: Str {
   High = "HIGH"
   Medium = "MEDIUM"
@@ -1639,13 +1974,18 @@ pub struct LensUpgradeSummary {
 pub struct ListAgentContextsRequest {
   /// The Amazon Resource Name (ARN) of the profile to list contexts for.
   pub profile_arn: Str? = None
+  /// The maximum number of contexts to return in a single call. Default is
+  /// 100.
   pub max_results: Int? = None
+  /// A pagination token returned from a previous call to continue retrieving
+  /// results.
   pub next_token: Str? = None
 }
 
 pub struct ListAgentContextsResponse {
   /// A list of context summaries associated with the profile.
   pub items: List[ContextSummary]? = None
+  /// A pagination token to retrieve the next set of results, if available.
   pub next_token: Str? = None
 }
 
@@ -1664,6 +2004,25 @@ pub struct ListAgentGoalsResponse {
   /// A list of goal summaries associated with the profile.
   pub items: List[GoalSummary]? = None
   /// A pagination token to retrieve the next set of results, if available.
+  pub next_token: Str? = None
+}
+
+pub struct ListAgentOrganizationalReportsRequest {
+  /// Maximum number of items to return in a single page. Defaults to 100.
+  pub max_results: Int? = None
+  /// Pagination token from a previous ListAgentOrganizationalReports
+  /// response. Absent on the first page.
+  pub next_token: Str? = None
+  /// Optional filter restricting the response to reports in a single
+  /// lifecycle state.
+  pub state: OrganizationalReportState? = None
+}
+
+pub struct ListAgentOrganizationalReportsResponse {
+  /// Page of report summaries, most-recently-created first.
+  pub items: List[OrganizationalReportSummary]? = None
+  /// Pagination token to supply on the next request, or absent when there are
+  /// no more pages.
   pub next_token: Str? = None
 }
 
@@ -2120,6 +2479,130 @@ pub enum OrganizationSharingStatus: Str {
   Unknown(value: Str)
 }
 
+/// An individual account entry in the organizational monitoring boundary,
+/// with its associated regions.
+pub struct OrganizationalAccountEntry {
+  /// The Amazon Web Services account ID to include in the monitoring
+  /// boundary.
+  pub account_id: Str? = None
+  /// The list of regions to monitor for this account.
+  pub regions: List[Str]? = None
+}
+
+/// The organizational monitoring boundary configuration. Contains
+/// organizational unit entries and individual account entries, each with
+/// their own region selections, that define the scope for organizational
+/// profile analysis.
+pub struct OrganizationalAggregationConfiguration {
+  /// A list of organizational unit or root entries that define the
+  /// organizational scope. Each entry specifies an OU or root ID and the
+  /// regions to monitor within it.
+  pub organizational_units: List[OrganizationalUnitEntry]? = None
+  /// A list of individual account entries that define additional accounts to
+  /// include. Each entry specifies an account ID and the regions to monitor
+  /// within it.
+  pub accounts: List[OrganizationalAccountEntry]? = None
+}
+
+/// Filters narrowing the scope of an Organizational Report. Every member is
+/// optional. An absent or empty member places no constraint on that
+/// dimension. When the entire structure is absent, the report covers every
+/// account and every recommendation in the organization.
+pub struct OrganizationalReportFilters {
+  /// AWS account IDs to include in the report. Absent or empty means all
+  /// accounts in the organization are in scope. Each supplied account is
+  /// validated against AWS Organizations membership. Accounts that do not
+  /// belong to the caller's organization are excluded and recorded on the
+  /// report's coverage summary.
+  pub account_ids: List[Str]? = None
+  /// AWS Organizational Unit IDs whose member accounts are included in the
+  /// report. Absent or empty means no OU-based scoping is applied. Account
+  /// and OU filters combine as a union.
+  pub organizational_unit_ids: List[Str]? = None
+  /// Well-Architected pillars to include. Absent or empty means all pillars.
+  pub pillars: List[Pillar]? = None
+  /// Recommendation types (RESOURCE, ARCHITECTURE, APPLICATION) to include.
+  /// Absent or empty means all types.
+  pub recommendation_types: List[RecommendationType]? = None
+  /// Recommendation statuses (ACTIVE, SUPPRESSED, COMPLETED) to include.
+  /// Absent or empty means all statuses.
+  pub statuses: List[RecommendationStatus]? = None
+  /// Recommendation priorities (HIGH, MEDIUM, LOW) to include. Absent or
+  /// empty means all priorities.
+  pub priorities: List[Priority]? = None
+  /// Inclusive window on recommendation creation time. Absent means no lower
+  /// or upper bound on createdAt.
+  pub created_at_range: TimeWindow? = None
+  /// Inclusive window on recommendation last-updated time. Absent means no
+  /// lower or upper bound on updatedAt.
+  pub updated_at_range: TimeWindow? = None
+}
+
+/// The output format for an Organizational Report artifact retrieved
+/// through GetAgentOrganizationalReportData or delivered through
+/// SendAgentOrganizationalReportDataToS3.
+pub enum OrganizationalReportFormat: Str {
+  Csv = "CSV"
+  Json = "JSON"
+  Parquet = "PARQUET"
+  Unknown(value: Str)
+}
+
+/// The lifecycle state of an Organizational Report. The state advances
+/// through the asynchronous pipeline: DISCOVERING (expanding the
+/// caller-supplied scope into the full list of in-scope accounts and
+/// profiles), SNAPSHOTTING (materializing per-account profile and
+/// recommendation snapshots), AGGREGATING (merging snapshots into the final
+/// artifact), COMPRESSING (writing the final CSV, JSON, or Parquet
+/// artifacts to Amazon S3), COMPLETED (the report is ready to download),
+/// FAILED (terminal failure), and DELETING (the report is being removed).
+pub enum OrganizationalReportState: Str {
+  Discovering = "DISCOVERING"
+  Snapshotting = "SNAPSHOTTING"
+  Aggregating = "AGGREGATING"
+  Compressing = "COMPRESSING"
+  Completed = "COMPLETED"
+  Failed = "FAILED"
+  Deleting = "DELETING"
+  Unknown(value: Str)
+}
+
+/// Summary of an Organizational Report returned in a list response.
+/// Includes the core fields of the full report and the optional label, but
+/// omits the filters and coverage summary. The filters and coverage summary
+/// are available through GetAgentOrganizationalReport. The coverage summary
+/// is populated once the report reaches COMPLETED.
+pub struct OrganizationalReportSummary {
+  /// Unique identifier of the Organizational Report assigned by the service
+  /// at creation time.
+  pub report_id: Str? = None
+  /// AWS account ID of the caller that created the report. Only this account
+  /// or a delegated administrator of the same organization may retrieve or
+  /// delete the report.
+  pub owner_account_id: Str? = None
+  /// Identifier of the AWS Organization the report belongs to. Derived from
+  /// the caller's authorization context at creation time and not accepted as
+  /// a client-supplied input.
+  pub organization_id: Str? = None
+  /// Optional human-readable label supplied by the caller at creation time.
+  pub label: Str? = None
+  /// Current lifecycle state of the report.
+  pub state: OrganizationalReportState? = None
+  /// Timestamp at which the report was created.
+  pub created_at: Time? = None
+}
+
+/// An organizational unit or root entry in the organizational monitoring
+/// boundary, with its associated regions.
+pub struct OrganizationalUnitEntry {
+  /// The AWS Organizations organizational unit ID or root ID. Must match the
+  /// pattern r-[a-z0-9]{4,32} for roots or ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}
+  /// for OUs.
+  pub organizational_unit_id: Str? = None
+  /// The list of regions to monitor for this organizational unit or root.
+  pub regions: List[Str]? = None
+}
+
 /// Permission granted on a share request.
 pub enum PermissionType: Str {
   Readonly = "READONLY"
@@ -2127,6 +2610,11 @@ pub enum PermissionType: Str {
   Unknown(value: Str)
 }
 
+/// OPERATIONAL_EXCELLENCE can appear in recommendation results but cannot
+/// be specified as a request parameter. The requestable values are
+/// COST_OPTIMIZATION , SECURITY , RESILIENCE , and PERFORMANCE . A pillar
+/// of the Amazon Web Services Well-Architected Framework, used to scope
+/// recommendation generation.
 pub enum Pillar: Str {
   CostOptimization = "COST_OPTIMIZATION"
   Security = "SECURITY"
@@ -2134,6 +2622,16 @@ pub enum Pillar: Str {
   Performance = "PERFORMANCE"
   OperationalExcellence = "OPERATIONAL_EXCELLENCE"
   Unknown(value: Str)
+}
+
+/// Pair of a Well-Architected pillar and the number of recommendations
+/// attributed to it in a CoverageSummary.
+pub struct PillarCount {
+  /// Well-Architected pillar this count is attributed to.
+  pub pillar: Pillar? = None
+  /// Non-negative count of recommendations in the report that are attributed
+  /// to this pillar.
+  pub count: Int? = None
 }
 
 /// A pillar difference return object.
@@ -2146,8 +2644,8 @@ pub struct PillarDifference {
   pub question_differences: List[QuestionDifference]? = None
 }
 
-/// Item configuration for a specific Well-Architected Tool Framework
-/// pillar.
+/// Item configuration for a specific Amazon Web Services Well-Architected
+/// Framework pillar.
 pub struct PillarItem {
   /// The pillar this item configuration applies to.
   pub pillar: Pillar? = None
@@ -2173,11 +2671,77 @@ pub struct PillarReviewSummary {
   pub prioritized_risk_counts: Map[Str, Int]? = None
 }
 
+/// A single Well-Architected Agent preference and its current state.
+pub struct PreferenceEntry {
+  /// Which preference this entry describes.
+  pub key: PreferenceKey? = None
+  /// Current state of the preference. ENABLED and DISABLED reflect the result
+  /// of the most recent successful change. FAILED reflects a stored failure
+  /// surfaced on a read and is accompanied by a detail message.
+  pub status: PreferenceStatus? = None
+  /// A human-readable explanation present only when status is FAILED,
+  /// describing what went wrong and how to recover.
+  pub detail: Str? = None
+}
+
+/// Identifies one of the caller's Well-Architected Agent preferences. A new
+/// preference is introduced as a new enum value, which is a
+/// backward-compatible change. Existing values are never removed or
+/// renamed.
+pub enum PreferenceKey: Str {
+  OrgIntegration = "ORG_INTEGRATION"
+  Unknown(value: Str)
+}
+
+/// This is the writable subset of PreferenceStatus : you can set a
+/// preference to ENABLED or DISABLED , but you cannot set FAILED , which is
+/// an observed state only. The settable state of a preference, supplied to
+/// PutAgentPreferences .
+pub enum PreferenceState: Str {
+  Enabled = "ENABLED"
+  Disabled = "DISABLED"
+  Unknown(value: Str)
+}
+
+/// The observed state of a preference. Because enabling and disabling are
+/// performed synchronously by PutAgentPreferences , this value is both what
+/// the caller requested and what the system achieved. FAILED is never an
+/// accepted input; it reflects a stored failure (for example, an
+/// onboarding-time auto-creation that failed) surfaced on a read, and is
+/// accompanied by a statusMessage .
+pub enum PreferenceStatus: Str {
+  Enabled = "ENABLED"
+  Disabled = "DISABLED"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// A caller's requested change to one preference, supplied to
+/// PutAgentPreferences.
+pub struct PreferenceUpdate {
+  /// Which preference to update.
+  pub key: PreferenceKey? = None
+  /// State to set the preference to. FAILED is an observed state only and
+  /// cannot be requested.
+  pub state: PreferenceState? = None
+}
+
+/// The priority of a recommendation.
 pub enum Priority: Str {
   High = "HIGH"
   Medium = "MEDIUM"
   Low = "LOW"
   Unknown(value: Str)
+}
+
+/// Pair of a recommendation Priority and the number of recommendations
+/// attributed to it in a CoverageSummary.
+pub struct PriorityCount {
+  /// Priority this count is attributed to.
+  pub priority: Priority? = None
+  /// Non-negative count of recommendations in the report that are attributed
+  /// to this priority.
+  pub count: Int? = None
 }
 
 /// A profile.
@@ -2318,6 +2882,14 @@ pub struct ProfileTemplateQuestion {
   pub max_selected_choices: Int? = None
 }
 
+/// The type of a profile.
+pub enum ProfileType: Str {
+  Standard = "STANDARD"
+  Basic = "BASIC"
+  Organizational = "ORGANIZATIONAL"
+  Unknown(value: Str)
+}
+
 /// Progress information for a recommendation generation process.
 pub struct Progress {
   /// The number of generation steps that have been completed.
@@ -2326,6 +2898,26 @@ pub struct Progress {
   pub total_steps: Int? = None
   /// The completion percentage of the generation process (0-100).
   pub completion_percentage: Float? = None
+}
+
+pub struct PutAgentPreferencesRequest {
+  /// Preference updates to apply. A given preference key may appear at most
+  /// once.
+  pub preferences: List[PreferenceUpdate]? = None
+}
+
+pub struct PutAgentPreferencesResponse {
+}
+
+pub struct PutAgentProfilePolicyRequest {
+  /// The ARN of the Agent Profile to attach the policy to.
+  pub profile_arn: Str? = None
+  /// The IAM resource-based policy document in JSON format. Maximum size
+  /// 50KB.
+  pub policy: Str? = None
+}
+
+pub struct PutAgentProfilePolicyResponse {
 }
 
 pub struct PutAgentRecommendationFeedbackRequest {
@@ -2341,6 +2933,17 @@ pub struct PutAgentRecommendationFeedbackRequest {
 }
 
 pub struct PutAgentRecommendationFeedbackResponse {
+}
+
+pub struct PutAgentRecommendationPolicyRequest {
+  /// The ARN of the Agent Recommendation to attach the policy to.
+  pub recommendation_arn: Str? = None
+  /// The IAM resource-based policy document in JSON format. Maximum size
+  /// 50KB.
+  pub policy: Str? = None
+}
+
+pub struct PutAgentRecommendationPolicyResponse {
 }
 
 pub enum Question: Str {
@@ -2378,6 +2981,7 @@ pub enum QuestionType: Str {
   Unknown(value: Str)
 }
 
+/// The type of feedback provided for a recommendation.
 pub enum RecommendationFeedbackType: Str {
   Useful = "USEFUL"
   NotUseful = "NOT_USEFUL"
@@ -2390,12 +2994,14 @@ pub struct RecommendationGoal {
   pub title: Str? = None
 }
 
+/// The type of a recommendation item.
 pub enum RecommendationItemType: Str {
   AwsResource = "AWS_RESOURCE"
   Recommendation = "RECOMMENDATION"
   Unknown(value: Str)
 }
 
+/// The origin system that produced a recommendation.
 pub enum RecommendationSource: Str {
   TrustedAdvisor = "TRUSTED_ADVISOR"
   CostExplorer = "COST_EXPLORER"
@@ -2406,12 +3012,14 @@ pub enum RecommendationSource: Str {
   Unknown(value: Str)
 }
 
+/// The state of a recommendation.
 pub enum RecommendationState: Str {
   Open = "OPEN"
   Closed = "CLOSED"
   Unknown(value: Str)
 }
 
+/// The status of a recommendation.
 pub enum RecommendationStatus: Str {
   Active = "ACTIVE"
   Suppressed = "SUPPRESSED"
@@ -2419,6 +3027,7 @@ pub enum RecommendationStatus: Str {
   Unknown(value: Str)
 }
 
+/// The type of a recommendation.
 pub enum RecommendationType: Str {
   Resource = "RESOURCE"
   Architecture = "ARCHITECTURE"
@@ -2443,6 +3052,7 @@ pub struct RemediationSummary {
   pub steps: List[Str]? = None
 }
 
+/// The method by which a recommendation is remediated.
 pub enum RemediationType: Str {
   AutoRemediation = "AUTO_REMEDIATION"
   Console = "CONSOLE"
@@ -2611,6 +3221,7 @@ pub enum Risk: Str {
   Unknown(value: Str)
 }
 
+/// The risk rating for automated remediation.
 pub enum RiskRating: Str {
   Low = "LOW"
   Medium = "MEDIUM"
@@ -2630,12 +3241,15 @@ pub struct Roi {
 /// Defines the scope for recommendation generation, specifying which
 /// pillars and goals to focus on.
 pub struct Scope {
-  /// The Well-Architected Tool Framework pillars to include in the generation
-  /// scope.
+  /// The Amazon Web Services Well-Architected Framework pillars to include in
+  /// the generation scope.
   pub pillars: List[Pillar]? = None
-  /// Specific goal IDs to focus on during recommendation generation.
+  /// Specific goal IDs to focus on during recommendation generation. Use
+  /// ListAgentGoals to retrieve goal IDs.
   pub goal_ids: List[Str]? = None
-  /// Optional per-pillar item filtering configuration.
+  /// An optional per-pillar filter. When you specify items, only the listed
+  /// items are processed for each pillar. When you omit items, all items are
+  /// processed.
   pub items: List[PillarItem]? = None
 }
 
@@ -2644,6 +3258,22 @@ pub struct SelectedPillar {
   pub pillar_id: Str? = None
   /// Selected question IDs in the selected pillar.
   pub selected_question_ids: List[Str]? = None
+}
+
+pub struct SendAgentOrganizationalReportDataToS3Request {
+  /// Identifier of the report whose data is being delivered.
+  pub report_id: Str? = None
+  /// Format of the delivered artifact (CSV, JSON, or PARQUET).
+  pub format: OrganizationalReportFormat? = None
+  /// ARN of the caller-owned S3 bucket that will receive the artifact.
+  pub bucket_arn: Str? = None
+  /// S3 object key under bucketArn where the artifact will be written.
+  pub object_key: Str? = None
+}
+
+pub struct SendAgentOrganizationalReportDataToS3Response {
+  /// S3 URI (format s3://bucket/key) where the artifact was written.
+  pub delivered_to: Str? = None
 }
 
 /// The user has reached their resource quota.
@@ -2727,16 +3357,25 @@ pub struct StartAgentRecommendationGenerationRequest {
   /// The Amazon Resource Name (ARN) of the optimization profile to use for
   /// generating recommendations.
   pub profile_arn: Str? = None
-  /// The types of recommendations to generate.
+  /// The types of recommendations to generate. You can specify up to two
+  /// types in a single request. Currently, only ARCHITECTURE is supported for
+  /// this operation.
   pub types: List[RecommendationType]? = None
-  /// An optional name for this generation process to help identify it in
-  /// lists and logs.
+  /// An optional name for this generation that identifies the architecture
+  /// review in the console and in ListAgentRecommendationGenerations results.
+  /// Applies to ARCHITECTURE type only. Must be absent for other types.
   pub name: Str? = None
-  /// Optional additional context to guide the recommendation generation, such
-  /// as specific business requirements or constraints.
+  /// The location of the infrastructure as code (IaC) template to review, and
+  /// the lenses to review it against. Required for the ARCHITECTURE type.
+  /// Must be absent for other types. Specify a JSON object with the following
+  /// members: s3Uri : The Amazon S3 URI of the IaC template, .zip archive, or
+  /// folder to review. s3VersionId : The version ID of the Amazon S3 object.
+  /// If you omit this member, the current version is used. lensArns : The
+  /// ARNs of the lenses to review against. Only
+  /// arn:aws:wellarchitected::aws:lens/wellarchitected is supported.
   pub additional_context: json.Value? = None
-  /// Scope configuration to focus the generation on specific pillars or
-  /// goals.
+  /// Defines which pillars, goals, and items the review covers. Required for
+  /// the ARCHITECTURE type. Must be absent for other types.
   pub scope: Scope? = None
 }
 
@@ -2793,6 +3432,16 @@ pub struct ThrottlingException {
   pub message: Str? = None
   pub quota_code: Str? = None
   pub service_code: Str? = None
+}
+
+/// An inclusive time window used by Organizational Report filters. Both
+/// bounds are optional, but at least one of from or to must be set when the
+/// structure is present.
+pub struct TimeWindow {
+  /// Lower bound of the window (inclusive). Absent means no lower bound.
+  pub from_value: Time? = None
+  /// Upper bound of the window (inclusive). Absent means no upper bound.
+  pub to: Time? = None
 }
 
 /// A negative trade-off from acting on the recommendation.
@@ -2872,23 +3521,115 @@ pub struct UpdateAgentGoalResponse {
   pub goal: GoalSummary? = None
 }
 
+pub struct UpdateAgentOrganizationalProfileRequest {
+  /// A unique, case-sensitive identifier that you provide to ensure the
+  /// idempotency of the request.
+  pub client_token: Str? = None
+  /// The Amazon Resource Name (ARN) of the organizational profile to update.
+  pub profile_arn: Str? = None
+  /// The updated display name of the organizational profile. Omit this field
+  /// to keep the current display name. A display name is required, so it
+  /// cannot be cleared.
+  pub display_name: Str? = None
+  /// The updated description of the organizational profile. Omit this field
+  /// to keep the current description, or supply an empty string to clear it;
+  /// a cleared description is read back as absent rather than as an empty
+  /// string.
+  pub description: Str? = None
+  /// The updated business overview for the organizational profile. Omit this
+  /// field to keep the current business overview, or supply an empty string
+  /// to clear it; a cleared business overview is read back as absent rather
+  /// than as an empty string.
+  pub business_overview: Str? = None
+  /// The updated Amazon Web Services Well-Architected Framework pillars for
+  /// the organizational profile. Omit this field to keep the current pillars.
+  /// A profile must target at least one pillar, so an empty list is rejected.
+  pub pillars: List[Pillar]? = None
+  /// Indicates whether deletion protection is enabled for the organizational
+  /// profile.
+  pub deletion_protection: Bool? = None
+  /// The organizational monitoring boundary. Contains organizational unit or
+  /// root entries and individual account entries that define the scope for
+  /// the profile. Omit this field to keep the current boundary, or supply
+  /// this structure with both its organizationalUnits and accounts lists
+  /// empty to remove every monitored organizational unit and account. The
+  /// field remains set either way — an emptied boundary is read back as a
+  /// structure with two empty lists, not as an absent field.
+  pub organizational_aggregation_configuration: OrganizationalAggregationConfiguration? = None
+}
+
+pub struct UpdateAgentOrganizationalProfileResponse {
+  /// The system name of the updated organizational profile.
+  pub name: Str? = None
+  /// The display name of the updated organizational profile.
+  pub display_name: Str? = None
+  /// A description of the updated organizational profile.
+  pub description: Str? = None
+  /// The business overview of the updated organizational profile.
+  pub business_overview: Str? = None
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with the updated organizational profile.
+  pub pillars: List[Pillar]? = None
+  /// Indicates whether deletion protection is enabled.
+  pub deletion_protection: Bool? = None
+  /// The identifier of the Amazon Web Services Organization this profile
+  /// belongs to.
+  pub organization_id: Str? = None
+  /// The organizational monitoring boundary for the updated profile.
+  pub organizational_aggregation_configuration: OrganizationalAggregationConfiguration? = None
+  /// The Amazon Resource Name (ARN) of the updated organizational profile.
+  pub arn: Str? = None
+  /// Indicates whether the profile is valid for scheduled recommendation
+  /// generation.
+  pub eligible_for_scheduled_generation: Bool? = None
+  /// Indicates whether the profile is valid for manual architecture
+  /// generation.
+  pub eligible_for_architecture_generation: Bool? = None
+  /// A map of field paths to error messages for invalid or missing input
+  /// fields.
+  pub field_errors: Map[Str, Str]? = None
+  /// The identifier of the user or system that created this organizational
+  /// profile.
+  pub created_by: Str? = None
+  /// The timestamp when the organizational profile was created.
+  pub created_at: Time? = None
+  /// The identifier of the user or system that last modified this
+  /// organizational profile.
+  pub last_modified_by: Str? = None
+  /// The timestamp when the organizational profile was last modified.
+  pub last_modified_at: Time? = None
+}
+
 pub struct UpdateAgentProfileRequest {
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request.
   pub client_token: Str? = None
   /// The Amazon Resource Name (ARN) of the profile to update.
   pub profile_arn: Str? = None
-  /// The updated display name of the profile.
+  /// The updated display name of the profile. Omit this field to keep the
+  /// current display name. A display name is required, so it cannot be
+  /// cleared.
   pub display_name: Str? = None
-  /// The updated description of the profile.
+  /// The updated description of the profile. Omit this field to keep the
+  /// current description, or supply an empty string to clear it; a cleared
+  /// description is read back as absent rather than as an empty string.
   pub description: Str? = None
-  /// The updated ARN of the IAM execution role.
+  /// The updated ARN of the IAM execution role. Omit this field to keep the
+  /// current execution role.
   pub execution_role_arn: Str? = None
-  /// The updated aggregation configuration.
+  /// The updated aggregation configuration, as a list of per-account entries.
+  /// Omit this field to keep the current entries, or supply an empty list to
+  /// remove them all. The field remains set either way — an emptied
+  /// configuration is read back as an empty list, not as an absent field.
   pub aggregation_configuration: List[AggregationConfiguration]? = None
-  /// The updated business overview for the profile.
+  /// The updated business overview for the profile. Omit this field to keep
+  /// the current business overview, or supply an empty string to clear it; a
+  /// cleared business overview is read back as absent rather than as an empty
+  /// string.
   pub business_overview: Str? = None
-  /// The updated Well-Architected Tool Framework pillars for the profile.
+  /// The updated Amazon Web Services Well-Architected Framework pillars for
+  /// the profile. Omit this field to keep the current pillars. A profile must
+  /// target at least one pillar, so an empty list is rejected.
   pub pillars: List[Pillar]? = None
   /// Indicates whether deletion protection is enabled for the profile.
   pub deletion_protection: Bool? = None
@@ -2903,8 +3644,8 @@ pub struct UpdateAgentProfileResponse {
   pub description: Str? = None
   /// The business overview of the updated profile.
   pub business_overview: Str? = None
-  /// The Well-Architected Tool Framework pillars associated with the updated
-  /// profile.
+  /// The Amazon Web Services Well-Architected Framework pillars associated
+  /// with the updated profile.
   pub pillars: List[Pillar]? = None
   /// Indicates whether deletion protection is enabled.
   pub deletion_protection: Bool? = None
@@ -2923,8 +3664,6 @@ pub struct UpdateAgentProfileResponse {
   /// A map of field paths to error messages for invalid or missing input
   /// fields.
   pub field_errors: Map[Str, Str]? = None
-  /// The tags associated with the updated profile.
-  pub tags: List[Tag]? = None
   /// The identifier of the user or system that created this profile.
   pub created_by: Str? = None
   /// The timestamp when the profile was created.

@@ -136,6 +136,9 @@ fn json_of_bad_request_exception(v: BadRequestException) -> json.Value {
   if let Some(x) = v.message {
     fs.push(("Message", json.Value.Str(x)))
   }
+  if let Some(x) = v.reason {
+    fs.push(("Reason", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -147,6 +150,7 @@ fn from_json_bad_request_exception(v: json.Value) -> BadRequestException ! Str {
     }
     match k {
       "Message" => out.message = jsonv.read_str(fv)?
+      "Reason" => out.reason = BadRequestExceptionReason.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -3935,6 +3939,216 @@ fn from_json_summarization(v: json.Value) -> Summarization ! Str {
   Ok(out)
 }
 
+fn json_of_sync_item(v: SyncItem) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.id {
+    fs.push(("Id", json.Value.Int(x)))
+  }
+  if let Some(x) = v.content {
+    fs.push(("Content", json.Value.Str(x)))
+  }
+  if let Some(x) = v.start_time {
+    fs.push(("StartTime", jsonv.float(x)))
+  }
+  if let Some(x) = v.end_time {
+    fs.push(("EndTime", jsonv.float(x)))
+  }
+  if let Some(x) = v.language_code {
+    fs.push(("LanguageCode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.channel_label {
+    fs.push(("ChannelLabel", json.Value.Str(x)))
+  }
+  if let Some(x) = v.speaker_label {
+    fs.push(("SpeakerLabel", json.Value.Str(x)))
+  }
+  if let Some(x) = v.vocabulary_filter_match {
+    fs.push(("VocabularyFilterMatch", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.redactions {
+    fs.push(("Redactions", json_of_sync_redaction_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_sync_item(v: json.Value) -> SyncItem ! Str {
+  var out = SyncItem{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Id" => out.id = jsonv.read_int(fv)?
+      "Content" => out.content = jsonv.read_str(fv)?
+      "StartTime" => out.start_time = jsonv.read_float(fv)?
+      "EndTime" => out.end_time = jsonv.read_float(fv)?
+      "LanguageCode" => out.language_code = SyncLanguageCode.from(jsonv.read_str(fv)?)
+      "ChannelLabel" => out.channel_label = jsonv.read_str(fv)?
+      "SpeakerLabel" => out.speaker_label = jsonv.read_str(fv)?
+      "VocabularyFilterMatch" => out.vocabulary_filter_match = jsonv.read_bool(fv)?
+      "Redactions" => out.redactions = from_json_sync_redaction_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_sync_item_list(v: List[SyncItem]) -> json.Value {
+  json.Value.List(v.map(fn(x: SyncItem) -> json.Value { json_of_sync_item(x) }))
+}
+
+fn from_json_sync_item_list(v: json.Value) -> List[SyncItem] ! Str {
+  var out: List[SyncItem] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_sync_item(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_sync_language_code_item(v: SyncLanguageCodeItem) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.language_code {
+    fs.push(("LanguageCode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.duration_in_seconds {
+    fs.push(("DurationInSeconds", jsonv.float32(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_sync_language_code_item(v: json.Value) -> SyncLanguageCodeItem ! Str {
+  var out = SyncLanguageCodeItem{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "LanguageCode" => out.language_code = SyncLanguageCode.from(jsonv.read_str(fv)?)
+      "DurationInSeconds" => out.duration_in_seconds = jsonv.read_float32(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_sync_language_code_list(v: List[SyncLanguageCodeItem]) -> json.Value {
+  json.Value.List(v.map(fn(x: SyncLanguageCodeItem) -> json.Value { json_of_sync_language_code_item(x) }))
+}
+
+fn from_json_sync_language_code_list(v: json.Value) -> List[SyncLanguageCodeItem] ! Str {
+  var out: List[SyncLanguageCodeItem] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_sync_language_code_item(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_sync_language_options(v: List[SyncLanguage]) -> json.Value {
+  json.Value.List(v.map(fn(x: SyncLanguage) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_sync_language_options(v: json.Value) -> List[SyncLanguage] ! Str {
+  var out: List[SyncLanguage] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(SyncLanguage.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_sync_media(v: SyncMedia) -> json.Value {
+  match v {
+    MediaBytes(x) => json.Value.Object([("MediaBytes", jsonv.blob(x))])
+    MediaFileUri(x) => json.Value.Object([("MediaFileUri", json.Value.Str(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_sync_media(v: json.Value) -> SyncMedia ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "MediaBytes" => Ok(SyncMedia.MediaBytes(jsonv.read_blob(fv)?))
+      "MediaFileUri" => Ok(SyncMedia.MediaFileUri(jsonv.read_str(fv)?))
+      _ => Ok(SyncMedia.Unknown(k))
+    }
+  }
+  Err("SyncMedia: no member set")
+}
+
+fn json_of_sync_output_configuration(v: SyncOutputConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.output_media_file_uri {
+    fs.push(("OutputMediaFileUri", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_sync_output_configuration(v: json.Value) -> SyncOutputConfiguration ! Str {
+  var out = SyncOutputConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "OutputMediaFileUri" => out.output_media_file_uri = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_sync_redaction(v: SyncRedaction) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.type_value {
+    fs.push(("Type", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_sync_redaction(v: json.Value) -> SyncRedaction ! Str {
+  var out = SyncRedaction{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Type" => out.type_value = PiiEntityType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_sync_redaction_list(v: List[SyncRedaction]) -> json.Value {
+  json.Value.List(v.map(fn(x: SyncRedaction) -> json.Value { json_of_sync_redaction(x) }))
+}
+
+fn from_json_sync_redaction_list(v: json.Value) -> List[SyncRedaction] ! Str {
+  var out: List[SyncRedaction] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_sync_redaction(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_tag(v: Tag) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.key {
@@ -4084,6 +4298,162 @@ fn from_json_toxicity_detection_settings(v: json.Value) -> ToxicityDetectionSett
   Ok(out)
 }
 
+fn json_of_transcribe_audio_metadata(v: TranscribeAudioMetadata) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.language_code {
+    fs.push(("LanguageCode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.language_codes {
+    fs.push(("LanguageCodes", json_of_sync_language_code_list(x)))
+  }
+  if let Some(x) = v.media_format {
+    fs.push(("MediaFormat", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.media_sample_rate_hertz {
+    fs.push(("MediaSampleRateHertz", json.Value.Int(x)))
+  }
+  if let Some(x) = v.speakers_count {
+    fs.push(("SpeakersCount", json.Value.Int(x)))
+  }
+  if let Some(x) = v.number_of_channels {
+    fs.push(("NumberOfChannels", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_transcribe_audio_metadata(v: json.Value) -> TranscribeAudioMetadata ! Str {
+  var out = TranscribeAudioMetadata{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "LanguageCode" => out.language_code = SyncLanguageCode.from(jsonv.read_str(fv)?)
+      "LanguageCodes" => out.language_codes = from_json_sync_language_code_list(fv)?
+      "MediaFormat" => out.media_format = MediaFormat.from(jsonv.read_str(fv)?)
+      "MediaSampleRateHertz" => out.media_sample_rate_hertz = jsonv.read_int(fv)?
+      "SpeakersCount" => out.speakers_count = jsonv.read_int(fv)?
+      "NumberOfChannels" => out.number_of_channels = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_transcribe_audio_request(v: TranscribeAudioRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.media {
+    fs.push(("Media", json_of_sync_media(x)))
+  }
+  if let Some(x) = v.language {
+    fs.push(("Language", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.language_detection_mode {
+    fs.push(("LanguageDetectionMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.language_options {
+    fs.push(("LanguageOptions", json_of_sync_language_options(x)))
+  }
+  if let Some(x) = v.channel_identification {
+    fs.push(("ChannelIdentification", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.show_speaker_labels {
+    fs.push(("ShowSpeakerLabels", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.max_speaker_labels {
+    fs.push(("MaxSpeakerLabels", json.Value.Int(x)))
+  }
+  if let Some(x) = v.vocabulary_settings {
+    fs.push(("VocabularySettings", json_of_vocabulary_settings_list(x)))
+  }
+  if let Some(x) = v.vocabulary_filter_settings {
+    fs.push(("VocabularyFilterSettings", json_of_vocabulary_filter_settings(x)))
+  }
+  if let Some(x) = v.content_redaction {
+    fs.push(("ContentRedaction", json_of_content_redaction(x)))
+  }
+  if let Some(x) = v.output_configuration {
+    fs.push(("OutputConfiguration", json_of_sync_output_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_transcribe_audio_request(v: json.Value) -> TranscribeAudioRequest ! Str {
+  var out = TranscribeAudioRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Media" => out.media = from_json_sync_media(fv)?
+      "Language" => out.language = SyncLanguage.from(jsonv.read_str(fv)?)
+      "LanguageDetectionMode" => out.language_detection_mode = LanguageDetectionMode.from(jsonv.read_str(fv)?)
+      "LanguageOptions" => out.language_options = from_json_sync_language_options(fv)?
+      "ChannelIdentification" => out.channel_identification = jsonv.read_bool(fv)?
+      "ShowSpeakerLabels" => out.show_speaker_labels = jsonv.read_bool(fv)?
+      "MaxSpeakerLabels" => out.max_speaker_labels = jsonv.read_int(fv)?
+      "VocabularySettings" => out.vocabulary_settings = from_json_vocabulary_settings_list(fv)?
+      "VocabularyFilterSettings" => out.vocabulary_filter_settings = from_json_vocabulary_filter_settings(fv)?
+      "ContentRedaction" => out.content_redaction = from_json_content_redaction(fv)?
+      "OutputConfiguration" => out.output_configuration = from_json_sync_output_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_transcribe_audio_response(v: TranscribeAudioResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.output_configuration {
+    fs.push(("OutputConfiguration", json_of_sync_output_configuration(x)))
+  }
+  if let Some(x) = v.transcript_response {
+    fs.push(("TranscriptResponse", json_of_transcript_response(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_transcribe_audio_response(v: json.Value) -> TranscribeAudioResponse ! Str {
+  var out = TranscribeAudioResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "OutputConfiguration" => out.output_configuration = from_json_sync_output_configuration(fv)?
+      "TranscriptResponse" => out.transcript_response = from_json_transcript_response(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_transcribe_audio_results(v: TranscribeAudioResults) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.transcript {
+    fs.push(("Transcript", json.Value.Str(x)))
+  }
+  if let Some(x) = v.items {
+    fs.push(("Items", json_of_sync_item_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_transcribe_audio_results(v: json.Value) -> TranscribeAudioResults ! Str {
+  var out = TranscribeAudioResults{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Transcript" => out.transcript = jsonv.read_str(fv)?
+      "Items" => out.items = from_json_sync_item_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_transcript(v: Transcript) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.transcript_file_uri {
@@ -4146,6 +4516,36 @@ fn from_json_transcript_filter(v: json.Value) -> TranscriptFilter ! Str {
       "ParticipantRole" => out.participant_role = ParticipantRole.from(jsonv.read_str(fv)?)
       "Negate" => out.negate = jsonv.read_bool(fv)?
       "Targets" => out.targets = from_json_string_target_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_transcript_response(v: TranscriptResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metadata {
+    fs.push(("Metadata", json_of_transcribe_audio_metadata(x)))
+  }
+  if let Some(x) = v.results {
+    fs.push(("Results", json_of_transcribe_audio_results(x)))
+  }
+  if let Some(x) = v.redacted_results {
+    fs.push(("RedactedResults", json_of_transcribe_audio_results(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_transcript_response(v: json.Value) -> TranscriptResponse ! Str {
+  var out = TranscriptResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Metadata" => out.metadata = from_json_transcribe_audio_metadata(fv)?
+      "Results" => out.results = from_json_transcribe_audio_results(fv)?
+      "RedactedResults" => out.redacted_results = from_json_transcribe_audio_results(fv)?
       _ => {}
     }
   }
@@ -4733,6 +5133,52 @@ fn from_json_vocabularies(v: json.Value) -> List[VocabularyInfo] ! Str {
   Ok(out)
 }
 
+fn json_of_vocabulary_filter_entry(v: VocabularyFilterEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.language {
+    fs.push(("Language", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.vocabulary_filter_name {
+    fs.push(("VocabularyFilterName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.words {
+    fs.push(("Words", json_of_words(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_vocabulary_filter_entry(v: json.Value) -> VocabularyFilterEntry ! Str {
+  var out = VocabularyFilterEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Language" => out.language = SyncLanguage.from(jsonv.read_str(fv)?)
+      "VocabularyFilterName" => out.vocabulary_filter_name = jsonv.read_str(fv)?
+      "Words" => out.words = from_json_words(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_vocabulary_filter_entry_list(v: List[VocabularyFilterEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: VocabularyFilterEntry) -> json.Value { json_of_vocabulary_filter_entry(x) }))
+}
+
+fn from_json_vocabulary_filter_entry_list(v: json.Value) -> List[VocabularyFilterEntry] ! Str {
+  var out: List[VocabularyFilterEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_vocabulary_filter_entry(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_vocabulary_filter_info(v: VocabularyFilterInfo) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.vocabulary_filter_name {
@@ -4757,6 +5203,32 @@ fn from_json_vocabulary_filter_info(v: json.Value) -> VocabularyFilterInfo ! Str
       "VocabularyFilterName" => out.vocabulary_filter_name = jsonv.read_str(fv)?
       "LanguageCode" => out.language_code = LanguageCode.from(jsonv.read_str(fv)?)
       "LastModifiedTime" => out.last_modified_time = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_vocabulary_filter_settings(v: VocabularyFilterSettings) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.vocabulary_filter_method {
+    fs.push(("VocabularyFilterMethod", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("Filters", json_of_vocabulary_filter_entry_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_vocabulary_filter_settings(v: json.Value) -> VocabularyFilterSettings ! Str {
+  var out = VocabularyFilterSettings{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "VocabularyFilterMethod" => out.vocabulary_filter_method = VocabularyFilterMethod.from(jsonv.read_str(fv)?)
+      "Filters" => out.filters = from_json_vocabulary_filter_entry_list(fv)?
       _ => {}
     }
   }
@@ -4813,6 +5285,94 @@ fn from_json_vocabulary_info(v: json.Value) -> VocabularyInfo ! Str {
   Ok(out)
 }
 
+fn json_of_vocabulary_phrase(v: VocabularyPhrase) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.text {
+    fs.push(("Text", json.Value.Str(x)))
+  }
+  if let Some(x) = v.display_as {
+    fs.push(("DisplayAs", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_vocabulary_phrase(v: json.Value) -> VocabularyPhrase ! Str {
+  var out = VocabularyPhrase{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Text" => out.text = jsonv.read_str(fv)?
+      "DisplayAs" => out.display_as = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_vocabulary_phrase_list(v: List[VocabularyPhrase]) -> json.Value {
+  json.Value.List(v.map(fn(x: VocabularyPhrase) -> json.Value { json_of_vocabulary_phrase(x) }))
+}
+
+fn from_json_vocabulary_phrase_list(v: json.Value) -> List[VocabularyPhrase] ! Str {
+  var out: List[VocabularyPhrase] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_vocabulary_phrase(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_vocabulary_settings_entry(v: VocabularySettingsEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.language {
+    fs.push(("Language", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.vocabulary_name {
+    fs.push(("VocabularyName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.phrases {
+    fs.push(("Phrases", json_of_vocabulary_phrase_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_vocabulary_settings_entry(v: json.Value) -> VocabularySettingsEntry ! Str {
+  var out = VocabularySettingsEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Language" => out.language = SyncLanguage.from(jsonv.read_str(fv)?)
+      "VocabularyName" => out.vocabulary_name = jsonv.read_str(fv)?
+      "Phrases" => out.phrases = from_json_vocabulary_phrase_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_vocabulary_settings_list(v: List[VocabularySettingsEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: VocabularySettingsEntry) -> json.Value { json_of_vocabulary_settings_entry(x) }))
+}
+
+fn from_json_vocabulary_settings_list(v: json.Value) -> List[VocabularySettingsEntry] ! Str {
+  var out: List[VocabularySettingsEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_vocabulary_settings_entry(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_words(v: List[Str]) -> json.Value {
   json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
@@ -4838,6 +5398,7 @@ fn read_error_bad_request_exception(resp: http.Response, body: json.Value) -> Ba
     }
     match k {
       "Message" => out.message = jsonv.read_str(fv)?
+      "Reason" => out.reason = BadRequestExceptionReason.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -9660,6 +10221,165 @@ pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceRespons
     return Err(deserialize_tag_resource_error(resp))
   }
   deserialize_tag_resource(resp) ?? e => Err(TagResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_transcribe_audio(base: EndpointParameters, input: TranscribeAudioRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of TranscribeAudio.
+pub fn serialize_transcribe_audio(ep: rest.Endpoint, input: TranscribeAudioRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.media {
+    fs.push(("Media", json_of_sync_media(x)))
+  }
+  if let Some(x) = input.language {
+    fs.push(("Language", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.language_detection_mode {
+    fs.push(("LanguageDetectionMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.language_options {
+    fs.push(("LanguageOptions", json_of_sync_language_options(x)))
+  }
+  if let Some(x) = input.channel_identification {
+    fs.push(("ChannelIdentification", json.Value.Bool(x)))
+  }
+  if let Some(x) = input.show_speaker_labels {
+    fs.push(("ShowSpeakerLabels", json.Value.Bool(x)))
+  }
+  if let Some(x) = input.max_speaker_labels {
+    fs.push(("MaxSpeakerLabels", json.Value.Int(x)))
+  }
+  if let Some(x) = input.vocabulary_settings {
+    fs.push(("VocabularySettings", json_of_vocabulary_settings_list(x)))
+  }
+  if let Some(x) = input.vocabulary_filter_settings {
+    fs.push(("VocabularyFilterSettings", json_of_vocabulary_filter_settings(x)))
+  }
+  if let Some(x) = input.content_redaction {
+    fs.push(("ContentRedaction", json_of_content_redaction(x)))
+  }
+  if let Some(x) = input.output_configuration {
+    fs.push(("OutputConfiguration", json_of_sync_output_configuration(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Transcribe.TranscribeAudio"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_transcribe_audio(resp: http.Response) -> TranscribeAudioResponse ! Str {
+  var out = TranscribeAudioResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "OutputConfiguration" => out.output_configuration = from_json_sync_output_configuration(fv)?
+      "TranscriptResponse" => out.transcript_response = from_json_transcript_response(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of TranscribeAudio.
+pub enum TranscribeAudioErr {
+  BadRequestException(e: BadRequestException)
+  InternalFailureException(e: InternalFailureException)
+  LimitExceededException(e: LimitExceededException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: TranscribeAudioErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    InternalFailureException(x) => "InternalFailureException: ${x:?}"
+    LimitExceededException(x) => "LimitExceededException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_transcribe_audio_error(resp: http.Response) -> TranscribeAudioErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return TranscribeAudioErr.BadRequestException(x)
+      Err(msg) => return TranscribeAudioErr.Deserialize(msg)
+    }
+    "InternalFailureException" => match read_error_internal_failure_exception(resp, body) {
+      Ok(x) => return TranscribeAudioErr.InternalFailureException(x)
+      Err(msg) => return TranscribeAudioErr.Deserialize(msg)
+    }
+    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
+      Ok(x) => return TranscribeAudioErr.LimitExceededException(x)
+      Err(msg) => return TranscribeAudioErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  TranscribeAudioErr.Api(restjson.api_error(resp, body))
+}
+
+/// Transcribes a media file and returns the transcript in the same
+/// response. There is no job to start and no status to poll. Use
+/// TranscribeAudio when you already have a complete media file and want the
+/// transcript right away. For large files, long audio, or bulk processing,
+/// use . You must include the following parameters in your TranscribeAudio
+/// request: Media : Your audio, either as inline bytes ( MediaBytes ) or as
+/// the Amazon S3 location of a media file ( MediaFileUri ). One of Language
+/// or LanguageDetectionMode : Specify the language of your audio, or have
+/// Amazon Transcribe identify it. Your audio must be between 0.5 seconds
+/// and 1 hour long. Supported formats are WAV, MP3, FLAC, M4A, MP4, Ogg,
+/// WebM, and AMR. If you send your audio in the request ( MediaBytes ), the
+/// file can be up to 25 MB. If you provide an Amazon S3 location (
+/// MediaFileUri ), the file can be up to 500 MB. Amazon Transcribe always
+/// turns on smart formatting, also known as inverse text normalization
+/// (ITN). It writes numbers, dates, currency, and similar items in their
+/// usual written form. For example, "one hundred" becomes "100". You can't
+/// turn smart formatting off. By default, Amazon Transcribe returns the
+/// transcript in TranscriptResponse . If you include OutputConfiguration ,
+/// Amazon Transcribe writes the transcript to the Amazon S3 location you
+/// specify instead, and the response contains only that location.
+pub fn (c: Client) transcribe_audio(input: TranscribeAudioRequest) -> TranscribeAudioResponse ! TranscribeAudioErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_transcribe_audio(c.params, input)) ?? e => return Err(TranscribeAudioErr.InvalidInput(e))
+  var req = serialize_transcribe_audio(ep, input, "") ?? e => return Err(TranscribeAudioErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TranscribeAudioErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_transcribe_audio_error(resp))
+  }
+  deserialize_transcribe_audio(resp) ?? e => Err(TranscribeAudioErr.Deserialize(e))
 }
 
 pub fn endpoint_params_untag_resource(base: EndpointParameters, input: UntagResourceRequest) -> EndpointParameters {

@@ -11,7 +11,8 @@ pub struct AuditEvent {
   pub event_id: Str? = None
   /// The type of audit history event. Valid Values: Case.Created |
   /// Case.Updated | RelatedItem.Created | RelatedItem.Updated |
-  /// RelatedItem.Deleted
+  /// RelatedItem.Deleted | Case.Merged Case.Merged summarizes a merge on each
+  /// of the two cases that took part in it.
   pub type_value: Str? = None
   /// The Type of the related item.
   pub related_item_type: Str? = None
@@ -21,6 +22,10 @@ pub struct AuditEvent {
   pub fields: List[AuditEventField?]? = None
   /// Information of the user which performed the audit.
   pub performed_by: AuditEventPerformedBy? = None
+  /// Information about the merge that produced this audit event. Present only
+  /// on audit events produced by a merge. For more information, see
+  /// StartMergeCases .
+  pub merge_metadata: AuditMergeMetadata? = None
 }
 
 /// Fields for audit event.
@@ -49,6 +54,18 @@ pub struct AuditEventPerformedBy {
   pub user: UserUnion? = None
   /// Unique identifier of an IAM role.
   pub iam_principal_arn: Str? = None
+}
+
+/// Information about the merge that produced an audit event.
+pub struct AuditMergeMetadata {
+  /// The unique identifier of the merge. All audit events produced by the
+  /// same merge, on both cases, have the same value. Use it to group the
+  /// changes that a merge made.
+  pub merge_event_id: Str? = None
+  /// The unique identifier of the primary case of the merge.
+  pub primary_case_id: Str? = None
+  /// The unique identifier of the secondary case of the merge.
+  pub secondary_case_id: Str? = None
 }
 
 /// Content specific to BasicLayout type. It configures fields in the top
@@ -272,9 +289,21 @@ pub struct BooleanOperands {
 }
 
 /// Details of what case data is published through the case event stream.
+/// Use fields to include a specific list of fields, and use
+/// autoIncludeFields to automatically include a category of fields. When
+/// both are set, the effective field set is the union of the two.
 pub struct CaseEventIncludedData {
-  /// List of field identifiers.
+  /// List of field identifiers to include in case event data.
   pub fields: List[FieldIdentifier]? = None
+  /// Automatically include a category of fields in case event data, combined
+  /// as a union with any fields specified in fields . Valid values are All
+  /// (include all fields on the case), System (include all system fields),
+  /// and Custom (include all custom fields). When this attribute is set, new
+  /// fields added to the domain are picked up automatically without another
+  /// call to PutCaseEventConfiguration. For the full behavior matrix and IAM
+  /// requirements, see Case event streams in Connect Customer Cases in the
+  /// Connect Customer Administrator Guide .
+  pub auto_include_fields: Str? = None
 }
 
 /// A filter for cases. Only one value can be provided.
@@ -886,6 +915,18 @@ pub enum FieldValueUnion {
   Unknown(tag: Str)
 }
 
+/// Specifies the fields whose values to take from the secondary case when
+/// you merge cases.
+pub struct FieldsConfiguration {
+  /// The fields whose values to take from the source case. Each field must
+  /// exist on the source case and must be a field that can be merged. Don't
+  /// list the same field more than once.
+  pub field_ids: List[FieldIdentifier]? = None
+  /// The unique identifier of the case to take the field values from. This
+  /// must be the secondary case.
+  pub source_case_id: Str? = None
+}
+
 /// An object that represents a content of an Connect Customer file object.
 pub struct FileContent {
   /// The Amazon Resource Name (ARN) of a File in Connect Customer.
@@ -1058,6 +1099,23 @@ pub struct GetLayoutResponse {
   pub created_time: Time? = None
   /// Timestamp at which the resource was created or last modified.
   pub last_modified_time: Time? = None
+}
+
+pub struct GetMergeCasesStatusRequest {
+  /// The unique identifier of the Cases domain.
+  pub domain_id: Str? = None
+  /// The unique identifier of the case. This can be the primary case or the
+  /// secondary case of a merge.
+  pub case_id: Str? = None
+}
+
+pub struct GetMergeCasesStatusResponse {
+  /// The merge status of the case.
+  pub status: Str? = None
+  /// The unique identifier of the primary case of the merge.
+  pub primary_case_id: Str? = None
+  /// The unique identifiers of the secondary cases of the merge.
+  pub secondary_case_ids: List[Str]? = None
 }
 
 pub struct GetTemplateRequest {
@@ -1386,12 +1444,32 @@ pub enum RelatedItemTypeFilter {
 }
 
 /// Represents the content of a related item to be updated. This is a union
-/// type that can contain either comment content or custom content.
+/// type that can contain comment content, custom content, or SLA content.
 pub enum RelatedItemUpdateContent {
   Comment(value: CommentUpdateContent)
   Custom(value: CustomUpdateContent)
+  Sla(value: SlaUpdateContent)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
+}
+
+/// Specifies which types of related items to move from the secondary case
+/// to the primary case when you merge cases. Moved related items keep their
+/// related item ID, creator, association time, and tags.
+pub struct RelatedItemsConfiguration {
+  /// Whether to move Comment related items to the primary case.
+  pub comment: Bool? = None
+  /// Whether to move Case related items to the primary case. If the primary
+  /// case already links to the same case, the secondary case's link is
+  /// removed instead of moved.
+  pub connect_case: Bool? = None
+  /// Whether to move Contact related items to the primary case. If the same
+  /// contact is related to both cases, the primary case keeps its related
+  /// item and gets any tag keys that only the secondary case's related item
+  /// has.
+  pub contact: Bool? = None
+  /// Whether to move Custom related items to the primary case.
+  pub custom: Bool? = None
 }
 
 /// Required rule type, used to indicate whether a field is required. In the
@@ -1618,7 +1696,9 @@ pub struct SlaInputConfiguration {
   pub name: Str? = None
   /// Type of SLA.
   pub type_value: Str? = None
-  /// Unique identifier of a field.
+  /// Unique identifier of the case field that the SLA tracks. The field must
+  /// be a single-select field, such as the system status field or a custom
+  /// single-select field.
   pub field_id: Str? = None
   /// Represents a list of target field values for the fieldId specified in
   /// SlaInputConfiguration. The SLA is considered met if any one of these
@@ -1635,12 +1715,67 @@ pub enum SlaInputContent {
   Unknown(tag: Str)
 }
 
+/// Represents the SLA configuration to update.
+pub struct SlaUpdateConfiguration {
+  /// New target duration in minutes within which an SLA should be completed.
+  /// The new deadline is counted from when the SLA was created.
+  pub target_sla_minutes: Int? = None
+}
+
+/// Represents the updated content of an SLA related item.
+pub enum SlaUpdateContent {
+  SlaUpdateConfiguration(value: SlaUpdateConfiguration)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
 /// A structured set of sort terms.
 pub struct Sort {
   /// Unique identifier of a field.
   pub field_id: Str? = None
   /// Whether results should be sorted in ascending or descending order.
   pub sort_order: Str? = None
+}
+
+pub struct StartMergeCasesRequest {
+  /// The unique identifier of the Cases domain.
+  pub domain_id: Str? = None
+  /// The unique identifier of the primary case. The primary case remains
+  /// active and receives the merged field values and related items. The cases
+  /// can use different templates, and the primary case keeps its template.
+  pub case_id: Str? = None
+  /// The unique identifier of the secondary case to merge into the primary
+  /// case. The secondary case is closed when the merge finishes. Specify
+  /// exactly one case ID.
+  pub secondary_case_ids: List[Str]? = None
+  /// The fields whose values to take from the secondary case. You can only
+  /// merge custom fields and the following system fields: assigned_queue ,
+  /// assigned_user , summary , and case_reason . If you select any other
+  /// system field, the request fails with a ValidationException . For each
+  /// field that can be merged, the merge works as follows: If you select the
+  /// field, the primary case gets the secondary case's value. If the
+  /// secondary case's value is empty, the primary case's value is cleared. If
+  /// you don't select the field and the primary case has a value for it, the
+  /// primary case keeps its value. If you don't select the field and the
+  /// primary case doesn't have the field, or its value is empty, the primary
+  /// case gets the secondary case's value. This applies even when the field
+  /// isn't on the primary case's template. Field values are read from both
+  /// cases when the merge runs, so changes that you make to the primary case
+  /// after you start the merge are taken into account. Specify at most one
+  /// entry, and set its sourceCaseId to the secondary case ID.
+  pub fields_configuration: List[FieldsConfiguration]? = None
+  /// The types of related items to move from the secondary case to the
+  /// primary case. Related items of a type that you don't select, or set to
+  /// false , stay on the closed secondary case. If you omit this parameter,
+  /// no related items are moved. File, SLA, and work plan related items are
+  /// never moved. They stay on the secondary case.
+  pub related_items_configuration: RelatedItemsConfiguration? = None
+  /// The user who performed the merge. If you provide userArn , you must also
+  /// have DescribeUser permission on the ARN of that user.
+  pub performed_by: UserUnion? = None
+}
+
+pub struct StartMergeCasesResponse {
 }
 
 /// A filter for tags. Only one value can be provided.

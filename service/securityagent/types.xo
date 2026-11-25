@@ -858,6 +858,16 @@ pub struct CodeLocation {
   pub label: Str? = None
 }
 
+/// Code remediation status for a particular repository.
+pub enum CodeRemediationJobStatus: Str {
+  InProgress = "IN_PROGRESS"
+  Completed = "COMPLETED"
+  Failed = "FAILED"
+  NoChangeRequired = "NO_CHANGE_REQUIRED"
+  Unknown = "UNKNOWN"
+  UnknownValue(value: Str)
+}
+
 /// Strategy for automated code remediation.
 pub enum CodeRemediationStrategy: Str {
   Automatic = "AUTOMATIC"
@@ -868,24 +878,32 @@ pub enum CodeRemediationStrategy: Str {
 /// Represents a code remediation task that was initiated to fix a security
 /// finding.
 pub struct CodeRemediationTask {
-  /// The current status of the code remediation task.
+  /// The current status of the overall code remediation task.
   pub status: CodeRemediationTaskStatus? = None
-  /// The reason for the current status of the code remediation task.
+  /// The reason for the current status of the overall code remediation task.
   pub status_reason: Str? = None
-  /// The list of details for the code remediation task, including repository
-  /// name, code diff link, and pull request link.
+  /// The list of details for a code remediation task, including repository
+  /// names, status of code remediation for each associated repository, and
+  /// generated code diff or pull request links.
   pub task_details: List[CodeRemediationTaskDetails]? = None
 }
 
 /// Contains details about a code remediation task, including links to the
 /// code diff and pull request.
 pub struct CodeRemediationTaskDetails {
-  /// The name of the repository where the remediation was applied.
+  /// The name of an associated repository where the remediation was applied.
   pub repo_name: Str? = None
   /// The link to the code diff for the remediation.
   pub code_diff_link: Str? = None
   /// The link to the pull request created for the remediation.
   pub pull_request_link: Str? = None
+  /// The current status of the code remediation task for the particular
+  /// repository.
+  pub status: CodeRemediationJobStatus? = None
+  /// A category classifier if a repository's code remediation fails.
+  pub status_code: Str? = None
+  /// A descriptive reason when a repository's code remediation fails.
+  pub status_reason: Str? = None
 }
 
 /// Code remediation task status.
@@ -1334,6 +1352,9 @@ pub struct CreatePentestInput {
   /// The code remediation strategy for the pentest. Valid values are
   /// AUTOMATIC and DISABLED.
   pub code_remediation_strategy: CodeRemediationStrategy? = None
+  /// The strategy for cleaning up resources after pentest job completion.
+  /// Valid values are BEST_EFFORT_DELETE and RETAIN_ALL.
+  pub clean_up_strategy: CleanUpStrategy? = None
   /// A list of managed skills to disable for this pentest. Valid values
   /// include FINDING_PERSONALIZATION and LOGIN_OPTIMIZATION.
   pub disable_managed_skills: List[SkillType]? = None
@@ -1854,6 +1875,7 @@ pub enum ErrorCode: Str {
   ClientError = "CLIENT_ERROR"
   InternalError = "INTERNAL_ERROR"
   StoppedByUser = "STOPPED_BY_USER"
+  PausedByUser = "PAUSED_BY_USER"
   Unknown(value: Str)
 }
 
@@ -2454,6 +2476,8 @@ pub enum JobStatus: Str {
   InProgress = "IN_PROGRESS"
   Stopping = "STOPPING"
   Stopped = "STOPPED"
+  Pausing = "PAUSING"
+  Paused = "PAUSED"
   Failed = "FAILED"
   Completed = "COMPLETED"
   Unknown(value: Str)
@@ -3300,6 +3324,10 @@ pub struct PentestJob {
   pub scope_changes: List[ScopeChange]? = None
   pub cicd_configuration: CiCdConfiguration? = None
   pub test_scope: TestScope? = None
+  /// The version of the pentest job. The version increases each time the job
+  /// is resumed. This value is absent for jobs created before versions were
+  /// recorded.
+  pub version: Str? = None
   /// The date and time the pentest job was created, in UTC format.
   pub created_at: Time? = None
   /// The date and time the pentest job was last updated, in UTC format.
@@ -3325,6 +3353,10 @@ pub struct PentestJobSummary {
   pub job_type: JobType? = None
   /// The URL to view this pentest job's findings report in the console.
   pub report_url: Str? = None
+  /// The version of the pentest job. The version increases each time the job
+  /// is resumed. This value is absent for jobs created before versions were
+  /// recorded.
+  pub version: Str? = None
 }
 
 /// Contains summary information about a pentest.
@@ -3498,6 +3530,52 @@ pub enum ResourceType: Str {
   Document = "DOCUMENT"
   Project = "PROJECT"
   Unknown(value: Str)
+}
+
+/// Input for resuming a stopped or paused pentest job.
+pub struct ResumePentestJobInput {
+  /// The unique identifier of the agent space.
+  pub agent_space_id: Str? = None
+  /// The unique identifier of the pentest job to resume.
+  pub pentest_job_id: Str? = None
+  /// The actors to use for the resumed job. When specified, replaces the
+  /// actors the job used before it stopped.
+  pub actors: List[Actor]? = None
+  /// The network traffic configuration to use for the resumed job. When
+  /// specified, replaces the configuration the job used before it stopped.
+  pub network_traffic_config: NetworkTrafficConfig? = None
+  /// The VPC configuration to use for the resumed job. When specified,
+  /// replaces the configuration the job used before it stopped.
+  pub vpc_config: VpcConfig? = None
+  /// The maximum number of task hours for the resumed job. To resume a job
+  /// that stopped because it reached its task hours limit, specify a higher
+  /// value.
+  pub max_task_hours: Float? = None
+  /// Specifies whether to copy the current actors, network traffic
+  /// configuration, VPC configuration, and maximum task hours from the
+  /// pentest to the resumed job. The job's scope, such as its target
+  /// endpoints, is never changed. Values you specify in this request take
+  /// precedence over copied values.
+  pub copy_config_from_pentest: Bool? = None
+}
+
+/// Output for the ResumePentestJob operation.
+pub struct ResumePentestJobOutput {
+  /// The title of the pentest job.
+  pub title: Str? = None
+  /// The current status of the pentest job.
+  pub status: JobStatus? = None
+  /// The date and time the pentest job was created, in UTC format.
+  pub created_at: Time? = None
+  /// The date and time the pentest job was last updated, in UTC format.
+  pub updated_at: Time? = None
+  /// The unique identifier of the pentest.
+  pub pentest_id: Str? = None
+  /// The unique identifier of the resumed pentest job.
+  pub pentest_job_id: Str? = None
+  /// The version of the pentest job that the resume started. The version
+  /// increases each time the job is resumed.
+  pub version: Str? = None
 }
 
 /// Risk severity level.
@@ -3869,6 +3947,11 @@ pub struct StopPentestJobInput {
   pub agent_space_id: Str? = None
   /// The unique identifier of the pentest job to stop.
   pub pentest_job_id: Str? = None
+  /// Specifies whether to pause the job instead of stopping it. A paused job
+  /// moves to PAUSING and then to PAUSED , and you can resume it later with
+  /// ResumePentestJob . You can pause only a job that is IN_PROGRESS . The
+  /// default is false.
+  pub pause: Bool? = None
 }
 
 /// Output for the StopPentestJob operation.
@@ -4559,6 +4642,9 @@ pub struct UpdatePentestInput {
   pub network_traffic_config: NetworkTrafficConfig? = None
   /// The updated code remediation strategy for the pentest.
   pub code_remediation_strategy: CodeRemediationStrategy? = None
+  /// The updated strategy for cleaning up resources after pentest job
+  /// completion.
+  pub clean_up_strategy: CleanUpStrategy? = None
   /// The updated list of managed skills to disable for this pentest. Valid
   /// values include FINDING_PERSONALIZATION and LOGIN_OPTIMIZATION.
   pub disable_managed_skills: List[SkillType]? = None

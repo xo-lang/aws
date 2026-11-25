@@ -107,6 +107,9 @@ fn json_of_aws_configuration(v: AWSConfiguration) -> json.Value {
   if let Some(x) = v.agent_elevated_role_arn_status {
     fs.push(("agentElevatedRoleArnStatus", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.service_management_role_arn {
+    fs.push(("serviceManagementRoleArn", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -122,6 +125,7 @@ fn from_json_aws_configuration(v: json.Value) -> AWSConfiguration ! Str {
       "accountType" => out.account_type = MonitorAccountType.from(jsonv.read_str(fv)?)
       "agentElevatedRoleArn" => out.agent_elevated_role_arn = jsonv.read_str(fv)?
       "agentElevatedRoleArnStatus" => out.agent_elevated_role_arn_status = ValidationStatus.from(jsonv.read_str(fv)?)
+      "serviceManagementRoleArn" => out.service_management_role_arn = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -146,6 +150,22 @@ fn from_json_access_denied_exception(v: json.Value) -> AccessDeniedException ! S
       "message" => out.message = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_account_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_account_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -244,6 +264,9 @@ fn json_of_agent_space(v: AgentSpace) -> json.Value {
   if let Some(x) = v.preferences {
     fs.push(("preferences", json_of_agent_space_preferences(x)))
   }
+  if let Some(x) = v.aws_source_mode {
+    fs.push(("awsSourceMode", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -262,6 +285,7 @@ fn from_json_agent_space(v: json.Value) -> AgentSpace ! Str {
       "kmsKeyArn" => out.kms_key_arn = jsonv.read_str(fv)?
       "agentSpaceId" => out.agent_space_id = jsonv.read_str(fv)?
       "preferences" => out.preferences = from_json_agent_space_preferences(fv)?
+      "awsSourceMode" => out.aws_source_mode = AwsSourceMode.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -1030,6 +1054,9 @@ fn json_of_chat_execution(v: ChatExecution) -> json.Value {
   if let Some(x) = v.summary {
     fs.push(("summary", json.Value.Str(x)))
   }
+  if let Some(x) = v.archive_status {
+    fs.push(("archiveStatus", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -1044,6 +1071,7 @@ fn from_json_chat_execution(v: json.Value) -> ChatExecution ! Str {
       "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
       "summary" => out.summary = jsonv.read_str(fv)?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -1071,6 +1099,9 @@ fn json_of_conflict_exception(v: ConflictException) -> json.Value {
   if let Some(x) = v.message {
     fs.push(("message", json.Value.Str(x)))
   }
+  if let Some(x) = v.reason {
+    fs.push(("reason", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -1082,6 +1113,7 @@ fn from_json_conflict_exception(v: json.Value) -> ConflictException ! Str {
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      "reason" => out.reason = ConflictExceptionReason.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -1133,6 +1165,9 @@ fn json_of_create_agent_space_input(v: CreateAgentSpaceInput) -> json.Value {
   if let Some(x) = v.preferences {
     fs.push(("preferences", json_of_agent_space_preferences(x)))
   }
+  if let Some(x) = v.aws_source_mode {
+    fs.push(("awsSourceMode", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -1150,6 +1185,7 @@ fn from_json_create_agent_space_input(v: json.Value) -> CreateAgentSpaceInput ! 
       "clientToken" => out.client_token = jsonv.read_str(fv)?
       "tags" => out.tags = from_json_tags(fv)?
       "preferences" => out.preferences = from_json_agent_space_preferences(fv)?
+      "awsSourceMode" => out.aws_source_mode = AwsSourceMode.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -2833,6 +2869,70 @@ fn from_json_get_backlog_task_response(v: json.Value) -> GetBacklogTaskResponse 
   Ok(out)
 }
 
+fn json_of_get_chat_request(v: GetChatRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.agent_space_id {
+    fs.push(("agentSpaceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.execution_id {
+    fs.push(("executionId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_chat_request(v: json.Value) -> GetChatRequest ! Str {
+  var out = GetChatRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "agentSpaceId" => out.agent_space_id = jsonv.read_str(fv)?
+      "executionId" => out.execution_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_chat_response(v: GetChatResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.execution_id {
+    fs.push(("executionId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.summary {
+    fs.push(("summary", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.updated_at {
+    fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.archive_status {
+    fs.push(("archiveStatus", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_chat_response(v: json.Value) -> GetChatResponse ! Str {
+  var out = GetChatResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "executionId" => out.execution_id = jsonv.read_str(fv)?
+      "summary" => out.summary = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_get_operator_app_input(v: GetOperatorAppInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.agent_space_id {
@@ -4033,6 +4133,9 @@ fn json_of_list_chats_request(v: ListChatsRequest) -> json.Value {
   if let Some(x) = v.next_token {
     fs.push(("nextToken", json.Value.Str(x)))
   }
+  if let Some(x) = v.archive_status {
+    fs.push(("archiveStatus", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -4047,6 +4150,7 @@ fn from_json_list_chats_request(v: json.Value) -> ListChatsRequest ! Str {
       "userId" => out.user_id = jsonv.read_str(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -5215,6 +5319,32 @@ fn from_json_mcp_tools_list(v: json.Value) -> List[Str] ! Str {
   Ok(out)
 }
 
+fn json_of_ms_teams_bidirectional_configuration(v: MSTeamsBidirectionalConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.role_arn {
+    fs.push(("roleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.enabled {
+    fs.push(("enabled", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_ms_teams_bidirectional_configuration(v: json.Value) -> MSTeamsBidirectionalConfiguration ! Str {
+  var out = MSTeamsBidirectionalConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "roleArn" => out.role_arn = jsonv.read_str(fv)?
+      "enabled" => out.enabled = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_ms_teams_channel(v: MSTeamsChannel) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.channel_name {
@@ -5252,6 +5382,9 @@ fn json_of_ms_teams_configuration(v: MSTeamsConfiguration) -> json.Value {
   if let Some(x) = v.transmission_target {
     fs.push(("transmissionTarget", json_of_ms_teams_transmission_target(x)))
   }
+  if let Some(x) = v.bidirectional {
+    fs.push(("bidirectional", json_of_ms_teams_bidirectional_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -5265,6 +5398,7 @@ fn from_json_ms_teams_configuration(v: json.Value) -> MSTeamsConfiguration ! Str
       "teamId" => out.team_id = jsonv.read_str(fv)?
       "teamName" => out.team_name = jsonv.read_str(fv)?
       "transmissionTarget" => out.transmission_target = from_json_ms_teams_transmission_target(fv)?
+      "bidirectional" => out.bidirectional = from_json_ms_teams_bidirectional_configuration(fv)?
       _ => {}
     }
   }
@@ -5511,6 +5645,86 @@ fn from_json_o_auth_additional_step_details(v: json.Value) -> OAuthAdditionalSte
       "authorizationUrl" => out.authorization_url = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_org_source_deployment_state(v: OrgSourceDeploymentState) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.deployed_account_count {
+    fs.push(("deployedAccountCount", json.Value.Int(x)))
+  }
+  if let Some(x) = v.issues {
+    fs.push(("issues", json_of_org_source_issue_list(x)))
+  }
+  if let Some(x) = v.last_evaluated_at {
+    fs.push(("lastEvaluatedAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_org_source_deployment_state(v: json.Value) -> OrgSourceDeploymentState ! Str {
+  var out = OrgSourceDeploymentState{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "deployedAccountCount" => out.deployed_account_count = jsonv.read_int(fv)?
+      "issues" => out.issues = from_json_org_source_issue_list(fv)?
+      "lastEvaluatedAt" => out.last_evaluated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_org_source_issue(v: OrgSourceIssue) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.reason_code {
+    fs.push(("reasonCode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.account_count {
+    fs.push(("accountCount", json.Value.Int(x)))
+  }
+  if let Some(x) = v.account_ids {
+    fs.push(("accountIds", json_of_account_id_list(x)))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_org_source_issue(v: json.Value) -> OrgSourceIssue ! Str {
+  var out = OrgSourceIssue{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reasonCode" => out.reason_code = OrgSourceAccountReasonCode.from(jsonv.read_str(fv)?)
+      "accountCount" => out.account_count = jsonv.read_int(fv)?
+      "accountIds" => out.account_ids = from_json_account_id_list(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_org_source_issue_list(v: List[OrgSourceIssue]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrgSourceIssue) -> json.Value { json_of_org_source_issue(x) }))
+}
+
+fn from_json_org_source_issue_list(v: json.Value) -> List[OrgSourceIssue] ! Str {
+  var out: List[OrgSourceIssue] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_org_source_issue(fv)?)
   }
   Ok(out)
 }
@@ -7555,6 +7769,7 @@ fn from_json_send_message_usage_info(v: json.Value) -> SendMessageUsageInfo ! St
 fn json_of_service_configuration(v: ServiceConfiguration) -> json.Value {
   match v {
     SourceAws(x) => json.Value.Object([("sourceAws", json_of_source_aws_configuration(x))])
+    SourceAwsOrg(x) => json.Value.Object([("sourceAwsOrg", json_of_source_aws_org_configuration(x))])
     Aws(x) => json.Value.Object([("aws", json_of_aws_configuration(x))])
     Github(x) => json.Value.Object([("github", json_of_git_hub_configuration(x))])
     Slack(x) => json.Value.Object([("slack", json_of_slack_configuration(x))])
@@ -7586,6 +7801,7 @@ fn from_json_service_configuration(v: json.Value) -> ServiceConfiguration ! Str 
     }
     return match k {
       "sourceAws" => Ok(ServiceConfiguration.SourceAws(from_json_source_aws_configuration(fv)?))
+      "sourceAwsOrg" => Ok(ServiceConfiguration.SourceAwsOrg(from_json_source_aws_org_configuration(fv)?))
       "aws" => Ok(ServiceConfiguration.Aws(from_json_aws_configuration(fv)?))
       "github" => Ok(ServiceConfiguration.Github(from_json_git_hub_configuration(fv)?))
       "slack" => Ok(ServiceConfiguration.Slack(from_json_slack_configuration(fv)?))
@@ -8004,6 +8220,62 @@ fn from_json_source_aws_configuration(v: json.Value) -> SourceAwsConfiguration !
       "externalId" => out.external_id = jsonv.read_str(fv)?
       "agentElevatedRoleArn" => out.agent_elevated_role_arn = jsonv.read_str(fv)?
       "agentElevatedRoleArnStatus" => out.agent_elevated_role_arn_status = ValidationStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_source_aws_org_configuration(v: SourceAwsOrgConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_type {
+    fs.push(("accountType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.organizational_unit {
+    fs.push(("organizationalUnit", json_of_source_aws_org_unit(x)))
+  }
+  if let Some(x) = v.deployment_state {
+    fs.push(("deploymentState", json_of_org_source_deployment_state(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_source_aws_org_configuration(v: json.Value) -> SourceAwsOrgConfiguration ! Str {
+  var out = SourceAwsOrgConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "accountType" => out.account_type = SourceAccountType.from(jsonv.read_str(fv)?)
+      "organizationalUnit" => out.organizational_unit = from_json_source_aws_org_unit(fv)?
+      "deploymentState" => out.deployment_state = from_json_org_source_deployment_state(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_source_aws_org_unit(v: SourceAwsOrgUnit) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_unit_id {
+    fs.push(("organizationalUnitId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.account_ids {
+    fs.push(("accountIds", json_of_account_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_source_aws_org_unit(v: json.Value) -> SourceAwsOrgUnit ! Str {
+  var out = SourceAwsOrgUnit{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnitId" => out.organizational_unit_id = jsonv.read_str(fv)?
+      "accountIds" => out.account_ids = from_json_account_id_list(fv)?
       _ => {}
     }
   }
@@ -8521,6 +8793,9 @@ fn json_of_update_agent_space_input(v: UpdateAgentSpaceInput) -> json.Value {
   if let Some(x) = v.preferences {
     fs.push(("preferences", json_of_agent_space_preferences(x)))
   }
+  if let Some(x) = v.aws_source_mode {
+    fs.push(("awsSourceMode", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -8536,6 +8811,7 @@ fn from_json_update_agent_space_input(v: json.Value) -> UpdateAgentSpaceInput ! 
       "description" => out.description = jsonv.read_str(fv)?
       "locale" => out.locale = jsonv.read_str(fv)?
       "preferences" => out.preferences = from_json_agent_space_preferences(fv)?
+      "awsSourceMode" => out.aws_source_mode = AwsSourceMode.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -8874,6 +9150,78 @@ fn from_json_update_backlog_task_response(v: json.Value) -> UpdateBacklogTaskRes
     }
     match k {
       "task" => out.task = from_json_task(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_chat_request(v: UpdateChatRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.agent_space_id {
+    fs.push(("agentSpaceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.execution_id {
+    fs.push(("executionId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.summary {
+    fs.push(("summary", json.Value.Str(x)))
+  }
+  if let Some(x) = v.archive_status {
+    fs.push(("archiveStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_chat_request(v: json.Value) -> UpdateChatRequest ! Str {
+  var out = UpdateChatRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "agentSpaceId" => out.agent_space_id = jsonv.read_str(fv)?
+      "executionId" => out.execution_id = jsonv.read_str(fv)?
+      "summary" => out.summary = jsonv.read_str(fv)?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_chat_response(v: UpdateChatResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.execution_id {
+    fs.push(("executionId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.summary {
+    fs.push(("summary", json.Value.Str(x)))
+  }
+  if let Some(x) = v.updated_at {
+    fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.archive_status {
+    fs.push(("archiveStatus", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_chat_response(v: json.Value) -> UpdateChatResponse ! Str {
+  var out = UpdateChatResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "executionId" => out.execution_id = jsonv.read_str(fv)?
+      "summary" => out.summary = jsonv.read_str(fv)?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -9487,6 +9835,7 @@ fn read_error_conflict_exception(resp: http.Response, body: json.Value) -> Confl
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      "reason" => out.reason = ConflictExceptionReason.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -9952,6 +10301,9 @@ pub fn serialize_create_agent_space(ep: rest.Endpoint, input: CreateAgentSpaceIn
   }
   if let Some(x) = input.preferences {
     fs.push(("preferences", json_of_agent_space_preferences(x)))
+  }
+  if let Some(x) = input.aws_source_mode {
+    fs.push(("awsSourceMode", json.Value.Str(x.value())))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -13125,274 +13477,4 @@ pub fn deserialize_get_asset_content_error(resp: http.Response) -> GetAssetConte
     _ => {}
   }
   GetAssetContentErr.Api(restjson.api_error(resp, body))
-}
-
-/// Gets an asset's content as a zip bundle
-pub fn (c: Client) get_asset_content(input: GetAssetContentRequest) -> GetAssetContentResponse ! GetAssetContentErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_asset_content(c.params, input)) ?? e => return Err(GetAssetContentErr.InvalidInput(e))
-  var req = serialize_get_asset_content(ep, input, "") ?? e => return Err(GetAssetContentErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAssetContentErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_get_asset_content_error(resp))
-  }
-  deserialize_get_asset_content(resp) ?? e => Err(GetAssetContentErr.Deserialize(e))
-}
-
-pub fn endpoint_params_get_asset_file(base: EndpointParameters, input: GetAssetFileRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of GetAssetFile.
-pub fn serialize_get_asset_file(ep: rest.Endpoint, input: GetAssetFileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_agent_space_id = match input.agent_space_id {
-    Some(v) => v
-    None => return Err("input member agentSpaceId is required")
-  }
-  if label_agent_space_id == "" {
-    return Err("input member agentSpaceId must not be empty")
-  }
-  let label_asset_id = match input.asset_id {
-    Some(v) => v
-    None => return Err("input member assetId is required")
-  }
-  if label_asset_id == "" {
-    return Err("input member assetId must not be empty")
-  }
-  let label_path = match input.path {
-    Some(v) => v
-    None => return Err("input member path is required")
-  }
-  if label_path == "" {
-    return Err("input member path must not be empty")
-  }
-  if let Some(v) = input.asset_version {
-    qs.push(("assetVersion", "${v}"))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: "dp.${ep.host}",
-    port: ep.port,
-    path: rest.join_path(ep.path, "/asset/agent-space/${rest.escape(label_agent_space_id, false)}/assets/${rest.escape(label_asset_id, false)}/files/${rest.escape(label_path, true)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_get_asset_file(resp: http.Response) -> GetAssetFileResponse ! Str {
-  var out = GetAssetFileResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "file" => out.file = from_json_asset_file(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of GetAssetFile.
-pub enum GetAssetFileErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  ConflictException(e: ConflictException)
-  ContentSizeExceededException(e: ContentSizeExceededException)
-  InvalidParameterException(e: InvalidParameterException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: GetAssetFileErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
-    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_get_asset_file_error(resp: http.Response) -> GetAssetFileErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.AccessDeniedException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.InternalServerException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.ResourceNotFoundException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.ThrottlingException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.ValidationException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.ConflictException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "ContentSizeExceededException" => match read_error_content_size_exceeded_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.ContentSizeExceededException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.InvalidParameterException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return GetAssetFileErr.ServiceQuotaExceededException(x)
-      Err(msg) => return GetAssetFileErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  GetAssetFileErr.Api(restjson.api_error(resp, body))
-}
-
-/// Gets a file from an asset
-pub fn (c: Client) get_asset_file(input: GetAssetFileRequest) -> GetAssetFileResponse ! GetAssetFileErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_asset_file(c.params, input)) ?? e => return Err(GetAssetFileErr.InvalidInput(e))
-  var req = serialize_get_asset_file(ep, input, "") ?? e => return Err(GetAssetFileErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAssetFileErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_get_asset_file_error(resp))
-  }
-  deserialize_get_asset_file(resp) ?? e => Err(GetAssetFileErr.Deserialize(e))
-}
-
-pub fn endpoint_params_get_association(base: EndpointParameters, input: GetAssociationInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of GetAssociation.
-pub fn serialize_get_association(ep: rest.Endpoint, input: GetAssociationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_agent_space_id = match input.agent_space_id {
-    Some(v) => v
-    None => return Err("input member agentSpaceId is required")
-  }
-  if label_agent_space_id == "" {
-    return Err("input member agentSpaceId must not be empty")
-  }
-  let label_association_id = match input.association_id {
-    Some(v) => v
-    None => return Err("input member associationId is required")
-  }
-  if label_association_id == "" {
-    return Err("input member associationId must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: "cp.${ep.host}",
-    port: ep.port,
-    path: rest.join_path(ep.path, "/v1/agentspaces/${rest.escape(label_agent_space_id, false)}/associations/${rest.escape(label_association_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_get_association(resp: http.Response) -> GetAssociationOutput ! Str {
-  var out = GetAssociationOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "association" => out.association = from_json_association(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of GetAssociation.
-pub enum GetAssociationErr {
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ValidationException(e: ValidationException)
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  ContentSizeExceededException(e: ContentSizeExceededException)
-  InvalidParameterException(e: InvalidParameterException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: GetAssociationErr) display() -> Str {
-  match e {
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
-    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
 }

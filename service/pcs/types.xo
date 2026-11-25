@@ -102,6 +102,12 @@ pub struct ClusterSlurmConfiguration {
   /// Additional Cgroup-specific configuration that directly maps to Cgroup
   /// settings.
   pub cgroup_custom_settings: List[CgroupCustomSetting]? = None
+  /// The job submit plugins to run on the cluster controller. Use job submit
+  /// plugins to execute custom scripts during job submission and job
+  /// modification to validate or modify the job's configuration. Custom
+  /// scripts can accept or reject jobs based on their configuration or modify
+  /// the configuration before job execution.
+  pub job_submit_plugins: List[JobSubmitPlugin]? = None
   /// The shared Slurm key for authentication, also known as the cluster
   /// secret .
   pub auth_key: SlurmAuthKey? = None
@@ -127,6 +133,12 @@ pub struct ClusterSlurmConfigurationRequest {
   /// Additional Cgroup-specific configuration that directly maps to Cgroup
   /// settings.
   pub cgroup_custom_settings: List[CgroupCustomSetting]? = None
+  /// The job submit plugins to run on the cluster controller. Use job submit
+  /// plugins to execute custom scripts during job submission and job
+  /// modification to validate or modify the job's configuration. Custom
+  /// scripts can accept or reject jobs based on their configuration or modify
+  /// the configuration before job execution.
+  pub job_submit_plugins: List[JobSubmitPlugin]? = None
   /// The accounting configuration includes configurable settings for Slurm
   /// accounting.
   pub accounting: AccountingRequest? = None
@@ -256,6 +268,10 @@ pub struct ComputeNodeGroup {
   /// compute node's lifecycle, such as when a compute node finishes
   /// bootstrapping or becomes ready to accept jobs.
   pub node_lifecycle_actions: NodeLifecycleActions? = None
+  /// The instance health check settings of the compute node group. Instance
+  /// health checks detect faults on instances in the compute node group and
+  /// respond with the repair action that you choose.
+  pub instance_health_checks: InstanceHealthChecks? = None
   /// The list of errors that occurred during compute node group provisioning.
   pub error_info: List[ErrorInfo]? = None
 }
@@ -471,6 +487,13 @@ pub struct CreateComputeNodeGroupRequest {
   /// compute node's lifecycle, such as when a compute node finishes
   /// bootstrapping or becomes ready to accept jobs.
   pub node_lifecycle_actions: NodeLifecycleActionsRequest? = None
+  /// The instance health check settings for the compute node group. Instance
+  /// health checks detect faults on instances in the compute node group and
+  /// respond with the repair action that you choose. You can configure health
+  /// monitoring, deep health checks, or both. You can't specify an empty
+  /// object ( {} ). Instance health checks require Slurm version 26.05 or
+  /// later.
+  pub instance_health_checks: InstanceHealthChecksRequest? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request. Idempotency ensures that an API request
   /// completes only once. With an idempotent request, if the original request
@@ -524,6 +547,83 @@ pub struct CustomLaunchTemplate {
   /// The version of the EC2 launch template to use to provision instances.
   /// Specify this value together with id .
   pub version: Str? = None
+}
+
+/// The deep health check that runs each time an instance starts, including
+/// after a reboot, before the compute node accepts jobs.
+pub struct DeepHealthCheckOnStart {
+  /// The deep health check profile to run. Each profile other than NONE runs
+  /// NVIDIA Data Center GPU Manager (DCGM) diagnostics. More thorough
+  /// profiles run more tests and add more time to instance launch. A profile
+  /// other than NONE requires instance types with NVIDIA GPUs. This value is
+  /// required when you specify onStart . There is no default value. Valid
+  /// values: NONE – Turns off the deep health check. You can't specify
+  /// repairAction with this profile. QUICK – Runs basic GPU tests (DCGM
+  /// diagnostics level 1). This profile adds the least time to instance
+  /// launch. MEDIUM – Runs extended GPU tests (DCGM diagnostics level 2).
+  /// LONG – Runs GPU stress and diagnostic tests (DCGM diagnostics level
+  /// 3). This profile adds the most time to instance launch.
+  pub profile: DeepHealthCheckOnStartProfile? = None
+  /// The action that PCS takes when an instance fails the deep health check.
+  /// You can't specify this value when profile is NONE . If you don't specify
+  /// this value and profile isn't NONE , PCS uses AUTO . GetComputeNodeGroup
+  /// doesn't return a repairAction that you didn't specify. Valid values:
+  /// AUTO – PCS chooses the repair action based on the fault. REPLACE –
+  /// Replaces the instance before it accepts jobs. ISOLATE – Stops new jobs
+  /// on the instance and keeps the instance running until you investigate.
+  /// NONE – Records the fault in Slurm and leaves the instance available
+  /// for jobs.
+  pub repair_action: DeepHealthCheckOnStartRepairAction? = None
+}
+
+/// The deep health check profile to run each time an instance starts. Each
+/// profile other than NONE runs NVIDIA Data Center GPU Manager (DCGM)
+/// diagnostics. More thorough profiles run more tests and add more time to
+/// instance launch. Valid values: NONE – Turns off the deep health check.
+/// You can't specify repairAction with this profile. QUICK – Runs basic
+/// GPU tests (DCGM diagnostics level 1). This profile adds the least time
+/// to instance launch. MEDIUM – Runs extended GPU tests (DCGM diagnostics
+/// level 2). LONG – Runs GPU stress and diagnostic tests (DCGM
+/// diagnostics level 3). This profile adds the most time to instance
+/// launch.
+pub enum DeepHealthCheckOnStartProfile: Str {
+  None = "NONE"
+  Quick = "QUICK"
+  Medium = "MEDIUM"
+  Long = "LONG"
+  Unknown(value: Str)
+}
+
+/// The action that PCS takes when an instance fails the deep health check.
+/// Valid values: AUTO – PCS chooses the repair action based on the fault.
+/// REPLACE – Replaces the instance before it accepts jobs. ISOLATE –
+/// Stops new jobs on the instance and keeps the instance running until you
+/// investigate. NONE – Records the fault in Slurm and leaves the instance
+/// available for jobs.
+pub enum DeepHealthCheckOnStartRepairAction: Str {
+  Auto = "AUTO"
+  Replace = "REPLACE"
+  Isolate = "ISOLATE"
+  None = "NONE"
+  Unknown(value: Str)
+}
+
+/// The deep health check settings of a compute node group. Deep health
+/// checks test the graphics processing units (GPUs) of an instance each
+/// time it starts, including after a reboot, before it accepts jobs. Deep
+/// health checks with a profile other than NONE require instance types with
+/// NVIDIA GPUs.
+pub struct DeepHealthChecks {
+  /// The deep health check to run each time an instance starts, including
+  /// after a reboot, before the compute node accepts jobs. If the check fails
+  /// after a reboot, PCS takes the same repairAction as at launch. For
+  /// example, with REPLACE , PCS replaces the instance instead of returning
+  /// it to service. If the compute node group has scripts in the
+  /// nodeBootstrapped stage of nodeLifecycleActions , the deep health check
+  /// runs after those scripts. If a script fails and its onError setting
+  /// terminates the compute node, the deep health check doesn't run. This
+  /// value is required when you specify deepHealthChecks .
+  pub on_start: DeepHealthCheckOnStart? = None
 }
 
 pub struct DeleteClusterRequest {
@@ -651,6 +751,51 @@ pub struct GetQueueResponse {
   pub queue: Queue? = None
 }
 
+/// The health monitoring settings of a compute node group. Health
+/// monitoring continuously checks running instances for hardware and
+/// software faults.
+pub struct HealthMonitoring {
+  /// The health monitoring mode. This value is required when you specify
+  /// healthMonitoring . There is no default value. Valid values: NONE –
+  /// Turns off health monitoring. You can't specify repairAction with this
+  /// mode. STANDARD – Continuously checks running instances for hardware
+  /// and software faults.
+  pub mode: HealthMonitoringMode? = None
+  /// The action that PCS takes when health monitoring finds a fault on an
+  /// instance. You can't specify this value when mode is NONE . If you don't
+  /// specify this value and mode isn't NONE , PCS uses AUTO .
+  /// GetComputeNodeGroup doesn't return a repairAction that you didn't
+  /// specify. Valid values: AUTO – PCS chooses the repair action based on
+  /// the fault. REPLACE – Replaces the instance after running jobs finish.
+  /// ISOLATE – Stops new jobs on the instance and keeps the instance
+  /// running until you investigate. NONE – Records the fault in Slurm and
+  /// leaves the instance available for jobs.
+  pub repair_action: HealthMonitoringRepairAction? = None
+}
+
+/// The health monitoring mode. Valid values: NONE – Turns off health
+/// monitoring. You can't specify repairAction with this mode. STANDARD –
+/// Continuously checks running instances for hardware and software faults.
+pub enum HealthMonitoringMode: Str {
+  None = "NONE"
+  Standard = "STANDARD"
+  Unknown(value: Str)
+}
+
+/// The action that PCS takes when health monitoring finds a fault on an
+/// instance. Valid values: AUTO – PCS chooses the repair action based on
+/// the fault. REPLACE – Replaces the instance after running jobs finish.
+/// ISOLATE – Stops new jobs on the instance and keeps the instance
+/// running until you investigate. NONE – Records the fault in Slurm and
+/// leaves the instance available for jobs.
+pub enum HealthMonitoringRepairAction: Str {
+  Auto = "AUTO"
+  Replace = "REPLACE"
+  Isolate = "ISOLATE"
+  None = "NONE"
+  Unknown(value: Str)
+}
+
 /// An EC2 instance configuration PCS uses to launch compute nodes.
 pub struct InstanceConfig {
   /// The EC2 instance type that PCS can provision in the compute node group.
@@ -658,9 +803,72 @@ pub struct InstanceConfig {
   pub instance_type: Str? = None
 }
 
+/// The instance health check settings of a compute node group. Instance
+/// health checks detect faults on instances in the compute node group and
+/// respond with the repair action that you choose.
+pub struct InstanceHealthChecks {
+  /// The health monitoring settings. Health monitoring continuously checks
+  /// running instances for hardware and software faults.
+  pub health_monitoring: HealthMonitoring? = None
+  /// The deep health check settings. Deep health checks test the graphics
+  /// processing units (GPUs) of an instance each time it starts, including
+  /// after a reboot, before it accepts jobs.
+  pub deep_health_checks: DeepHealthChecks? = None
+}
+
+/// The instance health check settings to configure on a compute node group
+/// when you create it. Specify healthMonitoring , deepHealthChecks , or
+/// both. You can't specify an empty object ( {} ).
+pub struct InstanceHealthChecksRequest {
+  /// The health monitoring settings. Health monitoring continuously checks
+  /// running instances for hardware and software faults. If you specify this
+  /// object, it can't be empty.
+  pub health_monitoring: HealthMonitoring? = None
+  /// The deep health check settings. Deep health checks test the graphics
+  /// processing units (GPUs) of an instance each time it starts, including
+  /// after a reboot, before it accepts jobs. If you specify this object, it
+  /// can't be empty.
+  pub deep_health_checks: DeepHealthChecks? = None
+}
+
 /// PCS can't process your request right now. Try again later.
 pub struct InternalServerException {
   pub message: Str? = None
+}
+
+/// A job submit plugin configuration, including its name, runtime language,
+/// and script source.
+pub struct JobSubmitPlugin {
+  /// A unique name for the plugin. The name can be up to 64 characters long.
+  /// Valid characters are letters, numbers, spaces, underscores ( _ ), and
+  /// hyphens ( - ). The first character must be a letter or a number.
+  pub name: Str? = None
+  /// The runtime language used to execute the custom script. Valid values:
+  /// STARLARK – The script uses Starlark syntax.
+  pub type_value: JobSubmitPluginType? = None
+  /// The source location and integrity information for the script.
+  pub script_source: JobSubmitScriptSource? = None
+}
+
+/// The runtime language used to execute the custom script. Valid values:
+/// STARLARK – The script uses Starlark syntax.
+pub enum JobSubmitPluginType: Str {
+  Starlark = "STARLARK"
+  Unknown(value: Str)
+}
+
+/// The source location and integrity information for the script.
+pub struct JobSubmitScriptSource {
+  /// The location of the script. Specify an Amazon S3 URI in the format
+  /// s3://bucket-name/key .
+  pub script_location: Str? = None
+  /// The Amazon S3 version ID of the script. Use this value to pin the script
+  /// to a specific version in a versioned Amazon S3 bucket.
+  pub s3_version_id: Str? = None
+  /// The SHA-256 checksum of the script content, as a 64-character
+  /// hexadecimal string. This value is optional. When specified, PCS uses
+  /// this value to verify the integrity of the downloaded script.
+  pub checksum: Str? = None
 }
 
 /// The JWT authentication configuration for Slurm REST API access.
@@ -1022,6 +1230,10 @@ pub struct RegisterComputeNodeGroupInstanceResponse {
   /// The scheduler version that the cluster is running. A compute node uses
   /// this value to run the matching scheduler version.
   pub scheduler_version: Str? = None
+  /// The instance health check settings configured for the compute node group
+  /// that the compute node registered into. The compute node uses these
+  /// settings to configure health monitoring and deep health checks.
+  pub instance_health_checks: InstanceHealthChecks? = None
 }
 
 /// The requested resource can't be found. The cluster, node group, or queue
@@ -1291,6 +1503,12 @@ pub struct UpdateClusterSlurmConfigurationRequest {
   /// Additional Cgroup-specific configuration that directly maps to Cgroup
   /// settings.
   pub cgroup_custom_settings: List[CgroupCustomSetting]? = None
+  /// The job submit plugins to run on the cluster controller. Use job submit
+  /// plugins to execute custom scripts during job submission and job
+  /// modification to validate or modify the job's configuration. Custom
+  /// scripts can accept or reject jobs based on their configuration or modify
+  /// the configuration before job execution.
+  pub job_submit_plugins: List[JobSubmitPlugin]? = None
   /// The accounting configuration includes configurable settings for Slurm
   /// accounting.
   pub accounting: UpdateAccountingRequest? = None
@@ -1383,6 +1601,20 @@ pub struct UpdateComputeNodeGroupRequest {
   /// compute node's lifecycle, such as when a compute node finishes
   /// bootstrapping or becomes ready to accept jobs.
   pub node_lifecycle_actions: UpdateNodeLifecycleActionsRequest? = None
+  /// The instance health check settings for the compute node group. Instance
+  /// health checks detect faults on instances in the compute node group and
+  /// respond with the repair action that you choose. You can configure health
+  /// monitoring, deep health checks, or both. You can't specify an empty
+  /// object ( {} ). Instance health checks require Slurm version 26.05 or
+  /// later. The settings that you specify replace all of the current instance
+  /// health check settings of the compute node group. Include every setting
+  /// that you want to keep. If you omit this member, the current settings
+  /// don't change. If you omit healthMonitoring or deepHealthChecks , that
+  /// check is turned off. You can also turn off a check: set
+  /// healthMonitoring.mode or deepHealthChecks.onStart.profile to NONE and
+  /// omit its repairAction . When you change these settings, PCS drains and
+  /// replaces the instances in the compute node group.
+  pub instance_health_checks: UpdateInstanceHealthChecksRequest? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request. Idempotency ensures that an API request
   /// completes only once. With an idempotent request, if the original request
@@ -1414,6 +1646,25 @@ pub struct UpdateComputeNodeGroupSlurmConfigurationRequest {
   /// entry. PCS adds the NodeName= prefix and merges these records with the
   /// GPU record it derives from the instance type.
   pub gres_custom_settings: List[Map[Str, Str]]? = None
+}
+
+/// The instance health check settings to configure on a compute node group
+/// when you update it. These settings replace all of the current instance
+/// health check settings of the compute node group. Specify
+/// healthMonitoring , deepHealthChecks , or both. You can't specify an
+/// empty object ( {} ).
+pub struct UpdateInstanceHealthChecksRequest {
+  /// The health monitoring settings. Health monitoring continuously checks
+  /// running instances for hardware and software faults. If you specify this
+  /// object, it can't be empty. If you omit this object, health monitoring is
+  /// turned off.
+  pub health_monitoring: HealthMonitoring? = None
+  /// The deep health check settings. Deep health checks test the graphics
+  /// processing units (GPUs) of an instance each time it starts, including
+  /// after a reboot, before it accepts jobs. If you specify this object, it
+  /// can't be empty. If you omit this object, deep health checks are turned
+  /// off.
+  pub deep_health_checks: DeepHealthChecks? = None
 }
 
 /// The lifecycle actions to configure on a compute node group when you

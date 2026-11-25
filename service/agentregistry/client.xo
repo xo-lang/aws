@@ -23,6 +23,9 @@ pub struct Options {
   /// The application's id in the User-Agent (`AWS_SDK_UA_APP_ID` or the
   /// profile's `sdk_ua_app_id` through `from_config`).
   pub app_id: Str? = None
+  /// The token of bearer auth (`AWS_BEARER_TOKEN_AGENT_REGISTRY` through
+  /// `from_config`): when set, calls use it instead of SigV4.
+  pub bearer_token: Str? = None
 }
 
 pub struct Client {
@@ -41,7 +44,7 @@ pub fn new(net: Net, clock: Clock[clock], rand: Rand[rand], options: Options) ->
   Ok(Client{
     params: params,
     region: options.region,
-    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/agentregistry", app_id: options.app_id, features: ua_features},
+    transport: transport.new_client(net, clock, rand, options.credentials, retry.standard(max_attempts: options.max_attempts)) with {token: options.bearer_token.map(fn(t: Str) -> Secret[Str] { Secret.new(t) }), trace_id: options.trace_id, user_agent: "xo-lang-aws ua/2.1 lang/xo api/agentregistry", app_id: options.app_id, features: ua_features},
     rand: rand,
   })
 }
@@ -62,6 +65,7 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   }
   o.trace_id = cfg.trace_id
   o.app_id = cfg.app_id
+  o.bearer_token = cfg.bearer_tokens.get("AGENT_REGISTRY")
   Ok(o)
 }
 
@@ -77,7 +81,7 @@ fn (c: Client) route(params: EndpointParameters) -> (rest.Endpoint, transport.Si
   let e = resolve_endpoint(params) ?? err => return Err("endpoint: ${err.msg}")
   let ep = rest.parse_endpoint(e.url) ?? return Err("bad endpoint ${e.url}")
   let (service, region) = endpoints.signing(e)
-  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e)}
+  let signing = transport.Signing{service: service ?? SIGNING_NAME, region: region ?? c.region, s3: false, region_set: endpoints.region_set(e), auth: if c.transport.token.is_some() { transport.Auth.Bearer } else { transport.Auth.Required }}
   Ok((ep, signing, endpoints.header_pairs(e)))
 }
 
@@ -437,6 +441,9 @@ fn json_of_descriptors(v: Descriptors) -> json.Value {
   if let Some(x) = v.agui {
     fs.push(("agui", json_of_ag_ui_descriptor(x)))
   }
+  if let Some(x) = v.signature_agent_card {
+    fs.push(("signatureAgentCard", json_of_signature_agent_card_descriptor(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -453,6 +460,7 @@ fn from_json_descriptors(v: json.Value) -> Descriptors ! Str {
       "custom" => out.custom = from_json_custom_descriptor(fv)?
       "http" => out.http = from_json_http_descriptor(fv)?
       "agui" => out.agui = from_json_ag_ui_descriptor(fv)?
+      "signatureAgentCard" => out.signature_agent_card = from_json_signature_agent_card_descriptor(fv)?
       _ => {}
     }
   }
@@ -759,6 +767,32 @@ fn from_json_registry_id_list(v: json.Value) -> List[Str] ! Str {
   Ok(out)
 }
 
+fn json_of_registry_record_artifact_download(v: RegistryRecordArtifactDownload) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.sha256 {
+    fs.push(("sha256", json.Value.Str(x)))
+  }
+  if let Some(x) = v.download_url {
+    fs.push(("downloadUrl", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_registry_record_artifact_download(v: json.Value) -> RegistryRecordArtifactDownload ! Str {
+  var out = RegistryRecordArtifactDownload{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sha256" => out.sha256 = jsonv.read_str(fv)?
+      "downloadUrl" => out.download_url = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_registry_record_filter(v: RegistryRecordFilter) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.name {
@@ -858,6 +892,9 @@ fn json_of_registry_record_summary(v: RegistryRecordSummary) -> json.Value {
   if let Some(x) = v.custom_metadata {
     fs.push(("customMetadata", x))
   }
+  if let Some(x) = v.artifact {
+    fs.push(("artifact", json_of_registry_record_artifact_download(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -881,6 +918,7 @@ fn from_json_registry_record_summary(v: json.Value) -> RegistryRecordSummary ! S
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
       "customMetadata" => out.custom_metadata = fv
+      "artifact" => out.artifact = from_json_registry_record_artifact_download(fv)?
       _ => {}
     }
   }
@@ -981,6 +1019,12 @@ fn json_of_search_discoverable_registry_records_request(v: SearchDiscoverableReg
   if let Some(x) = v.filters {
     fs.push(("filters", x))
   }
+  if let Some(x) = v.search_type {
+    fs.push(("searchType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -995,6 +1039,8 @@ fn from_json_search_discoverable_registry_records_request(v: json.Value) -> Sear
       "registryIds" => out.registry_ids = from_json_registry_id_list(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
       "filters" => out.filters = fv
+      "searchType" => out.search_type = SearchType.from(jsonv.read_str(fv)?)
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1005,6 +1051,12 @@ fn json_of_search_discoverable_registry_records_response(v: SearchDiscoverableRe
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.registry_records {
     fs.push(("registryRecords", json_of_registry_record_summary_list(x)))
+  }
+  if let Some(x) = v.search_type {
+    fs.push(("searchType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -1017,6 +1069,64 @@ fn from_json_search_discoverable_registry_records_response(v: json.Value) -> Sea
     }
     match k {
       "registryRecords" => out.registry_records = from_json_registry_record_summary_list(fv)?
+      "searchType" => out.search_type = SearchType.from(jsonv.read_str(fv)?)
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_signature_agent_card_additional_data(v: SignatureAgentCardAdditionalData) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.category {
+    fs.push(("category", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_signature_agent_card_additional_data(v: json.Value) -> SignatureAgentCardAdditionalData ! Str {
+  var out = SignatureAgentCardAdditionalData{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "category" => out.category = BotCategory.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_signature_agent_card_descriptor(v: SignatureAgentCardDescriptor) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.data {
+    fs.push(("data", json.Value.Str(x)))
+  }
+  if let Some(x) = v.data_schema_version {
+    fs.push(("dataSchemaVersion", json.Value.Str(x)))
+  }
+  if let Some(x) = v.source {
+    fs.push(("source", json_of_descriptor_source(x)))
+  }
+  if let Some(x) = v.additional_data {
+    fs.push(("additionalData", json_of_signature_agent_card_additional_data(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_signature_agent_card_descriptor(v: json.Value) -> SignatureAgentCardDescriptor ! Str {
+  var out = SignatureAgentCardDescriptor{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "data" => out.data = jsonv.read_str(fv)?
+      "dataSchemaVersion" => out.data_schema_version = jsonv.read_str(fv)?
+      "source" => out.source = from_json_descriptor_source(fv)?
+      "additionalData" => out.additional_data = from_json_signature_agent_card_additional_data(fv)?
       _ => {}
     }
   }
@@ -1346,7 +1456,11 @@ pub fn deserialize_batch_get_discoverable_registry_record_error(resp: http.Respo
 
 /// Retrieves multiple discoverable registry records by ID from a single
 /// registry. Records that cannot be retrieved are reported individually in
-/// the errors list rather than failing the entire request.
+/// the errors list rather than failing the entire request. For each skill
+/// record that has a skill package, the operation also returns artifact .
+/// It contains a short-lived download URL and a SHA-256 checksum for the
+/// package of the record's latest approved revision. If the registry can't
+/// create a download URL for a package, the whole request fails.
 pub fn (c: Client) batch_get_discoverable_registry_record(input: BatchGetDiscoverableRegistryRecordRequest) -> BatchGetDiscoverableRegistryRecordResponse ! BatchGetDiscoverableRegistryRecordErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_batch_get_discoverable_registry_record(c.params, input)) ?? e => return Err(BatchGetDiscoverableRegistryRecordErr.InvalidInput(e))
   var req = serialize_batch_get_discoverable_registry_record(ep, input, "") ?? e => return Err(BatchGetDiscoverableRegistryRecordErr.InvalidInput(e))
@@ -1525,6 +1639,12 @@ pub fn serialize_search_discoverable_registry_records(ep: rest.Endpoint, input: 
   if let Some(x) = input.filters {
     fs.push(("filters", x))
   }
+  if let Some(x) = input.search_type {
+    fs.push(("searchType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -1551,6 +1671,8 @@ pub fn deserialize_search_discoverable_registry_records(resp: http.Response) -> 
     }
     match k {
       "registryRecords" => out.registry_records = from_json_registry_record_summary_list(fv)?
+      "searchType" => out.search_type = SearchType.from(jsonv.read_str(fv)?)
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1624,7 +1746,10 @@ pub fn deserialize_search_discoverable_registry_records_error(resp: http.Respons
 
 /// Searches the discoverable registry records in a registry using a natural
 /// language query. Returns metadata for the matching records ordered by
-/// relevance.
+/// relevance. Returns at most 1000 results across all pages when searchType
+/// is KEYWORD , and at most 20 results when it is HYBRID or SEMANTIC . To
+/// retrieve more records, refine the query or filters, or use
+/// ListDiscoverableRegistryRecords to list every record.
 pub fn (c: Client) search_discoverable_registry_records(input: SearchDiscoverableRegistryRecordsRequest) -> SearchDiscoverableRegistryRecordsResponse ! SearchDiscoverableRegistryRecordsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_search_discoverable_registry_records(c.params, input)) ?? e => return Err(SearchDiscoverableRegistryRecordsErr.InvalidInput(e))
   var req = serialize_search_discoverable_registry_records(ep, input, "") ?? e => return Err(SearchDiscoverableRegistryRecordsErr.InvalidInput(e))

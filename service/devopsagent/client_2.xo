@@ -8,6 +8,276 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Gets an asset's content as a zip bundle
+pub fn (c: Client) get_asset_content(input: GetAssetContentRequest) -> GetAssetContentResponse ! GetAssetContentErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_asset_content(c.params, input)) ?? e => return Err(GetAssetContentErr.InvalidInput(e))
+  var req = serialize_get_asset_content(ep, input, "") ?? e => return Err(GetAssetContentErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAssetContentErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_asset_content_error(resp))
+  }
+  deserialize_get_asset_content(resp) ?? e => Err(GetAssetContentErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_asset_file(base: EndpointParameters, input: GetAssetFileRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetAssetFile.
+pub fn serialize_get_asset_file(ep: rest.Endpoint, input: GetAssetFileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_agent_space_id = match input.agent_space_id {
+    Some(v) => v
+    None => return Err("input member agentSpaceId is required")
+  }
+  if label_agent_space_id == "" {
+    return Err("input member agentSpaceId must not be empty")
+  }
+  let label_asset_id = match input.asset_id {
+    Some(v) => v
+    None => return Err("input member assetId is required")
+  }
+  if label_asset_id == "" {
+    return Err("input member assetId must not be empty")
+  }
+  let label_path = match input.path {
+    Some(v) => v
+    None => return Err("input member path is required")
+  }
+  if label_path == "" {
+    return Err("input member path must not be empty")
+  }
+  if let Some(v) = input.asset_version {
+    qs.push(("assetVersion", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: "dp.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/asset/agent-space/${rest.escape(label_agent_space_id, false)}/assets/${rest.escape(label_asset_id, false)}/files/${rest.escape(label_path, true)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_asset_file(resp: http.Response) -> GetAssetFileResponse ! Str {
+  var out = GetAssetFileResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "file" => out.file = from_json_asset_file(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetAssetFile.
+pub enum GetAssetFileErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  ConflictException(e: ConflictException)
+  ContentSizeExceededException(e: ContentSizeExceededException)
+  InvalidParameterException(e: InvalidParameterException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetAssetFileErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_asset_file_error(resp: http.Response) -> GetAssetFileErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.AccessDeniedException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.InternalServerException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.ResourceNotFoundException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.ThrottlingException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.ValidationException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.ConflictException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "ContentSizeExceededException" => match read_error_content_size_exceeded_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.ContentSizeExceededException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.InvalidParameterException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return GetAssetFileErr.ServiceQuotaExceededException(x)
+      Err(msg) => return GetAssetFileErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetAssetFileErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets a file from an asset
+pub fn (c: Client) get_asset_file(input: GetAssetFileRequest) -> GetAssetFileResponse ! GetAssetFileErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_asset_file(c.params, input)) ?? e => return Err(GetAssetFileErr.InvalidInput(e))
+  var req = serialize_get_asset_file(ep, input, "") ?? e => return Err(GetAssetFileErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAssetFileErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_asset_file_error(resp))
+  }
+  deserialize_get_asset_file(resp) ?? e => Err(GetAssetFileErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_association(base: EndpointParameters, input: GetAssociationInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetAssociation.
+pub fn serialize_get_association(ep: rest.Endpoint, input: GetAssociationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_agent_space_id = match input.agent_space_id {
+    Some(v) => v
+    None => return Err("input member agentSpaceId is required")
+  }
+  if label_agent_space_id == "" {
+    return Err("input member agentSpaceId must not be empty")
+  }
+  let label_association_id = match input.association_id {
+    Some(v) => v
+    None => return Err("input member associationId is required")
+  }
+  if label_association_id == "" {
+    return Err("input member associationId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: "cp.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/agentspaces/${rest.escape(label_agent_space_id, false)}/associations/${rest.escape(label_association_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_association(resp: http.Response) -> GetAssociationOutput ! Str {
+  var out = GetAssociationOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "association" => out.association = from_json_association(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetAssociation.
+pub enum GetAssociationErr {
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ValidationException(e: ValidationException)
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  ContentSizeExceededException(e: ContentSizeExceededException)
+  InvalidParameterException(e: InvalidParameterException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetAssociationErr) display() -> Str {
+  match e {
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
 pub fn deserialize_get_association_error(resp: http.Response) -> GetAssociationErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
@@ -216,6 +486,163 @@ pub fn (c: Client) get_backlog_task(input: GetBacklogTaskRequest) -> GetBacklogT
     return Err(deserialize_get_backlog_task_error(resp))
   }
   deserialize_get_backlog_task(resp) ?? e => Err(GetBacklogTaskErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_chat(base: EndpointParameters, input: GetChatRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetChat.
+pub fn serialize_get_chat(ep: rest.Endpoint, input: GetChatRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_agent_space_id = match input.agent_space_id {
+    Some(v) => v
+    None => return Err("input member agentSpaceId is required")
+  }
+  if label_agent_space_id == "" {
+    return Err("input member agentSpaceId must not be empty")
+  }
+  let label_execution_id = match input.execution_id {
+    Some(v) => v
+    None => return Err("input member executionId is required")
+  }
+  if label_execution_id == "" {
+    return Err("input member executionId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: "dp.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/agents/agent-space/${rest.escape(label_agent_space_id, false)}/chat/get/${rest.escape(label_execution_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_chat(resp: http.Response) -> GetChatResponse ! Str {
+  var out = GetChatResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "executionId" => out.execution_id = jsonv.read_str(fv)?
+      "summary" => out.summary = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetChat.
+pub enum GetChatErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  ConflictException(e: ConflictException)
+  ContentSizeExceededException(e: ContentSizeExceededException)
+  InvalidParameterException(e: InvalidParameterException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetChatErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_chat_error(resp: http.Response) -> GetChatErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetChatErr.AccessDeniedException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetChatErr.InternalServerException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetChatErr.ResourceNotFoundException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetChatErr.ThrottlingException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetChatErr.ValidationException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return GetChatErr.ConflictException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "ContentSizeExceededException" => match read_error_content_size_exceeded_exception(resp, body) {
+      Ok(x) => return GetChatErr.ContentSizeExceededException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return GetChatErr.InvalidParameterException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return GetChatErr.ServiceQuotaExceededException(x)
+      Err(msg) => return GetChatErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetChatErr.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves the details of a chat execution, including its execution ID,
+/// summary, timestamps, and archive status.
+pub fn (c: Client) get_chat(input: GetChatRequest) -> GetChatResponse ! GetChatErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_chat(c.params, input)) ?? e => return Err(GetChatErr.InvalidInput(e))
+  var req = serialize_get_chat(ep, input, "") ?? e => return Err(GetChatErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetChatErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_chat_error(resp))
+  }
+  deserialize_get_chat(resp) ?? e => Err(GetChatErr.Deserialize(e))
 }
 
 pub fn endpoint_params_get_operator_app(base: EndpointParameters, input: GetOperatorAppInput) -> EndpointParameters {
@@ -1941,6 +2368,9 @@ pub fn serialize_list_chats(ep: rest.Endpoint, input: ListChatsRequest, idempote
   if let Some(v) = input.next_token {
     qs.push(("nextToken", v))
   }
+  if let Some(v) = input.archive_status {
+    qs.push(("archiveStatus", v.value()))
+  }
   var body = b""
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
@@ -1975,11 +2405,11 @@ pub fn deserialize_list_chats(resp: http.Response) -> ListChatsResponse ! Str {
 
 /// The errors of ListChats.
 pub enum ListChatsErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
-  AccessDeniedException(e: AccessDeniedException)
   ConflictException(e: ConflictException)
   ContentSizeExceededException(e: ContentSizeExceededException)
   InvalidParameterException(e: InvalidParameterException)
@@ -1996,11 +2426,11 @@ pub enum ListChatsErr {
 
 pub fn (e: ListChatsErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     ConflictException(x) => "ConflictException: ${x:?}"
     ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
@@ -2015,6 +2445,10 @@ pub fn (e: ListChatsErr) display() -> Str {
 pub fn deserialize_list_chats_error(resp: http.Response) -> ListChatsErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListChatsErr.AccessDeniedException(x)
+      Err(msg) => return ListChatsErr.Deserialize(msg)
+    }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
       Ok(x) => return ListChatsErr.InternalServerException(x)
       Err(msg) => return ListChatsErr.Deserialize(msg)
@@ -2029,10 +2463,6 @@ pub fn deserialize_list_chats_error(resp: http.Response) -> ListChatsErr {
     }
     "ValidationException" => match read_error_validation_exception(resp, body) {
       Ok(x) => return ListChatsErr.ValidationException(x)
-      Err(msg) => return ListChatsErr.Deserialize(msg)
-    }
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ListChatsErr.AccessDeniedException(x)
       Err(msg) => return ListChatsErr.Deserialize(msg)
     }
     "ConflictException" => match read_error_conflict_exception(resp, body) {
@@ -3850,12 +4280,12 @@ pub fn deserialize_send_message(resp: http.Response) -> SendMessageResponse ! St
 /// The errors of SendMessage.
 pub enum SendMessageErr {
   AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
-  ConflictException(e: ConflictException)
   ContentSizeExceededException(e: ContentSizeExceededException)
   InvalidParameterException(e: InvalidParameterException)
   /// A service error the model does not list for this operation.
@@ -3871,12 +4301,12 @@ pub enum SendMessageErr {
 pub fn (e: SendMessageErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
     ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     Api(x) => x.display()
@@ -3891,6 +4321,10 @@ pub fn deserialize_send_message_error(resp: http.Response) -> SendMessageErr {
   match restjson.error_code(resp, body) {
     "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
       Ok(x) => return SendMessageErr.AccessDeniedException(x)
+      Err(msg) => return SendMessageErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return SendMessageErr.ConflictException(x)
       Err(msg) => return SendMessageErr.Deserialize(msg)
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
@@ -3911,10 +4345,6 @@ pub fn deserialize_send_message_error(resp: http.Response) -> SendMessageErr {
     }
     "ValidationException" => match read_error_validation_exception(resp, body) {
       Ok(x) => return SendMessageErr.ValidationException(x)
-      Err(msg) => return SendMessageErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return SendMessageErr.ConflictException(x)
       Err(msg) => return SendMessageErr.Deserialize(msg)
     }
     "ContentSizeExceededException" => match read_error_content_size_exceeded_exception(resp, body) {
@@ -4266,6 +4696,9 @@ pub fn serialize_update_agent_space(ep: rest.Endpoint, input: UpdateAgentSpaceIn
   }
   if let Some(x) = input.preferences {
     fs.push(("preferences", json_of_agent_space_preferences(x)))
+  }
+  if let Some(x) = input.aws_source_mode {
+    fs.push(("awsSourceMode", json.Value.Str(x.value())))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -5233,6 +5666,178 @@ pub fn (c: Client) update_backlog_task(input: UpdateBacklogTaskRequest) -> Updat
     return Err(deserialize_update_backlog_task_error(resp))
   }
   deserialize_update_backlog_task(resp) ?? e => Err(UpdateBacklogTaskErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_chat(base: EndpointParameters, input: UpdateChatRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateChat.
+pub fn serialize_update_chat(ep: rest.Endpoint, input: UpdateChatRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_agent_space_id = match input.agent_space_id {
+    Some(v) => v
+    None => return Err("input member agentSpaceId is required")
+  }
+  if label_agent_space_id == "" {
+    return Err("input member agentSpaceId must not be empty")
+  }
+  let label_execution_id = match input.execution_id {
+    Some(v) => v
+    None => return Err("input member executionId is required")
+  }
+  if label_execution_id == "" {
+    return Err("input member executionId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.summary {
+    fs.push(("summary", json.Value.Str(x)))
+  }
+  if let Some(x) = input.archive_status {
+    fs.push(("archiveStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: "dp.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/agents/agent-space/${rest.escape(label_agent_space_id, false)}/chat/${rest.escape(label_execution_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_chat(resp: http.Response) -> UpdateChatResponse ! Str {
+  var out = UpdateChatResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "executionId" => out.execution_id = jsonv.read_str(fv)?
+      "summary" => out.summary = jsonv.read_str(fv)?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "archiveStatus" => out.archive_status = ChatArchiveStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateChat.
+pub enum UpdateChatErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  ContentSizeExceededException(e: ContentSizeExceededException)
+  InvalidParameterException(e: InvalidParameterException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateChatErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    ContentSizeExceededException(x) => "ContentSizeExceededException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_chat_error(resp: http.Response) -> UpdateChatErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.AccessDeniedException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.ConflictException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.InternalServerException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.ThrottlingException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.ValidationException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "ContentSizeExceededException" => match read_error_content_size_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.ContentSizeExceededException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.InvalidParameterException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateChatErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateChatErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateChatErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates a chat execution. You can use this operation to change the chat
+/// execution's summary or to archive or unarchive it. Archiving a chat
+/// execution hides it from the default chat list. Unarchiving a chat
+/// execution restores it to the default chat list.
+pub fn (c: Client) update_chat(input: UpdateChatRequest) -> UpdateChatResponse ! UpdateChatErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_chat(c.params, input)) ?? e => return Err(UpdateChatErr.InvalidInput(e))
+  var req = serialize_update_chat(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateChatErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateChatErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_chat_error(resp))
+  }
+  deserialize_update_chat(resp) ?? e => Err(UpdateChatErr.Deserialize(e))
 }
 
 pub fn endpoint_params_update_goal(base: EndpointParameters, input: UpdateGoalRequest) -> EndpointParameters {

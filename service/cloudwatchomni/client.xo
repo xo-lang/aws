@@ -4439,6 +4439,12 @@ fn json_of_metric_metadata(v: MetricMetadata) -> json.Value {
   if let Some(x) = v.semantics {
     fs.push(("semantics", json_of_metric_semantics(x)))
   }
+  if let Some(x) = v.aggregation_temporality {
+    fs.push(("aggregationTemporality", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.monotonicity {
+    fs.push(("monotonicity", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -4454,6 +4460,8 @@ fn from_json_metric_metadata(v: json.Value) -> MetricMetadata ! Str {
       "metricType" => out.metric_type = jsonv.read_str(fv)?
       "attributes" => out.attributes = from_json_metadata_attribute_map(fv)?
       "semantics" => out.semantics = from_json_metric_semantics(fv)?
+      "aggregationTemporality" => out.aggregation_temporality = MetricAggregationTemporality.from(jsonv.read_str(fv)?)
+      "monotonicity" => out.monotonicity = MetricMonotonicity.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -13171,20 +13179,4 @@ pub fn serialize_list_telemetry_query_sessions(ep: rest.Endpoint, input: ListTel
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_list_telemetry_query_sessions(resp: http.Response) -> ListTelemetryQuerySessionsResponse ! Str {
-  var out = ListTelemetryQuerySessionsResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "sessions" => out.sessions = from_json_session_summary_list(fv)?
-      "nextToken" => out.next_token = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
 }

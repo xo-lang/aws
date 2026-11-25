@@ -335,6 +335,36 @@ fn from_json_associate_resolver_rule_response(v: json.Value) -> AssociateResolve
   Ok(out)
 }
 
+fn json_of_auto_allowlist_config(v: AutoAllowlistConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.initial_data_timeframe_hours {
+    fs.push(("InitialDataTimeframeHours", json.Value.Int(x)))
+  }
+  if let Some(x) = v.import_from_firewall_domain_list_id {
+    fs.push(("ImportFromFirewallDomainListId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.auto_allowlist_firewall_domain_list_id {
+    fs.push(("AutoAllowlistFirewallDomainListId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_auto_allowlist_config(v: json.Value) -> AutoAllowlistConfig ! Str {
+  var out = AutoAllowlistConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "InitialDataTimeframeHours" => out.initial_data_timeframe_hours = jsonv.read_int(fv)?
+      "ImportFromFirewallDomainListId" => out.import_from_firewall_domain_list_id = jsonv.read_str(fv)?
+      "AutoAllowlistFirewallDomainListId" => out.auto_allowlist_firewall_domain_list_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_batch_create_firewall_rule_error(v: BatchCreateFirewallRuleError) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.firewall_rule {
@@ -2050,6 +2080,15 @@ fn json_of_firewall_domain_list_metadata(v: FirewallDomainListMetadata) -> json.
   if let Some(x) = v.category {
     fs.push(("Category", json.Value.Str(x)))
   }
+  if let Some(x) = v.firewall_rule_group_id {
+    fs.push(("FirewallRuleGroupId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.firewall_threat_protection_id {
+    fs.push(("FirewallThreatProtectionId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("Status", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -2067,6 +2106,9 @@ fn from_json_firewall_domain_list_metadata(v: json.Value) -> FirewallDomainListM
       "ManagedOwnerName" => out.managed_owner_name = jsonv.read_str(fv)?
       "ManagedListType" => out.managed_list_type = DomainListType.from(jsonv.read_str(fv)?)
       "Category" => out.category = jsonv.read_str(fv)?
+      "FirewallRuleGroupId" => out.firewall_rule_group_id = jsonv.read_str(fv)?
+      "FirewallThreatProtectionId" => out.firewall_threat_protection_id = jsonv.read_str(fv)?
+      "Status" => out.status = FirewallDomainListStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -2199,6 +2241,60 @@ fn from_json_firewall_rule(v: json.Value) -> FirewallRule ! Str {
       "StatusMessage" => out.status_message = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_firewall_rule_domain(v: FirewallRuleDomain) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_name {
+    fs.push(("DomainName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.domain_status {
+    fs.push(("DomainStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.last24_hour_requests {
+    fs.push(("Last24HourRequests", json.Value.Int(x)))
+  }
+  if let Some(x) = v.total_requests {
+    fs.push(("TotalRequests", json.Value.Int(x)))
+  }
+  if let Some(x) = v.added_time {
+    fs.push(("AddedTime", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_firewall_rule_domain(v: json.Value) -> FirewallRuleDomain ! Str {
+  var out = FirewallRuleDomain{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DomainName" => out.domain_name = jsonv.read_str(fv)?
+      "DomainStatus" => out.domain_status = FirewallDomainStatus.from(jsonv.read_str(fv)?)
+      "Last24HourRequests" => out.last24_hour_requests = jsonv.read_int(fv)?
+      "TotalRequests" => out.total_requests = jsonv.read_int(fv)?
+      "AddedTime" => out.added_time = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_firewall_rule_domains(v: List[FirewallRuleDomain]) -> json.Value {
+  json.Value.List(v.map(fn(x: FirewallRuleDomain) -> json.Value { json_of_firewall_rule_domain(x) }))
+}
+
+fn from_json_firewall_rule_domains(v: json.Value) -> List[FirewallRuleDomain] ! Str {
+  var out: List[FirewallRuleDomain] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_firewall_rule_domain(fv)?)
   }
   Ok(out)
 }
@@ -2423,6 +2519,9 @@ fn json_of_firewall_rule_type(v: FirewallRuleType) -> json.Value {
   if let Some(x) = v.dns_threat_protection {
     fs.push(("DnsThreatProtection", json_of_dns_threat_protection_rule_type_config(x)))
   }
+  if let Some(x) = v.auto_allowlist {
+    fs.push(("AutoAllowlist", json_of_auto_allowlist_config(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2437,6 +2536,7 @@ fn from_json_firewall_rule_type(v: json.Value) -> FirewallRuleType ! Str {
       "FirewallAdvancedContentCategory" => out.firewall_advanced_content_category = from_json_firewall_advanced_content_category_config(fv)?
       "FirewallAdvancedThreatCategory" => out.firewall_advanced_threat_category = from_json_firewall_advanced_threat_category_config(fv)?
       "DnsThreatProtection" => out.dns_threat_protection = from_json_dns_threat_protection_rule_type_config(fv)?
+      "AutoAllowlist" => out.auto_allowlist = from_json_auto_allowlist_config(fv)?
       _ => {}
     }
   }
@@ -2584,6 +2684,12 @@ fn json_of_get_firewall_domain_list_response(v: GetFirewallDomainListResponse) -
   if let Some(x) = v.firewall_domain_list {
     fs.push(("FirewallDomainList", json_of_firewall_domain_list(x)))
   }
+  if let Some(x) = v.firewall_rule_group_id {
+    fs.push(("FirewallRuleGroupId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.firewall_threat_protection_id {
+    fs.push(("FirewallThreatProtectionId", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2595,6 +2701,8 @@ fn from_json_get_firewall_domain_list_response(v: json.Value) -> GetFirewallDoma
     }
     match k {
       "FirewallDomainList" => out.firewall_domain_list = from_json_firewall_domain_list(fv)?
+      "FirewallRuleGroupId" => out.firewall_rule_group_id = jsonv.read_str(fv)?
+      "FirewallThreatProtectionId" => out.firewall_threat_protection_id = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -3699,6 +3807,108 @@ fn from_json_list_firewall_domains_response(v: json.Value) -> ListFirewallDomain
     match k {
       "NextToken" => out.next_token = jsonv.read_str(fv)?
       "Domains" => out.domains = from_json_firewall_domains(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_firewall_rule_domains_query_options(v: ListFirewallRuleDomainsQueryOptions) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_status {
+    fs.push(("DomainStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.sort_by {
+    fs.push(("SortBy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.sort_order {
+    fs.push(("SortOrder", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.domain_name_filter {
+    fs.push(("DomainNameFilter", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_firewall_rule_domains_query_options(v: json.Value) -> ListFirewallRuleDomainsQueryOptions ! Str {
+  var out = ListFirewallRuleDomainsQueryOptions{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "DomainStatus" => out.domain_status = FirewallDomainStatusFilter.from(jsonv.read_str(fv)?)
+      "SortBy" => out.sort_by = FirewallRuleDomainSortBy.from(jsonv.read_str(fv)?)
+      "SortOrder" => out.sort_order = FirewallRuleDomainSortOrder.from(jsonv.read_str(fv)?)
+      "DomainNameFilter" => out.domain_name_filter = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_firewall_rule_domains_request(v: ListFirewallRuleDomainsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.firewall_rule_group_id {
+    fs.push(("FirewallRuleGroupId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.firewall_threat_protection_id {
+    fs.push(("FirewallThreatProtectionId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.firewall_domain_list_id {
+    fs.push(("FirewallDomainListId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.query_options {
+    fs.push(("QueryOptions", json_of_list_firewall_rule_domains_query_options(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_firewall_rule_domains_request(v: json.Value) -> ListFirewallRuleDomainsRequest ! Str {
+  var out = ListFirewallRuleDomainsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "FirewallRuleGroupId" => out.firewall_rule_group_id = jsonv.read_str(fv)?
+      "FirewallThreatProtectionId" => out.firewall_threat_protection_id = jsonv.read_str(fv)?
+      "FirewallDomainListId" => out.firewall_domain_list_id = jsonv.read_str(fv)?
+      "QueryOptions" => out.query_options = from_json_list_firewall_rule_domains_query_options(fv)?
+      "MaxResults" => out.max_results = jsonv.read_int(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_firewall_rule_domains_response(v: ListFirewallRuleDomainsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domains {
+    fs.push(("Domains", json_of_firewall_rule_domains(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_firewall_rule_domains_response(v: json.Value) -> ListFirewallRuleDomainsResponse ! Str {
+  var out = ListFirewallRuleDomainsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Domains" => out.domains = from_json_firewall_rule_domains(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -6913,6 +7123,7 @@ pub fn deserialize_associate_resolver_endpoint_ip_address(resp: http.Response) -
 
 /// The errors of AssociateResolverEndpointIpAddress.
 pub enum AssociateResolverEndpointIpAddressErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   InvalidRequestException(e: InvalidRequestException)
@@ -6932,6 +7143,7 @@ pub enum AssociateResolverEndpointIpAddressErr {
 
 pub fn (e: AssociateResolverEndpointIpAddressErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
@@ -6949,6 +7161,10 @@ pub fn (e: AssociateResolverEndpointIpAddressErr) display() -> Str {
 pub fn deserialize_associate_resolver_endpoint_ip_address_error(resp: http.Response) -> AssociateResolverEndpointIpAddressErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return AssociateResolverEndpointIpAddressErr.AccessDeniedException(x)
+      Err(msg) => return AssociateResolverEndpointIpAddressErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return AssociateResolverEndpointIpAddressErr.InternalServiceErrorException(x)
       Err(msg) => return AssociateResolverEndpointIpAddressErr.Deserialize(msg)
@@ -7205,6 +7421,7 @@ pub fn deserialize_associate_resolver_rule(resp: http.Response) -> AssociateReso
 
 /// The errors of AssociateResolverRule.
 pub enum AssociateResolverRuleErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   InvalidRequestException(e: InvalidRequestException)
@@ -7225,6 +7442,7 @@ pub enum AssociateResolverRuleErr {
 
 pub fn (e: AssociateResolverRuleErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
@@ -7243,6 +7461,10 @@ pub fn (e: AssociateResolverRuleErr) display() -> Str {
 pub fn deserialize_associate_resolver_rule_error(resp: http.Response) -> AssociateResolverRuleErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return AssociateResolverRuleErr.AccessDeniedException(x)
+      Err(msg) => return AssociateResolverRuleErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return AssociateResolverRuleErr.InternalServiceErrorException(x)
       Err(msg) => return AssociateResolverRuleErr.Deserialize(msg)
@@ -7960,17 +8182,21 @@ pub fn deserialize_create_firewall_rule_error(resp: http.Response) -> CreateFire
 /// Amazon Web Services-managed domain list. DnsThreatProtection — match a
 /// built-in DNS Firewall Advanced threat detector ( DGA , DNS_TUNNELING ,
 /// or DICTIONARY_DGA ). FirewallRuleType — match one of the rule-type
-/// variants returned by ListFirewallRuleTypes :
-/// FirewallAdvancedContentCategory , FirewallAdvancedThreatCategory ,
-/// DnsThreatProtection , or PartnerThreatProtection . The
-/// PartnerThreatProtection variant requires an active Amazon Web Services
-/// Marketplace subscription to the named partner product. For rules that
-/// require asynchronous provisioning (today, the PartnerThreatProtection
-/// rule type), the rule's Status begins at CREATING and transitions to
-/// COMPLETE once the rule is provisioned and the marketplace entitlement is
-/// verified. If provisioning fails, Status becomes CREATION_FAILED and
-/// StatusMessage contains a human-readable reason; the rule is then
-/// immutable and must be removed with DeleteFirewallRule .
+/// variants: FirewallAdvancedContentCategory ,
+/// FirewallAdvancedThreatCategory , DnsThreatProtection ,
+/// PartnerThreatProtection , or AutoAllowlist . ListFirewallRuleTypes
+/// returns the first four. The PartnerThreatProtection variant requires an
+/// active Amazon Web Services Marketplace subscription to the named partner
+/// product. For rules that require asynchronous provisioning (the
+/// PartnerThreatProtection and AutoAllowlist rule types), the rule's Status
+/// begins at CREATING and transitions to COMPLETE once the rule is
+/// provisioned: for PartnerThreatProtection , when the marketplace
+/// entitlement is verified, and for AutoAllowlist , when DNS Firewall has
+/// read the look-back window of every VPC that uses the rule group, which
+/// can take hours for a rule group that many VPCs use. If provisioning
+/// fails, Status becomes CREATION_FAILED and StatusMessage contains a
+/// human-readable reason; the rule is then immutable and must be removed
+/// with DeleteFirewallRule .
 pub fn (c: Client) create_firewall_rule(input: CreateFirewallRuleRequest) -> CreateFirewallRuleResponse ! CreateFirewallRuleErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_create_firewall_rule(c.params, input)) ?? e => return Err(CreateFirewallRuleErr.InvalidInput(e))
   var req = serialize_create_firewall_rule(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateFirewallRuleErr.InvalidInput(e))
@@ -9335,6 +9561,7 @@ pub fn deserialize_delete_resolver_endpoint(resp: http.Response) -> DeleteResolv
 
 /// The errors of DeleteResolverEndpoint.
 pub enum DeleteResolverEndpointErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   InvalidRequestException(e: InvalidRequestException)
@@ -9352,6 +9579,7 @@ pub enum DeleteResolverEndpointErr {
 
 pub fn (e: DeleteResolverEndpointErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
@@ -9367,6 +9595,10 @@ pub fn (e: DeleteResolverEndpointErr) display() -> Str {
 pub fn deserialize_delete_resolver_endpoint_error(resp: http.Response) -> DeleteResolverEndpointErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteResolverEndpointErr.AccessDeniedException(x)
+      Err(msg) => return DeleteResolverEndpointErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return DeleteResolverEndpointErr.InternalServiceErrorException(x)
       Err(msg) => return DeleteResolverEndpointErr.Deserialize(msg)
@@ -9600,6 +9832,7 @@ pub fn deserialize_delete_resolver_rule(resp: http.Response) -> DeleteResolverRu
 
 /// The errors of DeleteResolverRule.
 pub enum DeleteResolverRuleErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   InvalidRequestException(e: InvalidRequestException)
@@ -9618,6 +9851,7 @@ pub enum DeleteResolverRuleErr {
 
 pub fn (e: DeleteResolverRuleErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
@@ -9634,6 +9868,10 @@ pub fn (e: DeleteResolverRuleErr) display() -> Str {
 pub fn deserialize_delete_resolver_rule_error(resp: http.Response) -> DeleteResolverRuleErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteResolverRuleErr.AccessDeniedException(x)
+      Err(msg) => return DeleteResolverRuleErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return DeleteResolverRuleErr.InternalServiceErrorException(x)
       Err(msg) => return DeleteResolverRuleErr.Deserialize(msg)
@@ -9860,6 +10098,7 @@ pub fn deserialize_disassociate_resolver_endpoint_ip_address(resp: http.Response
 
 /// The errors of DisassociateResolverEndpointIpAddress.
 pub enum DisassociateResolverEndpointIpAddressErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   InvalidRequestException(e: InvalidRequestException)
@@ -9878,6 +10117,7 @@ pub enum DisassociateResolverEndpointIpAddressErr {
 
 pub fn (e: DisassociateResolverEndpointIpAddressErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
@@ -9894,6 +10134,10 @@ pub fn (e: DisassociateResolverEndpointIpAddressErr) display() -> Str {
 pub fn deserialize_disassociate_resolver_endpoint_ip_address_error(resp: http.Response) -> DisassociateResolverEndpointIpAddressErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DisassociateResolverEndpointIpAddressErr.AccessDeniedException(x)
+      Err(msg) => return DisassociateResolverEndpointIpAddressErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return DisassociateResolverEndpointIpAddressErr.InternalServiceErrorException(x)
       Err(msg) => return DisassociateResolverEndpointIpAddressErr.Deserialize(msg)
@@ -10130,6 +10374,7 @@ pub fn deserialize_disassociate_resolver_rule(resp: http.Response) -> Disassocia
 
 /// The errors of DisassociateResolverRule.
 pub enum DisassociateResolverRuleErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   InvalidRequestException(e: InvalidRequestException)
@@ -10147,6 +10392,7 @@ pub enum DisassociateResolverRuleErr {
 
 pub fn (e: DisassociateResolverRuleErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
@@ -10162,6 +10408,10 @@ pub fn (e: DisassociateResolverRuleErr) display() -> Str {
 pub fn deserialize_disassociate_resolver_rule_error(resp: http.Response) -> DisassociateResolverRuleErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DisassociateResolverRuleErr.AccessDeniedException(x)
+      Err(msg) => return DisassociateResolverRuleErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return DisassociateResolverRuleErr.InternalServiceErrorException(x)
       Err(msg) => return DisassociateResolverRuleErr.Deserialize(msg)
@@ -10369,6 +10619,8 @@ pub fn deserialize_get_firewall_domain_list(resp: http.Response) -> GetFirewallD
     }
     match k {
       "FirewallDomainList" => out.firewall_domain_list = from_json_firewall_domain_list(fv)?
+      "FirewallRuleGroupId" => out.firewall_rule_group_id = jsonv.read_str(fv)?
+      "FirewallThreatProtectionId" => out.firewall_threat_protection_id = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -11225,6 +11477,7 @@ pub fn deserialize_get_resolver_endpoint(resp: http.Response) -> GetResolverEndp
 
 /// The errors of GetResolverEndpoint.
 pub enum GetResolverEndpointErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   ResourceNotFoundException(e: ResourceNotFoundException)
@@ -11241,6 +11494,7 @@ pub enum GetResolverEndpointErr {
 
 pub fn (e: GetResolverEndpointErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
@@ -11255,6 +11509,10 @@ pub fn (e: GetResolverEndpointErr) display() -> Str {
 pub fn deserialize_get_resolver_endpoint_error(resp: http.Response) -> GetResolverEndpointErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetResolverEndpointErr.AccessDeniedException(x)
+      Err(msg) => return GetResolverEndpointErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return GetResolverEndpointErr.InternalServiceErrorException(x)
       Err(msg) => return GetResolverEndpointErr.Deserialize(msg)
@@ -11724,6 +11982,7 @@ pub fn deserialize_get_resolver_rule(resp: http.Response) -> GetResolverRuleResp
 
 /// The errors of GetResolverRule.
 pub enum GetResolverRuleErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   ResourceNotFoundException(e: ResourceNotFoundException)
@@ -11740,6 +11999,7 @@ pub enum GetResolverRuleErr {
 
 pub fn (e: GetResolverRuleErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
@@ -11754,6 +12014,10 @@ pub fn (e: GetResolverRuleErr) display() -> Str {
 pub fn deserialize_get_resolver_rule_error(resp: http.Response) -> GetResolverRuleErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetResolverRuleErr.AccessDeniedException(x)
+      Err(msg) => return GetResolverRuleErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return GetResolverRuleErr.InternalServiceErrorException(x)
       Err(msg) => return GetResolverRuleErr.Deserialize(msg)
@@ -11841,6 +12105,7 @@ pub fn deserialize_get_resolver_rule_association(resp: http.Response) -> GetReso
 
 /// The errors of GetResolverRuleAssociation.
 pub enum GetResolverRuleAssociationErr {
+  AccessDeniedException(e: AccessDeniedException)
   InternalServiceErrorException(e: InternalServiceErrorException)
   InvalidParameterException(e: InvalidParameterException)
   ResourceNotFoundException(e: ResourceNotFoundException)
@@ -11857,6 +12122,7 @@ pub enum GetResolverRuleAssociationErr {
 
 pub fn (e: GetResolverRuleAssociationErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
     InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
@@ -11871,6 +12137,10 @@ pub fn (e: GetResolverRuleAssociationErr) display() -> Str {
 pub fn deserialize_get_resolver_rule_association_error(resp: http.Response) -> GetResolverRuleAssociationErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetResolverRuleAssociationErr.AccessDeniedException(x)
+      Err(msg) => return GetResolverRuleAssociationErr.Deserialize(msg)
+    }
     "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
       Ok(x) => return GetResolverRuleAssociationErr.InternalServiceErrorException(x)
       Err(msg) => return GetResolverRuleAssociationErr.Deserialize(msg)
@@ -12063,239 +12333,4 @@ pub fn serialize_import_firewall_domains(ep: rest.Endpoint, input: ImportFirewal
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_import_firewall_domains(resp: http.Response) -> ImportFirewallDomainsResponse ! Str {
-  var out = ImportFirewallDomainsResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Id" => out.id = jsonv.read_str(fv)?
-      "Name" => out.name = jsonv.read_str(fv)?
-      "Status" => out.status = FirewallDomainListStatus.from(jsonv.read_str(fv)?)
-      "StatusMessage" => out.status_message = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ImportFirewallDomains.
-pub enum ImportFirewallDomainsErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServiceErrorException(e: InternalServiceErrorException)
-  LimitExceededException(e: LimitExceededException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ImportFirewallDomainsErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
-    LimitExceededException(x) => "LimitExceededException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_import_firewall_domains_error(resp: http.Response) -> ImportFirewallDomainsErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.AccessDeniedException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.ConflictException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.InternalServiceErrorException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.LimitExceededException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.ResourceNotFoundException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.ThrottlingException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return ImportFirewallDomainsErr.ValidationException(x)
-      Err(msg) => return ImportFirewallDomainsErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ImportFirewallDomainsErr.Api(restjson.api_error(resp, body))
-}
-
-/// Imports domain names from a file into a domain list, for use in a DNS
-/// firewall rule group. Each domain specification in your domain list must
-/// satisfy the following requirements: It can optionally start with *
-/// (asterisk). With the exception of the optional starting asterisk, it
-/// must only contain the following characters: A-Z , a-z , 0-9 , -
-/// (hyphen). It must be from 1-255 characters in length.
-pub fn (c: Client) import_firewall_domains(input: ImportFirewallDomainsRequest) -> ImportFirewallDomainsResponse ! ImportFirewallDomainsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_import_firewall_domains(c.params, input)) ?? e => return Err(ImportFirewallDomainsErr.InvalidInput(e))
-  var req = serialize_import_firewall_domains(ep, input, "") ?? e => return Err(ImportFirewallDomainsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ImportFirewallDomainsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_import_firewall_domains_error(resp))
-  }
-  deserialize_import_firewall_domains(resp) ?? e => Err(ImportFirewallDomainsErr.Deserialize(e))
-}
-
-pub fn endpoint_params_list_firewall_configs(base: EndpointParameters, input: ListFirewallConfigsRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ListFirewallConfigs.
-pub fn serialize_list_firewall_configs(ep: rest.Endpoint, input: ListFirewallConfigsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.max_results {
-    fs.push(("MaxResults", json.Value.Int(x)))
-  }
-  if let Some(x) = input.next_token {
-    fs.push(("NextToken", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Route53Resolver.ListFirewallConfigs"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_list_firewall_configs(resp: http.Response) -> ListFirewallConfigsResponse ! Str {
-  var out = ListFirewallConfigsResponse{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "NextToken" => out.next_token = jsonv.read_str(fv)?
-      "FirewallConfigs" => out.firewall_configs = from_json_firewall_config_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ListFirewallConfigs.
-pub enum ListFirewallConfigsErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServiceErrorException(e: InternalServiceErrorException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ListFirewallConfigsErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServiceErrorException(x) => "InternalServiceErrorException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_list_firewall_configs_error(resp: http.Response) -> ListFirewallConfigsErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ListFirewallConfigsErr.AccessDeniedException(x)
-      Err(msg) => return ListFirewallConfigsErr.Deserialize(msg)
-    }
-    "InternalServiceErrorException" => match read_error_internal_service_error_exception(resp, body) {
-      Ok(x) => return ListFirewallConfigsErr.InternalServiceErrorException(x)
-      Err(msg) => return ListFirewallConfigsErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return ListFirewallConfigsErr.ThrottlingException(x)
-      Err(msg) => return ListFirewallConfigsErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return ListFirewallConfigsErr.ValidationException(x)
-      Err(msg) => return ListFirewallConfigsErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ListFirewallConfigsErr.Api(restjson.api_error(resp, body))
-}
-
-/// Retrieves the firewall configurations that you have defined. DNS
-/// Firewall uses the configurations to manage firewall behavior for your
-/// VPCs. A single call might return only a partial list of the
-/// configurations. For information, see MaxResults .
-pub fn (c: Client) list_firewall_configs(input: ListFirewallConfigsRequest) -> ListFirewallConfigsResponse ! ListFirewallConfigsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_firewall_configs(c.params, input)) ?? e => return Err(ListFirewallConfigsErr.InvalidInput(e))
-  var req = serialize_list_firewall_configs(ep, input, "") ?? e => return Err(ListFirewallConfigsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListFirewallConfigsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_list_firewall_configs_error(resp))
-  }
-  deserialize_list_firewall_configs(resp) ?? e => Err(ListFirewallConfigsErr.Deserialize(e))
-}
-
-pub fn endpoint_params_list_firewall_domain_lists(base: EndpointParameters, input: ListFirewallDomainListsRequest) -> EndpointParameters {
-  let _ = input
-  base
 }

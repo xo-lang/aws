@@ -111,6 +111,48 @@ fn from_json_access_denied_exception(v: json.Value) -> AccessDeniedException ! S
   Ok(out)
 }
 
+fn json_of_bm25_score(v: Bm25Score) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metadata_key {
+    fs.push(("metadataKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.score {
+    fs.push(("score", jsonv.float32(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_bm25_score(v: json.Value) -> Bm25Score ! Str {
+  var out = Bm25Score{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "metadataKey" => out.metadata_key = jsonv.read_str(fv)?
+      "score" => out.score = jsonv.read_float32(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_bm25_score_list(v: List[Bm25Score]) -> json.Value {
+  json.Value.List(v.map(fn(x: Bm25Score) -> json.Value { json_of_bm25_score(x) }))
+}
+
+fn from_json_bm25_score_list(v: json.Value) -> List[Bm25Score] ! Str {
+  var out: List[Bm25Score] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_bm25_score(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_conflict_exception(v: ConflictException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -1282,6 +1324,9 @@ fn json_of_metadata_configuration(v: MetadataConfiguration) -> json.Value {
   if let Some(x) = v.non_filterable_metadata_keys {
     fs.push(("nonFilterableMetadataKeys", json_of_non_filterable_metadata_keys(x)))
   }
+  if let Some(x) = v.text_search_configurations {
+    fs.push(("textSearchConfigurations", json_of_text_search_configurations(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1293,6 +1338,51 @@ fn from_json_metadata_configuration(v: json.Value) -> MetadataConfiguration ! St
     }
     match k {
       "nonFilterableMetadataKeys" => out.non_filterable_metadata_keys = from_json_non_filterable_metadata_keys(fv)?
+      "textSearchConfigurations" => out.text_search_configurations = from_json_text_search_configurations(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metadata_configuration_add(v: MetadataConfigurationAdd) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.text_search_configurations {
+    fs.push(("textSearchConfigurations", json_of_text_search_configurations(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metadata_configuration_add(v: json.Value) -> MetadataConfigurationAdd ! Str {
+  var out = MetadataConfigurationAdd{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "textSearchConfigurations" => out.text_search_configurations = from_json_text_search_configurations(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_metadata_configuration_delete(v: MetadataConfigurationDelete) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.text_search_configurations {
+    fs.push(("textSearchConfigurations", json_of_text_search_configuration_keys(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_metadata_configuration_delete(v: json.Value) -> MetadataConfigurationDelete ! Str {
+  var out = MetadataConfigurationDelete{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "textSearchConfigurations" => out.text_search_configurations = from_json_text_search_configuration_keys(fv)?
       _ => {}
     }
   }
@@ -1515,6 +1605,9 @@ fn json_of_query_output_vector(v: QueryOutputVector) -> json.Value {
   if let Some(x) = v.distance {
     fs.push(("distance", jsonv.float32(x)))
   }
+  if let Some(x) = v.scores {
+    fs.push(("scores", json_of_query_scores(x)))
+  }
   if let Some(x) = v.key {
     fs.push(("key", json.Value.Str(x)))
   }
@@ -1532,10 +1625,83 @@ fn from_json_query_output_vector(v: json.Value) -> QueryOutputVector ! Str {
     }
     match k {
       "distance" => out.distance = jsonv.read_float32(fv)?
+      "scores" => out.scores = from_json_query_scores(fv)?
       "key" => out.key = jsonv.read_str(fv)?
       "metadata" => out.metadata = fv
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_query_scores(v: QueryScores) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.fused {
+    fs.push(("fused", jsonv.float32(x)))
+  }
+  if let Some(x) = v.bm25_scores {
+    fs.push(("bm25Scores", json_of_bm25_score_list(x)))
+  }
+  if let Some(x) = v.vector_distance {
+    fs.push(("vectorDistance", jsonv.float32(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_query_scores(v: json.Value) -> QueryScores ! Str {
+  var out = QueryScores{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "fused" => out.fused = jsonv.read_float32(fv)?
+      "bm25Scores" => out.bm25_scores = from_json_bm25_score_list(fv)?
+      "vectorDistance" => out.vector_distance = jsonv.read_float32(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_query_text(v: QueryText) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.text {
+    fs.push(("text", json.Value.Str(x)))
+  }
+  if let Some(x) = v.metadata_key {
+    fs.push(("metadataKey", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_query_text(v: json.Value) -> QueryText ! Str {
+  var out = QueryText{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "text" => out.text = jsonv.read_str(fv)?
+      "metadataKey" => out.metadata_key = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_query_text_list(v: List[QueryText]) -> json.Value {
+  json.Value.List(v.map(fn(x: QueryText) -> json.Value { json_of_query_text(x) }))
+}
+
+fn from_json_query_text_list(v: json.Value) -> List[QueryText] ! Str {
+  var out: List[QueryText] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_query_text(fv)?)
   }
   Ok(out)
 }
@@ -1569,6 +1735,12 @@ fn json_of_query_vectors_input(v: QueryVectorsInput) -> json.Value {
   if let Some(x) = v.return_distance {
     fs.push(("returnDistance", json.Value.Bool(x)))
   }
+  if let Some(x) = v.query_texts {
+    fs.push(("queryTexts", json_of_query_text_list(x)))
+  }
+  if let Some(x) = v.return_scores {
+    fs.push(("returnScores", json.Value.Bool(x)))
+  }
   if let Some(x) = v.next_token {
     fs.push(("nextToken", json.Value.Str(x)))
   }
@@ -1591,6 +1763,8 @@ fn from_json_query_vectors_input(v: json.Value) -> QueryVectorsInput ! Str {
       "queryMode" => out.query_mode = IndexMode.from(jsonv.read_str(fv)?)
       "returnMetadata" => out.return_metadata = jsonv.read_bool(fv)?
       "returnDistance" => out.return_distance = jsonv.read_bool(fv)?
+      "queryTexts" => out.query_texts = from_json_query_text_list(fv)?
+      "returnScores" => out.return_scores = jsonv.read_bool(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
@@ -1779,6 +1953,90 @@ fn from_json_tags_map(v: json.Value) -> Map[Str, Str] ! Str {
   Ok(out)
 }
 
+fn json_of_text_search_configuration(v: TextSearchConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metadata_key {
+    fs.push(("metadataKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.language {
+    fs.push(("language", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_text_search_configuration(v: json.Value) -> TextSearchConfiguration ! Str {
+  var out = TextSearchConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "metadataKey" => out.metadata_key = jsonv.read_str(fv)?
+      "language" => out.language = LanguageCode.from(jsonv.read_str(fv)?)
+      "status" => out.status = AnalyzerStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_text_search_configuration_key(v: TextSearchConfigurationKey) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.metadata_key {
+    fs.push(("metadataKey", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_text_search_configuration_key(v: json.Value) -> TextSearchConfigurationKey ! Str {
+  var out = TextSearchConfigurationKey{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "metadataKey" => out.metadata_key = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_text_search_configuration_keys(v: List[TextSearchConfigurationKey]) -> json.Value {
+  json.Value.List(v.map(fn(x: TextSearchConfigurationKey) -> json.Value { json_of_text_search_configuration_key(x) }))
+}
+
+fn from_json_text_search_configuration_keys(v: json.Value) -> List[TextSearchConfigurationKey] ! Str {
+  var out: List[TextSearchConfigurationKey] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_text_search_configuration_key(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_text_search_configurations(v: List[TextSearchConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: TextSearchConfiguration) -> json.Value { json_of_text_search_configuration(x) }))
+}
+
+fn from_json_text_search_configurations(v: json.Value) -> List[TextSearchConfiguration] ! Str {
+  var out: List[TextSearchConfiguration] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_text_search_configuration(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_too_many_requests_exception(v: TooManyRequestsException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -1880,6 +2138,66 @@ fn json_of_update_index_mode_output(v: UpdateIndexModeOutput) -> json.Value {
 fn from_json_update_index_mode_output(v: json.Value) -> UpdateIndexModeOutput ! Str {
   var out = UpdateIndexModeOutput{}
   let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_update_metadata_configuration_input(v: UpdateMetadataConfigurationInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.vector_bucket_name {
+    fs.push(("vectorBucketName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.index_name {
+    fs.push(("indexName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.index_arn {
+    fs.push(("indexArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.add {
+    fs.push(("add", json_of_metadata_configuration_add(x)))
+  }
+  if let Some(x) = v.delete {
+    fs.push(("delete", json_of_metadata_configuration_delete(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_metadata_configuration_input(v: json.Value) -> UpdateMetadataConfigurationInput ! Str {
+  var out = UpdateMetadataConfigurationInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "vectorBucketName" => out.vector_bucket_name = jsonv.read_str(fv)?
+      "indexName" => out.index_name = jsonv.read_str(fv)?
+      "indexArn" => out.index_arn = jsonv.read_str(fv)?
+      "add" => out.add = from_json_metadata_configuration_add(fv)?
+      "delete" => out.delete = from_json_metadata_configuration_delete(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_metadata_configuration_output(v: UpdateMetadataConfigurationOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.index_arn {
+    fs.push(("indexArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_metadata_configuration_output(v: json.Value) -> UpdateMetadataConfigurationOutput ! Str {
+  var out = UpdateMetadataConfigurationOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "indexArn" => out.index_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
   Ok(out)
 }
 
@@ -4773,6 +5091,12 @@ pub fn serialize_query_vectors(ep: rest.Endpoint, input: QueryVectorsInput, idem
   if let Some(x) = input.return_distance {
     fs.push(("returnDistance", json.Value.Bool(x)))
   }
+  if let Some(x) = input.query_texts {
+    fs.push(("queryTexts", json_of_query_text_list(x)))
+  }
+  if let Some(x) = input.return_scores {
+    fs.push(("returnScores", json.Value.Bool(x)))
+  }
   if let Some(x) = input.next_token {
     fs.push(("nextToken", json.Value.Str(x)))
   }
@@ -4905,24 +5229,31 @@ pub fn deserialize_query_vectors_error(resp: http.Response) -> QueryVectorsErr {
   QueryVectorsErr.Api(restjson.api_error(resp, body))
 }
 
-/// Performs an approximate nearest neighbor search query in a vector index
-/// using a query vector. By default, it returns the keys of approximate
-/// nearest neighbors. You can optionally include the computed distance
-/// (between the query vector and each vector in the response) and metadata
-/// of each vector in the response. To specify the vector index, you can
-/// either use both the vector bucket name and the vector index name, or use
-/// the vector index Amazon Resource Name (ARN). Permissions You must have
-/// the s3vectors:QueryVectors permission to use this operation. Additional
+/// Returns matching vector keys from a vector index ranked by vector
+/// similarity, full-text relevance, or both. Specify queryVector to perform
+/// a vector search, specify queryTexts to perform a full-text search, or
+/// specify both to perform a hybrid search. Full-text search ranks results
+/// using BM25. Hybrid search combines the vector and full-text rankings
+/// using Reciprocal Rank Fusion (RRF). Amazon S3 Vectors ranks results by
+/// distance for a vector-only search, by BM25 score for a full-text-only
+/// search, and by RRF score for a hybrid search. You can optionally include
+/// computed distances, relevance scores, and vector metadata in the
+/// response. Full-text and hybrid searches require a vector index in
+/// ENHANCED mode. To specify the vector index, you can either use both the
+/// vector bucket name and the vector index name, or use the vector index
+/// Amazon Resource Name (ARN). Permissions You must have the
+/// s3vectors:QueryVectors permission to use this operation. Additional
 /// permissions are required based on the request parameters you specify:
 /// With only s3vectors:QueryVectors permission, you can retrieve vector
 /// keys of approximate nearest neighbors and computed distances between
-/// these vectors. This permission is sufficient only when you don't set any
-/// metadata filters and don't request metadata (by keeping the
-/// returnMetadata parameter set to false or not specified). If you specify
-/// a metadata filter or set returnMetadata to true, you must have both
-/// s3vectors:QueryVectors and s3vectors:GetVectors permissions. The request
-/// fails with a 403 Forbidden error if you request metadata filtering or
-/// metadata without the s3vectors:GetVectors permission.
+/// these vectors. This permission is sufficient only when you don't set
+/// queryTexts , don't set any metadata filters, and don't request metadata
+/// (by keeping the returnMetadata parameter set to false or not specified).
+/// To use queryTexts , a metadata filter, or returnMetadata set to true
+/// with this operation, you must have both the s3vectors:QueryVectors and
+/// s3vectors:GetVectors permissions. If you use any of these options
+/// without the s3vectors:GetVectors permission, Amazon S3 Vectors returns
+/// an AccessDeniedException .
 pub fn (c: Client) query_vectors(input: QueryVectorsInput) -> QueryVectorsOutput ! QueryVectorsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_query_vectors(c.params, input)) ?? e => return Err(QueryVectorsErr.InvalidInput(e))
   var req = serialize_query_vectors(ep, input, "") ?? e => return Err(QueryVectorsErr.InvalidInput(e))
@@ -5352,4 +5683,157 @@ pub fn (c: Client) update_index_mode(input: UpdateIndexModeInput) -> UpdateIndex
     return Err(deserialize_update_index_mode_error(resp))
   }
   deserialize_update_index_mode(resp) ?? e => Err(UpdateIndexModeErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_metadata_configuration(base: EndpointParameters, input: UpdateMetadataConfigurationInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateMetadataConfiguration.
+pub fn serialize_update_metadata_configuration(ep: rest.Endpoint, input: UpdateMetadataConfigurationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.vector_bucket_name {
+    fs.push(("vectorBucketName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.index_name {
+    fs.push(("indexName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.index_arn {
+    fs.push(("indexArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.add {
+    fs.push(("add", json_of_metadata_configuration_add(x)))
+  }
+  if let Some(x) = input.delete {
+    fs.push(("delete", json_of_metadata_configuration_delete(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/UpdateMetadataConfiguration"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_metadata_configuration(resp: http.Response) -> UpdateMetadataConfigurationOutput ! Str {
+  var out = UpdateMetadataConfigurationOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "indexArn" => out.index_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateMetadataConfiguration.
+pub enum UpdateMetadataConfigurationErr {
+  ConflictException(e: ConflictException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  RequestTimeoutException(e: RequestTimeoutException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateMetadataConfigurationErr) display() -> Str {
+  match e {
+    ConflictException(x) => "ConflictException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    RequestTimeoutException(x) => "RequestTimeoutException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_metadata_configuration_error(resp: http.Response) -> UpdateMetadataConfigurationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.ConflictException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.NotFoundException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.ServiceUnavailableException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.AccessDeniedException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.InternalServerException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "RequestTimeoutException" => match read_error_request_timeout_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.RequestTimeoutException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.TooManyRequestsException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateMetadataConfigurationErr.ValidationException(x)
+      Err(msg) => return UpdateMetadataConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateMetadataConfigurationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Adds or deletes text search configurations on a vector index. Specify
+/// either add or delete , but not both. The vector index must be in
+/// ENHANCED mode. Permissions You must have the
+/// s3vectors:UpdateMetadataConfiguration permission to use this operation.
+pub fn (c: Client) update_metadata_configuration(input: UpdateMetadataConfigurationInput) -> UpdateMetadataConfigurationOutput ! UpdateMetadataConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_metadata_configuration(c.params, input)) ?? e => return Err(UpdateMetadataConfigurationErr.InvalidInput(e))
+  var req = serialize_update_metadata_configuration(ep, input, "") ?? e => return Err(UpdateMetadataConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateMetadataConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_metadata_configuration_error(resp))
+  }
+  deserialize_update_metadata_configuration(resp) ?? e => Err(UpdateMetadataConfigurationErr.Deserialize(e))
 }

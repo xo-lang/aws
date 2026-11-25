@@ -1449,6 +1449,9 @@ fn json_of_create_scope_input(v: CreateScopeInput) -> json.Value {
   if let Some(x) = v.scope_configuration {
     fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
   }
+  if let Some(x) = v.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.is_published {
     fs.push(("isPublished", json.Value.Bool(x)))
   }
@@ -1469,6 +1472,7 @@ fn from_json_create_scope_input(v: json.Value) -> CreateScopeInput ! Str {
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "isPublished" => out.is_published = jsonv.read_bool(fv)?
       "tags" => out.tags = from_json_tag_map(fv)?
       _ => {}
@@ -1493,6 +1497,9 @@ fn json_of_create_scope_output(v: CreateScopeOutput) -> json.Value {
   }
   if let Some(x) = v.scope_configuration {
     fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
+  }
+  if let Some(x) = v.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
   }
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
@@ -1527,6 +1534,7 @@ fn from_json_create_scope_output(v: json.Value) -> CreateScopeOutput ! Str {
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -1586,6 +1594,9 @@ fn json_of_create_scope_snapshot_output(v: CreateScopeSnapshotOutput) -> json.Va
   if let Some(x) = v.scope_configuration {
     fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
   }
+  if let Some(x) = v.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
   }
@@ -1619,6 +1630,7 @@ fn from_json_create_scope_snapshot_output(v: json.Value) -> CreateScopeSnapshotO
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -1971,6 +1983,22 @@ fn from_json_delete_template_input(v: json.Value) -> DeleteTemplateInput ! Str {
   Ok(out)
 }
 
+fn json_of_deployment_arn_set(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_deployment_arn_set(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_deployment_configuration(v: DeploymentConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.enable_cross_account_visibility {
@@ -2183,6 +2211,7 @@ fn json_of_firewall_sync_reason(v: FirewallSyncReason) -> json.Value {
   match v {
     MissingFirewall(x) => json.Value.Object([("missingFirewall", json.Value.Str(x))])
     InvalidFirewall(x) => json.Value.Object([("invalidFirewall", json_of_invalid_firewall_reasons(x))])
+    InvalidResource(x) => json.Value.Object([("invalidResource", json_of_invalid_resources_by_type(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -2195,6 +2224,7 @@ fn from_json_firewall_sync_reason(v: json.Value) -> FirewallSyncReason ! Str {
     return match k {
       "missingFirewall" => Ok(FirewallSyncReason.MissingFirewall(jsonv.read_str(fv)?))
       "invalidFirewall" => Ok(FirewallSyncReason.InvalidFirewall(from_json_invalid_firewall_reasons(fv)?))
+      "invalidResource" => Ok(FirewallSyncReason.InvalidResource(from_json_invalid_resources_by_type(fv)?))
       _ => Ok(FirewallSyncReason.Unknown(k))
     }
   }
@@ -2656,6 +2686,9 @@ fn json_of_get_scope_output(v: GetScopeOutput) -> json.Value {
   if let Some(x) = v.scope_configuration {
     fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
   }
+  if let Some(x) = v.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
   }
@@ -2689,6 +2722,7 @@ fn from_json_get_scope_output(v: json.Value) -> GetScopeOutput ! Str {
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -2789,6 +2823,32 @@ fn from_json_get_template_output(v: json.Value) -> GetTemplateOutput ! Str {
   Ok(out)
 }
 
+fn json_of_igw_firewall_config(v: IgwFirewallConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.default_subnet_connectivity {
+    fs.push(("defaultSubnetConnectivity", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.subnet_connectivity_overrides {
+    fs.push(("subnetConnectivityOverrides", json_of_subnet_connectivity_override_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_igw_firewall_config(v: json.Value) -> IgwFirewallConfig ! Str {
+  var out = IgwFirewallConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "defaultSubnetConnectivity" => out.default_subnet_connectivity = DefaultSubnetConnectivity.from(jsonv.read_str(fv)?)
+      "subnetConnectivityOverrides" => out.subnet_connectivity_overrides = from_json_subnet_connectivity_override_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_internal_server_exception(v: InternalServerException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -2849,6 +2909,68 @@ fn from_json_invalid_firewall_reasons(v: json.Value) -> InvalidFirewallReasons !
       "unexpectedMergeableConfigurationValues" => out.unexpected_mergeable_configuration_values = from_json_configuration_issue_list(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_invalid_resource_issue(v: InvalidResourceIssue) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_id {
+    fs.push(("resourceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.expected_value {
+    fs.push(("expectedValue", json.Value.Str(x)))
+  }
+  if let Some(x) = v.actual_value {
+    fs.push(("actualValue", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_invalid_resource_issue(v: json.Value) -> InvalidResourceIssue ! Str {
+  var out = InvalidResourceIssue{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "expectedValue" => out.expected_value = jsonv.read_str(fv)?
+      "actualValue" => out.actual_value = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_invalid_resource_issue_list(v: List[InvalidResourceIssue]) -> json.Value {
+  json.Value.List(v.map(fn(x: InvalidResourceIssue) -> json.Value { json_of_invalid_resource_issue(x) }))
+}
+
+fn from_json_invalid_resource_issue_list(v: json.Value) -> List[InvalidResourceIssue] ! Str {
+  var out: List[InvalidResourceIssue] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_invalid_resource_issue(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_invalid_resources_by_type(v: Map[Str, List[InvalidResourceIssue]]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, List[InvalidResourceIssue])) -> (Str, json.Value) { (e.0, json_of_invalid_resource_issue_list(e.1)) }))
+}
+
+fn from_json_invalid_resources_by_type(v: json.Value) -> Map[Str, List[InvalidResourceIssue]] ! Str {
+  var out: Map[Str, List[InvalidResourceIssue]] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, from_json_invalid_resource_issue_list(fv)?)
   }
   Ok(out)
 }
@@ -3073,6 +3195,66 @@ fn from_json_list_deployments_output(v: json.Value) -> ListDeploymentsOutput ! S
   Ok(out)
 }
 
+fn json_of_list_entity_coverages_input(v: ListEntityCoveragesInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.entity_arn {
+    fs.push(("entityArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_owner_account_id {
+    fs.push(("resourceOwnerAccountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_entity_coverages_input(v: json.Value) -> ListEntityCoveragesInput ! Str {
+  var out = ListEntityCoveragesInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "entityArn" => out.entity_arn = jsonv.read_str(fv)?
+      "resourceOwnerAccountId" => out.resource_owner_account_id = jsonv.read_str(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_entity_coverages_output(v: ListEntityCoveragesOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_coverages {
+    fs.push(("resourceCoverages", json_of_resource_coverage_summary_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_entity_coverages_output(v: json.Value) -> ListEntityCoveragesOutput ! Str {
+  var out = ListEntityCoveragesOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "resourceCoverages" => out.resource_coverages = from_json_resource_coverage_summary_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_list_policies_input(v: ListPoliciesInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.max_results {
@@ -3179,6 +3361,66 @@ fn from_json_list_policy_snapshots_output(v: json.Value) -> ListPolicySnapshotsO
     match k {
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       "snapshots" => out.snapshots = from_json_policy_summary_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_protected_resource_coverages_input(v: ListProtectedResourceCoveragesInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_arn {
+    fs.push(("resourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.entity_type {
+    fs.push(("entityType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_protected_resource_coverages_input(v: json.Value) -> ListProtectedResourceCoveragesInput ! Str {
+  var out = ListProtectedResourceCoveragesInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "resourceArn" => out.resource_arn = jsonv.read_str(fv)?
+      "entityType" => out.entity_type = ServiceResourceType.from(jsonv.read_str(fv)?)
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_protected_resource_coverages_output(v: ListProtectedResourceCoveragesOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_coverages {
+    fs.push(("resourceCoverages", json_of_resource_coverage_summary_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_protected_resource_coverages_output(v: json.Value) -> ListProtectedResourceCoveragesOutput ! Str {
+  var out = ListProtectedResourceCoveragesOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "resourceCoverages" => out.resource_coverages = from_json_resource_coverage_summary_list(fv)?
       _ => {}
     }
   }
@@ -3636,6 +3878,9 @@ fn json_of_list_templates_input(v: ListTemplatesInput) -> json.Value {
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.template_owner {
+    fs.push(("templateOwner", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -3649,6 +3894,7 @@ fn from_json_list_templates_input(v: json.Value) -> ListTemplatesInput ! Str {
       "maxResults" => out.max_results = jsonv.read_int(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       "status" => out.status = EntityStatusFilter.from(jsonv.read_str(fv)?)
+      "templateOwner" => out.template_owner = TemplateOwner.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -3826,6 +4072,9 @@ fn json_of_policy_configuration(v: PolicyConfiguration) -> json.Value {
   if let Some(x) = v.waf_config {
     fs.push(("wafConfig", json_of_waf_config(x)))
   }
+  if let Some(x) = v.igw_firewall_config {
+    fs.push(("igwFirewallConfig", json_of_igw_firewall_config(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3839,6 +4088,7 @@ fn from_json_policy_configuration(v: json.Value) -> PolicyConfiguration ! Str {
       "remediationEnabled" => out.remediation_enabled = jsonv.read_bool(fv)?
       "resourcesCleanUp" => out.resources_clean_up = jsonv.read_bool(fv)?
       "wafConfig" => out.waf_config = from_json_waf_config(fv)?
+      "igwFirewallConfig" => out.igw_firewall_config = from_json_igw_firewall_config(fv)?
       _ => {}
     }
   }
@@ -4127,6 +4377,76 @@ fn from_json_resource_association_list(v: json.Value) -> List[ResourceAssociatio
       continue
     }
     out.push(from_json_resource_association(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_resource_coverage_summary(v: ResourceCoverageSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.resource_arn {
+    fs.push(("resourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.entity_type {
+    fs.push(("entityType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.entity_arn {
+    fs.push(("entityArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_owner_account_id {
+    fs.push(("resourceOwnerAccountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_type {
+    fs.push(("resourceType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.firewall_type {
+    fs.push(("firewallType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.coverage_status {
+    fs.push(("coverageStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.deployment_arns {
+    fs.push(("deploymentArns", json_of_deployment_arn_set(x)))
+  }
+  if let Some(x) = v.updated_at {
+    fs.push(("updatedAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_resource_coverage_summary(v: json.Value) -> ResourceCoverageSummary ! Str {
+  var out = ResourceCoverageSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "resourceArn" => out.resource_arn = jsonv.read_str(fv)?
+      "entityType" => out.entity_type = ServiceResourceType.from(jsonv.read_str(fv)?)
+      "entityArn" => out.entity_arn = jsonv.read_str(fv)?
+      "resourceOwnerAccountId" => out.resource_owner_account_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = ScopeResourceType.from(jsonv.read_str(fv)?)
+      "firewallType" => out.firewall_type = PolicyFirewallType.from(jsonv.read_str(fv)?)
+      "coverageStatus" => out.coverage_status = CoverageStatus.from(jsonv.read_str(fv)?)
+      "deploymentArns" => out.deployment_arns = from_json_deployment_arn_set(fv)?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_resource_coverage_summary_list(v: List[ResourceCoverageSummary]) -> json.Value {
+  json.Value.List(v.map(fn(x: ResourceCoverageSummary) -> json.Value { json_of_resource_coverage_summary(x) }))
+}
+
+fn from_json_resource_coverage_summary_list(v: json.Value) -> List[ResourceCoverageSummary] ! Str {
+  var out: List[ResourceCoverageSummary] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_resource_coverage_summary(fv)?)
   }
   Ok(out)
 }
@@ -4550,6 +4870,9 @@ fn json_of_scope_summary(v: ScopeSummary) -> json.Value {
   if let Some(x) = v.scope_name {
     fs.push(("scopeName", json.Value.Str(x)))
   }
+  if let Some(x) = v.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
   }
@@ -4575,6 +4898,7 @@ fn from_json_scope_summary(v: json.Value) -> ScopeSummary ! Str {
       "scopeId" => out.scope_id = jsonv.read_str(fv)?
       "scopeArn" => out.scope_arn = jsonv.read_str(fv)?
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "hasPublishedVersion" => out.has_published_version = jsonv.read_bool(fv)?
@@ -4677,6 +5001,64 @@ fn from_json_string_map(v: json.Value) -> Map[Str, Str] ! Str {
       continue
     }
     out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_subnet_connectivity_override(v: SubnetConnectivityOverride) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.connectivity_type {
+    fs.push(("connectivityType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.scopes {
+    fs.push(("scopes", json_of_subnet_connectivity_scope_arn_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_subnet_connectivity_override(v: json.Value) -> SubnetConnectivityOverride ! Str {
+  var out = SubnetConnectivityOverride{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "connectivityType" => out.connectivity_type = SubnetConnectivity.from(jsonv.read_str(fv)?)
+      "scopes" => out.scopes = from_json_subnet_connectivity_scope_arn_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_subnet_connectivity_override_list(v: List[SubnetConnectivityOverride]) -> json.Value {
+  json.Value.List(v.map(fn(x: SubnetConnectivityOverride) -> json.Value { json_of_subnet_connectivity_override(x) }))
+}
+
+fn from_json_subnet_connectivity_override_list(v: json.Value) -> List[SubnetConnectivityOverride] ! Str {
+  var out: List[SubnetConnectivityOverride] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_subnet_connectivity_override(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_subnet_connectivity_scope_arn_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_subnet_connectivity_scope_arn_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -4821,6 +5203,9 @@ fn json_of_template_summary(v: TemplateSummary) -> json.Value {
   if let Some(x) = v.template_name {
     fs.push(("templateName", json.Value.Str(x)))
   }
+  if let Some(x) = v.template_owner {
+    fs.push(("templateOwner", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
   }
@@ -4849,6 +5234,7 @@ fn from_json_template_summary(v: json.Value) -> TemplateSummary ! Str {
       "templateId" => out.template_id = jsonv.read_str(fv)?
       "templateArn" => out.template_arn = jsonv.read_str(fv)?
       "templateName" => out.template_name = jsonv.read_str(fv)?
+      "templateOwner" => out.template_owner = TemplateOwner.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "hasPublishedVersion" => out.has_published_version = jsonv.read_bool(fv)?
@@ -5366,6 +5752,9 @@ fn json_of_update_scope_output(v: UpdateScopeOutput) -> json.Value {
   if let Some(x) = v.scope_configuration {
     fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
   }
+  if let Some(x) = v.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.status {
     fs.push(("status", json.Value.Str(x.value())))
   }
@@ -5399,6 +5788,7 @@ fn from_json_update_scope_output(v: json.Value) -> UpdateScopeOutput ! Str {
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -6021,6 +6411,7 @@ pub enum CreateDeploymentSnapshotErr {
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  TagPolicyViolationException(e: TagPolicyViolationException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -6040,6 +6431,7 @@ pub fn (e: CreateDeploymentSnapshotErr) display() -> Str {
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    TagPolicyViolationException(x) => "TagPolicyViolationException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -6070,6 +6462,10 @@ pub fn deserialize_create_deployment_snapshot_error(resp: http.Response) -> Crea
     }
     "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
       Ok(x) => return CreateDeploymentSnapshotErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateDeploymentSnapshotErr.Deserialize(msg)
+    }
+    "TagPolicyViolationException" => match read_error_tag_policy_violation_exception(resp, body) {
+      Ok(x) => return CreateDeploymentSnapshotErr.TagPolicyViolationException(x)
       Err(msg) => return CreateDeploymentSnapshotErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -6359,6 +6755,7 @@ pub enum CreatePolicySnapshotErr {
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  TagPolicyViolationException(e: TagPolicyViolationException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -6378,6 +6775,7 @@ pub fn (e: CreatePolicySnapshotErr) display() -> Str {
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    TagPolicyViolationException(x) => "TagPolicyViolationException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -6408,6 +6806,10 @@ pub fn deserialize_create_policy_snapshot_error(resp: http.Response) -> CreatePo
     }
     "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
       Ok(x) => return CreatePolicySnapshotErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreatePolicySnapshotErr.Deserialize(msg)
+    }
+    "TagPolicyViolationException" => match read_error_tag_policy_violation_exception(resp, body) {
+      Ok(x) => return CreatePolicySnapshotErr.TagPolicyViolationException(x)
       Err(msg) => return CreatePolicySnapshotErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -6692,6 +7094,7 @@ pub enum CreateRuleSnapshotErr {
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  TagPolicyViolationException(e: TagPolicyViolationException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -6711,6 +7114,7 @@ pub fn (e: CreateRuleSnapshotErr) display() -> Str {
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    TagPolicyViolationException(x) => "TagPolicyViolationException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -6741,6 +7145,10 @@ pub fn deserialize_create_rule_snapshot_error(resp: http.Response) -> CreateRule
     }
     "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
       Ok(x) => return CreateRuleSnapshotErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateRuleSnapshotErr.Deserialize(msg)
+    }
+    "TagPolicyViolationException" => match read_error_tag_policy_violation_exception(resp, body) {
+      Ok(x) => return CreateRuleSnapshotErr.TagPolicyViolationException(x)
       Err(msg) => return CreateRuleSnapshotErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -6798,6 +7206,9 @@ pub fn serialize_create_scope(ep: rest.Endpoint, input: CreateScopeInput, idempo
   if let Some(x) = input.scope_configuration {
     fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
   }
+  if let Some(x) = input.specialized_scope_type {
+    fs.push(("specializedScopeType", json.Value.Str(x.value())))
+  }
   if let Some(x) = input.is_published {
     fs.push(("isPublished", json.Value.Bool(x)))
   }
@@ -6834,6 +7245,7 @@ pub fn deserialize_create_scope(resp: http.Response) -> CreateScopeOutput ! Str 
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -6996,6 +7408,7 @@ pub fn deserialize_create_scope_snapshot(resp: http.Response) -> CreateScopeSnap
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -7015,6 +7428,7 @@ pub enum CreateScopeSnapshotErr {
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  TagPolicyViolationException(e: TagPolicyViolationException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -7034,6 +7448,7 @@ pub fn (e: CreateScopeSnapshotErr) display() -> Str {
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    TagPolicyViolationException(x) => "TagPolicyViolationException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -7064,6 +7479,10 @@ pub fn deserialize_create_scope_snapshot_error(resp: http.Response) -> CreateSco
     }
     "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
       Ok(x) => return CreateScopeSnapshotErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateScopeSnapshotErr.Deserialize(msg)
+    }
+    "TagPolicyViolationException" => match read_error_tag_policy_violation_exception(resp, body) {
+      Ok(x) => return CreateScopeSnapshotErr.TagPolicyViolationException(x)
       Err(msg) => return CreateScopeSnapshotErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -7343,6 +7762,7 @@ pub enum CreateTemplateSnapshotErr {
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
   ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  TagPolicyViolationException(e: TagPolicyViolationException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -7362,6 +7782,7 @@ pub fn (e: CreateTemplateSnapshotErr) display() -> Str {
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    TagPolicyViolationException(x) => "TagPolicyViolationException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -7392,6 +7813,10 @@ pub fn deserialize_create_template_snapshot_error(resp: http.Response) -> Create
     }
     "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
       Ok(x) => return CreateTemplateSnapshotErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateTemplateSnapshotErr.Deserialize(msg)
+    }
+    "TagPolicyViolationException" => match read_error_tag_policy_violation_exception(resp, body) {
+      Ok(x) => return CreateTemplateSnapshotErr.TagPolicyViolationException(x)
       Err(msg) => return CreateTemplateSnapshotErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -8790,6 +9215,7 @@ pub fn deserialize_get_scope(resp: http.Response) -> GetScopeOutput ! Str {
       "scopeName" => out.scope_name = jsonv.read_str(fv)?
       "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
       "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
+      "specializedScopeType" => out.specialized_scope_type = SpecializedScopeType.from(jsonv.read_str(fv)?)
       "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
       "version" => out.version = jsonv.read_str(fv)?
       "updateToken" => out.update_token = jsonv.read_str(fv)?
@@ -9490,6 +9916,131 @@ pub fn (c: Client) list_deployments(input: ListDeploymentsInput) -> ListDeployme
   deserialize_list_deployments(resp) ?? e => Err(ListDeploymentsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_entity_coverages(base: EndpointParameters, input: ListEntityCoveragesInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListEntityCoverages.
+pub fn serialize_list_entity_coverages(ep: rest.Endpoint, input: ListEntityCoveragesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.entity_arn {
+    qs.push(("entityArn", v))
+  }
+  if let Some(v) = input.resource_owner_account_id {
+    qs.push(("resourceOwnerAccountId", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/resource-coverage/entities"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_entity_coverages(resp: http.Response) -> ListEntityCoveragesOutput ! Str {
+  var out = ListEntityCoveragesOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "resourceCoverages" => out.resource_coverages = from_json_resource_coverage_summary_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListEntityCoverages.
+pub enum ListEntityCoveragesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListEntityCoveragesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_entity_coverages_error(resp: http.Response) -> ListEntityCoveragesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListEntityCoveragesErr.AccessDeniedException(x)
+      Err(msg) => return ListEntityCoveragesErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListEntityCoveragesErr.InternalServerException(x)
+      Err(msg) => return ListEntityCoveragesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListEntityCoveragesErr.ThrottlingException(x)
+      Err(msg) => return ListEntityCoveragesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListEntityCoveragesErr.ValidationException(x)
+      Err(msg) => return ListEntityCoveragesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListEntityCoveragesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the protected resources that the specified Network Security
+/// Manager entity covers. You can filter the results to the resources owned
+/// by a single account and page through them. You must call this operation
+/// from the administrator account that owns the Network Security Manager
+/// entity.
+pub fn (c: Client) list_entity_coverages(input: ListEntityCoveragesInput) -> ListEntityCoveragesOutput ! ListEntityCoveragesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_entity_coverages(c.params, input)) ?? e => return Err(ListEntityCoveragesErr.InvalidInput(e))
+  var req = serialize_list_entity_coverages(ep, input, "") ?? e => return Err(ListEntityCoveragesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListEntityCoveragesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_entity_coverages_error(resp))
+  }
+  deserialize_list_entity_coverages(resp) ?? e => Err(ListEntityCoveragesErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_policies(base: EndpointParameters, input: ListPoliciesInput) -> EndpointParameters {
   let _ = input
   base
@@ -9735,6 +10286,129 @@ pub fn (c: Client) list_policy_snapshots(input: ListPolicySnapshotsInput) -> Lis
     return Err(deserialize_list_policy_snapshots_error(resp))
   }
   deserialize_list_policy_snapshots(resp) ?? e => Err(ListPolicySnapshotsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_protected_resource_coverages(base: EndpointParameters, input: ListProtectedResourceCoveragesInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListProtectedResourceCoverages.
+pub fn serialize_list_protected_resource_coverages(ep: rest.Endpoint, input: ListProtectedResourceCoveragesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.resource_arn {
+    qs.push(("resourceArn", v))
+  }
+  if let Some(v) = input.entity_type {
+    qs.push(("entityType", v.value()))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/resource-coverage/protected-resources"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_protected_resource_coverages(resp: http.Response) -> ListProtectedResourceCoveragesOutput ! Str {
+  var out = ListProtectedResourceCoveragesOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "resourceCoverages" => out.resource_coverages = from_json_resource_coverage_summary_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListProtectedResourceCoverages.
+pub enum ListProtectedResourceCoveragesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListProtectedResourceCoveragesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_protected_resource_coverages_error(resp: http.Response) -> ListProtectedResourceCoveragesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListProtectedResourceCoveragesErr.AccessDeniedException(x)
+      Err(msg) => return ListProtectedResourceCoveragesErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListProtectedResourceCoveragesErr.InternalServerException(x)
+      Err(msg) => return ListProtectedResourceCoveragesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListProtectedResourceCoveragesErr.ThrottlingException(x)
+      Err(msg) => return ListProtectedResourceCoveragesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListProtectedResourceCoveragesErr.ValidationException(x)
+      Err(msg) => return ListProtectedResourceCoveragesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListProtectedResourceCoveragesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the AWS Network Security Manager entities that cover the specified
+/// protected resource. You can filter the results by entity type and page
+/// through them. You must own the resource.
+pub fn (c: Client) list_protected_resource_coverages(input: ListProtectedResourceCoveragesInput) -> ListProtectedResourceCoveragesOutput ! ListProtectedResourceCoveragesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_protected_resource_coverages(c.params, input)) ?? e => return Err(ListProtectedResourceCoveragesErr.InvalidInput(e))
+  var req = serialize_list_protected_resource_coverages(ep, input, "") ?? e => return Err(ListProtectedResourceCoveragesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListProtectedResourceCoveragesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_protected_resource_coverages_error(resp))
+  }
+  deserialize_list_protected_resource_coverages(resp) ?? e => Err(ListProtectedResourceCoveragesErr.Deserialize(e))
 }
 
 pub fn endpoint_params_list_resource_associations(base: EndpointParameters, input: ListResourceAssociationsInput) -> EndpointParameters {
@@ -10746,6 +11420,9 @@ pub fn serialize_list_templates(ep: rest.Endpoint, input: ListTemplatesInput, id
   if let Some(v) = input.status {
     qs.push(("status", v.value()))
   }
+  if let Some(v) = input.template_owner {
+    qs.push(("templateOwner", v.value()))
+  }
   var body = b""
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
@@ -11734,351 +12411,4 @@ pub fn deserialize_update_rule_error(resp: http.Response) -> UpdateRuleErr {
     _ => {}
   }
   UpdateRuleErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the specified rule. To prevent conflicting concurrent updates,
-/// provide the current updateToken . Use isPublished to publish the update
-/// or keep the rule as a draft.
-pub fn (c: Client) update_rule(input: UpdateRuleInput) -> UpdateRuleOutput ! UpdateRuleErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_rule(c.params, input)) ?? e => return Err(UpdateRuleErr.InvalidInput(e))
-  var req = serialize_update_rule(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateRuleErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateRuleErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_rule_error(resp))
-  }
-  deserialize_update_rule(resp) ?? e => Err(UpdateRuleErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_scope(base: EndpointParameters, input: UpdateScopeInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateScope.
-pub fn serialize_update_scope(ep: rest.Endpoint, input: UpdateScopeInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_scope_identifier = match input.scope_identifier {
-    Some(v) => v
-    None => return Err("input member scopeIdentifier is required")
-  }
-  if label_scope_identifier == "" {
-    return Err("input member scopeIdentifier must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.update_token {
-    fs.push(("updateToken", json.Value.Str(x)))
-  }
-  if let Some(x) = input.scope_description {
-    fs.push(("scopeDescription", json.Value.Str(x)))
-  }
-  if let Some(x) = input.scope_configuration {
-    fs.push(("scopeConfiguration", json_of_scope_configuration(x)))
-  }
-  if let Some(x) = input.is_published {
-    fs.push(("isPublished", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/scopes/${rest.escape(label_scope_identifier, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_scope(resp: http.Response) -> UpdateScopeOutput ! Str {
-  var out = UpdateScopeOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "scopeId" => out.scope_id = jsonv.read_str(fv)?
-      "scopeArn" => out.scope_arn = jsonv.read_str(fv)?
-      "scopeName" => out.scope_name = jsonv.read_str(fv)?
-      "scopeDescription" => out.scope_description = jsonv.read_str(fv)?
-      "scopeConfiguration" => out.scope_configuration = from_json_scope_configuration(fv)?
-      "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
-      "version" => out.version = jsonv.read_str(fv)?
-      "updateToken" => out.update_token = jsonv.read_str(fv)?
-      "isSnapshot" => out.is_snapshot = jsonv.read_bool(fv)?
-      "hasPublishedVersion" => out.has_published_version = jsonv.read_bool(fv)?
-      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateScope.
-pub enum UpdateScopeErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateScopeErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_scope_error(resp: http.Response) -> UpdateScopeErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.AccessDeniedException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.ConflictException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.InternalServerException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.ThrottlingException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateScopeErr.ValidationException(x)
-      Err(msg) => return UpdateScopeErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateScopeErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the specified scope. To prevent conflicting concurrent updates,
-/// provide the current updateToken . Use isPublished to publish the update
-/// or keep the scope as a draft.
-pub fn (c: Client) update_scope(input: UpdateScopeInput) -> UpdateScopeOutput ! UpdateScopeErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_scope(c.params, input)) ?? e => return Err(UpdateScopeErr.InvalidInput(e))
-  var req = serialize_update_scope(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateScopeErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateScopeErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_scope_error(resp))
-  }
-  deserialize_update_scope(resp) ?? e => Err(UpdateScopeErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_template(base: EndpointParameters, input: UpdateTemplateInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateTemplate.
-pub fn serialize_update_template(ep: rest.Endpoint, input: UpdateTemplateInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_template_identifier = match input.template_identifier {
-    Some(v) => v
-    None => return Err("input member templateIdentifier is required")
-  }
-  if label_template_identifier == "" {
-    return Err("input member templateIdentifier must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.update_token {
-    fs.push(("updateToken", json.Value.Str(x)))
-  }
-  if let Some(x) = input.template_description {
-    fs.push(("templateDescription", json.Value.Str(x)))
-  }
-  if let Some(x) = input.associated_rule_list {
-    fs.push(("associatedRuleList", json_of_rule_reference_list(x)))
-  }
-  if let Some(x) = input.is_published {
-    fs.push(("isPublished", json.Value.Bool(x)))
-  }
-  if let Some(x) = input.client_token {
-    fs.push(("clientToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("clientToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PATCH",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/templates/${rest.escape(label_template_identifier, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_template(resp: http.Response) -> UpdateTemplateOutput ! Str {
-  var out = UpdateTemplateOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "templateId" => out.template_id = jsonv.read_str(fv)?
-      "templateArn" => out.template_arn = jsonv.read_str(fv)?
-      "templateName" => out.template_name = jsonv.read_str(fv)?
-      "templateDescription" => out.template_description = jsonv.read_str(fv)?
-      "status" => out.status = EntityStatus.from(jsonv.read_str(fv)?)
-      "version" => out.version = jsonv.read_str(fv)?
-      "associatedRuleList" => out.associated_rule_list = from_json_associated_rule_list(fv)?
-      "updateToken" => out.update_token = jsonv.read_str(fv)?
-      "isSnapshot" => out.is_snapshot = jsonv.read_bool(fv)?
-      "hasPublishedVersion" => out.has_published_version = jsonv.read_bool(fv)?
-      "firewallType" => out.firewall_type = TemplateFirewallType.from(jsonv.read_str(fv)?)
-      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateTemplate.
-pub enum UpdateTemplateErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateTemplateErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_template_error(resp: http.Response) -> UpdateTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.AccessDeniedException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ConflictException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.InternalServerException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ServiceQuotaExceededException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ThrottlingException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateTemplateErr.ValidationException(x)
-      Err(msg) => return UpdateTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the specified template. To prevent conflicting concurrent
-/// updates, provide the current updateToken . Use isPublished to publish
-/// the update or keep the template as a draft.
-pub fn (c: Client) update_template(input: UpdateTemplateInput) -> UpdateTemplateOutput ! UpdateTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_template(c.params, input)) ?? e => return Err(UpdateTemplateErr.InvalidInput(e))
-  var req = serialize_update_template(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_template_error(resp))
-  }
-  deserialize_update_template(resp) ?? e => Err(UpdateTemplateErr.Deserialize(e))
 }

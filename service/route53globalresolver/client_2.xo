@@ -8,6 +8,1440 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_list_managed_firewall_domain_lists_error(resp: http.Response) -> ListManagedFirewallDomainListsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListManagedFirewallDomainListsErr.AccessDeniedException(x)
+      Err(msg) => return ListManagedFirewallDomainListsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListManagedFirewallDomainListsErr.InternalServerException(x)
+      Err(msg) => return ListManagedFirewallDomainListsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListManagedFirewallDomainListsErr.ThrottlingException(x)
+      Err(msg) => return ListManagedFirewallDomainListsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListManagedFirewallDomainListsErr.ValidationException(x)
+      Err(msg) => return ListManagedFirewallDomainListsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListManagedFirewallDomainListsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns a paginated list of the Amazon Web Services Managed DNS Lists
+/// and the categories for DNS Firewall. The categories are either THREAT or
+/// CONTENT . Route 53 Global Resolver is a global service that supports
+/// resolvers in multiple Amazon Web Services Regions but you must specify
+/// the US East (Ohio) Region to create, update, or otherwise work with
+/// Route 53 Global Resolver resources. That is, for example, specify
+/// --region us-east-2 on Amazon Web Services CLI commands.
+pub fn (c: Client) list_managed_firewall_domain_lists(input: ListManagedFirewallDomainListsInput) -> ListManagedFirewallDomainListsOutput ! ListManagedFirewallDomainListsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_managed_firewall_domain_lists(c.params, input)) ?? e => return Err(ListManagedFirewallDomainListsErr.InvalidInput(e))
+  var req = serialize_list_managed_firewall_domain_lists(ep, input, "") ?? e => return Err(ListManagedFirewallDomainListsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListManagedFirewallDomainListsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_managed_firewall_domain_lists_error(resp))
+  }
+  deserialize_list_managed_firewall_domain_lists(resp) ?? e => Err(ListManagedFirewallDomainListsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_shared_dns_views(base: EndpointParameters, input: ListSharedDNSViewsInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListSharedDNSViews.
+pub fn serialize_list_shared_dns_views(ep: rest.Endpoint, input: ListSharedDNSViewsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.max_results {
+    qs.push(("max_results", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("next_token", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/shared-dns-views"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_shared_dns_views(resp: http.Response) -> ListSharedDNSViewsOutput ! Str {
+  var out = ListSharedDNSViewsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "dnsViews" => out.dns_views = from_json_shared_dns_views(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListSharedDNSViews.
+pub enum ListSharedDNSViewsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListSharedDNSViewsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_shared_dns_views_error(resp: http.Response) -> ListSharedDNSViewsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListSharedDNSViewsErr.AccessDeniedException(x)
+      Err(msg) => return ListSharedDNSViewsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListSharedDNSViewsErr.InternalServerException(x)
+      Err(msg) => return ListSharedDNSViewsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListSharedDNSViewsErr.ThrottlingException(x)
+      Err(msg) => return ListSharedDNSViewsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListSharedDNSViewsErr.ValidationException(x)
+      Err(msg) => return ListSharedDNSViewsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListSharedDNSViewsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the DNS views that have been shared with your Amazon Web Services
+/// account through Amazon Web Services Resource Access Manager (Amazon Web
+/// Services RAM), with pagination support. Route 53 Global Resolver is a
+/// global service that supports resolvers in multiple Amazon Web Services
+/// Regions but you must specify the US East (Ohio) Region to create,
+/// update, or otherwise work with Route 53 Global Resolver resources. That
+/// is, for example, specify --region us-east-2 on Amazon Web Services CLI
+/// commands.
+pub fn (c: Client) list_shared_dns_views(input: ListSharedDNSViewsInput) -> ListSharedDNSViewsOutput ! ListSharedDNSViewsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_shared_dns_views(c.params, input)) ?? e => return Err(ListSharedDNSViewsErr.InvalidInput(e))
+  var req = serialize_list_shared_dns_views(ep, input, "") ?? e => return Err(ListSharedDNSViewsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListSharedDNSViewsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_shared_dns_views_error(resp))
+  }
+  deserialize_list_shared_dns_views(resp) ?? e => Err(ListSharedDNSViewsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_tags_for_resource(base: EndpointParameters, input: ListTagsForResourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListTagsForResource.
+pub fn serialize_list_tags_for_resource(ep: rest.Endpoint, input: ListTagsForResourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_arn {
+    fs.push(("resourceArn", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/get-all-tags"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_tags_for_resource(resp: http.Response) -> ListTagsForResourceResponse ! Str {
+  var out = ListTagsForResourceResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_tags(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListTagsForResource.
+pub enum ListTagsForResourceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListTagsForResourceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTagsForResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.AccessDeniedException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.InternalServerException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListTagsForResourceErr.ThrottlingException(x)
+      Err(msg) => return ListTagsForResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListTagsForResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the tags associated with a Route 53 Global Resolver resource.
+/// Route 53 Global Resolver is a global service that supports resolvers in
+/// multiple Amazon Web Services Regions but you must specify the US East
+/// (Ohio) Region to create, update, or otherwise work with Route 53 Global
+/// Resolver resources. That is, for example, specify --region us-east-2 on
+/// Amazon Web Services CLI commands.
+pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> ListTagsForResourceResponse ! ListTagsForResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListTagsForResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_tags_for_resource_error(resp))
+  }
+  deserialize_list_tags_for_resource(resp) ?? e => Err(ListTagsForResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of TagResource.
+pub fn serialize_tag_resource(ep: rest.Endpoint, input: TagResourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_arn {
+    fs.push(("resourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("tags", json_of_tags(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/tag-resource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_tag_resource(resp: http.Response) -> TagResourceResponse ! Str {
+  var out = TagResourceResponse{}
+  Ok(out)
+}
+
+/// The errors of TagResource.
+pub enum TagResourceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: TagResourceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_tag_resource_error(resp: http.Response) -> TagResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return TagResourceErr.AccessDeniedException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return TagResourceErr.InternalServerException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ServiceQuotaExceededException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ThrottlingException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return TagResourceErr.ValidationException(x)
+      Err(msg) => return TagResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  TagResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Adds or updates tags for a Route 53 Global Resolver resource. Tags are
+/// key-value pairs that help you organize and identify your resources.
+/// Route 53 Global Resolver is a global service that supports resolvers in
+/// multiple Amazon Web Services Regions but you must specify the US East
+/// (Ohio) Region to create, update, or otherwise work with Route 53 Global
+/// Resolver resources. That is, for example, specify --region us-east-2 on
+/// Amazon Web Services CLI commands.
+pub fn (c: Client) tag_resource(input: TagResourceRequest) -> TagResourceResponse ! TagResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_tag_resource(c.params, input)) ?? e => return Err(TagResourceErr.InvalidInput(e))
+  var req = serialize_tag_resource(ep, input, "") ?? e => return Err(TagResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(TagResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_tag_resource_error(resp))
+  }
+  deserialize_tag_resource(resp) ?? e => Err(TagResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_untag_resource(base: EndpointParameters, input: UntagResourceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UntagResource.
+pub fn serialize_untag_resource(ep: rest.Endpoint, input: UntagResourceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_arn {
+    fs.push(("resourceArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.tag_keys {
+    fs.push(("tagKeys", json_of_tag_keys(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/untag-resource"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_untag_resource(resp: http.Response) -> UntagResourceResponse ! Str {
+  var out = UntagResourceResponse{}
+  Ok(out)
+}
+
+/// The errors of UntagResource.
+pub enum UntagResourceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UntagResourceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_untag_resource_error(resp: http.Response) -> UntagResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.AccessDeniedException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.InternalServerException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ThrottlingException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UntagResourceErr.ValidationException(x)
+      Err(msg) => return UntagResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UntagResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Removes tags from a Route 53 Global Resolver resource. Route 53 Global
+/// Resolver is a global service that supports resolvers in multiple Amazon
+/// Web Services Regions but you must specify the US East (Ohio) Region to
+/// create, update, or otherwise work with Route 53 Global Resolver
+/// resources. That is, for example, specify --region us-east-2 on Amazon
+/// Web Services CLI commands.
+pub fn (c: Client) untag_resource(input: UntagResourceRequest) -> UntagResourceResponse ! UntagResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_untag_resource(c.params, input)) ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  var req = serialize_untag_resource(ep, input, "") ?? e => return Err(UntagResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UntagResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_untag_resource_error(resp))
+  }
+  deserialize_untag_resource(resp) ?? e => Err(UntagResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_access_source(base: EndpointParameters, input: UpdateAccessSourceInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateAccessSource.
+pub fn serialize_update_access_source(ep: rest.Endpoint, input: UpdateAccessSourceInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_access_source_id = match input.access_source_id {
+    Some(v) => v
+    None => return Err("input member accessSourceId is required")
+  }
+  if label_access_source_id == "" {
+    return Err("input member accessSourceId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.cidr {
+    fs.push(("cidr", json.Value.Str(x)))
+  }
+  if let Some(x) = input.dns_view_id {
+    fs.push(("dnsViewId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.ip_address_type {
+    fs.push(("ipAddressType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.protocol {
+    fs.push(("protocol", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/access-sources/${rest.escape(label_access_source_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_access_source(resp: http.Response) -> UpdateAccessSourceOutput ! Str {
+  var out = UpdateAccessSourceOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "cidr" => out.cidr = jsonv.read_str(fv)?
+      "coreNetworkEndpointId" => out.core_network_endpoint_id = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "id" => out.id = jsonv.read_str(fv)?
+      "ipAddressType" => out.ip_address_type = IpAddressType.from(jsonv.read_str(fv)?)
+      "name" => out.name = jsonv.read_str(fv)?
+      "dnsViewId" => out.dns_view_id = jsonv.read_str(fv)?
+      "protocol" => out.protocol = DnsProtocol.from(jsonv.read_str(fv)?)
+      "segment" => out.segment = jsonv.read_str(fv)?
+      "status" => out.status = CRResourceStatus.from(jsonv.read_str(fv)?)
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateAccessSource.
+pub enum UpdateAccessSourceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateAccessSourceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_access_source_error(resp: http.Response) -> UpdateAccessSourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.AccessDeniedException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.ConflictException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.InternalServerException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.ThrottlingException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateAccessSourceErr.ValidationException(x)
+      Err(msg) => return UpdateAccessSourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateAccessSourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates the configuration of an access source. Route 53 Global Resolver
+/// is a global service that supports resolvers in multiple Amazon Web
+/// Services Regions but you must specify the US East (Ohio) Region to
+/// create, update, or otherwise work with Route 53 Global Resolver
+/// resources. That is, for example, specify --region us-east-2 on Amazon
+/// Web Services CLI commands.
+pub fn (c: Client) update_access_source(input: UpdateAccessSourceInput) -> UpdateAccessSourceOutput ! UpdateAccessSourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_access_source(c.params, input)) ?? e => return Err(UpdateAccessSourceErr.InvalidInput(e))
+  var req = serialize_update_access_source(ep, input, "") ?? e => return Err(UpdateAccessSourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateAccessSourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_access_source_error(resp))
+  }
+  deserialize_update_access_source(resp) ?? e => Err(UpdateAccessSourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_access_token(base: EndpointParameters, input: UpdateAccessTokenInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateAccessToken.
+pub fn serialize_update_access_token(ep: rest.Endpoint, input: UpdateAccessTokenInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_access_token_id = match input.access_token_id {
+    Some(v) => v
+    None => return Err("input member accessTokenId is required")
+  }
+  if label_access_token_id == "" {
+    return Err("input member accessTokenId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/tokens/${rest.escape(label_access_token_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_access_token(resp: http.Response) -> UpdateAccessTokenOutput ! Str {
+  var out = UpdateAccessTokenOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "id" => out.id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateAccessToken.
+pub enum UpdateAccessTokenErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateAccessTokenErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_access_token_error(resp: http.Response) -> UpdateAccessTokenErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.AccessDeniedException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.ConflictException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.InternalServerException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.ThrottlingException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateAccessTokenErr.ValidationException(x)
+      Err(msg) => return UpdateAccessTokenErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateAccessTokenErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates the configuration of an access token. Route 53 Global Resolver
+/// is a global service that supports resolvers in multiple Amazon Web
+/// Services Regions but you must specify the US East (Ohio) Region to
+/// create, update, or otherwise work with Route 53 Global Resolver
+/// resources. That is, for example, specify --region us-east-2 on Amazon
+/// Web Services CLI commands.
+pub fn (c: Client) update_access_token(input: UpdateAccessTokenInput) -> UpdateAccessTokenOutput ! UpdateAccessTokenErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_access_token(c.params, input)) ?? e => return Err(UpdateAccessTokenErr.InvalidInput(e))
+  var req = serialize_update_access_token(ep, input, "") ?? e => return Err(UpdateAccessTokenErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateAccessTokenErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_access_token_error(resp))
+  }
+  deserialize_update_access_token(resp) ?? e => Err(UpdateAccessTokenErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_core_network_endpoint(base: EndpointParameters, input: UpdateCoreNetworkEndpointInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateCoreNetworkEndpoint.
+pub fn serialize_update_core_network_endpoint(ep: rest.Endpoint, input: UpdateCoreNetworkEndpointInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_core_network_endpoint_id = match input.core_network_endpoint_id {
+    Some(v) => v
+    None => return Err("input member coreNetworkEndpointId is required")
+  }
+  if label_core_network_endpoint_id == "" {
+    return Err("input member coreNetworkEndpointId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.update_ip_addresses {
+    fs.push(("updateIpAddresses", json_of_update_ip_address_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/core-network-endpoints/${rest.escape(label_core_network_endpoint_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_core_network_endpoint(resp: http.Response) -> UpdateCoreNetworkEndpointOutput ! Str {
+  var out = UpdateCoreNetworkEndpointOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "availableRegions" => out.available_regions = from_json_regions(fv)?
+      "coreNetworkArn" => out.core_network_arn = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "globalResolverId" => out.global_resolver_id = jsonv.read_str(fv)?
+      "id" => out.id = jsonv.read_str(fv)?
+      "ipAddresses" => out.ip_addresses = from_json_core_network_endpoint_dns_ip_items(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "status" => out.status = CRResourceStatus.from(jsonv.read_str(fv)?)
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateCoreNetworkEndpoint.
+pub enum UpdateCoreNetworkEndpointErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateCoreNetworkEndpointErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_core_network_endpoint_error(resp: http.Response) -> UpdateCoreNetworkEndpointErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.AccessDeniedException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.ConflictException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.InternalServerException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.ThrottlingException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateCoreNetworkEndpointErr.ValidationException(x)
+      Err(msg) => return UpdateCoreNetworkEndpointErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateCoreNetworkEndpointErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates the configuration of a core network endpoint. You can change the
+/// name and modify the IP addresses that the endpoint uses for DNS
+/// resolution. Route 53 Global Resolver is a global service that supports
+/// resolvers in multiple Amazon Web Services Regions, but you must specify
+/// the US East (Ohio) Region to create, update, or otherwise work with
+/// Route 53 Global Resolver resources. That is, for example, specify
+/// --region us-east-2 on Amazon Web Services CLI commands.
+pub fn (c: Client) update_core_network_endpoint(input: UpdateCoreNetworkEndpointInput) -> UpdateCoreNetworkEndpointOutput ! UpdateCoreNetworkEndpointErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_core_network_endpoint(c.params, input)) ?? e => return Err(UpdateCoreNetworkEndpointErr.InvalidInput(e))
+  var req = serialize_update_core_network_endpoint(ep, input, "") ?? e => return Err(UpdateCoreNetworkEndpointErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateCoreNetworkEndpointErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_core_network_endpoint_error(resp))
+  }
+  deserialize_update_core_network_endpoint(resp) ?? e => Err(UpdateCoreNetworkEndpointErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_dns_view(base: EndpointParameters, input: UpdateDNSViewInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateDNSView.
+pub fn serialize_update_dns_view(ep: rest.Endpoint, input: UpdateDNSViewInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_dns_view_id = match input.dns_view_id {
+    Some(v) => v
+    None => return Err("input member dnsViewId is required")
+  }
+  if label_dns_view_id == "" {
+    return Err("input member dnsViewId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = input.dnssec_validation {
+    fs.push(("dnssecValidation", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.edns_client_subnet {
+    fs.push(("ednsClientSubnet", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.firewall_rules_fail_open {
+    fs.push(("firewallRulesFailOpen", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/dns-views/${rest.escape(label_dns_view_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_dns_view(resp: http.Response) -> UpdateDNSViewOutput ! Str {
+  var out = UpdateDNSViewOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "id" => out.id = jsonv.read_str(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      "dnssecValidation" => out.dnssec_validation = DnsSecValidationType.from(jsonv.read_str(fv)?)
+      "ednsClientSubnet" => out.edns_client_subnet = EdnsClientSubnetType.from(jsonv.read_str(fv)?)
+      "firewallRulesFailOpen" => out.firewall_rules_fail_open = FirewallRulesFailOpenType.from(jsonv.read_str(fv)?)
+      "name" => out.name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "globalResolverId" => out.global_resolver_id = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      "status" => out.status = ProfileResourceStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateDNSView.
+pub enum UpdateDNSViewErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateDNSViewErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_dns_view_error(resp: http.Response) -> UpdateDNSViewErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.AccessDeniedException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.ConflictException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.InternalServerException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.ThrottlingException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateDNSViewErr.ValidationException(x)
+      Err(msg) => return UpdateDNSViewErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateDNSViewErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates the configuration of a DNS view. Route 53 Global Resolver is a
+/// global service that supports resolvers in multiple Amazon Web Services
+/// Regions but you must specify the US East (Ohio) Region to create,
+/// update, or otherwise work with Route 53 Global Resolver resources. That
+/// is, for example, specify --region us-east-2 on Amazon Web Services CLI
+/// commands.
+pub fn (c: Client) update_dns_view(input: UpdateDNSViewInput) -> UpdateDNSViewOutput ! UpdateDNSViewErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_dns_view(c.params, input)) ?? e => return Err(UpdateDNSViewErr.InvalidInput(e))
+  var req = serialize_update_dns_view(ep, input, "") ?? e => return Err(UpdateDNSViewErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateDNSViewErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_dns_view_error(resp))
+  }
+  deserialize_update_dns_view(resp) ?? e => Err(UpdateDNSViewErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_firewall_domains(base: EndpointParameters, input: UpdateFirewallDomainsInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateFirewallDomains.
+pub fn serialize_update_firewall_domains(ep: rest.Endpoint, input: UpdateFirewallDomainsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_firewall_domain_list_id = match input.firewall_domain_list_id {
+    Some(v) => v
+    None => return Err("input member firewallDomainListId is required")
+  }
+  if label_firewall_domain_list_id == "" {
+    return Err("input member firewallDomainListId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.domains {
+    fs.push(("domains", json_of_domains(x)))
+  }
+  if let Some(x) = input.operation {
+    fs.push(("operation", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/firewall-domain-lists/${rest.escape(label_firewall_domain_list_id, false)}/domains"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_firewall_domains(resp: http.Response) -> UpdateFirewallDomainsOutput ! Str {
+  var out = UpdateFirewallDomainsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "id" => out.id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "status" => out.status = CRResourceStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateFirewallDomains.
+pub enum UpdateFirewallDomainsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateFirewallDomainsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_firewall_domains_error(resp: http.Response) -> UpdateFirewallDomainsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.AccessDeniedException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.ConflictException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.InternalServerException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.ThrottlingException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateFirewallDomainsErr.ValidationException(x)
+      Err(msg) => return UpdateFirewallDomainsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateFirewallDomainsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Updates a DNS Firewall domain list from an array of specified domains.
+/// Route 53 Global Resolver is a global service that supports resolvers in
+/// multiple Amazon Web Services Regions but you must specify the US East
+/// (Ohio) Region to create, update, or otherwise work with Route 53 Global
+/// Resolver resources. That is, for example, specify --region us-east-2 on
+/// Amazon Web Services CLI commands.
+pub fn (c: Client) update_firewall_domains(input: UpdateFirewallDomainsInput) -> UpdateFirewallDomainsOutput ! UpdateFirewallDomainsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_firewall_domains(c.params, input)) ?? e => return Err(UpdateFirewallDomainsErr.InvalidInput(e))
+  var req = serialize_update_firewall_domains(ep, input, "") ?? e => return Err(UpdateFirewallDomainsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateFirewallDomainsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_firewall_domains_error(resp))
+  }
+  deserialize_update_firewall_domains(resp) ?? e => Err(UpdateFirewallDomainsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_update_firewall_rule(base: EndpointParameters, input: UpdateFirewallRuleInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateFirewallRule.
+pub fn serialize_update_firewall_rule(ep: rest.Endpoint, input: UpdateFirewallRuleInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_firewall_rule_id = match input.firewall_rule_id {
+    Some(v) => v
+    None => return Err("input member firewallRuleId is required")
+  }
+  if label_firewall_rule_id == "" {
+    return Err("input member firewallRuleId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.action {
+    fs.push(("action", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.block_override_dns_type {
+    fs.push(("blockOverrideDnsType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.block_override_domain {
+    fs.push(("blockOverrideDomain", json.Value.Str(x)))
+  }
+  if let Some(x) = input.block_override_ttl {
+    fs.push(("blockOverrideTtl", json.Value.Int(x)))
+  }
+  if let Some(x) = input.block_response {
+    fs.push(("blockResponse", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.confidence_threshold {
+    fs.push(("confidenceThreshold", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = input.dns_advanced_protection {
+    fs.push(("dnsAdvancedProtection", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.priority {
+    fs.push(("priority", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "PATCH",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/firewall-rules/${rest.escape(label_firewall_rule_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_firewall_rule(resp: http.Response) -> UpdateFirewallRuleOutput ! Str {
+  var out = UpdateFirewallRuleOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "action" => out.action = FirewallRuleAction.from(jsonv.read_str(fv)?)
+      "blockOverrideDnsType" => out.block_override_dns_type = BlockOverrideDnsQueryType.from(jsonv.read_str(fv)?)
+      "blockOverrideDomain" => out.block_override_domain = jsonv.read_str(fv)?
+      "blockOverrideTtl" => out.block_override_ttl = jsonv.read_int(fv)?
+      "blockResponse" => out.block_response = FirewallBlockResponse.from(jsonv.read_str(fv)?)
+      "confidenceThreshold" => out.confidence_threshold = ConfidenceThreshold.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "description" => out.description = jsonv.read_str(fv)?
+      "dnsAdvancedProtection" => out.dns_advanced_protection = DnsAdvancedProtection.from(jsonv.read_str(fv)?)
+      "firewallDomainListId" => out.firewall_domain_list_id = jsonv.read_str(fv)?
+      "id" => out.id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "priority" => out.priority = jsonv.read_int(fv)?
+      "dnsViewId" => out.dns_view_id = jsonv.read_str(fv)?
+      "queryType" => out.query_type = jsonv.read_str(fv)?
+      "status" => out.status = CRResourceStatus.from(jsonv.read_str(fv)?)
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateFirewallRule.
+pub enum UpdateFirewallRuleErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: UpdateFirewallRuleErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
@@ -110,6 +1544,9 @@ pub fn serialize_update_global_resolver(ep: rest.Endpoint, input: UpdateGlobalRe
   if let Some(x) = input.ip_address_type {
     fs.push(("ipAddressType", json.Value.Str(x.value())))
   }
+  if let Some(x) = input.public_ip_status {
+    fs.push(("publicIpStatus", json.Value.Str(x.value())))
+  }
   if let Some(x) = input.regions {
     fs.push(("regions", json_of_regions(x)))
   }
@@ -152,6 +1589,7 @@ pub fn deserialize_update_global_resolver(resp: http.Response) -> UpdateGlobalRe
       "ipv4Addresses" => out.ipv4_addresses = from_json_ipv4_addresses(fv)?
       "ipv6Addresses" => out.ipv6_addresses = from_json_ipv6_addresses(fv)?
       "ipAddressType" => out.ip_address_type = GlobalResolverIpAddressType.from(jsonv.read_str(fv)?)
+      "publicIpStatus" => out.public_ip_status = PublicIpStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }

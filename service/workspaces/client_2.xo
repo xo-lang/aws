@@ -8,6 +8,38 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_describe_application_associations(resp: http.Response) -> DescribeApplicationAssociationsResult ! Str {
+  var out = DescribeApplicationAssociationsResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Associations" => out.associations = from_json_application_resource_association_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DescribeApplicationAssociations.
+pub enum DescribeApplicationAssociationsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InvalidParameterValuesException(e: InvalidParameterValuesException)
+  OperationNotSupportedException(e: OperationNotSupportedException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
 pub fn (e: DescribeApplicationAssociationsErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
@@ -5284,6 +5316,9 @@ pub fn serialize_register_workspace_directory(ep: rest.Endpoint, input: Register
   }
   if let Some(x) = input.user_identity_type {
     fs.push(("UserIdentityType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.workspace_os_user_mode {
+    fs.push(("WorkspaceOsUserMode", json.Value.Str(x.value())))
   }
   if let Some(x) = input.idc_instance_arn {
     fs.push(("IdcInstanceArn", json.Value.Str(x)))

@@ -8,6 +8,59 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// The errors of DeleteContactList.
+pub enum DeleteContactListErr {
+  BadRequestException(e: BadRequestException)
+  ConcurrentModificationException(e: ConcurrentModificationException)
+  NotFoundException(e: NotFoundException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteContactListErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConcurrentModificationException(x) => "ConcurrentModificationException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_contact_list_error(resp: http.Response) -> DeleteContactListErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return DeleteContactListErr.BadRequestException(x)
+      Err(msg) => return DeleteContactListErr.Deserialize(msg)
+    }
+    "ConcurrentModificationException" => match read_error_concurrent_modification_exception(resp, body) {
+      Ok(x) => return DeleteContactListErr.ConcurrentModificationException(x)
+      Err(msg) => return DeleteContactListErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return DeleteContactListErr.NotFoundException(x)
+      Err(msg) => return DeleteContactListErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return DeleteContactListErr.TooManyRequestsException(x)
+      Err(msg) => return DeleteContactListErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteContactListErr.Api(restjson.api_error(resp, body))
+}
+
 /// Deletes a contact list and all of the contacts on that list.
 pub fn (c: Client) delete_contact_list(input: DeleteContactListRequest) -> DeleteContactListResponse ! DeleteContactListErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_delete_contact_list(c.params, input)) ?? e => return Err(DeleteContactListErr.InvalidInput(e))
@@ -1128,6 +1181,7 @@ pub fn deserialize_get_account(resp: http.Response) -> GetAccountResponse ! Str 
       "Details" => out.details = from_json_account_details(fv)?
       "VdmAttributes" => out.vdm_attributes = from_json_vdm_attributes(fv)?
       "PricingAttributes" => out.pricing_attributes = from_json_pricing_attributes(fv)?
+      "DeliveryAttributes" => out.delivery_attributes = from_json_delivery_attributes(fv)?
       _ => {}
     }
   }
@@ -6324,6 +6378,103 @@ pub fn (c: Client) put_account_dedicated_ip_warmup_attributes(input: PutAccountD
   deserialize_put_account_dedicated_ip_warmup_attributes(resp) ?? e => Err(PutAccountDedicatedIpWarmupAttributesErr.Deserialize(e))
 }
 
+pub fn endpoint_params_put_account_delivery_attributes(base: EndpointParameters, input: PutAccountDeliveryAttributesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of PutAccountDeliveryAttributes.
+pub fn serialize_put_account_delivery_attributes(ep: rest.Endpoint, input: PutAccountDeliveryAttributesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.shared_pool_delivery_mode {
+    fs.push(("SharedPoolDeliveryMode", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v2/email/account/delivery"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_put_account_delivery_attributes(resp: http.Response) -> PutAccountDeliveryAttributesResponse ! Str {
+  var out = PutAccountDeliveryAttributesResponse{}
+  Ok(out)
+}
+
+/// The errors of PutAccountDeliveryAttributes.
+pub enum PutAccountDeliveryAttributesErr {
+  BadRequestException(e: BadRequestException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: PutAccountDeliveryAttributesErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_put_account_delivery_attributes_error(resp: http.Response) -> PutAccountDeliveryAttributesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return PutAccountDeliveryAttributesErr.BadRequestException(x)
+      Err(msg) => return PutAccountDeliveryAttributesErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return PutAccountDeliveryAttributesErr.TooManyRequestsException(x)
+      Err(msg) => return PutAccountDeliveryAttributesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  PutAccountDeliveryAttributesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Set the shared pool delivery mode for your Amazon SES account in the
+/// current Amazon Web Services Region. The mode controls whether Amazon SES
+/// can deliver your email from shared IP addresses in other Amazon Web
+/// Services Regions within the same Amazon Web Services partition. A change
+/// may take a few minutes to take effect. Messages that are already queued
+/// for delivery keep the mode that they were sent with.
+pub fn (c: Client) put_account_delivery_attributes(input: PutAccountDeliveryAttributesRequest) -> PutAccountDeliveryAttributesResponse ! PutAccountDeliveryAttributesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_put_account_delivery_attributes(c.params, input)) ?? e => return Err(PutAccountDeliveryAttributesErr.InvalidInput(e))
+  var req = serialize_put_account_delivery_attributes(ep, input, "") ?? e => return Err(PutAccountDeliveryAttributesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(PutAccountDeliveryAttributesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_put_account_delivery_attributes_error(resp))
+  }
+  deserialize_put_account_delivery_attributes(resp) ?? e => Err(PutAccountDeliveryAttributesErr.Deserialize(e))
+}
+
 pub fn endpoint_params_put_account_details(base: EndpointParameters, input: PutAccountDetailsRequest) -> EndpointParameters {
   let _ = input
   base
@@ -6950,6 +7101,9 @@ pub fn serialize_put_configuration_set_delivery_options(ep: rest.Endpoint, input
   }
   if let Some(x) = input.max_delivery_seconds {
     fs.push(("MaxDeliverySeconds", json.Value.Int(x)))
+  }
+  if let Some(x) = input.shared_pool_delivery_mode {
+    fs.push(("SharedPoolDeliveryMode", json.Value.Str(x.value())))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -10574,121 +10728,4 @@ pub fn (c: Client) update_reputation_entity_customer_managed_status(input: Updat
     return Err(deserialize_update_reputation_entity_customer_managed_status_error(resp))
   }
   deserialize_update_reputation_entity_customer_managed_status(resp) ?? e => Err(UpdateReputationEntityCustomerManagedStatusErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_reputation_entity_policy(base: EndpointParameters, input: UpdateReputationEntityPolicyRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateReputationEntityPolicy.
-pub fn serialize_update_reputation_entity_policy(ep: rest.Endpoint, input: UpdateReputationEntityPolicyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_reputation_entity_type = match input.reputation_entity_type {
-    Some(v) => v.value()
-    None => return Err("input member ReputationEntityType is required")
-  }
-  if label_reputation_entity_type == "" {
-    return Err("input member ReputationEntityType must not be empty")
-  }
-  let label_reputation_entity_reference = match input.reputation_entity_reference {
-    Some(v) => v
-    None => return Err("input member ReputationEntityReference is required")
-  }
-  if label_reputation_entity_reference == "" {
-    return Err("input member ReputationEntityReference must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.reputation_entity_policy {
-    fs.push(("ReputationEntityPolicy", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "PUT",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/v2/email/reputation/entities/${rest.escape(label_reputation_entity_type, false)}/${rest.escape(label_reputation_entity_reference, false)}/policy"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_reputation_entity_policy(resp: http.Response) -> UpdateReputationEntityPolicyResponse ! Str {
-  var out = UpdateReputationEntityPolicyResponse{}
-  Ok(out)
-}
-
-/// The errors of UpdateReputationEntityPolicy.
-pub enum UpdateReputationEntityPolicyErr {
-  BadRequestException(e: BadRequestException)
-  ConflictException(e: ConflictException)
-  TooManyRequestsException(e: TooManyRequestsException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateReputationEntityPolicyErr) display() -> Str {
-  match e {
-    BadRequestException(x) => "BadRequestException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_reputation_entity_policy_error(resp: http.Response) -> UpdateReputationEntityPolicyErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
-      Ok(x) => return UpdateReputationEntityPolicyErr.BadRequestException(x)
-      Err(msg) => return UpdateReputationEntityPolicyErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateReputationEntityPolicyErr.ConflictException(x)
-      Err(msg) => return UpdateReputationEntityPolicyErr.Deserialize(msg)
-    }
-    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
-      Ok(x) => return UpdateReputationEntityPolicyErr.TooManyRequestsException(x)
-      Err(msg) => return UpdateReputationEntityPolicyErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateReputationEntityPolicyErr.Api(restjson.api_error(resp, body))
-}
-
-/// Update the reputation management policy for a reputation entity. The
-/// policy determines how the entity responds to reputation findings, such
-/// as automatically pausing sending when certain thresholds are exceeded.
-/// Reputation management policies are Amazon Web Services Amazon
-/// SES-managed (predefined policies). You can select from none, standard,
-/// and strict policies.
-pub fn (c: Client) update_reputation_entity_policy(input: UpdateReputationEntityPolicyRequest) -> UpdateReputationEntityPolicyResponse ! UpdateReputationEntityPolicyErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_reputation_entity_policy(c.params, input)) ?? e => return Err(UpdateReputationEntityPolicyErr.InvalidInput(e))
-  var req = serialize_update_reputation_entity_policy(ep, input, "") ?? e => return Err(UpdateReputationEntityPolicyErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateReputationEntityPolicyErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_reputation_entity_policy_error(resp))
-  }
-  deserialize_update_reputation_entity_policy(resp) ?? e => Err(UpdateReputationEntityPolicyErr.Deserialize(e))
 }

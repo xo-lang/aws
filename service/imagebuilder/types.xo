@@ -814,8 +814,11 @@ pub struct CreateImagePipelineRequest {
   /// images that this pipeline creates.
   pub image_scanning_configuration: ImageScanningConfiguration? = None
   /// The array of workflow configuration objects for builds that this
-  /// pipeline starts. You must also specify executionRole when you provide
-  /// workflows.
+  /// pipeline starts. If you specify workflows, they replace the default
+  /// workflows that Image Builder otherwise runs for the pipeline's builds.
+  /// For example, if your list doesn't include a test workflow, the
+  /// pipeline's builds don't run one. You must also specify executionRole
+  /// when you provide workflows.
   pub workflows: List[WorkflowConfiguration]? = None
   /// The name or Amazon Resource Name (ARN) for the IAM role you create that
   /// grants Image Builder access to perform workflow actions.
@@ -1616,9 +1619,17 @@ pub struct FastLaunchSnapshotConfiguration {
 /// of results from a list operation. Filters can be used to match a set of
 /// resources by specific criteria, such as tags, attributes, or IDs.
 pub struct Filter {
-  /// The name of the filter. Filter names are case-sensitive.
+  /// The name of the filter. Filter names are case-sensitive. The name filter
+  /// matches the name that you gave the resource when you created it, exactly
+  /// as you entered it. It doesn't match the name segment of the resource
+  /// ARN, which Image Builder converts to lowercase with hyphens in place of
+  /// spaces and underscores. For example, a resource named My Image has an
+  /// ARN that contains my-image – filter on My Image to find it.
   pub name: Str? = None
-  /// The filter values. Filter values are case-sensitive.
+  /// The filter values. Filter values are case-sensitive. The name filter can
+  /// use a wildcard: web* matches names that begin with web , and *web*
+  /// matches names that contain web . The wildcard isn't supported in other
+  /// positions or in other filters.
   pub values: List[Str]? = None
 }
 
@@ -2446,9 +2457,10 @@ pub struct ImageScanningConfiguration {
   /// or the output AMI. For container output, Amazon Inspector scans the
   /// container image that Image Builder pushes to the Amazon ECR repository
   /// from your ecrConfiguration settings. To use container image scans, you
-  /// must activate Amazon Inspector for Amazon ECR scanning in your account.
-  /// The Image Builder ListImageScanFindings operation returns the findings
-  /// of these scans.
+  /// must activate Amazon Inspector for Amazon ECR scanning in the account
+  /// and Amazon Web Services Region where the build runs. Amazon Inspector
+  /// activation is Regional. The Image Builder ListImageScanFindings
+  /// operation returns the findings of these scans.
   pub image_scanning_enabled: Bool? = None
   /// Contains Amazon ECR settings for vulnerability scans.
   pub ecr_configuration: EcrConfiguration? = None
@@ -2457,8 +2469,9 @@ pub struct ImageScanningConfiguration {
   /// imageScanningTypes , Image Builder uses TEST_INSTANCE_CVE . The scan
   /// types work as follows: With TEST_INSTANCE_CVE , Amazon Inspector scans
   /// the test instance during image tests. To use this scan, you must
-  /// activate Amazon Inspector for Amazon EC2 scanning in your account. The
-  /// Image Builder ListImageScanFindings operation returns the findings. With
+  /// activate Amazon Inspector for Amazon EC2 scanning in the account and
+  /// Amazon Web Services Region where the build runs. The Image Builder
+  /// ListImageScanFindings operation returns the findings. With
   /// ON_DEMAND_AMI_CVE , Amazon Inspector starts an on-demand scan of the
   /// output AMI during image tests. To use this scan, you must build from an
   /// image recipe, but you do not need to activate Amazon Inspector in your
@@ -3409,9 +3422,14 @@ pub struct ListComponentBuildVersionsRequest {
   /// The component version ARN whose build versions you want to list. The ARN
   /// must specify an exact version, without a build number suffix. If you
   /// don't specify an ARN, Image Builder returns build versions for the
-  /// components that your account owns.
+  /// components that your account owns. If the ARN that you specify doesn't
+  /// exist, Image Builder returns an empty list rather than a
+  /// ResourceNotFoundException error.
   pub component_version_arn: Str? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3449,7 +3467,10 @@ pub struct ListComponentsRequest {
   /// one entry per component version. You can't combine this option with the
   /// version filter.
   pub by_name: Bool? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3479,7 +3500,10 @@ pub struct ListContainerRecipesRequest {
   /// Use the following filters to streamline results: containerType name
   /// parentImage platform
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3501,7 +3525,10 @@ pub struct ListContainerRecipesResponse {
 pub struct ListDistributionConfigurationsRequest {
   /// You can filter on name to streamline results.
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3525,12 +3552,17 @@ pub struct ListImageBuildVersionsRequest {
   /// you want to retrieve. The ARN must specify an exact version ( . . ) -
   /// wildcards aren't allowed. This parameter is optional. If you don't
   /// specify it, Image Builder returns build versions for all of the images
-  /// in your account.
+  /// in your account. If the ARN that you specify doesn't exist, Image
+  /// Builder returns an empty list rather than a ResourceNotFoundException
+  /// error.
   pub image_version_arn: Str? = None
   /// Use the following filters to streamline results: name osVersion platform
   /// type version
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3553,7 +3585,10 @@ pub struct ListImagePackagesRequest {
   /// The Amazon Resource Name (ARN) of the image build version whose packages
   /// you want to list. The value must be a full build version ARN.
   pub image_build_version_arn: Str? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3574,11 +3609,15 @@ pub struct ListImagePackagesResponse {
 
 pub struct ListImagePipelineImagesRequest {
   /// The Amazon Resource Name (ARN) of the image pipeline whose images you
-  /// want to view.
+  /// want to view. If the ARN that you specify doesn't exist, Image Builder
+  /// returns an empty list rather than a ResourceNotFoundException error.
   pub image_pipeline_arn: Str? = None
   /// Use the following filters to streamline results: name version
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3602,7 +3641,10 @@ pub struct ListImagePipelinesRequest {
   /// distributionConfigurationArn imageRecipeArn
   /// infrastructureConfigurationArn name status
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3630,7 +3672,10 @@ pub struct ListImageRecipesRequest {
   /// Use the following filters to streamline results: name parentImage
   /// platform
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3693,7 +3738,10 @@ pub struct ListImageScanFindingsRequest {
   /// severity level. If you don't request a filter, then all findings in your
   /// account are listed.
   pub filters: List[ImageScanFindingsFilter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3725,7 +3773,10 @@ pub struct ListImagesRequest {
   /// per image version. You can't combine this option with the version
   /// filter.
   pub by_name: Bool? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3756,7 +3807,10 @@ pub struct ListImagesResponse {
 pub struct ListInfrastructureConfigurationsRequest {
   /// You can filter on name to streamline results.
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3786,7 +3840,10 @@ pub struct ListLifecycleExecutionResourcesRequest {
   /// If the image build version that you specify in parentResourceId wasn't
   /// part of this lifecycle execution, the response contains an empty list.
   pub parent_resource_id: Str? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3808,7 +3865,10 @@ pub struct ListLifecycleExecutionResourcesResponse {
 }
 
 pub struct ListLifecycleExecutionsRequest {
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3835,7 +3895,10 @@ pub struct ListLifecyclePoliciesRequest {
   /// Use the following filters to streamline results: name , resourceType ,
   /// and status . Filter names are matched exactly as shown.
   pub filters: List[Filter]? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3865,7 +3928,10 @@ pub struct ListTagsForResourceResponse {
 }
 
 pub struct ListWaitingWorkflowStepsRequest {
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3892,7 +3958,10 @@ pub struct ListWorkflowBuildVersionsRequest {
   /// ARN, the response lists build versions for all of the workflows in your
   /// account.
   pub workflow_version_arn: Str? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3911,7 +3980,10 @@ pub struct ListWorkflowBuildVersionsResponse {
 }
 
 pub struct ListWorkflowExecutionsRequest {
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3945,7 +4017,10 @@ pub struct ListWorkflowExecutionsResponse {
 }
 
 pub struct ListWorkflowStepExecutionsRequest {
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -3995,7 +4070,10 @@ pub struct ListWorkflowsRequest {
   /// one entry per workflow version. You can't combine this option with the
   /// version filter.
   pub by_name: Bool? = None
-  /// The maximum number of items to return in a single request.
+  /// The maximum number of items to return in a single request. If you don't
+  /// specify a value, Image Builder returns up to 25 items. The largest page
+  /// size that you can request is 100 items. A page can contain fewer items
+  /// than the maximum, with a nextToken to continue paging.
   pub max_results: Int? = None
   /// A token to specify where to start paginating. Use the nextToken value
   /// from a previously truncated response.
@@ -4766,8 +4844,11 @@ pub struct UpdateImagePipelineRequest {
   /// scans the images that this pipeline creates.
   pub image_scanning_configuration: ImageScanningConfiguration? = None
   /// The array of workflow configuration objects for builds that this
-  /// pipeline starts. You must also specify executionRole when you provide
-  /// workflows.
+  /// pipeline starts. If you specify workflows, they replace the default
+  /// workflows that Image Builder otherwise runs for the pipeline's builds.
+  /// For example, if your list doesn't include a test workflow, the
+  /// pipeline's builds don't run one. You must also specify executionRole
+  /// when you provide workflows.
   pub workflows: List[WorkflowConfiguration]? = None
   /// Specifies the logging configuration for the image pipeline. Use this to
   /// define custom CloudWatch Logs log groups for your pipeline execution

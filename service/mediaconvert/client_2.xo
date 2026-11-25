@@ -8,6 +8,110 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// The HTTP request of CancelJob.
+pub fn serialize_cancel_job(ep: rest.Endpoint, input: CancelJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_id = match input.id {
+    Some(v) => v
+    None => return Err("input member Id is required")
+  }
+  if label_id == "" {
+    return Err("input member Id must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/2017-08-29/jobs/${rest.escape(label_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_cancel_job(resp: http.Response) -> CancelJobResponse ! Str {
+  var out = CancelJobResponse{}
+  Ok(out)
+}
+
+/// The errors of CancelJob.
+pub enum CancelJobErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CancelJobErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_cancel_job_error(resp: http.Response) -> CancelJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return CancelJobErr.BadRequestException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CancelJobErr.ConflictException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return CancelJobErr.ForbiddenException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return CancelJobErr.InternalServerErrorException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return CancelJobErr.NotFoundException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CancelJobErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return CancelJobErr.TooManyRequestsException(x)
+      Err(msg) => return CancelJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CancelJobErr.Api(restjson.api_error(resp, body))
+}
+
 /// Permanently cancel a job. Once you have canceled a job, you can't start
 /// it again.
 pub fn (c: Client) cancel_job(input: CancelJobRequest) -> CancelJobResponse ! CancelJobErr uses (net.dial, clock, rand) {

@@ -8,6 +8,45 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+fn xml_write_streaming_distribution_summary(var w: xmlv.Writer, v: StreamingDistributionSummary, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.id {
+    xmlv.elem(w, "Id", x, [])
+  }
+  if let Some(x) = v.arn {
+    xmlv.elem(w, "ARN", x, [])
+  }
+  if let Some(x) = v.status {
+    xmlv.elem(w, "Status", x, [])
+  }
+  if let Some(x) = v.last_modified_time {
+    xmlv.elem(w, "LastModifiedTime", rest.date_time(x), [])
+  }
+  if let Some(x) = v.domain_name {
+    xmlv.elem(w, "DomainName", x, [])
+  }
+  if let Some(x) = v.s3_origin {
+    xml_write_s3_origin(w, x, "S3Origin", [])
+  }
+  if let Some(x) = v.aliases {
+    xml_write_aliases(w, x, "Aliases", [])
+  }
+  if let Some(x) = v.trusted_signers {
+    xml_write_trusted_signers(w, x, "TrustedSigners", [])
+  }
+  if let Some(x) = v.comment {
+    xmlv.elem(w, "Comment", x, [])
+  }
+  if let Some(x) = v.price_class {
+    xmlv.elem(w, "PriceClass", x.value(), [])
+  }
+  if let Some(x) = v.enabled {
+    xmlv.elem(w, "Enabled", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
 fn xml_read_streaming_distribution_summary(e: xml.Element) -> StreamingDistributionSummary ! Str {
   var out = StreamingDistributionSummary{}
   for c in xmlv.elements(e) {
@@ -2004,6 +2043,9 @@ fn xml_write_update_connection_group_request(var w: xmlv.Writer, v: UpdateConnec
   if let Some(x) = v.enabled {
     xmlv.elem(w, "Enabled", "${x}", [])
   }
+  if let Some(x) = v.viewer_fallback {
+    xml_write_viewer_fallback(w, x, "ViewerFallback", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -2016,6 +2058,7 @@ fn xml_read_update_connection_group_request(e: xml.Element) -> UpdateConnectionG
       "IfMatch" => out.if_match = c.text()
       "AnycastIpListId" => out.anycast_ip_list_id = c.text()
       "Enabled" => out.enabled = xmlv.read_bool(c.text())?
+      "ViewerFallback" => out.viewer_fallback = xml_read_viewer_fallback(c)?
       _ => {}
     }
   }
@@ -2180,6 +2223,9 @@ fn xml_write_update_distribution_tenant_request(var w: xmlv.Writer, v: UpdateDis
   if let Some(x) = v.enabled {
     xmlv.elem(w, "Enabled", "${x}", [])
   }
+  if let Some(x) = v.on_domain_takeover {
+    xmlv.elem(w, "OnDomainTakeover", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -2196,6 +2242,7 @@ fn xml_read_update_distribution_tenant_request(e: xml.Element) -> UpdateDistribu
       "IfMatch" => out.if_match = c.text()
       "ManagedCertificateRequest" => out.managed_certificate_request = xml_read_managed_certificate_request(c)?
       "Enabled" => out.enabled = xmlv.read_bool(c.text())?
+      "OnDomainTakeover" => out.on_domain_takeover = OnDomainTakeover.from(c.text())
       _ => {}
     }
   }
@@ -3155,6 +3202,26 @@ fn xml_read_viewer_certificate(e: xml.Element) -> ViewerCertificate ! Str {
   Ok(out)
 }
 
+fn xml_write_viewer_fallback(var w: xmlv.Writer, v: ViewerFallback, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.distribution_id {
+    xmlv.elem(w, "DistributionId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_viewer_fallback(e: xml.Element) -> ViewerFallback ! Str {
+  var out = ViewerFallback{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "DistributionId" => out.distribution_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_viewer_mtls_config(var w: xmlv.Writer, v: ViewerMtlsConfig, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -3238,6 +3305,9 @@ fn xml_write_vpc_origin_config(var w: xmlv.Writer, v: VpcOriginConfig, name: Str
   if let Some(x) = v.origin_keepalive_timeout {
     xmlv.elem(w, "OriginKeepaliveTimeout", "${x}", [])
   }
+  if let Some(x) = v.origin_http_version {
+    xmlv.elem(w, "OriginHttpVersion", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -3249,6 +3319,7 @@ fn xml_read_vpc_origin_config(e: xml.Element) -> VpcOriginConfig ! Str {
       "OwnerAccountId" => out.owner_account_id = c.text()
       "OriginReadTimeout" => out.origin_read_timeout = xmlv.read_int(c.text())?
       "OriginKeepaliveTimeout" => out.origin_keepalive_timeout = xmlv.read_int(c.text())?
+      "OriginHttpVersion" => out.origin_http_version = OriginHttpVersion.from(c.text())
       _ => {}
     }
   }
@@ -7410,6 +7481,12 @@ fn xml_body_viewer_certificate(v: ViewerCertificate, name: Str, ns: List[(Str, S
   xmlv.finish(w)
 }
 
+fn xml_body_viewer_fallback(v: ViewerFallback, name: Str, ns: List[(Str, Str)]) -> Bytes {
+  var w = xmlv.writer()
+  xml_write_viewer_fallback(w, v, name, ns)
+  xmlv.finish(w)
+}
+
 fn xml_body_viewer_mtls_config(v: ViewerMtlsConfig, name: Str, ns: List[(Str, Str)]) -> Bytes {
   var w = xmlv.writer()
   xml_write_viewer_mtls_config(w, v, name, ns)
@@ -10776,6 +10853,9 @@ pub fn serialize_create_connection_group(ep: rest.Endpoint, input: CreateConnect
   if let Some(x) = input.enabled {
     xmlv.elem(w, "Enabled", "${x}", [])
   }
+  if let Some(x) = input.viewer_fallback {
+    xml_write_viewer_fallback(w, x, "ViewerFallback", [])
+  }
   xmlv.end(w, "CreateConnectionGroupRequest")
   body = xmlv.finish(w)
   headers.push(("Content-Type", "application/xml"))
@@ -11548,6 +11628,9 @@ pub fn serialize_create_distribution_tenant(ep: rest.Endpoint, input: CreateDist
   if let Some(x) = input.enabled {
     xmlv.elem(w, "Enabled", "${x}", [])
   }
+  if let Some(x) = input.on_domain_takeover {
+    xmlv.elem(w, "OnDomainTakeover", x.value(), [])
+  }
   xmlv.end(w, "CreateDistributionTenantRequest")
   body = xmlv.finish(w)
   headers.push(("Content-Type", "application/xml"))
@@ -12239,45 +12322,4 @@ pub fn (e: CreateFieldLevelEncryptionConfigErr) display() -> Str {
     InvalidInput(msg) => "invalid input: ${msg}"
     Deserialize(msg) => "cannot read the response: ${msg}"
   }
-}
-
-pub fn deserialize_create_field_level_encryption_config_error(resp: http.Response) -> CreateFieldLevelEncryptionConfigErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "FieldLevelEncryptionConfigAlreadyExists" => match read_error_field_level_encryption_config_already_exists(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.FieldLevelEncryptionConfigAlreadyExists(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "InconsistentQuantities" => match read_error_inconsistent_quantities(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.InconsistentQuantities(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "InvalidArgument" => match read_error_invalid_argument(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.InvalidArgument(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "NoSuchFieldLevelEncryptionProfile" => match read_error_no_such_field_level_encryption_profile(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.NoSuchFieldLevelEncryptionProfile(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "QueryArgProfileEmpty" => match read_error_query_arg_profile_empty(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.QueryArgProfileEmpty(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "TooManyFieldLevelEncryptionConfigs" => match read_error_too_many_field_level_encryption_configs(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.TooManyFieldLevelEncryptionConfigs(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "TooManyFieldLevelEncryptionContentTypeProfiles" => match read_error_too_many_field_level_encryption_content_type_profiles(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.TooManyFieldLevelEncryptionContentTypeProfiles(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    "TooManyFieldLevelEncryptionQueryArgProfiles" => match read_error_too_many_field_level_encryption_query_arg_profiles(resp, body) {
-      Ok(x) => return CreateFieldLevelEncryptionConfigErr.TooManyFieldLevelEncryptionQueryArgProfiles(x)
-      Err(msg) => return CreateFieldLevelEncryptionConfigErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  CreateFieldLevelEncryptionConfigErr.Api(restxml.api_error(resp))
 }

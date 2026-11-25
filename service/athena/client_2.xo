@@ -8,6 +8,48 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_list_sessions(base: EndpointParameters, input: ListSessionsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListSessions.
+pub fn serialize_list_sessions(ep: rest.Endpoint, input: ListSessionsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.work_group {
+    fs.push(("WorkGroup", json.Value.Str(x)))
+  }
+  if let Some(x) = input.state_filter {
+    fs.push(("StateFilter", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AmazonAthena.ListSessions"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_list_sessions(resp: http.Response) -> ListSessionsResponse ! Str {
   var out = ListSessionsResponse{}
   let body = jsonv.parse_body(resp.body)?
@@ -232,6 +274,9 @@ pub fn serialize_list_table_metadata(ep: rest.Endpoint, input: ListTableMetadata
   }
   if let Some(x) = input.work_group {
     fs.push(("WorkGroup", json.Value.Str(x)))
+  }
+  if let Some(x) = input.attributes_to_get {
+    fs.push(("AttributesToGet", json_of_table_attributes_list(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/x-amz-json-1.1"))

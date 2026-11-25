@@ -191,6 +191,90 @@ fn from_json_artifact_details(v: json.Value) -> ArtifactDetails ! Str {
   Ok(out)
 }
 
+fn json_of_checklist(v: Checklist) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.checklist_id {
+    fs.push(("checklistId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_checklist_item_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_checklist(v: json.Value) -> Checklist ! Str {
+  var out = Checklist{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "checklistId" => out.checklist_id = jsonv.read_str(fv)?
+      "items" => out.items = from_json_checklist_item_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_checklist_item(v: ChecklistItem) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.item_key {
+    fs.push(("itemKey", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_checklist_item(v: json.Value) -> ChecklistItem ! Str {
+  var out = ChecklistItem{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "itemKey" => out.item_key = jsonv.read_str(fv)?
+      "status" => out.status = ChecklistItemStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_checklist_item_list(v: List[ChecklistItem]) -> json.Value {
+  json.Value.List(v.map(fn(x: ChecklistItem) -> json.Value { json_of_checklist_item(x) }))
+}
+
+fn from_json_checklist_item_list(v: json.Value) -> List[ChecklistItem] ! Str {
+  var out: List[ChecklistItem] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_checklist_item(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_checklist_list(v: List[Checklist]) -> json.Value {
+  json.Value.List(v.map(fn(x: Checklist) -> json.Value { json_of_checklist(x) }))
+}
+
+fn from_json_checklist_list(v: json.Value) -> List[Checklist] ! Str {
+  var out: List[Checklist] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_checklist(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_clinical_note_generation_result(v: ClinicalNoteGenerationResult) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.note_result {
@@ -281,6 +365,78 @@ fn from_json_conflict_exception(v: json.Value) -> ConflictException ! Str {
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_dataset_input(v: CreateDatasetInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.config {
+    fs.push(("config", json_of_dataset_config(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_dataset_input(v: json.Value) -> CreateDatasetInput ! Str {
+  var out = CreateDatasetInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "config" => out.config = from_json_dataset_config(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_dataset_output(v: CreateDatasetOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_dataset_output(v: json.Value) -> CreateDatasetOutput ! Str {
+  var out = CreateDatasetOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "type" => out.type_value = DatasetType.from(jsonv.read_str(fv)?)
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       _ => {}
     }
   }
@@ -525,6 +681,112 @@ fn from_json_custom_template_response(v: json.Value) -> CustomTemplateResponse !
   Ok(out)
 }
 
+fn json_of_dataset_artifacts(v: DatasetArtifacts) -> json.Value {
+  match v {
+    MedicalCoding(x) => json.Value.Object([("medicalCoding", json_of_medical_coding_dataset_artifacts(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_dataset_artifacts(v: json.Value) -> DatasetArtifacts ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "medicalCoding" => Ok(DatasetArtifacts.MedicalCoding(from_json_medical_coding_dataset_artifacts(fv)?))
+      _ => Ok(DatasetArtifacts.Unknown(k))
+    }
+  }
+  Err("DatasetArtifacts: no member set")
+}
+
+fn json_of_dataset_config(v: DatasetConfig) -> json.Value {
+  match v {
+    MedicalCoding(x) => json.Value.Object([("medicalCoding", json_of_medical_coding_dataset_config(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_dataset_config(v: json.Value) -> DatasetConfig ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "medicalCoding" => Ok(DatasetConfig.MedicalCoding(from_json_medical_coding_dataset_config(fv)?))
+      _ => Ok(DatasetConfig.Unknown(k))
+    }
+  }
+  Err("DatasetConfig: no member set")
+}
+
+fn json_of_dataset_summary(v: DatasetSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status_details {
+    fs.push(("statusDetails", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.updated_at {
+    fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_dataset_summary(v: json.Value) -> DatasetSummary ! Str {
+  var out = DatasetSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "type" => out.type_value = DatasetType.from(jsonv.read_str(fv)?)
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
+      "statusDetails" => out.status_details = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_dataset_summary_list(v: List[DatasetSummary]) -> json.Value {
+  json.Value.List(v.map(fn(x: DatasetSummary) -> json.Value { json_of_dataset_summary(x) }))
+}
+
+fn from_json_dataset_summary_list(v: json.Value) -> List[DatasetSummary] ! Str {
+  var out: List[DatasetSummary] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_dataset_summary(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_deactivate_subscription_input(v: DeactivateSubscriptionInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.domain_id {
@@ -567,6 +829,62 @@ fn from_json_deactivate_subscription_output(v: json.Value) -> DeactivateSubscrip
     }
     match k {
       "subscription" => out.subscription = from_json_subscription_description(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_dataset_input(v: DeleteDatasetInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_dataset_input(v: json.Value) -> DeleteDatasetInput ! Str {
+  var out = DeleteDatasetInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_dataset_output(v: DeleteDatasetOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_dataset_output(v: json.Value) -> DeleteDatasetOutput ! Str {
+  var out = DeleteDatasetOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -684,6 +1002,9 @@ fn json_of_encounter_context(v: EncounterContext) -> json.Value {
   if let Some(x) = v.unstructured_context {
     fs.push(("unstructuredContext", json.Value.Str(x)))
   }
+  if let Some(x) = v.medical_coding_context {
+    fs.push(("medicalCodingContext", json_of_medical_coding_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -695,6 +1016,7 @@ fn from_json_encounter_context(v: json.Value) -> EncounterContext ! Str {
     }
     match k {
       "unstructuredContext" => out.unstructured_context = jsonv.read_str(fv)?
+      "medicalCodingContext" => out.medical_coding_context = from_json_medical_coding_context(fv)?
       _ => {}
     }
   }
@@ -747,6 +1069,90 @@ fn from_json_fhir_server(v: json.Value) -> FHIRServer ! Str {
     match k {
       "fhirEndpoint" => out.fhir_endpoint = jsonv.read_str(fv)?
       "oauthToken" => out.oauth_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_dataset_input(v: GetDatasetInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_dataset_input(v: json.Value) -> GetDatasetInput ! Str {
+  var out = GetDatasetInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_dataset_output(v: GetDatasetOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.config {
+    fs.push(("config", json_of_dataset_config(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status_details {
+    fs.push(("statusDetails", json.Value.Str(x)))
+  }
+  if let Some(x) = v.artifacts {
+    fs.push(("artifacts", json_of_dataset_artifacts(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.updated_at {
+    fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_dataset_output(v: json.Value) -> GetDatasetOutput ! Str {
+  var out = GetDatasetOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "type" => out.type_value = DatasetType.from(jsonv.read_str(fv)?)
+      "config" => out.config = from_json_dataset_config(fv)?
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
+      "statusDetails" => out.status_details = jsonv.read_str(fv)?
+      "artifacts" => out.artifacts = from_json_dataset_artifacts(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
       _ => {}
     }
   }
@@ -827,6 +1233,98 @@ fn from_json_get_domain_output(v: json.Value) -> GetDomainOutput ! Str {
       "webAppConfiguration" => out.web_app_configuration = from_json_web_app_configuration(fv)?
       "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "tags" => out.tags = from_json_tag_map(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_medical_coding_job_request(v: GetMedicalCodingJobRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_medical_coding_job_request(v: json.Value) -> GetMedicalCodingJobRequest ! Str {
+  var out = GetMedicalCodingJobRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_medical_coding_job_response(v: GetMedicalCodingJobResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.job_arn {
+    fs.push(("jobArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.job_status {
+    fs.push(("jobStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.creation_time {
+    fs.push(("creationTime", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.updated_time {
+    fs.push(("updatedTime", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.text {
+    fs.push(("text", json.Value.Str(x)))
+  }
+  if let Some(x) = v.patient_context {
+    fs.push(("patientContext", json_of_medical_codes_patient_context(x)))
+  }
+  if let Some(x) = v.encounter_context {
+    fs.push(("encounterContext", json_of_medical_codes_encounter_context(x)))
+  }
+  if let Some(x) = v.output_data_config {
+    fs.push(("outputDataConfig", json_of_medical_coding_output_data_config(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.medical_coding_output {
+    fs.push(("medicalCodingOutput", json_of_medical_coding_output(x)))
+  }
+  if let Some(x) = v.status_details {
+    fs.push(("statusDetails", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_medical_coding_job_response(v: json.Value) -> GetMedicalCodingJobResponse ! Str {
+  var out = GetMedicalCodingJobResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "jobArn" => out.job_arn = jsonv.read_str(fv)?
+      "jobStatus" => out.job_status = JobStatus.from(jsonv.read_str(fv)?)
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      "updatedTime" => out.updated_time = jsonv.read_time(fv, "date-time")?
+      "text" => out.text = jsonv.read_str(fv)?
+      "patientContext" => out.patient_context = from_json_medical_codes_patient_context(fv)?
+      "encounterContext" => out.encounter_context = from_json_medical_codes_encounter_context(fv)?
+      "outputDataConfig" => out.output_data_config = from_json_medical_coding_output_data_config(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "medicalCodingOutput" => out.medical_coding_output = from_json_medical_coding_output(fv)?
+      "statusDetails" => out.status_details = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1121,6 +1619,66 @@ fn from_json_internal_server_exception(v: json.Value) -> InternalServerException
   Ok(out)
 }
 
+fn json_of_list_datasets_input(v: ListDatasetsInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.type_value {
+    fs.push(("type", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_datasets_input(v: json.Value) -> ListDatasetsInput ! Str {
+  var out = ListDatasetsInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "type" => out.type_value = DatasetType.from(jsonv.read_str(fv)?)
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_datasets_output(v: ListDatasetsOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_dataset_summary_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_datasets_output(v: json.Value) -> ListDatasetsOutput ! Str {
+  var out = ListDatasetsOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_dataset_summary_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_list_domains_input(v: ListDomainsInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.status {
@@ -1321,6 +1879,286 @@ fn from_json_managed_template_response(v: json.Value) -> ManagedTemplateResponse
   Ok(out)
 }
 
+fn json_of_medical_code_generation_result(v: MedicalCodeGenerationResult) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.medical_codes_result {
+    fs.push(("medicalCodesResult", json_of_artifact_details(x)))
+  }
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_code_generation_result(v: json.Value) -> MedicalCodeGenerationResult ! Str {
+  var out = MedicalCodeGenerationResult{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "medicalCodesResult" => out.medical_codes_result = from_json_artifact_details(fv)?
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_code_generation_settings(v: MedicalCodeGenerationSettings) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.enabled {
+    fs.push(("enabled", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_code_generation_settings(v: json.Value) -> MedicalCodeGenerationSettings ! Str {
+  var out = MedicalCodeGenerationSettings{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "enabled" => out.enabled = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_code_generation_settings_response(v: MedicalCodeGenerationSettingsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.enabled {
+    fs.push(("enabled", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_code_generation_settings_response(v: json.Value) -> MedicalCodeGenerationSettingsResponse ! Str {
+  var out = MedicalCodeGenerationSettingsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "enabled" => out.enabled = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_codes_encounter_context(v: MedicalCodesEncounterContext) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.encounter_type {
+    fs.push(("encounterType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.encounter_reason {
+    fs.push(("encounterReason", json.Value.Str(x)))
+  }
+  if let Some(x) = v.after_hours {
+    fs.push(("afterHours", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.encounter_date {
+    fs.push(("encounterDate", json.Value.Str(x)))
+  }
+  if let Some(x) = v.encounter_duration_minutes {
+    fs.push(("encounterDurationMinutes", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_codes_encounter_context(v: json.Value) -> MedicalCodesEncounterContext ! Str {
+  var out = MedicalCodesEncounterContext{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "encounterType" => out.encounter_type = EncounterType.from(jsonv.read_str(fv)?)
+      "encounterReason" => out.encounter_reason = jsonv.read_str(fv)?
+      "afterHours" => out.after_hours = jsonv.read_bool(fv)?
+      "encounterDate" => out.encounter_date = jsonv.read_str(fv)?
+      "encounterDurationMinutes" => out.encounter_duration_minutes = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_codes_patient_context(v: MedicalCodesPatientContext) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.sex {
+    fs.push(("sex", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.date_of_birth {
+    fs.push(("dateOfBirth", json.Value.Str(x)))
+  }
+  if let Some(x) = v.insurance {
+    fs.push(("insurance", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_codes_patient_context(v: json.Value) -> MedicalCodesPatientContext ! Str {
+  var out = MedicalCodesPatientContext{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sex" => out.sex = Sex.from(jsonv.read_str(fv)?)
+      "status" => out.status = PatientStatus.from(jsonv.read_str(fv)?)
+      "dateOfBirth" => out.date_of_birth = jsonv.read_str(fv)?
+      "insurance" => out.insurance = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_coding_context(v: MedicalCodingContext) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.sex {
+    fs.push(("sex", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.date_of_birth {
+    fs.push(("dateOfBirth", json.Value.Str(x)))
+  }
+  if let Some(x) = v.encounter_type {
+    fs.push(("encounterType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.encounter_reason {
+    fs.push(("encounterReason", json.Value.Str(x)))
+  }
+  if let Some(x) = v.after_hours {
+    fs.push(("afterHours", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.encounter_date {
+    fs.push(("encounterDate", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_coding_context(v: json.Value) -> MedicalCodingContext ! Str {
+  var out = MedicalCodingContext{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sex" => out.sex = Sex.from(jsonv.read_str(fv)?)
+      "status" => out.status = PatientStatus.from(jsonv.read_str(fv)?)
+      "dateOfBirth" => out.date_of_birth = jsonv.read_str(fv)?
+      "encounterType" => out.encounter_type = EncounterType.from(jsonv.read_str(fv)?)
+      "encounterReason" => out.encounter_reason = jsonv.read_str(fv)?
+      "afterHours" => out.after_hours = jsonv.read_bool(fv)?
+      "encounterDate" => out.encounter_date = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_coding_dataset_artifacts(v: MedicalCodingDatasetArtifacts) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.evaluation_s3_uri {
+    fs.push(("evaluationS3Uri", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_coding_dataset_artifacts(v: json.Value) -> MedicalCodingDatasetArtifacts ! Str {
+  var out = MedicalCodingDatasetArtifacts{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "evaluationS3Uri" => out.evaluation_s3_uri = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_coding_dataset_config(v: MedicalCodingDatasetConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.s3_input_path {
+    fs.push(("s3InputPath", json.Value.Str(x)))
+  }
+  if let Some(x) = v.s3_output_path {
+    fs.push(("s3OutputPath", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_coding_dataset_config(v: json.Value) -> MedicalCodingDatasetConfig ! Str {
+  var out = MedicalCodingDatasetConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "s3InputPath" => out.s3_input_path = jsonv.read_str(fv)?
+      "s3OutputPath" => out.s3_output_path = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_coding_output(v: MedicalCodingOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.uri {
+    fs.push(("uri", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_coding_output(v: json.Value) -> MedicalCodingOutput ! Str {
+  var out = MedicalCodingOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "uri" => out.uri = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_medical_coding_output_data_config(v: MedicalCodingOutputDataConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.s3_output_path {
+    fs.push(("s3OutputPath", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_coding_output_data_config(v: json.Value) -> MedicalCodingOutputDataConfig ! Str {
+  var out = MedicalCodingOutputDataConfig{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "s3OutputPath" => out.s3_output_path = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_medical_scribe_audio_event(v: MedicalScribeAudioEvent) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.audio_chunk {
@@ -1403,6 +2241,32 @@ fn from_json_medical_scribe_channel_definitions(v: json.Value) -> List[MedicalSc
       continue
     }
     out.push(from_json_medical_scribe_channel_definition(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_medical_scribe_checklist_event(v: MedicalScribeChecklistEvent) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.snapshot_version {
+    fs.push(("snapshotVersion", json.Value.Int(x)))
+  }
+  if let Some(x) = v.checklists {
+    fs.push(("checklists", json_of_checklist_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_scribe_checklist_event(v: json.Value) -> MedicalScribeChecklistEvent ! Str {
+  var out = MedicalScribeChecklistEvent{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "snapshotVersion" => out.snapshot_version = jsonv.read_int(fv)?
+      "checklists" => out.checklists = from_json_checklist_list(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -1495,6 +2359,9 @@ fn json_of_medical_scribe_listening_session_details(v: MedicalScribeListeningSes
   if let Some(x) = v.encounter_context_provided {
     fs.push(("encounterContextProvided", json.Value.Bool(x)))
   }
+  if let Some(x) = v.medical_coding_context_provided {
+    fs.push(("medicalCodingContextProvided", json.Value.Bool(x)))
+  }
   if let Some(x) = v.stream_status {
     fs.push(("streamStatus", json.Value.Str(x.value())))
   }
@@ -1524,6 +2391,7 @@ fn from_json_medical_scribe_listening_session_details(v: json.Value) -> MedicalS
       "postStreamActionSettings" => out.post_stream_action_settings = from_json_medical_scribe_post_stream_action_settings_response(fv)?
       "postStreamActionResult" => out.post_stream_action_result = from_json_medical_scribe_post_stream_actions_result(fv)?
       "encounterContextProvided" => out.encounter_context_provided = jsonv.read_bool(fv)?
+      "medicalCodingContextProvided" => out.medical_coding_context_provided = jsonv.read_bool(fv)?
       "streamStatus" => out.stream_status = MedicalScribeStreamStatus.from(jsonv.read_str(fv)?)
       "streamCreationTime" => out.stream_creation_time = jsonv.read_time(fv, "epoch-seconds")?
       "streamEndTime" => out.stream_end_time = jsonv.read_time(fv, "epoch-seconds")?
@@ -1538,6 +2406,8 @@ fn json_of_medical_scribe_output_stream(v: MedicalScribeOutputStream) -> json.Va
     TranscriptEvent(x) => json.Value.Object([("transcriptEvent", json_of_medical_scribe_transcript_event(x))])
     InternalFailureException(x) => json.Value.Object([("internalFailureException", json_of_internal_server_exception(x))])
     ValidationException(x) => json.Value.Object([("validationException", json_of_validation_exception(x))])
+    PeriodontalChartEvent(x) => json.Value.Object([("periodontalChartEvent", json_of_medical_scribe_periodontal_chart_event(x))])
+    ChecklistEvent(x) => json.Value.Object([("checklistEvent", json_of_medical_scribe_checklist_event(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -1551,10 +2421,42 @@ fn from_json_medical_scribe_output_stream(v: json.Value) -> MedicalScribeOutputS
       "transcriptEvent" => Ok(MedicalScribeOutputStream.TranscriptEvent(from_json_medical_scribe_transcript_event(fv)?))
       "internalFailureException" => Ok(MedicalScribeOutputStream.InternalFailureException(from_json_internal_server_exception(fv)?))
       "validationException" => Ok(MedicalScribeOutputStream.ValidationException(from_json_validation_exception(fv)?))
+      "periodontalChartEvent" => Ok(MedicalScribeOutputStream.PeriodontalChartEvent(from_json_medical_scribe_periodontal_chart_event(fv)?))
+      "checklistEvent" => Ok(MedicalScribeOutputStream.ChecklistEvent(from_json_medical_scribe_checklist_event(fv)?))
       _ => Ok(MedicalScribeOutputStream.Unknown(k))
     }
   }
   Err("MedicalScribeOutputStream: no member set")
+}
+
+fn json_of_medical_scribe_periodontal_chart_event(v: MedicalScribePeriodontalChartEvent) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.snapshot_version {
+    fs.push(("snapshotVersion", json.Value.Int(x)))
+  }
+  if let Some(x) = v.teeth {
+    fs.push(("teeth", json_of_periodontal_tooth_list(x)))
+  }
+  if let Some(x) = v.review_items {
+    fs.push(("reviewItems", json_of_periodontal_review_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_medical_scribe_periodontal_chart_event(v: json.Value) -> MedicalScribePeriodontalChartEvent ! Str {
+  var out = MedicalScribePeriodontalChartEvent{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "snapshotVersion" => out.snapshot_version = jsonv.read_int(fv)?
+      "teeth" => out.teeth = from_json_periodontal_tooth_list(fv)?
+      "reviewItems" => out.review_items = from_json_periodontal_review_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
 }
 
 fn json_of_medical_scribe_post_stream_action_settings(v: MedicalScribePostStreamActionSettings) -> json.Value {
@@ -1564,6 +2466,9 @@ fn json_of_medical_scribe_post_stream_action_settings(v: MedicalScribePostStream
   }
   if let Some(x) = v.clinical_note_generation_settings {
     fs.push(("clinicalNoteGenerationSettings", json_of_clinical_note_generation_settings(x)))
+  }
+  if let Some(x) = v.medical_code_generation_settings {
+    fs.push(("medicalCodeGenerationSettings", json_of_medical_code_generation_settings(x)))
   }
   json.Value.Object(fs)
 }
@@ -1577,6 +2482,7 @@ fn from_json_medical_scribe_post_stream_action_settings(v: json.Value) -> Medica
     match k {
       "outputS3Uri" => out.output_s3_uri = jsonv.read_str(fv)?
       "clinicalNoteGenerationSettings" => out.clinical_note_generation_settings = from_json_clinical_note_generation_settings(fv)?
+      "medicalCodeGenerationSettings" => out.medical_code_generation_settings = from_json_medical_code_generation_settings(fv)?
       _ => {}
     }
   }
@@ -1591,6 +2497,9 @@ fn json_of_medical_scribe_post_stream_action_settings_response(v: MedicalScribeP
   if let Some(x) = v.clinical_note_generation_settings {
     fs.push(("clinicalNoteGenerationSettings", json_of_clinical_note_generation_settings_response(x)))
   }
+  if let Some(x) = v.medical_code_generation_settings {
+    fs.push(("medicalCodeGenerationSettings", json_of_medical_code_generation_settings_response(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1603,6 +2512,7 @@ fn from_json_medical_scribe_post_stream_action_settings_response(v: json.Value) 
     match k {
       "outputS3Uri" => out.output_s3_uri = jsonv.read_str(fv)?
       "clinicalNoteGenerationSettings" => out.clinical_note_generation_settings = from_json_clinical_note_generation_settings_response(fv)?
+      "medicalCodeGenerationSettings" => out.medical_code_generation_settings = from_json_medical_code_generation_settings_response(fv)?
       _ => {}
     }
   }
@@ -1613,6 +2523,9 @@ fn json_of_medical_scribe_post_stream_actions_result(v: MedicalScribePostStreamA
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.clinical_note_generation_result {
     fs.push(("clinicalNoteGenerationResult", json_of_clinical_note_generation_result(x)))
+  }
+  if let Some(x) = v.medical_code_generation_result {
+    fs.push(("medicalCodeGenerationResult", json_of_medical_code_generation_result(x)))
   }
   json.Value.Object(fs)
 }
@@ -1625,6 +2538,7 @@ fn from_json_medical_scribe_post_stream_actions_result(v: json.Value) -> Medical
     }
     match k {
       "clinicalNoteGenerationResult" => out.clinical_note_generation_result = from_json_clinical_note_generation_result(fv)?
+      "medicalCodeGenerationResult" => out.medical_code_generation_result = from_json_medical_code_generation_result(fv)?
       _ => {}
     }
   }
@@ -1835,6 +2749,176 @@ fn from_json_patient_insights_patient_context(v: json.Value) -> PatientInsightsP
   Ok(out)
 }
 
+fn json_of_periodontal_review(v: PeriodontalReview) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.reason {
+    fs.push(("reason", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.tooth_number {
+    fs.push(("toothNumber", json.Value.Int(x)))
+  }
+  if let Some(x) = v.sites {
+    fs.push(("sites", json_of_periodontal_site_name_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_periodontal_review(v: json.Value) -> PeriodontalReview ! Str {
+  var out = PeriodontalReview{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reason" => out.reason = PeriodontalReviewReason.from(jsonv.read_str(fv)?)
+      "toothNumber" => out.tooth_number = jsonv.read_int(fv)?
+      "sites" => out.sites = from_json_periodontal_site_name_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_periodontal_review_list(v: List[PeriodontalReview]) -> json.Value {
+  json.Value.List(v.map(fn(x: PeriodontalReview) -> json.Value { json_of_periodontal_review(x) }))
+}
+
+fn from_json_periodontal_review_list(v: json.Value) -> List[PeriodontalReview] ! Str {
+  var out: List[PeriodontalReview] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_periodontal_review(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_periodontal_site(v: PeriodontalSite) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.site {
+    fs.push(("site", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.probing_depth {
+    fs.push(("probingDepth", json.Value.Int(x)))
+  }
+  if let Some(x) = v.recession {
+    fs.push(("recession", json.Value.Int(x)))
+  }
+  if let Some(x) = v.bleeding {
+    fs.push(("bleeding", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.suppuration {
+    fs.push(("suppuration", json.Value.Bool(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_periodontal_site(v: json.Value) -> PeriodontalSite ! Str {
+  var out = PeriodontalSite{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "site" => out.site = PeriodontalSiteName.from(jsonv.read_str(fv)?)
+      "probingDepth" => out.probing_depth = jsonv.read_int(fv)?
+      "recession" => out.recession = jsonv.read_int(fv)?
+      "bleeding" => out.bleeding = jsonv.read_bool(fv)?
+      "suppuration" => out.suppuration = jsonv.read_bool(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_periodontal_site_list(v: List[PeriodontalSite]) -> json.Value {
+  json.Value.List(v.map(fn(x: PeriodontalSite) -> json.Value { json_of_periodontal_site(x) }))
+}
+
+fn from_json_periodontal_site_list(v: json.Value) -> List[PeriodontalSite] ! Str {
+  var out: List[PeriodontalSite] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_periodontal_site(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_periodontal_site_name_list(v: List[PeriodontalSiteName]) -> json.Value {
+  json.Value.List(v.map(fn(x: PeriodontalSiteName) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_periodontal_site_name_list(v: json.Value) -> List[PeriodontalSiteName] ! Str {
+  var out: List[PeriodontalSiteName] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(PeriodontalSiteName.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_periodontal_tooth(v: PeriodontalTooth) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tooth_number {
+    fs.push(("toothNumber", json.Value.Int(x)))
+  }
+  if let Some(x) = v.missing {
+    fs.push(("missing", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.mobility {
+    fs.push(("mobility", json.Value.Int(x)))
+  }
+  if let Some(x) = v.furcation {
+    fs.push(("furcation", json.Value.Int(x)))
+  }
+  if let Some(x) = v.sites {
+    fs.push(("sites", json_of_periodontal_site_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_periodontal_tooth(v: json.Value) -> PeriodontalTooth ! Str {
+  var out = PeriodontalTooth{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "toothNumber" => out.tooth_number = jsonv.read_int(fv)?
+      "missing" => out.missing = jsonv.read_bool(fv)?
+      "mobility" => out.mobility = jsonv.read_int(fv)?
+      "furcation" => out.furcation = jsonv.read_int(fv)?
+      "sites" => out.sites = from_json_periodontal_site_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_periodontal_tooth_list(v: List[PeriodontalTooth]) -> json.Value {
+  json.Value.List(v.map(fn(x: PeriodontalTooth) -> json.Value { json_of_periodontal_tooth(x) }))
+}
+
+fn from_json_periodontal_tooth_list(v: json.Value) -> List[PeriodontalTooth] ! Str {
+  var out: List[PeriodontalTooth] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_periodontal_tooth(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_resource_not_found_exception(v: ResourceNotFoundException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -1911,6 +2995,82 @@ fn from_json_service_quota_exceeded_exception(v: json.Value) -> ServiceQuotaExce
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_start_medical_coding_job_request(v: StartMedicalCodingJobRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.text {
+    fs.push(("text", json.Value.Str(x)))
+  }
+  if let Some(x) = v.patient_context {
+    fs.push(("patientContext", json_of_medical_codes_patient_context(x)))
+  }
+  if let Some(x) = v.encounter_context {
+    fs.push(("encounterContext", json_of_medical_codes_encounter_context(x)))
+  }
+  if let Some(x) = v.output_data_config {
+    fs.push(("outputDataConfig", json_of_medical_coding_output_data_config(x)))
+  }
+  if let Some(x) = v.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_medical_coding_job_request(v: json.Value) -> StartMedicalCodingJobRequest ! Str {
+  var out = StartMedicalCodingJobRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "text" => out.text = jsonv.read_str(fv)?
+      "patientContext" => out.patient_context = from_json_medical_codes_patient_context(fv)?
+      "encounterContext" => out.encounter_context = from_json_medical_codes_encounter_context(fv)?
+      "outputDataConfig" => out.output_data_config = from_json_medical_coding_output_data_config(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_start_medical_coding_job_response(v: StartMedicalCodingJobResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.job_arn {
+    fs.push(("jobArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.creation_time {
+    fs.push(("creationTime", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_medical_coding_job_response(v: json.Value) -> StartMedicalCodingJobResponse ! Str {
+  var out = StartMedicalCodingJobResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobArn" => out.job_arn = jsonv.read_str(fv)?
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
       _ => {}
     }
   }
@@ -2090,6 +3250,67 @@ fn from_json_start_patient_insights_job_response(v: json.Value) -> StartPatientI
       _ => {}
     }
   }
+  Ok(out)
+}
+
+fn json_of_submit_feedback_request(v: SubmitFeedbackRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.domain_id {
+    fs.push(("domainId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.artifact_source_id {
+    fs.push(("artifactSourceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.subscription_id {
+    fs.push(("subscriptionId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.artifact_type {
+    fs.push(("artifactType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.signed_artifact_s3_uri {
+    fs.push(("signedArtifactS3Uri", json.Value.Str(x)))
+  }
+  if let Some(x) = v.generated_artifact_s3_uri {
+    fs.push(("generatedArtifactS3Uri", json.Value.Str(x)))
+  }
+  if let Some(x) = v.comments {
+    fs.push(("comments", json.Value.Str(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_submit_feedback_request(v: json.Value) -> SubmitFeedbackRequest ! Str {
+  var out = SubmitFeedbackRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "domainId" => out.domain_id = jsonv.read_str(fv)?
+      "artifactSourceId" => out.artifact_source_id = jsonv.read_str(fv)?
+      "subscriptionId" => out.subscription_id = jsonv.read_str(fv)?
+      "artifactType" => out.artifact_type = FeedbackArtifactType.from(jsonv.read_str(fv)?)
+      "signedArtifactS3Uri" => out.signed_artifact_s3_uri = jsonv.read_str(fv)?
+      "generatedArtifactS3Uri" => out.generated_artifact_s3_uri = jsonv.read_str(fv)?
+      "comments" => out.comments = jsonv.read_str(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_submit_feedback_response(v: SubmitFeedbackResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_submit_feedback_response(v: json.Value) -> SubmitFeedbackResponse ! Str {
+  var out = SubmitFeedbackResponse{}
+  let _ = jsonv.fields(v)?
   Ok(out)
 }
 
@@ -2647,6 +3868,8 @@ pub fn (e: MedicalScribeOutputStreamErr) display() -> Str {
 fn event_medical_scribe_output_stream(t: Str, m: eventstream.Message) -> MedicalScribeOutputStream ! Str {
   match t {
     "transcriptEvent" => Ok(MedicalScribeOutputStream.TranscriptEvent(event_read_medical_scribe_transcript_event(m)?))
+    "periodontalChartEvent" => Ok(MedicalScribeOutputStream.PeriodontalChartEvent(event_read_medical_scribe_periodontal_chart_event(m)?))
+    "checklistEvent" => Ok(MedicalScribeOutputStream.ChecklistEvent(event_read_medical_scribe_checklist_event(m)?))
     _ => Ok(MedicalScribeOutputStream.Unknown(t))
   }
 }
@@ -2676,6 +3899,16 @@ fn exception_read_validation_exception(b: Bytes) -> ValidationException ! Str {
 
 fn event_read_medical_scribe_transcript_event(m: eventstream.Message) -> MedicalScribeTranscriptEvent ! Str {
   var out = if m.payload.is_empty() { MedicalScribeTranscriptEvent{} } else { from_json_medical_scribe_transcript_event(jsonv.parse_body(m.payload)?)? }
+  Ok(out)
+}
+
+fn event_read_medical_scribe_periodontal_chart_event(m: eventstream.Message) -> MedicalScribePeriodontalChartEvent ! Str {
+  var out = if m.payload.is_empty() { MedicalScribePeriodontalChartEvent{} } else { from_json_medical_scribe_periodontal_chart_event(jsonv.parse_body(m.payload)?)? }
+  Ok(out)
+}
+
+fn event_read_medical_scribe_checklist_event(m: eventstream.Message) -> MedicalScribeChecklistEvent ! Str {
+  var out = if m.payload.is_empty() { MedicalScribeChecklistEvent{} } else { from_json_medical_scribe_checklist_event(jsonv.parse_body(m.payload)?)? }
   Ok(out)
 }
 
@@ -2799,6 +4032,169 @@ pub fn (c: Client) activate_subscription(input: ActivateSubscriptionInput) -> Ac
     return Err(deserialize_activate_subscription_error(resp))
   }
   deserialize_activate_subscription(resp) ?? e => Err(ActivateSubscriptionErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_dataset(base: EndpointParameters, input: CreateDatasetInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of CreateDataset.
+pub fn serialize_create_dataset(ep: rest.Endpoint, input: CreateDatasetInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.config {
+    fs.push(("config", json_of_dataset_config(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domains/${rest.escape(label_domain_id, false)}/datasets"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_dataset(resp: http.Response) -> CreateDatasetOutput ! Str {
+  var out = CreateDatasetOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "type" => out.type_value = DatasetType.from(jsonv.read_str(fv)?)
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateDataset.
+pub enum CreateDatasetErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateDatasetErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_dataset_error(resp: http.Response) -> CreateDatasetErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.AccessDeniedException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.ConflictException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.InternalServerException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.ResourceNotFoundException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.ThrottlingException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateDatasetErr.ValidationException(x)
+      Err(msg) => return CreateDatasetErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateDatasetErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates a Dataset in a Domain and starts building it. A new dataset has
+/// the status CREATING. When it's ready to use, its status changes to
+/// ACTIVE, or to CREATE_FAILED if it fails to build. To check the status,
+/// call GetDataset. This operation is idempotent: if you retry a request
+/// with the same clientToken, it returns the dataset that the first request
+/// created. For a medical coding dataset, Amazon Connect Health uses the
+/// coded examples that are in the s3InputPath when you create the dataset,
+/// and writes evaluation scores to the s3OutputPath. Later changes to the
+/// s3InputPath don't change the dataset. To use this operation, you must
+/// have s3:GetObject and s3:ListBucket permissions for the input location
+/// and s3:PutObject permission for the output location, and kms:Decrypt and
+/// kms:GenerateDataKey permissions if you encrypt the locations with an AWS
+/// KMS key. Datasets are in preview release and are subject to change.
+pub fn (c: Client) create_dataset(input: CreateDatasetInput) -> CreateDatasetOutput ! CreateDatasetErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_dataset(c.params, input)) ?? e => return Err(CreateDatasetErr.InvalidInput(e))
+  var req = serialize_create_dataset(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateDatasetErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateDatasetErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_dataset_error(resp))
+  }
+  deserialize_create_dataset(resp) ?? e => Err(CreateDatasetErr.Deserialize(e))
 }
 
 pub fn endpoint_params_create_domain(base: EndpointParameters, input: CreateDomainInput) -> EndpointParameters {
@@ -3165,6 +4561,149 @@ pub fn (c: Client) deactivate_subscription(input: DeactivateSubscriptionInput) -
   deserialize_deactivate_subscription(resp) ?? e => Err(DeactivateSubscriptionErr.Deserialize(e))
 }
 
+pub fn endpoint_params_delete_dataset(base: EndpointParameters, input: DeleteDatasetInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteDataset.
+pub fn serialize_delete_dataset(ep: rest.Endpoint, input: DeleteDatasetInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  let label_dataset_id = match input.dataset_id {
+    Some(v) => v
+    None => return Err("input member datasetId is required")
+  }
+  if label_dataset_id == "" {
+    return Err("input member datasetId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "DELETE",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domains/${rest.escape(label_domain_id, false)}/datasets/${rest.escape(label_dataset_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_dataset(resp: http.Response) -> DeleteDatasetOutput ! Str {
+  var out = DeleteDatasetOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DeleteDataset.
+pub enum DeleteDatasetErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteDatasetErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_dataset_error(resp: http.Response) -> DeleteDatasetErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteDatasetErr.AccessDeniedException(x)
+      Err(msg) => return DeleteDatasetErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteDatasetErr.ConflictException(x)
+      Err(msg) => return DeleteDatasetErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteDatasetErr.InternalServerException(x)
+      Err(msg) => return DeleteDatasetErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DeleteDatasetErr.ResourceNotFoundException(x)
+      Err(msg) => return DeleteDatasetErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteDatasetErr.ThrottlingException(x)
+      Err(msg) => return DeleteDatasetErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DeleteDatasetErr.ValidationException(x)
+      Err(msg) => return DeleteDatasetErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteDatasetErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts deleting a Dataset and the resources that Amazon Connect Health
+/// built for it. You can delete a dataset whose status is ACTIVE,
+/// CREATE_FAILED, or DELETE_FAILED. The dataset moves to DELETING, and then
+/// to DELETED. If the delete fails, the dataset moves to DELETE_FAILED, and
+/// you can call DeleteDataset again. Medical coding jobs that already use
+/// the dataset finish. Amazon Connect Health rejects new requests that
+/// specify the dataset. Datasets are in preview release and are subject to
+/// change.
+pub fn (c: Client) delete_dataset(input: DeleteDatasetInput) -> DeleteDatasetOutput ! DeleteDatasetErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_dataset(c.params, input)) ?? e => return Err(DeleteDatasetErr.InvalidInput(e))
+  var req = serialize_delete_dataset(ep, input, "") ?? e => return Err(DeleteDatasetErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteDatasetErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_dataset_error(resp))
+  }
+  deserialize_delete_dataset(resp) ?? e => Err(DeleteDatasetErr.Deserialize(e))
+}
+
 pub fn endpoint_params_delete_domain(base: EndpointParameters, input: DeleteDomainInput) -> EndpointParameters {
   let _ = input
   base
@@ -3262,6 +4801,146 @@ pub fn (c: Client) delete_domain(input: DeleteDomainInput) -> DeleteDomainOutput
     return Err(deserialize_delete_domain_error(resp))
   }
   deserialize_delete_domain(resp) ?? e => Err(DeleteDomainErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_dataset(base: EndpointParameters, input: GetDatasetInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetDataset.
+pub fn serialize_get_dataset(ep: rest.Endpoint, input: GetDatasetInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  let label_dataset_id = match input.dataset_id {
+    Some(v) => v
+    None => return Err("input member datasetId is required")
+  }
+  if label_dataset_id == "" {
+    return Err("input member datasetId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domains/${rest.escape(label_domain_id, false)}/datasets/${rest.escape(label_dataset_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_dataset(resp: http.Response) -> GetDatasetOutput ! Str {
+  var out = GetDatasetOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "type" => out.type_value = DatasetType.from(jsonv.read_str(fv)?)
+      "config" => out.config = from_json_dataset_config(fv)?
+      "status" => out.status = DatasetStatus.from(jsonv.read_str(fv)?)
+      "statusDetails" => out.status_details = jsonv.read_str(fv)?
+      "artifacts" => out.artifacts = from_json_dataset_artifacts(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetDataset.
+pub enum GetDatasetErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetDatasetErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_dataset_error(resp: http.Response) -> GetDatasetErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetDatasetErr.AccessDeniedException(x)
+      Err(msg) => return GetDatasetErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetDatasetErr.InternalServerException(x)
+      Err(msg) => return GetDatasetErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetDatasetErr.ResourceNotFoundException(x)
+      Err(msg) => return GetDatasetErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetDatasetErr.ThrottlingException(x)
+      Err(msg) => return GetDatasetErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetDatasetErr.ValidationException(x)
+      Err(msg) => return GetDatasetErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetDatasetErr.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves information about a Dataset, including its status and, after
+/// it is built, its results. A dataset whose status is DELETED returns
+/// ResourceNotFoundException. Datasets are in preview release and are
+/// subject to change.
+pub fn (c: Client) get_dataset(input: GetDatasetInput) -> GetDatasetOutput ! GetDatasetErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_dataset(c.params, input)) ?? e => return Err(GetDatasetErr.InvalidInput(e))
+  var req = serialize_get_dataset(ep, input, "") ?? e => return Err(GetDatasetErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetDatasetErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_dataset_error(resp))
+  }
+  deserialize_get_dataset(resp) ?? e => Err(GetDatasetErr.Deserialize(e))
 }
 
 pub fn endpoint_params_get_domain(base: EndpointParameters, input: GetDomainInput) -> EndpointParameters {
@@ -3368,6 +5047,147 @@ pub fn (c: Client) get_domain(input: GetDomainInput) -> GetDomainOutput ! GetDom
     return Err(deserialize_get_domain_error(resp))
   }
   deserialize_get_domain(resp) ?? e => Err(GetDomainErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_medical_coding_job(base: EndpointParameters, input: GetMedicalCodingJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetMedicalCodingJob.
+pub fn serialize_get_medical_coding_job(ep: rest.Endpoint, input: GetMedicalCodingJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  let label_job_id = match input.job_id {
+    Some(v) => v
+    None => return Err("input member jobId is required")
+  }
+  if label_job_id == "" {
+    return Err("input member jobId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: "runtime.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domain/${rest.escape(label_domain_id, false)}/medical-coding-job/${rest.escape(label_job_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_medical_coding_job(resp: http.Response) -> GetMedicalCodingJobResponse ! Str {
+  var out = GetMedicalCodingJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "jobArn" => out.job_arn = jsonv.read_str(fv)?
+      "jobStatus" => out.job_status = JobStatus.from(jsonv.read_str(fv)?)
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      "updatedTime" => out.updated_time = jsonv.read_time(fv, "date-time")?
+      "text" => out.text = jsonv.read_str(fv)?
+      "patientContext" => out.patient_context = from_json_medical_codes_patient_context(fv)?
+      "encounterContext" => out.encounter_context = from_json_medical_codes_encounter_context(fv)?
+      "outputDataConfig" => out.output_data_config = from_json_medical_coding_output_data_config(fv)?
+      "datasetId" => out.dataset_id = jsonv.read_str(fv)?
+      "medicalCodingOutput" => out.medical_coding_output = from_json_medical_coding_output(fv)?
+      "statusDetails" => out.status_details = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetMedicalCodingJob.
+pub enum GetMedicalCodingJobErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetMedicalCodingJobErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_medical_coding_job_error(resp: http.Response) -> GetMedicalCodingJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetMedicalCodingJobErr.AccessDeniedException(x)
+      Err(msg) => return GetMedicalCodingJobErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetMedicalCodingJobErr.InternalServerException(x)
+      Err(msg) => return GetMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetMedicalCodingJobErr.ResourceNotFoundException(x)
+      Err(msg) => return GetMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetMedicalCodingJobErr.ThrottlingException(x)
+      Err(msg) => return GetMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetMedicalCodingJobErr.ValidationException(x)
+      Err(msg) => return GetMedicalCodingJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetMedicalCodingJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Retrieves information about a medical coding job, including its status
+/// and, when it succeeds, the location of its results. Medical coding jobs
+/// are in preview release and are subject to change.
+pub fn (c: Client) get_medical_coding_job(input: GetMedicalCodingJobRequest) -> GetMedicalCodingJobResponse ! GetMedicalCodingJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_medical_coding_job(c.params, input)) ?? e => return Err(GetMedicalCodingJobErr.InvalidInput(e))
+  var req = serialize_get_medical_coding_job(ep, input, "") ?? e => return Err(GetMedicalCodingJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetMedicalCodingJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_medical_coding_job_error(resp))
+  }
+  deserialize_get_medical_coding_job(resp) ?? e => Err(GetMedicalCodingJobErr.Deserialize(e))
 }
 
 pub fn endpoint_params_get_medical_scribe_listening_session(base: EndpointParameters, input: GetMedicalScribeListeningSessionInput) -> EndpointParameters {
@@ -3767,6 +5587,141 @@ pub fn (c: Client) get_subscription(input: GetSubscriptionInput) -> GetSubscript
   deserialize_get_subscription(resp) ?? e => Err(GetSubscriptionErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_datasets(base: EndpointParameters, input: ListDatasetsInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDatasets.
+pub fn serialize_list_datasets(ep: rest.Endpoint, input: ListDatasetsInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  if let Some(v) = input.type_value {
+    qs.push(("type", v.value()))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domains/${rest.escape(label_domain_id, false)}/datasets"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_datasets(resp: http.Response) -> ListDatasetsOutput ! Str {
+  var out = ListDatasetsOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_dataset_summary_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDatasets.
+pub enum ListDatasetsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDatasetsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_datasets_error(resp: http.Response) -> ListDatasetsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListDatasetsErr.AccessDeniedException(x)
+      Err(msg) => return ListDatasetsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListDatasetsErr.InternalServerException(x)
+      Err(msg) => return ListDatasetsErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListDatasetsErr.ResourceNotFoundException(x)
+      Err(msg) => return ListDatasetsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListDatasetsErr.ThrottlingException(x)
+      Err(msg) => return ListDatasetsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListDatasetsErr.ValidationException(x)
+      Err(msg) => return ListDatasetsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListDatasetsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the Datasets in a Domain. You can list only the datasets of one
+/// type. The operation doesn't return datasets whose status is DELETED, and
+/// the order of the results isn't specified. We recommend using pagination
+/// to ensure that the operation returns quickly and successfully. Datasets
+/// are in preview release and are subject to change.
+pub fn (c: Client) list_datasets(input: ListDatasetsInput) -> ListDatasetsOutput ! ListDatasetsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_datasets(c.params, input)) ?? e => return Err(ListDatasetsErr.InvalidInput(e))
+  var req = serialize_list_datasets(ep, input, "") ?? e => return Err(ListDatasetsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDatasetsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_datasets_error(resp))
+  }
+  deserialize_list_datasets(resp) ?? e => Err(ListDatasetsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_domains(base: EndpointParameters, input: ListDomainsInput) -> EndpointParameters {
   let _ = input
   base
@@ -4066,6 +6021,165 @@ pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceInput) -> Li
     return Err(deserialize_list_tags_for_resource_error(resp))
   }
   deserialize_list_tags_for_resource(resp) ?? e => Err(ListTagsForResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_medical_coding_job(base: EndpointParameters, input: StartMedicalCodingJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartMedicalCodingJob.
+pub fn serialize_start_medical_coding_job(ep: rest.Endpoint, input: StartMedicalCodingJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.text {
+    fs.push(("text", json.Value.Str(x)))
+  }
+  if let Some(x) = input.patient_context {
+    fs.push(("patientContext", json_of_medical_codes_patient_context(x)))
+  }
+  if let Some(x) = input.encounter_context {
+    fs.push(("encounterContext", json_of_medical_codes_encounter_context(x)))
+  }
+  if let Some(x) = input.output_data_config {
+    fs.push(("outputDataConfig", json_of_medical_coding_output_data_config(x)))
+  }
+  if let Some(x) = input.dataset_id {
+    fs.push(("datasetId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: "runtime.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domain/${rest.escape(label_domain_id, false)}/medical-coding-job"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_medical_coding_job(resp: http.Response) -> StartMedicalCodingJobResponse ! Str {
+  var out = StartMedicalCodingJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobArn" => out.job_arn = jsonv.read_str(fv)?
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "creationTime" => out.creation_time = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartMedicalCodingJob.
+pub enum StartMedicalCodingJobErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartMedicalCodingJobErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_medical_coding_job_error(resp: http.Response) -> StartMedicalCodingJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return StartMedicalCodingJobErr.AccessDeniedException(x)
+      Err(msg) => return StartMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartMedicalCodingJobErr.ConflictException(x)
+      Err(msg) => return StartMedicalCodingJobErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return StartMedicalCodingJobErr.InternalServerException(x)
+      Err(msg) => return StartMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return StartMedicalCodingJobErr.ResourceNotFoundException(x)
+      Err(msg) => return StartMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return StartMedicalCodingJobErr.ThrottlingException(x)
+      Err(msg) => return StartMedicalCodingJobErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return StartMedicalCodingJobErr.ValidationException(x)
+      Err(msg) => return StartMedicalCodingJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartMedicalCodingJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts an asynchronous job that generates medical codes (ICD-10 and CPT)
+/// for clinical text. Call GetMedicalCodingJob to check the status of the
+/// job. When the job succeeds, Amazon Connect Health writes the results to
+/// the output Amazon S3 location. To tailor the codes to your organization,
+/// specify an ACTIVE medical coding dataset in the Domain. If you don't
+/// specify a dataset, the job uses the general medical coding knowledge
+/// base. Medical coding jobs are in preview release and are subject to
+/// change.
+pub fn (c: Client) start_medical_coding_job(input: StartMedicalCodingJobRequest) -> StartMedicalCodingJobResponse ! StartMedicalCodingJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_medical_coding_job(c.params, input)) ?? e => return Err(StartMedicalCodingJobErr.InvalidInput(e))
+  var req = serialize_start_medical_coding_job(ep, input, rest.uuid(c.rand)) ?? e => return Err(StartMedicalCodingJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartMedicalCodingJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_medical_coding_job_error(resp))
+  }
+  deserialize_start_medical_coding_job(resp) ?? e => Err(StartMedicalCodingJobErr.Deserialize(e))
 }
 
 pub fn endpoint_params_start_medical_scribe_listening_session(base: EndpointParameters, input: StartMedicalScribeListeningSessionInput) -> EndpointParameters {
@@ -4397,6 +6511,144 @@ pub fn (c: Client) start_patient_insights_job(input: StartPatientInsightsJobRequ
     return Err(deserialize_start_patient_insights_job_error(resp))
   }
   deserialize_start_patient_insights_job(resp) ?? e => Err(StartPatientInsightsJobErr.Deserialize(e))
+}
+
+pub fn endpoint_params_submit_feedback(base: EndpointParameters, input: SubmitFeedbackRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of SubmitFeedback.
+pub fn serialize_submit_feedback(ep: rest.Endpoint, input: SubmitFeedbackRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_domain_id = match input.domain_id {
+    Some(v) => v
+    None => return Err("input member domainId is required")
+  }
+  if label_domain_id == "" {
+    return Err("input member domainId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.artifact_source_id {
+    fs.push(("artifactSourceId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.subscription_id {
+    fs.push(("subscriptionId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.artifact_type {
+    fs.push(("artifactType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.signed_artifact_s3_uri {
+    fs.push(("signedArtifactS3Uri", json.Value.Str(x)))
+  }
+  if let Some(x) = input.generated_artifact_s3_uri {
+    fs.push(("generatedArtifactS3Uri", json.Value.Str(x)))
+  }
+  if let Some(x) = input.comments {
+    fs.push(("comments", json.Value.Str(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: "runtime.${ep.host}",
+    port: ep.port,
+    path: rest.join_path(ep.path, "/domain/${rest.escape(label_domain_id, false)}/feedback"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_submit_feedback(resp: http.Response) -> SubmitFeedbackResponse ! Str {
+  var out = SubmitFeedbackResponse{}
+  Ok(out)
+}
+
+/// The errors of SubmitFeedback.
+pub enum SubmitFeedbackErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: SubmitFeedbackErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_submit_feedback_error(resp: http.Response) -> SubmitFeedbackErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return SubmitFeedbackErr.AccessDeniedException(x)
+      Err(msg) => return SubmitFeedbackErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return SubmitFeedbackErr.InternalServerException(x)
+      Err(msg) => return SubmitFeedbackErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return SubmitFeedbackErr.ResourceNotFoundException(x)
+      Err(msg) => return SubmitFeedbackErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return SubmitFeedbackErr.ThrottlingException(x)
+      Err(msg) => return SubmitFeedbackErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return SubmitFeedbackErr.ValidationException(x)
+      Err(msg) => return SubmitFeedbackErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  SubmitFeedbackErr.Api(restjson.api_error(resp, body))
+}
+
+/// Submits feedback on a clinical document or a set of medical codes that
+/// Amazon Connect Health generated.
+pub fn (c: Client) submit_feedback(input: SubmitFeedbackRequest) -> SubmitFeedbackResponse ! SubmitFeedbackErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_submit_feedback(c.params, input)) ?? e => return Err(SubmitFeedbackErr.InvalidInput(e))
+  var req = serialize_submit_feedback(ep, input, rest.uuid(c.rand)) ?? e => return Err(SubmitFeedbackErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SubmitFeedbackErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_submit_feedback_error(resp))
+  }
+  deserialize_submit_feedback(resp) ?? e => Err(SubmitFeedbackErr.Deserialize(e))
 }
 
 pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceInput) -> EndpointParameters {

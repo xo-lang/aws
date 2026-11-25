@@ -953,7 +953,8 @@ pub struct ConfigurationRecorderSummary {
   pub recording_scope: RecordingScope? = None
   /// For service-linked configuration recorders that record resources from a
   /// third-party cloud service provider, indicates the cloud service
-  /// provider. Currently, AZURE is supported.
+  /// provider. Valid values: AZURE – The recorder records resources from
+  /// Microsoft Azure GCP – The recorder records resources from Google Cloud
   pub provider: Provider? = None
 }
 
@@ -1065,6 +1066,19 @@ pub struct ConformancePackDetail {
   /// Amazon Web Services Systems Manager document (SSM document) and the
   /// version of the SSM document that is used to create a conformance pack.
   pub template_ssm_document_details: TemplateSSMDocumentDetails? = None
+  /// The type of the conformance pack. Valid values: CUSTOM – A custom
+  /// conformance pack. MANAGED – A managed conformance pack.
+  pub type_value: ConformancePackType? = None
+  /// Contains the identifier of the managed conformance pack that Config
+  /// deploys in your account. This field applies only to managed conformance
+  /// packs. Custom conformance packs leave it empty.
+  pub source: ConformancePackSource? = None
+  /// An object of type ConformancePackScope , which contains the tag key and
+  /// optional tag value that defines which resources trigger an evaluation
+  /// for the Config rules in the managed conformance pack. Managed
+  /// conformance packs with a scope populate this field. Custom conformance
+  /// packs leave it empty.
+  pub scope: ConformancePackScope? = None
 }
 
 /// Filters a conformance pack by Config rule names, compliance types,
@@ -1102,9 +1116,11 @@ pub struct ConformancePackEvaluationResult {
 }
 
 /// Input parameters in the form of key-value pairs for the conformance
-/// pack, both of which you define. Keys can have a maximum character length
-/// of 255 characters, and values can have a maximum length of 4096
-/// characters.
+/// pack, both of which you define. For managed conformance packs, keys can
+/// have a maximum character length of 255 characters, and values can have a
+/// maximum length of 1024 characters. For custom conformance packs, keys
+/// can have a maximum character length of 255 characters, and values can
+/// have a maximum length of 4096 characters.
 pub struct ConformancePackInputParameter {
   /// One part of a key-value pair.
   pub parameter_name: Str? = None
@@ -1126,10 +1142,42 @@ pub struct ConformancePackRuleCompliance {
   pub controls: List[Str]? = None
 }
 
+/// Defines which resources trigger an evaluation for the Config rules in a
+/// conformance pack. The scope is a tag key, or a combination of a tag key
+/// and value, that is applied to every rule in the conformance pack.
+/// Specify a scope to constrain which resources trigger an evaluation for
+/// the rules. Otherwise, evaluations of rules in the conformance pack are
+/// triggered when any resource in your recording group changes in
+/// configuration.
+pub struct ConformancePackScope {
+  /// The tag key that applies to only those Amazon Web Services resources
+  /// that you want to trigger an evaluation for the rules in the conformance
+  /// pack. Defines the Scope$TagKey of all Config rules in the conformance
+  /// pack.
+  pub tag_key: Str? = None
+  /// The tag value that applies to only those Amazon Web Services resources
+  /// that you want to trigger an evaluation for the rules in the conformance
+  /// pack. If you do not specify a value for TagValue , resources that have
+  /// the tag key TagKey trigger an evaluation, regardless of the tag value.
+  /// Defines the Scope$TagValue of all Config rules in the conformance pack.
+  pub tag_value: Str? = None
+}
+
+/// Provides the identifier of the managed conformance pack that Config
+/// deploys in your account.
+pub struct ConformancePackSource {
+  /// A predefined identifier for a managed conformance pack. The identifier
+  /// specifies which managed conformance pack Config deploys in your account.
+  pub source_identifier: Str? = None
+}
+
 pub enum ConformancePackState: Str {
   CreateInProgress = "CREATE_IN_PROGRESS"
   CreateComplete = "CREATE_COMPLETE"
   CreateFailed = "CREATE_FAILED"
+  UpdateInProgress = "UPDATE_IN_PROGRESS"
+  UpdateComplete = "UPDATE_COMPLETE"
+  UpdateFailed = "UPDATE_FAILED"
   DeleteInProgress = "DELETE_IN_PROGRESS"
   DeleteFailed = "DELETE_FAILED"
   Unknown(value: Str)
@@ -1148,10 +1196,15 @@ pub struct ConformancePackStatusDetail {
   /// creation is in progress for an account. CREATE_COMPLETE when a
   /// conformance pack has been successfully created in your account.
   /// CREATE_FAILED when a conformance pack creation failed in your account.
-  /// DELETE_IN_PROGRESS when a conformance pack deletion is in progress.
-  /// DELETE_FAILED when a conformance pack deletion failed in your account.
+  /// UPDATE_IN_PROGRESS when a conformance pack update is in progress for an
+  /// account. UPDATE_COMPLETE when a conformance pack has been successfully
+  /// updated in your account. UPDATE_FAILED when a conformance pack update
+  /// failed in your account. DELETE_IN_PROGRESS when a conformance pack
+  /// deletion is in progress. DELETE_FAILED when a conformance pack deletion
+  /// failed in your account.
   pub conformance_pack_state: ConformancePackState? = None
-  /// Amazon Resource Name (ARN) of CloudFormation stack.
+  /// Amazon Resource Name (ARN) of CloudFormation stack. Custom conformance
+  /// packs populate this field. Managed conformance packs leave it empty.
   pub stack_arn: Str? = None
   /// The reason of conformance pack creation failure.
   pub conformance_pack_status_reason: Str? = None
@@ -1159,12 +1212,21 @@ pub struct ConformancePackStatusDetail {
   pub last_update_requested_time: Time? = None
   /// Last time when conformation pack creation and update was successful.
   pub last_update_completed_time: Time? = None
+  /// The type of the conformance pack. Valid values: CUSTOM – A custom
+  /// conformance pack. MANAGED – A managed conformance pack.
+  pub type_value: ConformancePackType? = None
 }
 
 /// You have specified a template that is not valid or supported.
 pub struct ConformancePackTemplateValidationException {
   /// Error executing the command
   pub message: Str? = None
+}
+
+pub enum ConformancePackType: Str {
+  Custom = "CUSTOM"
+  Managed = "MANAGED"
+  Unknown(value: Str)
 }
 
 /// The details of the connector, including the connector configuration and
@@ -1187,13 +1249,17 @@ pub struct Connector {
 pub struct ConnectorConfiguration {
   /// The configuration for an Azure connector.
   pub azure: AzureConnectorConfiguration? = None
+  /// The configuration for a Google Cloud connector.
+  pub gcp: GcpConnectorConfiguration? = None
 }
 
 /// Filters connectors based on the connector provider.
 pub struct ConnectorFilter {
   /// The name of the filter. Currently, only provider is supported.
   pub filter_name: ConnectorFilterName? = None
-  /// The value of the filter. For provider , valid values include: AZURE .
+  /// The value of the filter. For provider , valid values include: AZURE –
+  /// The connector is for Microsoft Azure GCP – The connector is for Google
+  /// Cloud
   pub filter_values: List[Str]? = None
 }
 
@@ -1208,10 +1274,19 @@ pub struct ConnectorSummary {
   pub arn: Str? = None
   /// The name of the connector.
   pub name: Str? = None
-  /// The third-party cloud service provider. Currently, AZURE is supported.
+  /// The third-party cloud service provider. Valid values: AZURE – The
+  /// connector is for Microsoft Azure GCP – The connector is for Google
+  /// Cloud
   pub provider: Provider? = None
-  /// The Azure tenant identifier for the connector.
+  /// The Azure tenant identifier for the connector. Returned only for Azure
+  /// connectors.
   pub tenant_identifier: Str? = None
+  /// The Google Cloud organization ID for the connector. Returned only for
+  /// Google Cloud connectors.
+  pub gcp_organization_id: Str? = None
+  /// The email address of the Google Cloud service account for the connector.
+  /// Returned only for Google Cloud connectors.
+  pub service_account_email: Str? = None
   /// The date and time that the connector was created.
   pub created_time: Time? = None
 }
@@ -1724,6 +1799,10 @@ pub struct DescribeConformancePackComplianceResponse {
 pub struct DescribeConformancePackStatusRequest {
   /// Comma-separated list of conformance pack names.
   pub conformance_pack_names: List[Str]? = None
+  /// Returns a filtered list of custom or managed conformance pack statuses.
+  /// By default, if the filter is not defined, Config returns details for all
+  /// your conformance packs.
+  pub filters: DescribeConformancePacksFilters? = None
   /// The maximum number of conformance packs status returned on each page.
   pub limit: Int? = None
   /// The nextToken string returned in a previous request that you use to
@@ -1739,11 +1818,24 @@ pub struct DescribeConformancePackStatusResponse {
   pub next_token: Str? = None
 }
 
+/// Filters for filtering results from DescribeConformancePacks and
+/// DescribeConformancePackStatus by conformance pack type.
+pub struct DescribeConformancePacksFilters {
+  /// Filters results by conformance pack type. Valid values: CUSTOM – A
+  /// custom conformance pack. MANAGED – A managed conformance pack. If you
+  /// specify both values, Config returns conformance packs of either type.
+  pub types: List[ConformancePackType]? = None
+}
+
 pub struct DescribeConformancePacksRequest {
   /// Comma-separated list of conformance pack names for which you want
   /// details. If you do not specify any names, Config returns details for all
   /// your conformance packs.
   pub conformance_pack_names: List[Str]? = None
+  /// Returns a filtered list of custom or managed conformance packs. By
+  /// default, if the filter is not defined, Config returns details for all
+  /// your conformance packs.
+  pub filters: DescribeConformancePacksFilters? = None
   /// The maximum number of conformance packs returned on each page.
   pub limit: Int? = None
   /// The nextToken string returned in a previous request that you use to
@@ -2172,6 +2264,30 @@ pub struct FailedRemediationExceptionBatch {
 pub struct FieldInfo {
   /// Name of the field.
   pub name: Str? = None
+}
+
+/// The configuration details for connecting to Google Cloud.
+pub struct GcpConnectorConfiguration {
+  /// The ID of the Google Cloud organization that contains the connector's
+  /// management project, which is the project of the service account in
+  /// serviceAccountEmail . Required if the management project belongs to an
+  /// organization. A connector needs an organization ID to record an entire
+  /// organization or more than one project. Omit it only if the management
+  /// project doesn't belong to an organization. In that case, the connector
+  /// can record only the management project.
+  pub gcp_organization_id: Str? = None
+  /// The email address of the Google Cloud service account that Config uses
+  /// to access your Google Cloud resources. The format is
+  /// SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com . The project
+  /// that contains this service account is the connector's management
+  /// project. If the connector has no gcpOrganizationId , it can record only
+  /// the management project.
+  pub service_account_email: Str? = None
+  /// The full resource name of the Google Cloud workload identity pool
+  /// provider that trusts Config. The format is
+  /// projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID
+  /// .
+  pub workload_identity_pool_provider: Str? = None
 }
 
 pub struct GetAggregateComplianceDetailsByConfigRuleRequest {
@@ -3692,6 +3808,7 @@ pub struct PendingAggregationRequest {
 
 pub enum Provider: Str {
   Azure = "AZURE"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -3767,7 +3884,9 @@ pub struct PutConformancePackRequest {
   pub delivery_s3_bucket: Str? = None
   /// The prefix for the Amazon S3 bucket. This field is optional.
   pub delivery_s3_key_prefix: Str? = None
-  /// A list of ConformancePackInputParameter objects.
+  /// A list of ConformancePackInputParameter objects. Custom conformance
+  /// packs can have at most 60 input parameters. Managed conformance packs
+  /// can have at most 330 input parameters.
   pub conformance_pack_input_parameters: List[ConformancePackInputParameter]? = None
   /// An object of type TemplateSSMDocumentDetails , which contains the name
   /// or the Amazon Resource Name (ARN) of the Amazon Web Services Systems
@@ -3777,6 +3896,26 @@ pub struct PutConformancePackRequest {
   /// The tags for the conformance pack. Each tag consists of a key and an
   /// optional value, both of which you define.
   pub tags: List[Tag]? = None
+  /// An object of type ConformancePackSource , which contains the identifier
+  /// of the managed conformance pack that you want to deploy. If you specify
+  /// a source, Config creates a managed conformance pack. Managed conformance
+  /// packs are predefined collections of Config rules that are created and
+  /// maintained by Amazon Web Services. If you specify a source, you cannot
+  /// specify TemplateS3Uri , TemplateBody , TemplateSSMDocumentDetails ,
+  /// DeliveryS3Bucket , or DeliveryS3KeyPrefix . You cannot convert an
+  /// existing conformance pack between a managed conformance pack and a
+  /// custom conformance pack. You also cannot change the source of an
+  /// existing managed conformance pack.
+  pub source: ConformancePackSource? = None
+  /// An object of type ConformancePackScope that defines which resources can
+  /// trigger an evaluation for Config rules in the conformance pack. The
+  /// scope can include a tag key and optional tag value. Specify a scope to
+  /// constrain the resources that can trigger an evaluation for rules in the
+  /// conformance pack. If you do not specify a scope, all rules in the
+  /// conformance pack are unscoped. This field is optional and is supported
+  /// only for managed conformance packs. If you specify a scope, you must
+  /// also specify Source .
+  pub scope: ConformancePackScope? = None
 }
 
 pub struct PutConformancePackResponse {
@@ -5210,10 +5349,16 @@ pub struct Scope {
 /// service provider.
 pub struct ScopeConfiguration {
   /// The type of scope for the third-party cloud resources. Valid values
-  /// include tenant and subscription .
+  /// include: tenant – Applies to all resources in an Azure tenant
+  /// subscription – Applies to resources in the Azure subscriptions you
+  /// specify organization – Applies to all resources in a Google Cloud
+  /// organization project – Applies to resources in the Google Cloud
+  /// projects you specify
   pub scope_type: Str? = None
   /// The list of specific scope values for the third-party cloud resources.
-  /// For example, a list of Azure subscriptions or management groups.
+  /// For example, a list of Azure subscription IDs, or a list of Google Cloud
+  /// project IDs. Don't specify scopeValues when scopeType is tenant or
+  /// organization .
   pub scope_values: List[Str]? = None
   /// Specifies whether to record resources from all supported regions for the
   /// third-party cloud service provider.

@@ -1647,6 +1647,9 @@ fn json_of_automation_execution(v: AutomationExecution) -> json.Value {
   if let Some(x) = v.variables {
     fs.push(("Variables", json_of_automation_parameter_map(x)))
   }
+  if let Some(x) = v.targets_summary {
+    fs.push(("TargetsSummary", json_of_targets_summary(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1693,6 +1696,7 @@ fn from_json_automation_execution(v: json.Value) -> AutomationExecution ! Str {
       "AssociationId" => out.association_id = jsonv.read_str(fv)?
       "ChangeRequestName" => out.change_request_name = jsonv.read_str(fv)?
       "Variables" => out.variables = from_json_automation_parameter_map(fv)?
+      "TargetsSummary" => out.targets_summary = from_json_targets_summary(fv)?
       _ => {}
     }
   }
@@ -2379,6 +2383,7 @@ fn from_json_category_list(v: json.Value) -> List[Str] ! Str {
 fn json_of_cloud_connector_configuration(v: CloudConnectorConfiguration) -> json.Value {
   match v {
     AzureConfiguration(x) => json.Value.Object([("AzureConfiguration", json_of_azure_configuration(x))])
+    GcpConfiguration(x) => json.Value.Object([("GcpConfiguration", json_of_gcp_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -2390,6 +2395,7 @@ fn from_json_cloud_connector_configuration(v: json.Value) -> CloudConnectorConfi
     }
     return match k {
       "AzureConfiguration" => Ok(CloudConnectorConfiguration.AzureConfiguration(from_json_azure_configuration(fv)?))
+      "GcpConfiguration" => Ok(CloudConnectorConfiguration.GcpConfiguration(from_json_gcp_configuration(fv)?))
       _ => Ok(CloudConnectorConfiguration.Unknown(k))
     }
   }
@@ -2474,6 +2480,12 @@ fn json_of_cloud_connector_summary(v: CloudConnectorSummary) -> json.Value {
   if let Some(x) = v.updated_at {
     fs.push(("UpdatedAt", jsonv.time(x, "epoch-seconds")))
   }
+  if let Some(x) = v.provider {
+    fs.push(("Provider", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.config_connector_arn {
+    fs.push(("ConfigConnectorArn", json.Value.Str(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2490,6 +2502,8 @@ fn from_json_cloud_connector_summary(v: json.Value) -> CloudConnectorSummary ! S
       "RoleArn" => out.role_arn = jsonv.read_str(fv)?
       "CreatedAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "UpdatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "Provider" => out.provider = Provider.from(jsonv.read_str(fv)?)
+      "ConfigConnectorArn" => out.config_connector_arn = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -2508,6 +2522,22 @@ fn from_json_cloud_connector_summary_list(v: json.Value) -> List[CloudConnectorS
       continue
     }
     out.push(from_json_cloud_connector_summary(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_cloud_provider_list(v: List[CloudProvider]) -> json.Value {
+  json.Value.List(v.map(fn(x: CloudProvider) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_cloud_provider_list(v: json.Value) -> List[CloudProvider] ! Str {
+  var out: List[CloudProvider] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(CloudProvider.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -3760,6 +3790,9 @@ fn json_of_create_document_request(v: CreateDocumentRequest) -> json.Value {
   if let Some(x) = v.tags {
     fs.push(("Tags", json_of_tag_list(x)))
   }
+  if let Some(x) = v.cloud_providers {
+    fs.push(("CloudProviders", json_of_cloud_provider_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3780,6 +3813,7 @@ fn from_json_create_document_request(v: json.Value) -> CreateDocumentRequest ! S
       "DocumentFormat" => out.document_format = DocumentFormat.from(jsonv.read_str(fv)?)
       "TargetType" => out.target_type = jsonv.read_str(fv)?
       "Tags" => out.tags = from_json_tag_list(fv)?
+      "CloudProviders" => out.cloud_providers = from_json_cloud_provider_list(fv)?
       _ => {}
     }
   }
@@ -7219,6 +7253,9 @@ fn json_of_document_description(v: DocumentDescription) -> json.Value {
   if let Some(x) = v.category_enum {
     fs.push(("CategoryEnum", json_of_category_enum_list(x)))
   }
+  if let Some(x) = v.cloud_providers {
+    fs.push(("CloudProviders", json_of_cloud_provider_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -7259,6 +7296,7 @@ fn from_json_document_description(v: json.Value) -> DocumentDescription ! Str {
       "ReviewStatus" => out.review_status = ReviewStatus.from(jsonv.read_str(fv)?)
       "Category" => out.category = from_json_category_list(fv)?
       "CategoryEnum" => out.category_enum = from_json_category_enum_list(fv)?
+      "CloudProviders" => out.cloud_providers = from_json_cloud_provider_list(fv)?
       _ => {}
     }
   }
@@ -7354,6 +7392,9 @@ fn json_of_document_identifier(v: DocumentIdentifier) -> json.Value {
   if let Some(x) = v.author {
     fs.push(("Author", json.Value.Str(x)))
   }
+  if let Some(x) = v.cloud_providers {
+    fs.push(("CloudProviders", json_of_cloud_provider_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -7379,6 +7420,7 @@ fn from_json_document_identifier(v: json.Value) -> DocumentIdentifier ! Str {
       "Requires" => out.requires_value = from_json_document_requires_list(fv)?
       "ReviewStatus" => out.review_status = ReviewStatus.from(jsonv.read_str(fv)?)
       "Author" => out.author = jsonv.read_str(fv)?
+      "CloudProviders" => out.cloud_providers = from_json_cloud_provider_list(fv)?
       _ => {}
     }
   }
@@ -7779,6 +7821,9 @@ fn json_of_document_version_info(v: DocumentVersionInfo) -> json.Value {
   if let Some(x) = v.review_status {
     fs.push(("ReviewStatus", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.cloud_providers {
+    fs.push(("CloudProviders", json_of_cloud_provider_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -7799,6 +7844,7 @@ fn from_json_document_version_info(v: json.Value) -> DocumentVersionInfo ! Str {
       "Status" => out.status = DocumentStatus.from(jsonv.read_str(fv)?)
       "StatusInformation" => out.status_information = jsonv.read_str(fv)?
       "ReviewStatus" => out.review_status = ReviewStatus.from(jsonv.read_str(fv)?)
+      "CloudProviders" => out.cloud_providers = from_json_cloud_provider_list(fv)?
       _ => {}
     }
   }
@@ -8112,6 +8158,102 @@ fn from_json_feature_not_available_exception(v: json.Value) -> FeatureNotAvailab
       "Message" => out.message = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_configuration(v: GcpConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organization_id {
+    fs.push(("OrganizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.workload_identity_pool_provider {
+    fs.push(("WorkloadIdentityPoolProvider", json.Value.Str(x)))
+  }
+  if let Some(x) = v.service_account_email {
+    fs.push(("ServiceAccountEmail", json.Value.Str(x)))
+  }
+  if let Some(x) = v.targets {
+    fs.push(("Targets", json_of_gcp_configuration_targets(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_configuration(v: json.Value) -> GcpConfiguration ! Str {
+  var out = GcpConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "OrganizationId" => out.organization_id = jsonv.read_str(fv)?
+      "WorkloadIdentityPoolProvider" => out.workload_identity_pool_provider = jsonv.read_str(fv)?
+      "ServiceAccountEmail" => out.service_account_email = jsonv.read_str(fv)?
+      "Targets" => out.targets = from_json_gcp_configuration_targets(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_configuration_targets(v: GcpConfigurationTargets) -> json.Value {
+  match v {
+    Projects(x) => json.Value.Object([("Projects", json_of_gcp_project_list(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_gcp_configuration_targets(v: json.Value) -> GcpConfigurationTargets ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "Projects" => Ok(GcpConfigurationTargets.Projects(from_json_gcp_project_list(fv)?))
+      _ => Ok(GcpConfigurationTargets.Unknown(k))
+    }
+  }
+  Err("GcpConfigurationTargets: no member set")
+}
+
+fn json_of_gcp_project(v: GcpProject) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.project_id {
+    fs.push(("ProjectId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.project_display_name {
+    fs.push(("ProjectDisplayName", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_gcp_project(v: json.Value) -> GcpProject ! Str {
+  var out = GcpProject{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ProjectId" => out.project_id = jsonv.read_str(fv)?
+      "ProjectDisplayName" => out.project_display_name = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_gcp_project_list(v: List[GcpProject]) -> json.Value {
+  json.Value.List(v.map(fn(x: GcpProject) -> json.Value { json_of_gcp_project(x) }))
+}
+
+fn from_json_gcp_project_list(v: json.Value) -> List[GcpProject] ! Str {
+  var out: List[GcpProject] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_gcp_project(fv)?)
   }
   Ok(out)
 }
@@ -14325,146 +14467,6 @@ fn json_of_maintenance_window_execution_task_invocation_identity(v: MaintenanceW
   }
   if let Some(x) = v.window_target_id {
     fs.push(("WindowTargetId", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_maintenance_window_execution_task_invocation_identity(v: json.Value) -> MaintenanceWindowExecutionTaskInvocationIdentity ! Str {
-  var out = MaintenanceWindowExecutionTaskInvocationIdentity{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "WindowExecutionId" => out.window_execution_id = jsonv.read_str(fv)?
-      "TaskExecutionId" => out.task_execution_id = jsonv.read_str(fv)?
-      "InvocationId" => out.invocation_id = jsonv.read_str(fv)?
-      "ExecutionId" => out.execution_id = jsonv.read_str(fv)?
-      "TaskType" => out.task_type = MaintenanceWindowTaskType.from(jsonv.read_str(fv)?)
-      "Parameters" => out.parameters = jsonv.read_str(fv)?
-      "Status" => out.status = MaintenanceWindowExecutionStatus.from(jsonv.read_str(fv)?)
-      "StatusDetails" => out.status_details = jsonv.read_str(fv)?
-      "StartTime" => out.start_time = jsonv.read_time(fv, "epoch-seconds")?
-      "EndTime" => out.end_time = jsonv.read_time(fv, "epoch-seconds")?
-      "OwnerInformation" => out.owner_information = jsonv.read_str(fv)?
-      "WindowTargetId" => out.window_target_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_maintenance_window_execution_task_invocation_identity_list(v: List[MaintenanceWindowExecutionTaskInvocationIdentity]) -> json.Value {
-  json.Value.List(v.map(fn(x: MaintenanceWindowExecutionTaskInvocationIdentity) -> json.Value { json_of_maintenance_window_execution_task_invocation_identity(x) }))
-}
-
-fn from_json_maintenance_window_execution_task_invocation_identity_list(v: json.Value) -> List[MaintenanceWindowExecutionTaskInvocationIdentity] ! Str {
-  var out: List[MaintenanceWindowExecutionTaskInvocationIdentity] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_maintenance_window_execution_task_invocation_identity(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_maintenance_window_filter(v: MaintenanceWindowFilter) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.key {
-    fs.push(("Key", json.Value.Str(x)))
-  }
-  if let Some(x) = v.values {
-    fs.push(("Values", json_of_maintenance_window_filter_values(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_maintenance_window_filter(v: json.Value) -> MaintenanceWindowFilter ! Str {
-  var out = MaintenanceWindowFilter{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Key" => out.key = jsonv.read_str(fv)?
-      "Values" => out.values = from_json_maintenance_window_filter_values(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_maintenance_window_filter_list(v: List[MaintenanceWindowFilter]) -> json.Value {
-  json.Value.List(v.map(fn(x: MaintenanceWindowFilter) -> json.Value { json_of_maintenance_window_filter(x) }))
-}
-
-fn from_json_maintenance_window_filter_list(v: json.Value) -> List[MaintenanceWindowFilter] ! Str {
-  var out: List[MaintenanceWindowFilter] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_maintenance_window_filter(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_maintenance_window_filter_values(v: List[Str]) -> json.Value {
-  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
-}
-
-fn from_json_maintenance_window_filter_values(v: json.Value) -> List[Str] ! Str {
-  var out: List[Str] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(jsonv.read_str(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_maintenance_window_identity(v: MaintenanceWindowIdentity) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.window_id {
-    fs.push(("WindowId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = v.enabled {
-    fs.push(("Enabled", json.Value.Bool(x)))
-  }
-  if let Some(x) = v.duration {
-    fs.push(("Duration", json.Value.Int(x)))
-  }
-  if let Some(x) = v.cutoff {
-    fs.push(("Cutoff", json.Value.Int(x)))
-  }
-  if let Some(x) = v.schedule {
-    fs.push(("Schedule", json.Value.Str(x)))
-  }
-  if let Some(x) = v.schedule_timezone {
-    fs.push(("ScheduleTimezone", json.Value.Str(x)))
-  }
-  if let Some(x) = v.schedule_offset {
-    fs.push(("ScheduleOffset", json.Value.Int(x)))
-  }
-  if let Some(x) = v.end_date {
-    fs.push(("EndDate", json.Value.Str(x)))
-  }
-  if let Some(x) = v.start_date {
-    fs.push(("StartDate", json.Value.Str(x)))
-  }
-  if let Some(x) = v.next_execution_time {
-    fs.push(("NextExecutionTime", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }

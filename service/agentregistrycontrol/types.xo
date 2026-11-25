@@ -74,10 +74,30 @@ pub struct AgentCoreRuntimeSourceDetails {
   pub workload_identity_details: WorkloadIdentityDetails? = None
 }
 
-/// Additional data associated with an agent skills definition descriptor.
+/// Additional data associated with an agent skills definition descriptor:
+/// the skill's SKILL.md and the source that the registry synchronizes the
+/// skill from. A record synchronizes from one source at most, either
+/// skillMd.source for SKILL.md only or skillPackage.source for the full
+/// skill package. When the record has a skill package or a synchronized
+/// source, the registry sets skillMd.data from the SKILL.md in that package
+/// or source.
 pub struct AgentSkillsAdditionalData {
   /// The markdown skill content associated with an agent skills definition.
   pub skill_md: AgentSkillsMdDescriptor? = None
+  /// The source that the registry synchronizes the full skill package from.
+  /// The registry validates and stores the package, sets skillMd.data from
+  /// its SKILL.md, and returns the package in the artifact member of
+  /// GetRegistryRecord . You can't set both this source and skillMd.source .
+  pub skill_package: AgentSkillsPackageDescriptor? = None
+  /// The repository provider of the record's skill source. Set it to GITHUB
+  /// when skillMd.source or skillPackage.source is a GitHub folder URL. The
+  /// registry treats an https:// source as a GitHub source only when this
+  /// member is set. Don't set it for an Amazon S3 source.
+  pub repository_provider: AgentSkillsRepositoryProvider? = None
+  /// The provider-specific settings of the record's skill source. For an
+  /// Amazon S3 source, s3.bucketOwnerAccountId specifies the account that
+  /// owns the source bucket.
+  pub source_configuration: AgentSkillsSourceConfiguration? = None
 }
 
 /// Descriptor that defines an agent skills registry record and its
@@ -99,9 +119,40 @@ pub struct AgentSkillsMdDescriptor {
   pub data: Str? = None
   /// The schema version of the descriptor payload.
   pub data_schema_version: Str? = None
-  /// The optional source configuration used to synchronize the agent skills
-  /// markdown content.
+  /// The optional source of the skill's SKILL.md only. The registry
+  /// synchronizes the SKILL.md from this source into data . Specify an s3://
+  /// URL of a SKILL.md object, or a GitHub folder URL together with
+  /// repositoryProvider set to GITHUB . The registry rejects a new https://
+  /// URL without repositoryProvider , and you can't set both this source and
+  /// skillPackage.source .
   pub source: DescriptorSource? = None
+}
+
+/// Descriptor that names the source that the registry synchronizes a full
+/// skill package from. It holds only the source. The record's artifact
+/// member returns the package that the registry reads from this source.
+pub struct AgentSkillsPackageDescriptor {
+  /// The source of the skill package. Specify an s3:// URL of a ZIP object,
+  /// or a GitHub folder URL together with repositoryProvider set to GITHUB .
+  /// For a GitHub folder, the registry builds the package from every file in
+  /// the folder.
+  pub source: DescriptorSource? = None
+}
+
+/// The repository provider of a skill source. GITHUB covers GitHub.com,
+/// GitHub Enterprise Cloud with data residency ( *.ghe.com ), and GitHub
+/// Enterprise Server hosts that are reachable from the internet.
+pub enum AgentSkillsRepositoryProvider: Str {
+  Github = "GITHUB"
+  Unknown(value: Str)
+}
+
+/// The provider-specific settings of a skill source. Specify the member
+/// that matches the source's provider, such as s3 for an Amazon S3 source.
+pub enum AgentSkillsSourceConfiguration {
+  S3(value: S3SourceConfiguration)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// Configuration for the registry's record approval workflow. Controls
@@ -114,6 +165,62 @@ pub struct ApprovalConfiguration {
   /// approved on submission. When omitted or empty, submitted records require
   /// manual review.
   pub auto_approval_rules: List[AutoApprovalRule]? = None
+}
+
+pub struct AssociatePublisherRequest {
+  /// The Record being associated.
+  pub record_arn: Str? = None
+  /// The Publisher to associate the Record with.
+  pub publisher_arn: Str? = None
+  /// Optional single DNS label placed in front of the publisher domain (e.g.
+  /// "agents" - agents.acme.com). Absent means the Record sits directly on
+  /// the publisher domain.
+  pub subdomain: Str? = None
+  /// Optional categorization/hierarchy applied to the public identifier.
+  pub categories: List[Str]? = None
+  /// Optional client-provided idempotency token. Retries carrying the same
+  /// token return the originally-created association instead of creating a
+  /// duplicate.
+  pub client_token: Str? = None
+}
+
+/// The new association between the registry record and the publisher,
+/// including the record's public identifier. A retry with the original
+/// clientToken returns the original association.
+pub struct AssociatePublisherResponse {
+  pub record_arn: Str? = None
+  pub public_identifier: Str? = None
+  pub publisher: Str? = None
+  pub status: AssociationStatus? = None
+  /// The reason for the association's current status, such as why it is
+  /// suspended. Present only when a reason is available.
+  pub status_reason: Str? = None
+}
+
+/// The curator's decision on a Record's Publisher association.
+pub enum AssociationApprovalStatus: Str {
+  Approved = "APPROVED"
+  Rejected = "REJECTED"
+  Unknown(value: Str)
+}
+
+/// The Record Publisher association's status.
+pub enum AssociationStatus: Str {
+  PendingApproval = "PENDING_APPROVAL"
+  Approved = "APPROVED"
+  Rejected = "REJECTED"
+  Suspended = "SUSPENDED"
+  Unknown(value: Str)
+}
+
+/// The authorization that a user must complete before a registry record can
+/// synchronize from its source. Only CreateRegistryRecord and
+/// UpdateRegistryRecord return it. GetRegistryRecord and
+/// ListRegistryRecords never do.
+pub enum AuthorizationData {
+  Oauth2(value: OAuth2AuthorizationData)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// The authorizer configuration for a registry. Exactly one member is set.
@@ -179,6 +286,54 @@ pub enum AutoDetectionStatus: Str {
   Unknown(value: Str)
 }
 
+/// The category that describes a web bot's purpose. The categories follow
+/// AWS WAF Bot Control bot categories. Valid values: advertising - Bots
+/// used for advertising, such as third-party ad services that access a
+/// website programmatically. archiver - Bots that crawl the web and capture
+/// content to create archives. content_fetcher - Bots that visit a website
+/// on behalf of a user to fetch content, such as RSS feeds, or to verify
+/// content. email_client - Bots that check links in emails, such as those
+/// run by email providers to flag suspicious emails. http_library -
+/// Requests generated by the HTTP libraries of programming languages, such
+/// as API clients. link_checker - Bots that check for broken links.
+/// miscellaneous - Bots that don't match another category. monitoring -
+/// Bots that periodically access a website to monitor performance and
+/// uptime. page_preview - Bots that generate page and link previews when
+/// content is shared on messaging, social media, or collaboration tools.
+/// scraping_framework - Bots from web scraping frameworks that automate
+/// crawling and extracting website content. search_engine - Bots that crawl
+/// websites to index content for search engine results. security - Bots
+/// that scan web applications for vulnerabilities or perform security
+/// audits. seo - Bots that crawl a website to help improve its search
+/// engine rankings. social_media - Bots that social media platforms use to
+/// provide content summaries when users share content. ai_training - AI
+/// bots that collect content to train AI models. ai_search - AI bots that
+/// retrieve content to answer AI search queries. ai_assistant - AI bots
+/// that access content on behalf of a user's AI assistant or agent.
+/// ai_content_optimization - AI bots that analyze content to optimize it
+/// for AI-generated results.
+pub enum BotCategory: Str {
+  Advertising = "advertising"
+  Archiver = "archiver"
+  ContentFetcher = "content_fetcher"
+  EmailClient = "email_client"
+  HttpLibrary = "http_library"
+  LinkChecker = "link_checker"
+  Miscellaneous = "miscellaneous"
+  Monitoring = "monitoring"
+  PagePreview = "page_preview"
+  ScrapingFramework = "scraping_framework"
+  SearchEngine = "search_engine"
+  Security = "security"
+  Seo = "seo"
+  SocialMedia = "social_media"
+  AiTraining = "ai_training"
+  AiSearch = "ai_search"
+  AiAssistant = "ai_assistant"
+  AiContentOptimization = "ai_content_optimization"
+  Unknown(value: Str)
+}
+
 /// The operator used to compare a claim value against the expected value
 /// during JWT validation.
 pub enum ClaimMatchOperatorType: Str {
@@ -201,6 +356,49 @@ pub struct ConflictException {
   pub message: Str? = None
 }
 
+pub struct CreatePublisherRequest {
+  pub value: Identifier? = None
+  /// The tags to attach to the publisher. Each tag is a key-value pair. You
+  /// can attach up to 50 tags.
+  pub tags: Map[Str, Str]? = None
+  /// Optional client-provided idempotency token. Retries of the same Create
+  /// request carrying the same token return the originally-created resource
+  /// instead of creating a duplicate. Forwarded to BelfryGlobalCP. Optional
+  /// and backward-compatible.
+  pub client_token: Str? = None
+}
+
+/// The new publisher, in ACTION_REQUIRED, with the domainChallenge to
+/// publish as a DNS TXT record. A retry with the original clientToken
+/// returns the existing publisher.
+pub struct CreatePublisherResponse {
+  pub value: Identifier? = None
+  /// The identifier type. `DOMAIN` is the only supported value.
+  pub identifier_type: IdentifierType? = None
+  /// The domain verification status of the publisher: - `ACTION_REQUIRED`:
+  /// The registry is waiting to find the DNS TXT record described by
+  /// `domainChallenge`. - `ACTIVE`: The domain is verified. You can associate
+  /// registry records with the publisher. - `SUSPENDED`: The domain was
+  /// verified, but a later check found the TXT record missing or changed. The
+  /// publisher returns to `ACTIVE` when the record is found again, and
+  /// becomes `FAILED` if the record stays missing. - `FAILED`: Verification
+  /// didn't succeed, for example because the TXT record wasn't found in time
+  /// or another account verified the domain first. Call `ValidatePublisher`
+  /// to try again. - `DELETING`: A delete is in progress.
+  pub status: VerificationStatus? = None
+  /// The reason for the publisher's current status, such as why verification
+  /// failed. Present only when a reason is available.
+  pub status_reason: Str? = None
+  pub domain_challenge: DomainChallenge? = None
+  /// The tags attached to the publisher.
+  pub tags: Map[Str, Str]? = None
+  /// The date and time that the publisher was created.
+  pub created_at: Time? = None
+  /// The date and time that the publisher was last updated.
+  pub updated_at: Time? = None
+  pub publisher_arn: Str? = None
+}
+
 pub struct CreateRegistryRecordRequest {
   /// The identifier of the registry in which to create the record (ARN or ID)
   pub registry_id: Str? = None
@@ -214,6 +412,12 @@ pub struct CreateRegistryRecordRequest {
   pub record_type: RecordType? = None
   /// The typed descriptor content for the registry record
   pub descriptors: Descriptors? = None
+  /// The skill package to store with the record, for a record of type SKILL
+  /// with an agentSkillsDefinition descriptor. The registry validates the
+  /// package after the operation returns and sets skillMd.data from the
+  /// package's SKILL.md. A request that uploads a package can't also set a
+  /// skill source or send new skillMd.data .
+  pub artifact: RegistryRecordArtifactUpload? = None
   /// The version of the registry record
   pub record_version: Str? = None
   /// Client token for idempotency
@@ -233,9 +437,17 @@ pub struct CreateRegistryRecordRequest {
 pub struct CreateRegistryRecordResponse {
   /// The ARN of the created registry record
   pub record_arn: Str? = None
-  /// The status of the registry record, set to CREATING while the
-  /// asynchronous workflow is in progress
+  /// The status of the registry record. CREATING means that the asynchronous
+  /// workflow is in progress. CREATE_PENDING_AUTH means that the record waits
+  /// for a GitHub user to authorize access before it synchronizes from its
+  /// GitHub source. For the authorization link, see authorizationData .
   pub status: RegistryRecordStatus? = None
+  /// The authorization that a GitHub user must complete before the record's
+  /// synchronization starts. Present only in this response, and only while
+  /// the status is CREATE_PENDING_AUTH . If the status is CREATE_PENDING_AUTH
+  /// but this member is absent, call UpdateRegistryRecord with
+  /// triggerSynchronization to get a new authorization link.
+  pub authorization_data: AuthorizationData? = None
 }
 
 /// Request structure for creating a registry
@@ -344,6 +556,10 @@ pub struct CustomMetadataSchemaConfiguration {
   pub record_type_schema_overrides: List[RecordTypeSchemaOverride]? = None
 }
 
+pub struct DeletePublisherRequest {
+  pub publisher_arn: Str? = None
+}
+
 pub struct DeleteRegistryRecordRequest {
   /// The identifier of the registry containing the record (ARN or ID)
   pub registry_id: Str? = None
@@ -368,6 +584,15 @@ pub struct DeleteRegistryResponse {
   pub status: RegistryStatus? = None
 }
 
+/// This exception is thrown on a database (or other dependency) error.
+/// Modeled as a server error so SDKs retry it (5xx) and it feeds
+/// server-error alarming. Marked @retryable because it represents a
+/// transient downstream failure that is safe to retry (matches the
+/// forwarder's own retry-on-DependencyException behavior).
+pub struct DependencyException {
+  pub message: Str? = None
+}
+
 /// The source configuration that defines where descriptor content is
 /// retrieved from.
 pub struct DescriptorSource {
@@ -379,7 +604,12 @@ pub struct DescriptorSource {
 /// URL-based descriptor source configuration, with credential provider
 /// configurations for authenticated URL retrieval.
 pub struct DescriptorSourceFromUrl {
-  /// The URL from which the descriptor content is retrieved.
+  /// The URL from which the descriptor content is retrieved. For an agent
+  /// skill source, specify an s3:// URL of an object in a bucket in the same
+  /// Amazon Web Services Region as the registry. For a GitHub skill source,
+  /// specify a GitHub folder URL in the form
+  /// https://host/owner/repo/tree/branch-or-tag/path . Other descriptor
+  /// sources use https:// URLs.
   pub url: Str? = None
   /// The credential providers used to authenticate when fetching descriptor
   /// content from the source URL.
@@ -404,6 +634,13 @@ pub struct Descriptors {
   /// The AG-UI descriptor, populated for records detected from an AG-UI
   /// protocol source.
   pub agui: AgUiDescriptor? = None
+  /// The signature agent card descriptor, populated when the record type is
+  /// WEB_BOT.
+  pub signature_agent_card: SignatureAgentCardDescriptor? = None
+}
+
+pub struct DisassociatePublisherRequest {
+  pub record_arn: Str? = None
 }
 
 /// Discovery configuration for the registry. Controls how consumers are
@@ -415,6 +652,18 @@ pub struct DiscoveryConfiguration {
   /// The type of authorizer that controls how consumers access the registry's
   /// search and MCP invoke operations.
   pub authorizer_type: RegistryAuthorizerType? = None
+}
+
+/// Server-generated DNS-01 challenge the caller must publish to prove
+/// ownership.
+pub struct DomainChallenge {
+  /// The name of the DNS TXT record to create, such as
+  /// `_acme-challenge.example.com`.
+  pub record_name: Str? = None
+  /// The value to publish in the DNS TXT record. A new value is issued each
+  /// time verification restarts, and earlier values no longer verify the
+  /// domain.
+  pub record_value: Str? = None
 }
 
 /// The server-side encryption configuration for a registry. Specifies a
@@ -433,6 +682,10 @@ pub enum EndpointIpAddressType: Str {
   Ipv4 = "IPV4"
   Ipv6 = "IPV6"
   Unknown(value: Str)
+}
+
+pub struct GetPublisherRequest {
+  pub publisher_arn: Str? = None
 }
 
 pub struct GetRegistryRecordRequest {
@@ -460,6 +713,9 @@ pub struct GetRegistryRecordResponse {
   /// The type of the registry record, such as MCP, AGENT, SKILL, or CUSTOM.
   pub record_type: RecordType? = None
   /// The typed descriptors that define the content of the registry record.
+  /// For a skill record with a skill package or a synchronized source,
+  /// skillMd.data contains the SKILL.md that the registry took from the
+  /// package or the source.
   pub descriptors: Descriptors? = None
   /// The version identifier of the registry record.
   pub record_version: Str? = None
@@ -491,6 +747,23 @@ pub struct GetRegistryRecordResponse {
   /// registry's current schema. This status is computed at read time against
   /// the latest schema.
   pub custom_metadata_schema_compliance_status: CustomMetadataSchemaComplianceStatus? = None
+  /// The skill package of the record's latest revision, including a revision
+  /// in DRAFT or PENDING_APPROVAL status, as a download URL and a SHA-256
+  /// checksum. While an update of the record is in progress or after it
+  /// fails, this is the last package that passed validation, unless the
+  /// update switches between an uploaded package and a synchronized one: then
+  /// it is absent until the update succeeds. Absent while the record is being
+  /// created or after its creation fails, and when the record has no package,
+  /// for example when its content is inline or it synchronizes only SKILL.md.
+  pub artifact: RegistryRecordArtifactDownload? = None
+  /// The source that the registry last synchronized the record's skill
+  /// content from, including when the registry read the source and which
+  /// version it read. Absent until the first successful synchronization, and
+  /// after an update replaces the synchronized content, for example with an
+  /// uploaded package. A failed synchronization leaves this member unchanged.
+  /// After you change the source, this member shows the previous source until
+  /// the registry successfully synchronizes from the new source.
+  pub synchronized_source: RegistryRecordSynchronizedSource? = None
 }
 
 /// Request structure for getting a registry
@@ -535,11 +808,37 @@ pub struct GetRegistryResponse {
   pub updated_at: Time? = None
 }
 
+/// A GitHub source that a skill record's content was synchronized from, and
+/// the commit that the registry read.
+pub struct GitHubSynchronizedSource {
+  /// The source URL that the registry read.
+  pub url: Str? = None
+  /// The timestamp when the registry read the source.
+  pub synchronized_at: Time? = None
+  /// The commit that the source's branch or tag pointed to when the registry
+  /// read it.
+  pub commit_id: Str? = None
+}
+
 /// A registry record descriptor for the HTTP protocol. This descriptor is
 /// source-only: its content is synchronized from the configured source URL
 /// rather than supplied inline.
 pub struct HttpDescriptor {
   pub source: DescriptorSource? = None
+}
+
+/// The identifier value. Discriminated union — exactly one member is set.
+/// GA supports `domain` only; other identifier types are added as new
+/// members (backward-compatible) in a later task.
+pub enum Identifier {
+  Domain(value: Str)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+pub enum IdentifierType: Str {
+  Domain = "DOMAIN"
+  Unknown(value: Str)
 }
 
 /// The value type of a claim in an inbound JWT.
@@ -553,6 +852,29 @@ pub enum InboundTokenClaimValueType: Str {
 /// retry.
 pub struct InternalServerException {
   pub message: Str? = None
+}
+
+pub struct ListPublisherAssociationsRequest {
+  pub publisher_arn: Str? = None
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct ListPublisherAssociationsResponse {
+  /// The publisher associations on this page of results.
+  pub items: List[PublisherAssociation]? = None
+  pub next_token: Str? = None
+}
+
+pub struct ListPublishersRequest {
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct ListPublishersResponse {
+  /// Summaries of the publishers on this page of results.
+  pub items: List[PublisherSummary]? = None
+  pub next_token: Str? = None
 }
 
 /// Request structure for listing registries
@@ -654,6 +976,35 @@ pub struct McpToolsDescriptor {
   pub data_schema_version: Str? = None
 }
 
+/// An OAuth 2.0 authorization that waits for a user's approval. The user
+/// opens authorizationUrl and approves access on GitHub. Amazon Bedrock
+/// AgentCore Identity then redirects the browser to the source's returnUrl
+/// . There, your application completes the authorization by calling the
+/// AgentCore Identity CompleteResourceTokenAuth operation with userId . If
+/// the source has no returnUrl , the user returns to the Amazon Web
+/// Services Agent Registry console, which completes the authorization.
+/// After the authorization completes, the registry synchronizes the record
+/// without another request. If the user doesn't approve access before
+/// expiresAt , the record moves to CREATE_FAILED or UPDATE_FAILED . To
+/// start again, call UpdateRegistryRecord with triggerSynchronization .
+pub struct OAuth2AuthorizationData {
+  /// The URL that the user opens to approve access. The link is valid for up
+  /// to 10 minutes. Treat it as sensitive and give it only to the user who
+  /// approves access.
+  pub authorization_url: Str? = None
+  /// The AgentCore Identity user ID that the authorization is for. Store it
+  /// with your signed-in user and pass it as userIdentifier.userId when your
+  /// application calls CompleteResourceTokenAuth .
+  pub user_id: Str? = None
+  /// The identifier of this authorization attempt.
+  pub authorization_attempt_id: Str? = None
+  /// The timestamp when the authorization link expires, 10 minutes after the
+  /// authorization started. A request that joins an authorization in progress
+  /// gets less time, and the link might stop working shortly before this
+  /// time.
+  pub expires_at: Time? = None
+}
+
 /// A private network endpoint used to reach a resource over a private path.
 /// Exactly one member is set.
 pub enum PrivateEndpoint {
@@ -713,6 +1064,68 @@ pub struct ProvenanceSummary {
   pub source_type: SourceType? = None
 }
 
+/// A publisher, including its verification status and the DNS challenge for
+/// its domain.
+pub struct Publisher {
+  pub value: Identifier? = None
+  /// The identifier type. `DOMAIN` is the only supported value.
+  pub identifier_type: IdentifierType? = None
+  /// The domain verification status of the publisher: - `ACTION_REQUIRED`:
+  /// The registry is waiting to find the DNS TXT record described by
+  /// `domainChallenge`. - `ACTIVE`: The domain is verified. You can associate
+  /// registry records with the publisher. - `SUSPENDED`: The domain was
+  /// verified, but a later check found the TXT record missing or changed. The
+  /// publisher returns to `ACTIVE` when the record is found again, and
+  /// becomes `FAILED` if the record stays missing. - `FAILED`: Verification
+  /// didn't succeed, for example because the TXT record wasn't found in time
+  /// or another account verified the domain first. Call `ValidatePublisher`
+  /// to try again. - `DELETING`: A delete is in progress.
+  pub status: VerificationStatus? = None
+  /// The reason for the publisher's current status, such as why verification
+  /// failed. Present only when a reason is available.
+  pub status_reason: Str? = None
+  pub domain_challenge: DomainChallenge? = None
+  /// The tags attached to the publisher.
+  pub tags: Map[Str, Str]? = None
+  /// The date and time that the publisher was created.
+  pub created_at: Time? = None
+  /// The date and time that the publisher was last updated.
+  pub updated_at: Time? = None
+  pub publisher_arn: Str? = None
+}
+
+/// An association between a registry record and a publisher, including the
+/// record's public identifier.
+pub struct PublisherAssociation {
+  pub record_arn: Str? = None
+  pub public_identifier: Str? = None
+  pub publisher: Str? = None
+  pub status: AssociationStatus? = None
+  /// The reason for the association's current status, such as why it is
+  /// suspended. Present only when a reason is available.
+  pub status_reason: Str? = None
+}
+
+/// Lightweight projection for list results.
+pub struct PublisherSummary {
+  pub value: Identifier? = None
+  /// The identifier type. `DOMAIN` is the only supported value.
+  pub identifier_type: IdentifierType? = None
+  /// The domain verification status of the publisher: `ACTION_REQUIRED`,
+  /// `ACTIVE`, `SUSPENDED`, `FAILED`, or `DELETING`. Only an `ACTIVE`
+  /// publisher accepts new registry record associations.
+  pub status: VerificationStatus? = None
+  /// The date and time that the publisher was created.
+  pub created_at: Time? = None
+  pub publisher_arn: Str? = None
+  /// The number of registry records associated with the publisher, in any
+  /// association status. Omitted when the count isn't available.
+  pub association_count: Int? = None
+  /// The number of the publisher's associations that are in PENDING_APPROVAL.
+  /// Omitted when the count isn't available.
+  pub pending_association_approval_count: Int? = None
+}
+
 /// Record type enum for registry record classification
 pub enum RecordType: Str {
   Mcp = "MCP"
@@ -720,6 +1133,7 @@ pub enum RecordType: Str {
   Custom = "CUSTOM"
   Skill = "SKILL"
   Gateway = "GATEWAY"
+  WebBot = "WEB_BOT"
   Unknown(value: Str)
 }
 
@@ -750,6 +1164,38 @@ pub enum RegistryFilterName: Str {
   Status = "status"
   DiscoveryConfigurationAuthorizerType = "discoveryConfiguration.authorizerType"
   Unknown(value: Str)
+}
+
+/// The skill package of a registry record, as a short-lived download URL
+/// and the package's SHA-256 checksum. Responses never include the package
+/// bytes.
+pub struct RegistryRecordArtifactDownload {
+  /// The SHA-256 checksum of the package, as 64 lowercase hexadecimal
+  /// characters. The download response carries no signature that you can
+  /// check, so compare the checksum of the file that you download with this
+  /// value before you use the package.
+  pub sha256: Str? = None
+  /// A presigned Amazon S3 URL that downloads the package. The URL is valid
+  /// for up to 5 minutes, and the response doesn't include its expiry time.
+  /// To get a new URL, call the operation again. Anyone who has the URL can
+  /// download the package until it expires, so don't log, store, or share it.
+  pub download_url: Str? = None
+}
+
+/// A skill package to upload with a registry record: a ZIP archive of a
+/// skill that follows the Agent Skills specification. The registry
+/// validates the package asynchronously, stores it, and sets skillMd.data
+/// from the package's SKILL.md.
+pub struct RegistryRecordArtifactUpload {
+  /// The ZIP archive of the skill package, up to 5 MiB (5,242,880 bytes). In
+  /// a JSON request, the content is base64-encoded. The Amazon Web Services
+  /// SDKs encode it for you.
+  pub content: Bytes? = None
+  /// The optional SHA-256 checksum of the ZIP archive, as 64 lowercase
+  /// hexadecimal characters, computed over the archive's bytes rather than
+  /// its base64 text. If it doesn't match the content, the request fails with
+  /// a ValidationException .
+  pub sha256: Str? = None
 }
 
 /// A credential provider configuration that specifies how to authenticate
@@ -794,16 +1240,20 @@ pub enum RegistryRecordFilterName: Str {
 
 /// The configuration for an IAM role credential provider that signs
 /// requests to a registry record's source with Amazon Web Services
-/// Signature Version 4 (SigV4).
+/// Signature Version 4 (SigV4). For an Amazon S3 skill source (an s3://
+/// URL), Amazon Web Services Agent Registry assumes the role to read the
+/// object. The role must be in your Amazon Web Services account.
 pub struct RegistryRecordIamCredentialProvider {
   /// The Amazon Resource Name (ARN) of the IAM role to assume for request
   /// signing.
   pub role_arn: Str? = None
-  /// The service name to use for request signing, such as execute-api.
+  /// The service name to use for request signing, such as execute-api. For an
+  /// Amazon S3 skill source, omit it or set it to s3 .
   pub service: Str? = None
   /// The Amazon Web Services Region to use for request signing. If not
   /// specified, the Region is derived from the source URL hostname, falling
-  /// back to the Region of the registry.
+  /// back to the Region of the registry. For an Amazon S3 skill source, omit
+  /// it or set it to the Region of the registry.
   pub region: Str? = None
 }
 
@@ -813,20 +1263,55 @@ pub struct RegistryRecordOAuthCredentialProvider {
   /// The Amazon Resource Name (ARN) of the OAuth 2.0 credential provider
   /// resource in Amazon Bedrock AgentCore Identity.
   pub provider_arn: Str? = None
-  /// The OAuth 2.0 grant type used to obtain access tokens.
+  /// The OAuth 2.0 grant type used to obtain access tokens. A GitHub skill
+  /// source requires AUTHORIZATION_CODE . Other sources, such as MCP server
+  /// and A2A agent card sources, use CLIENT_CREDENTIALS . A GitHub source
+  /// takes exactly one OAuth credential provider, in the registry's Amazon
+  /// Web Services account and Region. Only an IAM role or IAM user in the
+  /// account that owns the registry can set, synchronize, or reauthorize it,
+  /// and the caller needs bedrock-agentcore:GetWorkloadAccessTokenForUserId
+  /// and bedrock-agentcore:GetResourceOauth2Token on the registry's workload
+  /// identity, registry- followed by the registry ID.
   pub grant_type: RegistryRecordOAuthGrantType? = None
   /// The OAuth 2.0 scopes to request when obtaining access tokens.
   pub scopes: List[Str]? = None
   /// Additional parameters to include in the OAuth 2.0 token request.
   pub custom_parameters: Map[Str, Str]? = None
+  /// The URL that the user's browser returns to after the user approves
+  /// access on GitHub, for the AUTHORIZATION_CODE grant. There, your
+  /// application completes the authorization by calling the Amazon Bedrock
+  /// AgentCore Identity CompleteResourceTokenAuth operation with the userId
+  /// from authorizationData . If you omit it, the user returns to the Amazon
+  /// Web Services Agent Registry console, which completes the authorization
+  /// when the user is signed in as the IAM principal that made the request. A
+  /// request that joins an authorization already in progress uses the return
+  /// URL of the request that started it.
+  pub return_url: Str? = None
 }
 
+/// The OAuth 2.0 grant type that a credential provider uses to obtain
+/// access tokens. CLIENT_CREDENTIALS obtains tokens for the client
+/// application itself and is the grant for sources such as MCP server and
+/// A2A agent card sources. AUTHORIZATION_CODE obtains tokens with a user's
+/// approval and is required for GitHub skill sources. A GitHub user
+/// approves access once. Later requests from the same IAM principal for the
+/// same registry, host, credential provider, scopes, and custom parameters
+/// reuse that approval.
 pub enum RegistryRecordOAuthGrantType: Str {
   ClientCredentials = "CLIENT_CREDENTIALS"
+  AuthorizationCode = "AUTHORIZATION_CODE"
   Unknown(value: Str)
 }
 
-/// Registry record status
+/// The lifecycle status of a registry record. A record is DRAFT before it
+/// is submitted, PENDING_APPROVAL while it awaits curator review, and
+/// APPROVED after it is approved and discoverable. Rejecting a newer
+/// revision keeps the last approved revision discoverable. A DEPRECATED
+/// record isn't discoverable. CREATING , UPDATING , CREATE_FAILED , and
+/// UPDATE_FAILED reflect an asynchronous change that is in progress or has
+/// failed. CREATE_PENDING_AUTH and UPDATE_PENDING_AUTH mean that the record
+/// waits for a GitHub user to authorize access before it synchronizes from
+/// its GitHub source.
 pub enum RegistryRecordStatus: Str {
   Draft = "DRAFT"
   PendingApproval = "PENDING_APPROVAL"
@@ -837,6 +1322,8 @@ pub enum RegistryRecordStatus: Str {
   Updating = "UPDATING"
   CreateFailed = "CREATE_FAILED"
   UpdateFailed = "UPDATE_FAILED"
+  CreatePendingAuth = "CREATE_PENDING_AUTH"
+  UpdatePendingAuth = "UPDATE_PENDING_AUTH"
   Unknown(value: Str)
 }
 
@@ -884,6 +1371,15 @@ pub struct RegistryRecordSummary {
   pub custom_metadata_schema_compliance_status: CustomMetadataSchemaComplianceStatus? = None
 }
 
+/// The source that a skill record's content was last synchronized from.
+/// Exactly one member is set, for the source's provider.
+pub enum RegistryRecordSynchronizedSource {
+  S3(value: S3SynchronizedSource)
+  GitHub(value: GitHubSynchronizedSource)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
 pub enum RegistryStatus: Str {
   Creating = "CREATING"
   Ready = "READY"
@@ -927,6 +1423,34 @@ pub struct ResourceNotFoundException {
   pub message: Str? = None
 }
 
+/// The settings of a source that the registry reads from Amazon S3.
+pub struct S3SourceConfiguration {
+  /// The ID of the Amazon Web Services account that owns the source bucket.
+  /// The registry checks that the bucket belongs to this account each time it
+  /// reads the source. If you omit it for a source that uses an IAM role, the
+  /// registry expects the bucket to be in the role's account. If you omit it
+  /// for a source that has no credential provider, which the registry reads
+  /// as a public object, the request fails with a ValidationException .
+  pub bucket_owner_account_id: Str? = None
+}
+
+/// An Amazon S3 source that a skill record's content was synchronized from,
+/// and the object version that the registry read. At most one of versionId
+/// and eTag is set.
+pub struct S3SynchronizedSource {
+  /// The source URL that the registry read.
+  pub url: Str? = None
+  /// The timestamp when the registry read the source.
+  pub synchronized_at: Time? = None
+  /// The version ID of the object that the registry read. Absent when the
+  /// bucket isn't versioned.
+  pub version_id: Str? = None
+  /// The entity tag (ETag) of the object that the registry read, without
+  /// quotes, when the object has no version ID. Not recorded for a SKILL.md
+  /// source on a registry that is encrypted with a customer managed key.
+  pub e_tag: Str? = None
+}
+
 /// A self-managed private endpoint backed by a VPC Lattice resource
 /// configuration. Exactly one member is set.
 pub enum SelfManagedLatticeResource {
@@ -938,6 +1462,30 @@ pub enum SelfManagedLatticeResource {
 /// The request would exceed a service quota.
 pub struct ServiceQuotaExceededException {
   pub message: Str? = None
+}
+
+/// The additional data for a signature agent card descriptor, such as the
+/// bot category of the web bot.
+pub struct SignatureAgentCardAdditionalData {
+  /// The bot category that describes the purpose of the web bot identified by
+  /// the signature agent card descriptor.
+  pub category: BotCategory? = None
+}
+
+/// Descriptor that defines the content of a signature agent card, which
+/// identifies a web bot and references the JSON Web Key Set used to verify
+/// its HTTP message signatures.
+pub struct SignatureAgentCardDescriptor {
+  /// The signature agent card content, serialized as descriptor payload data.
+  pub data: Str? = None
+  /// The schema version of the descriptor payload.
+  pub data_schema_version: Str? = None
+  /// The optional source configuration used to synchronize the signature
+  /// agent card descriptor content.
+  pub source: DescriptorSource? = None
+  /// Additional data associated with the signature agent card descriptor,
+  /// such as the bot category.
+  pub additional_data: SignatureAgentCardAdditionalData? = None
 }
 
 /// The details about the upstream source from which a registry record was
@@ -1007,6 +1555,16 @@ pub struct UntagResourceRequest {
 pub struct UntagResourceResponse {
 }
 
+pub struct UpdatePublisherAssociationApprovalStatusRequest {
+  pub record_arn: Str? = None
+  pub approval_status: AssociationApprovalStatus? = None
+  /// The curator's reason for the decision; may be empty.
+  pub approval_status_reason: Str? = None
+}
+
+pub struct UpdatePublisherAssociationApprovalStatusResponse {
+}
+
 pub struct UpdateRegistryRecordRequest {
   /// The identifier of the registry containing the record (ARN or ID)
   pub registry_id: Str? = None
@@ -1027,6 +1585,14 @@ pub struct UpdateRegistryRecordRequest {
   /// The updated typed descriptor content for the registry record. Omit to
   /// leave the descriptors unchanged.
   pub descriptors: UpdatedDescriptors? = None
+  /// The change to the record's uploaded skill package. Omit it to keep the
+  /// current package, specify an empty object to remove an uploaded package,
+  /// or specify optionalValue to upload a new package. An empty object
+  /// doesn't remove a package that the record synchronizes from a source. To
+  /// stop that synchronization, remove skillPackage . A request that changes
+  /// skillMd.data replaces the record's package with that text, even if you
+  /// omit this member.
+  pub artifact: UpdatedRegistryRecordArtifact? = None
   /// The updated version of the registry record. Omit to leave the version
   /// unchanged.
   pub record_version: Str? = None
@@ -1036,9 +1602,22 @@ pub struct UpdateRegistryRecordRequest {
   /// with a full replacement set to update, or with a null value to clear all
   /// metadata.
   pub custom_metadata: UpdatedCustomMetadataMap? = None
-  /// Whether to trigger synchronization of the record's descriptor content
-  /// from its source
+  /// Specifies whether to synchronize the record's descriptor content from
+  /// its source. For a skill record, the registry reads the stored
+  /// skillMd.source or skillPackage.source again, because it doesn't watch
+  /// the source for changes. For a GitHub source, the operation also returns
+  /// a new authorization link when one is needed. An update that sets a
+  /// different skill source starts a synchronization even if you omit this
+  /// member.
   pub trigger_synchronization: Bool? = None
+  /// Specifies whether to ask a GitHub user to authorize access again, even
+  /// when the current authorization still works, for example to use a
+  /// different GitHub account. You can use it only together with
+  /// triggerSynchronization , for a GitHub source whose credential provider
+  /// uses the AUTHORIZATION_CODE grant. The new authorization also replaces
+  /// the one that the same IAM principal's other records in the registry use
+  /// for the same host, credential provider, scopes, and custom parameters.
+  pub force_authentication: Bool? = None
   /// The provenance lineage re-assertion for the registry record. This field
   /// is reserved for the Amazon Web Services Agent Registry auto-detection
   /// service principal. Requests that include this field from other callers
@@ -1068,7 +1647,10 @@ pub struct UpdateRegistryRecordResponse {
   pub descriptors: Descriptors? = None
   /// The version identifier of the registry record.
   pub record_version: Str? = None
-  /// The lifecycle status of the registry record.
+  /// The lifecycle status of the registry record. UPDATE_PENDING_AUTH means
+  /// that the update waits for a GitHub user to authorize access before the
+  /// record synchronizes from its GitHub source. For the authorization link,
+  /// see authorizationData .
   pub status: RegistryRecordStatus? = None
   /// The timestamp when the registry record was created.
   pub created_at: Time? = None
@@ -1096,6 +1678,12 @@ pub struct UpdateRegistryRecordResponse {
   /// registry's current schema. This status is computed at read time against
   /// the latest schema.
   pub custom_metadata_schema_compliance_status: CustomMetadataSchemaComplianceStatus? = None
+  /// The authorization that a GitHub user must complete before the record's
+  /// synchronization starts. Present only in this response, and only while
+  /// the status is UPDATE_PENDING_AUTH . If the status is UPDATE_PENDING_AUTH
+  /// but this member is absent, call UpdateRegistryRecord again with
+  /// triggerSynchronization to get a new authorization link.
+  pub authorization_data: AuthorizationData? = None
 }
 
 pub struct UpdateRegistryRecordStatusRequest {
@@ -1238,6 +1826,12 @@ pub struct UpdatedAgentSkillsAdditionalData {
 pub struct UpdatedAgentSkillsAdditionalDataFields {
   /// The patch for the agent skills markdown descriptor field.
   pub skill_md: UpdatedAgentSkillsMdDescriptor? = None
+  /// The patch for the skill package source field.
+  pub skill_package: UpdatedAgentSkillsPackageDescriptor? = None
+  /// The patch for the repository provider field.
+  pub repository_provider: UpdatedAgentSkillsRepositoryProvider? = None
+  /// The patch for the source configuration field.
+  pub source_configuration: UpdatedAgentSkillsSourceConfiguration? = None
 }
 
 /// The agent skills definition descriptor patch wrapper. Omit to leave the
@@ -1280,6 +1874,37 @@ pub struct UpdatedAgentSkillsMdDescriptorFields {
   pub source: UpdatedDescriptorSource? = None
 }
 
+/// The skill package source patch wrapper. Omit to leave the source
+/// unchanged; supply an empty object to remove it and stop synchronizing
+/// the package; supply optionalValue to replace it.
+pub struct UpdatedAgentSkillsPackageDescriptor {
+  /// The value to set for this field. Omit the wrapper to leave the field
+  /// unchanged.
+  pub optional_value: AgentSkillsPackageDescriptor? = None
+}
+
+/// The repository provider patch wrapper. Omit to leave the repository
+/// provider unchanged; supply an empty object to remove it; supply
+/// optionalValue to set it. When you remove it, also remove or replace the
+/// GitHub source in the same request.
+pub struct UpdatedAgentSkillsRepositoryProvider {
+  /// The value to set for this field. Omit the wrapper to leave the field
+  /// unchanged.
+  pub optional_value: AgentSkillsRepositoryProvider? = None
+}
+
+/// The source configuration patch wrapper. Omit to leave the configuration
+/// unchanged; supply an empty object to remove it; supply optionalValue to
+/// replace it. When you move an Amazon S3 source to another bucket, the
+/// record keeps its configuration. In the same request, specify the new
+/// bucket's owner, or specify an empty object so that the registry expects
+/// the bucket in the role's account.
+pub struct UpdatedAgentSkillsSourceConfiguration {
+  /// The value to set for this field. Omit the wrapper to leave the field
+  /// unchanged.
+  pub optional_value: AgentSkillsSourceConfiguration? = None
+}
+
 /// A wrapper for updating the approval configuration of a registry. Include
 /// this wrapper to replace the approval configuration with the specified
 /// value; omit it to leave the approval configuration unchanged.
@@ -1306,6 +1931,14 @@ pub struct UpdatedAutoDetectionConfiguration {
   /// The value to set for this field. Omit the wrapper to leave the field
   /// unchanged.
   pub optional_value: AutoDetectionConfiguration? = None
+}
+
+/// Leaf patch wrapper for a bot category. Omit to leave unchanged; supply
+/// an empty object to unset; supply optionalValue to set.
+pub struct UpdatedBotCategory {
+  /// The value to set for this field. Omit the wrapper to leave the field
+  /// unchanged.
+  pub optional_value: BotCategory? = None
 }
 
 /// The custom descriptor patch wrapper. Omit to leave the descriptor
@@ -1396,6 +2029,8 @@ pub struct UpdatedDescriptorsFields {
   pub http: UpdatedHttpDescriptor? = None
   /// The patch for the AG-UI descriptor.
   pub agui: UpdatedAgUiDescriptor? = None
+  /// The patch for the signature agent card descriptor.
+  pub signature_agent_card: UpdatedSignatureAgentCardDescriptor? = None
 }
 
 /// The discovery configuration fields to update on a registry. Omit this
@@ -1483,6 +2118,87 @@ pub struct UpdatedMcpToolsDescriptorFields {
   pub data_schema_version: UpdatedDataSchemaVersion? = None
 }
 
+/// The skill package patch wrapper. Omit to leave the package unchanged;
+/// supply an empty object to remove an uploaded package; supply
+/// optionalValue to upload a new package.
+pub struct UpdatedRegistryRecordArtifact {
+  /// The skill package to upload. It replaces the record's current package or
+  /// its synchronized content.
+  pub optional_value: RegistryRecordArtifactUpload? = None
+}
+
+/// The signature agent card additional-data patch wrapper. Omit to leave
+/// the additional data unchanged; supply an empty object to remove it;
+/// supply optionalValue to patch its fields.
+pub struct UpdatedSignatureAgentCardAdditionalData {
+  /// The value to set for this field. Omit the wrapper to leave the field
+  /// unchanged.
+  pub optional_value: UpdatedSignatureAgentCardAdditionalDataFields? = None
+}
+
+/// The set of signature agent card additional-data fields that can be
+/// individually updated.
+pub struct UpdatedSignatureAgentCardAdditionalDataFields {
+  /// The patch for the bot category field.
+  pub category: UpdatedBotCategory? = None
+}
+
+/// The signature agent card descriptor patch wrapper. Omit to leave the
+/// descriptor unchanged; supply an empty object to remove it; supply
+/// optionalValue to patch its fields.
+pub struct UpdatedSignatureAgentCardDescriptor {
+  /// The value to set for this field. Omit the wrapper to leave the field
+  /// unchanged.
+  pub optional_value: UpdatedSignatureAgentCardDescriptorFields? = None
+}
+
+/// The set of signature agent card descriptor fields that can be
+/// individually updated.
+pub struct UpdatedSignatureAgentCardDescriptorFields {
+  /// The patch for the descriptor's data field.
+  pub data: UpdatedDescriptorData? = None
+  /// The patch for the descriptor's data schema version field.
+  pub data_schema_version: UpdatedDataSchemaVersion? = None
+  /// The patch for the descriptor's source field.
+  pub source: UpdatedDescriptorSource? = None
+  /// The patch for the descriptor's additional data field.
+  pub additional_data: UpdatedSignatureAgentCardAdditionalData? = None
+}
+
+pub struct ValidatePublisherRequest {
+  pub publisher_arn: Str? = None
+}
+
+/// The publisher after verification restarts, in ACTION_REQUIRED with a new
+/// domainChallenge.
+pub struct ValidatePublisherResponse {
+  pub value: Identifier? = None
+  /// The identifier type. `DOMAIN` is the only supported value.
+  pub identifier_type: IdentifierType? = None
+  /// The domain verification status of the publisher: - `ACTION_REQUIRED`:
+  /// The registry is waiting to find the DNS TXT record described by
+  /// `domainChallenge`. - `ACTIVE`: The domain is verified. You can associate
+  /// registry records with the publisher. - `SUSPENDED`: The domain was
+  /// verified, but a later check found the TXT record missing or changed. The
+  /// publisher returns to `ACTIVE` when the record is found again, and
+  /// becomes `FAILED` if the record stays missing. - `FAILED`: Verification
+  /// didn't succeed, for example because the TXT record wasn't found in time
+  /// or another account verified the domain first. Call `ValidatePublisher`
+  /// to try again. - `DELETING`: A delete is in progress.
+  pub status: VerificationStatus? = None
+  /// The reason for the publisher's current status, such as why verification
+  /// failed. Present only when a reason is available.
+  pub status_reason: Str? = None
+  pub domain_challenge: DomainChallenge? = None
+  /// The tags attached to the publisher.
+  pub tags: Map[Str, Str]? = None
+  /// The date and time that the publisher was created.
+  pub created_at: Time? = None
+  /// The date and time that the publisher was last updated.
+  pub updated_at: Time? = None
+  pub publisher_arn: Str? = None
+}
+
 /// The request failed validation of one or more input fields.
 pub struct ValidationException {
   pub message: Str? = None
@@ -1506,6 +2222,16 @@ pub enum ValidationExceptionReason: Str {
   IdempotentParameterMismatchException = "IdempotentParameterMismatchException"
   RootEventInOtherSession = "EventInOtherSession"
   ResourceConflict = "ResourceConflict"
+  UnsupportedInRegion = "UnsupportedInRegion"
+  Unknown(value: Str)
+}
+
+pub enum VerificationStatus: Str {
+  ActionRequired = "ACTION_REQUIRED"
+  Active = "ACTIVE"
+  Failed = "FAILED"
+  Suspended = "SUSPENDED"
+  Deleting = "DELETING"
   Unknown(value: Str)
 }
 

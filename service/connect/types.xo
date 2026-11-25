@@ -77,8 +77,12 @@ pub struct AdditionalEmailRecipients {
 
 /// Configuration settings for after contact work (ACW) timeout.
 pub struct AfterContactWorkConfig {
-  /// The ACW timeout duration in seconds. Minimum: 1 second. Maximum:
-  /// 2,000,000 seconds (24 days). Enter 0 for indefinite ACW time.
+  /// The after contact work (ACW) timeout duration in seconds. Minimum: 1
+  /// second. Maximum: 2,000,000 seconds (24 days). For the CHAT channel, the
+  /// maximum for a specific duration is 5,400 seconds (90 minutes); higher
+  /// values end ACW after 90 minutes. For all channels, including chat, you
+  /// can enter 0 for an indefinite amount of time, meaning agents must
+  /// manually choose to end ACW.
   pub after_contact_work_time_limit: Int? = None
 }
 
@@ -1989,6 +1993,9 @@ pub struct Contact {
   /// the contact. This field is present only for contacts where
   /// conversational analytics is enabled in the contact flow.
   pub contact_lens: ContactLens? = None
+  /// If one or more voicemails were recorded for the contact, this contains
+  /// information about the voicemails.
+  pub voicemail_info: VoicemailInfo? = None
 }
 
 /// A structure that defines search criteria for contacts using analysis
@@ -4683,6 +4690,22 @@ pub struct DefaultVocabulary {
   pub vocabulary_name: Str? = None
 }
 
+pub struct DeleteAllEntitySessionsRequest {
+  /// The identifier of the Connect Customer instance. You can find the
+  /// instance ID in the Amazon Resource Name (ARN) of the instance.
+  pub instance_id: Str? = None
+  /// The identifier of the entity whose sessions you want to delete. For USER
+  /// , use the user ID or the user ARN.
+  pub entity_id: Str? = None
+  /// The type of entity whose sessions you want to delete. The only valid
+  /// value is USER , which signs out a user in your Connect Customer
+  /// instance.
+  pub entity_type: SessionEntityType? = None
+}
+
+pub struct DeleteAllEntitySessionsResponse {
+}
+
 /// Request to DeleteAttachedFile API
 pub struct DeleteAttachedFileRequest {
   /// The unique identifier of the Connect instance.
@@ -6269,6 +6292,28 @@ pub struct Evaluation {
   /// The tags used to organize, track, or control access for this resource.
   /// For example, { "Tags": {"key1":"value1", "key2":"value2"} }.
   pub tags: Map[Str, Str]? = None
+  /// A map of item (section or question) identifiers to their enablement
+  /// status, computed by the service from each item's conditional enablement
+  /// configuration. Disabled items are excluded from scoring. Valid values:
+  /// ENABLED | DISABLED .
+  pub item_enablement_status: Map[Str, EvaluationEnablementStatus]? = None
+  /// The aggregate status of resolving the external source data (such as
+  /// Contact Lens analysis and AI metrics) that is used by conditional
+  /// enablement in the evaluation. Source data is resolved asynchronously
+  /// after the evaluation is started. While a source is pending or after it
+  /// fails to resolve, conditions that depend on it evaluate to the item's
+  /// DefaultAction . Valid values: PENDING - One or more sources have not
+  /// been resolved yet. Call DescribeContactEvaluation again to get updated
+  /// ItemEnablementStatus values. RESOLVED - All sources have been resolved.
+  /// FAILED - One or more sources could not be resolved. Dependent conditions
+  /// use the item's DefaultAction .
+  pub source_resolution_status: EvaluationItemResolutionStatus? = None
+  /// The resolved values of the external sources (such as contact data,
+  /// evaluation metadata, form metadata, and AI metrics) that are used by the
+  /// conditions in the evaluation form. You can use these values to evaluate
+  /// the conditions against the current answers without calling
+  /// DescribeContactEvaluation again.
+  pub source_values: List[EvaluationResolvedSource]? = None
 }
 
 /// Information about the evaluation acknowledgement.
@@ -6345,6 +6390,12 @@ pub struct EvaluationContactParticipant {
   pub contact_participant_role: ContactParticipantRole? = None
   /// The identifier for the contact participant.
   pub contact_participant_id: Str? = None
+}
+
+pub enum EvaluationEnablementStatus: Str {
+  Enabled = "ENABLED"
+  Disabled = "DISABLED"
+  Unknown(value: Str)
 }
 
 /// Information about the evaluation form.
@@ -6434,10 +6485,49 @@ pub struct EvaluationFormAIVersionSummary {
   pub ai_version_lifecycle: EvaluationFormAIVersionLifecycle? = None
 }
 
+pub enum EvaluationFormAiMetricsField: Str {
+  AiSessionIsHandedOff = "AI_SESSION_IS_HANDED_OFF"
+  AiSessionSelfServiceDuration = "AI_SESSION_SELF_SERVICE_DURATION"
+  AiSessionGoalSuccessRate = "AI_SESSION_GOAL_SUCCESS_RATE"
+  AiSessionCompletenessScore = "AI_SESSION_COMPLETENESS_SCORE"
+  AiSessionFaithfulnessScore = "AI_SESSION_FAITHFULNESS_SCORE"
+  AiAgentMaxPromptLatency = "AI_AGENT_MAX_PROMPT_LATENCY"
+  AiToolMaxLatency = "AI_TOOL_MAX_LATENCY"
+  AiToolSelectionAccuracy = "AI_TOOL_SELECTION_ACCURACY"
+  AiToolParameterAccuracy = "AI_TOOL_PARAMETER_ACCURACY"
+  AiToolUtilizationAccuracy = "AI_TOOL_UTILIZATION_ACCURACY"
+  Unknown(value: Str)
+}
+
 /// The automatic evaluation configuration of an evaluation form.
 pub struct EvaluationFormAutoEvaluationConfiguration {
   /// When automated evaluation is enabled.
   pub enabled: Bool? = None
+}
+
+pub enum EvaluationFormContactField: Str {
+  Categories = "CATEGORIES"
+  AgentArn = "AGENT_ARN"
+  QueueArn = "QUEUE_ARN"
+  RoutingProfileArn = "ROUTING_PROFILE_ARN"
+  Channel = "CHANNEL"
+  InitiationMethod = "INITIATION_METHOD"
+  IsQueued = "IS_QUEUED"
+  OverallCustomerSentimentScore = "OVERALL_CUSTOMER_SENTIMENT_SCORE"
+  OverallAgentSentimentScore = "OVERALL_AGENT_SENTIMENT_SCORE"
+  CustomerSentimentScoreWithoutAgent = "CUSTOMER_SENTIMENT_SCORE_WITHOUT_AGENT"
+  CustomerSentimentScoreWithAgent = "CUSTOMER_SENTIMENT_SCORE_WITH_AGENT"
+  NonTalkTime = "NON_TALK_TIME"
+  NonTalkTimePercentage = "NON_TALK_TIME_PERCENTAGE"
+  NumberOfInterruptions = "NUMBER_OF_INTERRUPTIONS"
+  ContactDuration = "CONTACT_DURATION"
+  AgentInteractionDuration = "AGENT_INTERACTION_DURATION"
+  CustomerHoldTime = "CUSTOMER_HOLD_TIME"
+  LongestHoldDuration = "LONGEST_HOLD_DURATION"
+  NumberOfHolds = "NUMBER_OF_HOLDS"
+  AgentInteractionAndHoldDuration = "AGENT_INTERACTION_AND_HOLD_DURATION"
+  RecordingMediaStreamTypes = "RECORDING_MEDIA_STREAM_TYPES"
+  Unknown(value: Str)
 }
 
 /// Information about an evaluation form used in a contact evaluation.
@@ -6473,6 +6563,11 @@ pub struct EvaluationFormContent {
   pub ai_version: Str? = None
 }
 
+pub enum EvaluationFormEvaluationMetadataField: Str {
+  EvaluationType = "EVALUATION_TYPE"
+  Unknown(value: Str)
+}
+
 /// Information about an item from an evaluation form. The item must be
 /// either a section or a question.
 pub enum EvaluationFormItem {
@@ -6492,7 +6587,7 @@ pub enum EvaluationFormItemEnablementAction: Str {
 pub struct EvaluationFormItemEnablementCondition {
   /// Operands of the enablement condition.
   pub operands: List[EvaluationFormItemEnablementConditionOperand]? = None
-  /// The operator to be used to be applied to operands if more than one
+  /// The operator to apply to the operands when more than one operand is
   /// provided.
   pub operator: EvaluationFormItemEnablementOperator? = None
 }
@@ -6509,9 +6604,11 @@ pub enum EvaluationFormItemEnablementConditionOperand {
 pub struct EvaluationFormItemEnablementConfiguration {
   /// A condition for item enablement configuration.
   pub condition: EvaluationFormItemEnablementCondition? = None
-  /// An enablement action that if condition is satisfied.
+  /// The enablement action to apply if the condition is satisfied.
   pub action: EvaluationFormItemEnablementAction? = None
-  /// An enablement action that if condition is not satisfied.
+  /// The enablement action to apply if the condition is not satisfied. This
+  /// action is also applied when the condition depends on an external source
+  /// that is still pending or could not be resolved.
   pub default_action: EvaluationFormItemEnablementAction? = None
 }
 
@@ -6522,7 +6619,11 @@ pub struct EvaluationFormItemEnablementExpression {
   pub source: EvaluationFormItemEnablementSource? = None
   /// A list of values from source item.
   pub values: List[EvaluationFormItemEnablementSourceValue]? = None
-  /// A comparator to be used against list of values.
+  /// A comparator to be used against a list of values. IN , NOT_IN , ALL_IN ,
+  /// and EXACT compare sets of values. GREATER_THAN , LESS_THAN ,
+  /// GREATER_THAN_OR_EQUAL_TO , and LESS_THAN_OR_EQUAL_TO compare a single
+  /// numeric or date and time value. EQUAL_TO and NOT_EQUAL_TO compare a
+  /// single value.
   pub comparator: EvaluationFormItemSourceValuesComparator? = None
 }
 
@@ -6534,27 +6635,68 @@ pub enum EvaluationFormItemEnablementOperator: Str {
 
 /// An enablement expression source item.
 pub struct EvaluationFormItemEnablementSource {
-  /// A type of source item.
+  /// A type of source item. Valid values: QUESTION_REF_ID - The answer to
+  /// another question in the evaluation form. CONTACT - Data from the
+  /// evaluated contact. EVALUATION_METADATA - Metadata of the evaluation,
+  /// such as the evaluation type. AI_METRICS - Metrics about AI agents, AI
+  /// sessions, and AI tools on the contact.
   pub type_value: EvaluationFormItemEnablementSourceType? = None
-  /// A referenceId of the source item.
+  /// A referenceId of the source item. Use when Type is QUESTION_REF_ID .
   pub ref_id: Str? = None
+  /// The contact field to use as the source, such as CHANNEL , QUEUE_ARN ,
+  /// OVERALL_CUSTOMER_SENTIMENT_SCORE , or RECORDING_MEDIA_STREAM_TYPES . Use
+  /// when Type is CONTACT .
+  pub contact_field: EvaluationFormContactField? = None
+  /// The key of the contact attribute to use as the source. Use when Type is
+  /// CONTACT .
+  pub contact_attribute_key: Str? = None
+  /// The key of the contact segment attribute to use as the source. Use when
+  /// Type is CONTACT .
+  pub segment_attribute_key: Str? = None
+  /// The evaluation metadata field to use as the source. Use when Type is
+  /// EVALUATION_METADATA .
+  pub evaluation_metadata_field: EvaluationFormEvaluationMetadataField? = None
+  /// The AI metrics field to use as the source. Use when Type is AI_METRICS .
+  pub ai_metrics_field: EvaluationFormAiMetricsField? = None
 }
 
 pub enum EvaluationFormItemEnablementSourceType: Str {
   QuestionRefId = "QUESTION_REF_ID"
+  Contact = "CONTACT"
+  EvaluationMetadata = "EVALUATION_METADATA"
+  FormMetadata = "FORM_METADATA"
+  AiMetrics = "AI_METRICS"
   Unknown(value: Str)
 }
 
-/// An enablement expression source value.
+/// An enablement expression source value. Provide only the value member
+/// that matches the specified Type .
 pub struct EvaluationFormItemEnablementSourceValue {
-  /// A type of source item value.
+  /// A type of source item value. Valid values: OPTION_REF_ID | STRING_VALUE
+  /// | NUMERIC_VALUE | BOOLEAN_VALUE | DATETIME_VALUE .
   pub type_value: EvaluationFormItemEnablementSourceValueType? = None
-  /// A referenceId of the source value.
+  /// A referenceId of the source value. Use when Type is OPTION_REF_ID .
   pub ref_id: Str? = None
+  /// A string value to compare against the source. Use when Type is
+  /// STRING_VALUE .
+  pub string_value: Str? = None
+  /// A numeric value to compare against the source. Use when Type is
+  /// NUMERIC_VALUE .
+  pub numeric_value: Float? = None
+  /// A Boolean value to compare against the source. Use when Type is
+  /// BOOLEAN_VALUE .
+  pub boolean_value: Bool? = None
+  /// A date and time value to compare against the source. Use when Type is
+  /// DATETIME_VALUE .
+  pub date_time_value: Time? = None
 }
 
 pub enum EvaluationFormItemEnablementSourceValueType: Str {
   OptionRefId = "OPTION_REF_ID"
+  StringValue = "STRING_VALUE"
+  NumericValue = "NUMERIC_VALUE"
+  BooleanValue = "BOOLEAN_VALUE"
+  DatetimeValue = "DATETIME_VALUE"
   Unknown(value: Str)
 }
 
@@ -6563,6 +6705,12 @@ pub enum EvaluationFormItemSourceValuesComparator: Str {
   NotIn = "NOT_IN"
   AllIn = "ALL_IN"
   Exact = "EXACT"
+  GreaterThan = "GREATER_THAN"
+  LessThan = "LESS_THAN"
+  GreaterThanOrEqualTo = "GREATER_THAN_OR_EQUAL_TO"
+  LessThanOrEqualTo = "LESS_THAN_OR_EQUAL_TO"
+  EqualTo = "EQUAL_TO"
+  NotEqualTo = "NOT_EQUAL_TO"
   Unknown(value: Str)
 }
 
@@ -6577,6 +6725,102 @@ pub enum EvaluationFormLanguageCode: Str {
   KoKr = "ko-KR"
   ZhCn = "zh-CN"
   MsMy = "ms-MY"
+  AfZa = "af-ZA"
+  SqAl = "sq-AL"
+  AmEt = "am-ET"
+  ArAe = "ar-AE"
+  ArSa = "ar-SA"
+  HyAm = "hy-AM"
+  EuEs = "eu-ES"
+  BeBy = "be-BY"
+  BsBa = "bs-BA"
+  BgBg = "bg-BG"
+  CaEs = "ca-ES"
+  CkbIr = "ckb-IR"
+  CkbIq = "ckb-IQ"
+  ZhTw = "zh-TW"
+  HrHr = "hr-HR"
+  CsCz = "cs-CZ"
+  DaDk = "da-DK"
+  NlBe = "nl-BE"
+  NlNl = "nl-NL"
+  EnAu = "en-AU"
+  EnIn = "en-IN"
+  EnIe = "en-IE"
+  EnNz = "en-NZ"
+  EnAb = "en-AB"
+  EnSg = "en-SG"
+  EnZa = "en-ZA"
+  EnGb = "en-GB"
+  EnWl = "en-WL"
+  FaIr = "fa-IR"
+  FaAf = "fa-AF"
+  FiFi = "fi-FI"
+  FrBe = "fr-BE"
+  FrCa = "fr-CA"
+  GaIe = "ga-IE"
+  GlEs = "gl-ES"
+  KaGe = "ka-GE"
+  DeAt = "de-AT"
+  DeCh = "de-CH"
+  ElGr = "el-GR"
+  GuIn = "gu-IN"
+  HtHt = "ht-HT"
+  HeIl = "he-IL"
+  HiIn = "hi-IN"
+  HuHu = "hu-HU"
+  IsIs = "is-IS"
+  IdId = "id-ID"
+  JvId = "jv-ID"
+  KmKh = "km-KH"
+  KnIn = "kn-IN"
+  KkKz = "kk-KZ"
+  LoLa = "lo-LA"
+  LvLv = "lv-LV"
+  LtLt = "lt-LT"
+  MkMk = "mk-MK"
+  MlIn = "ml-IN"
+  MrIn = "mr-IN"
+  NeNp = "ne-NP"
+  NoNo = "no-NO"
+  OrIn = "or-IN"
+  PsAf = "ps-AF"
+  PlPl = "pl-PL"
+  PtPt = "pt-PT"
+  PaIn = "pa-IN"
+  RoRo = "ro-RO"
+  RuRu = "ru-RU"
+  SrRs = "sr-RS"
+  SiLk = "si-LK"
+  SkSk = "sk-SK"
+  SlSi = "sl-SI"
+  EsMx = "es-MX"
+  EsUs = "es-US"
+  SuId = "su-ID"
+  SwBi = "sw-BI"
+  SwKe = "sw-KE"
+  SwRw = "sw-RW"
+  SwTz = "sw-TZ"
+  SwUg = "sw-UG"
+  SvSe = "sv-SE"
+  TlPh = "tl-PH"
+  TaIn = "ta-IN"
+  TeIn = "te-IN"
+  ThTh = "th-TH"
+  TrTr = "tr-TR"
+  UkUa = "uk-UA"
+  UzUz = "uz-UZ"
+  ViVn = "vi-VN"
+  ZuZa = "zu-ZA"
+  MyMm = "my-MM"
+  SoSo = "so-SO"
+  YueHk = "yue-HK"
+  EtEe = "et-EE"
+  Hmn = "hmn"
+  LgUg = "lg-UG"
+  CyGb = "cy-GB"
+  XhZa = "xh-ZA"
+  BnBd = "bn-BD"
   Unknown(value: Str)
 }
 
@@ -6610,6 +6854,7 @@ pub struct EvaluationFormMultiSelectQuestionAutomation {
   pub options: List[EvaluationFormMultiSelectQuestionAutomationOption]? = None
   /// Reference IDs of default options.
   pub default_option_ref_ids: List[Str]? = None
+  /// Automation answer source.
   pub answer_source: EvaluationFormQuestionAutomationAnswerSource? = None
 }
 
@@ -6720,13 +6965,18 @@ pub struct EvaluationFormQuestion {
 
 /// A question automation answer.
 pub struct EvaluationFormQuestionAutomationAnswerSource {
-  /// The automation answer source type.
+  /// The automation answer source type. Valid values: CONTACT_LENS_DATA - The
+  /// answer is based on Contact Lens data, such as rule categories and
+  /// metrics. GEN_AI - The answer is generated by generative AI. CONDITION -
+  /// The answer is determined by evaluating the conditions defined in the
+  /// automation rules of the question.
   pub source_type: EvaluationFormQuestionAutomationAnswerSourceType? = None
 }
 
 pub enum EvaluationFormQuestionAutomationAnswerSourceType: Str {
   ContactLensData = "CONTACT_LENS_DATA"
   GenAi = "GEN_AI"
+  Condition = "CONDITION"
   Unknown(value: Str)
 }
 
@@ -6876,6 +7126,9 @@ pub struct EvaluationFormSection {
   pub is_excluded_from_scoring: Bool? = None
   /// The score thresholds for performance categories.
   pub score_thresholds: List[EvaluationFormScoreThreshold]? = None
+  /// The conditional enablement configuration of the section. Sections use
+  /// the same enablement model as questions.
+  pub enablement: EvaluationFormItemEnablementConfiguration? = None
 }
 
 /// Information about the automation configuration in single select
@@ -6895,6 +7148,7 @@ pub struct EvaluationFormSingleSelectQuestionAutomation {
 /// Information about the automation option of a single select question.
 pub enum EvaluationFormSingleSelectQuestionAutomationOption {
   RuleCategory(value: SingleSelectQuestionRuleCategoryAutomation)
+  AutomationRule(value: SingleSelectQuestionAutomationRule)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -7059,6 +7313,13 @@ pub struct EvaluationGenAIAnswerAnalysisDetails {
   pub points_of_interest: List[EvaluationTranscriptPointOfInterest]? = None
 }
 
+pub enum EvaluationItemResolutionStatus: Str {
+  Pending = "PENDING"
+  Resolved = "RESOLVED"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
 /// Metadata information about a contact evaluation.
 pub struct EvaluationMetadata {
   /// The identifier of the contact in this instance of Connect Customer.
@@ -7106,6 +7367,7 @@ pub enum EvaluationQuestionAnswerAnalysisDetails {
 pub enum EvaluationQuestionAnswerAnalysisType: Str {
   ContactLensData = "CONTACT_LENS_DATA"
   GenAi = "GEN_AI"
+  Condition = "CONDITION"
   Unknown(value: Str)
 }
 
@@ -7113,6 +7375,23 @@ pub enum EvaluationQuestionAnswerAnalysisType: Str {
 pub struct EvaluationQuestionInputDetails {
   /// Transcript type.
   pub transcript_type: EvaluationTranscriptType? = None
+}
+
+/// The resolved value of an external source that is used by the conditions
+/// in an evaluation form.
+pub struct EvaluationResolvedSource {
+  /// The external source, such as contact data, evaluation metadata, form
+  /// metadata, or AI metrics.
+  pub source: EvaluationFormItemEnablementSource? = None
+  /// The status of resolving the source. Valid values: PENDING - The source
+  /// has not been resolved yet. RESOLVED - The source has been resolved.
+  /// FAILED - The source could not be resolved.
+  pub status: EvaluationItemResolutionStatus? = None
+  /// The resolved values of the source. Present when Status is RESOLVED .
+  /// Contains one value for a single-valued source, any number of values for
+  /// a multi-valued source, and no values when the source is not present on
+  /// the contact.
+  pub values: List[EvaluationFormItemEnablementSourceValue]? = None
 }
 
 /// Configuration settings for evaluation reviews.
@@ -7303,7 +7582,8 @@ pub struct EvaluationSuggestedAnswer {
   pub status: EvaluationSuggestedAnswerStatus? = None
   /// Details about the input used to question automation.
   pub input: EvaluationQuestionInputDetails? = None
-  /// Type of analysis used to provide suggested answer.
+  /// Type of analysis used to provide suggested answer. Valid values:
+  /// CONTACT_LENS_DATA | GEN_AI | CONDITION .
   pub analysis_type: EvaluationQuestionAnswerAnalysisType? = None
   /// Detailed analysis results.
   pub analysis_details: EvaluationQuestionAnswerAnalysisDetails? = None
@@ -7617,6 +7897,10 @@ pub enum FileUseCaseType: Str {
   EmailMessagePlainTextRedacted = "EMAIL_MESSAGE_PLAIN_TEXT_REDACTED"
   Attachment = "ATTACHMENT"
   VoiceRecording = "VOICE_RECORDING"
+  VoicemailRecording = "VOICEMAIL_RECORDING"
+  VoicemailRecordingRedacted = "VOICEMAIL_RECORDING_REDACTED"
+  VoicemailAnalysis = "VOICEMAIL_ANALYSIS"
+  VoicemailAnalysisRedacted = "VOICEMAIL_ANALYSIS_REDACTED"
   Unknown(value: Str)
 }
 
@@ -9899,6 +10183,11 @@ pub struct IntegrationAssociationSummary {
   pub source_application_name: Str? = None
   /// The name of the source.
   pub source_type: SourceType? = None
+  /// The timestamp when the integration association was last modified.
+  pub last_modified_time: Time? = None
+  /// The Amazon Web Services Region where the integration association was
+  /// last modified.
+  pub last_modified_region: Str? = None
 }
 
 pub enum IntegrationType: Str {
@@ -10201,271 +10490,5 @@ pub struct ListAttachedFilesConfigurationsRequest {
   /// The token for the next set of results. Use the value returned in the
   /// previous response in the next request to retrieve the next set of
   /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListAttachedFilesConfigurationsResponse {
-  /// Information about the attached files configurations.
-  pub attached_files_configurations: List[AttachedFilesConfigurationSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListAuthenticationProfilesRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListAuthenticationProfilesResponse {
-  /// A summary of a given authentication profile.
-  pub authentication_profile_summary_list: List[AuthenticationProfileSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListBotsRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-  /// The version of Amazon Lex or Amazon Lex V2.
-  pub lex_version: LexVersion? = None
-}
-
-pub struct ListBotsResponse {
-  /// The names and Amazon Web Services Regions of the Amazon Lex or Amazon
-  /// Lex V2 bots associated with the specified instance.
-  pub lex_bots: List[LexBotConfig]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListChildHoursOfOperationsRequest {
-  /// The identifier of the Amazon Connect instance. You can find the instance
-  /// ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The identifier of the parent hours of operation.
-  pub hours_of_operation_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page. The default MaxResult
-  /// size is 100.
-  pub max_results: Int? = None
-}
-
-pub struct ListChildHoursOfOperationsResponse {
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// Information about the hours of operation.
-  pub child_hours_of_operations_summary_list: List[HoursOfOperationsIdentifier]? = None
-  /// The timestamp when this resource was last modified.
-  pub last_modified_time: Time? = None
-  /// The Amazon Web Services Region where this resource was last modified.
-  pub last_modified_region: Str? = None
-}
-
-/// A leaf node condition which can be used to specify a List condition to
-/// search users with attributes included in Lists like Proficiencies.
-pub struct ListCondition {
-  /// The type of target list that will be used to filter the users.
-  pub target_list_type: TargetListType? = None
-  /// A list of Condition objects which would be applied together with an AND
-  /// condition.
-  pub conditions: List[Condition]? = None
-}
-
-pub struct ListContactEvaluationsRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The identifier of the contact in this instance of Connect Customer.
-  pub contact_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results. This is not expected to be set because the value returned in
-  /// the previous response is always null.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactEvaluationsResponse {
-  /// Provides details about a list of contact evaluations belonging to an
-  /// instance.
-  pub evaluation_summary_list: List[EvaluationSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results. This is always returned as null in the response.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactFlowAliasesRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The identifier of the flow.
-  pub contact_flow_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-}
-
-pub struct ListContactFlowAliasesResponse {
-  /// Information about the flow aliases.
-  pub contact_flow_alias_summary_list: List[ContactFlowAliasSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactFlowModuleAliasesRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The identifier of the flow module.
-  pub contact_flow_module_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-}
-
-pub struct ListContactFlowModuleAliasesResponse {
-  /// Information about the flow module aliases.
-  pub contact_flow_module_alias_summary_list: List[ContactFlowModuleAliasSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactFlowModuleVersionsRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The identifier of the flow module.
-  pub contact_flow_module_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-}
-
-pub struct ListContactFlowModuleVersionsResponse {
-  /// Information about the flow module versions.
-  pub contact_flow_module_version_summary_list: List[ContactFlowModuleVersionSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactFlowModulesRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page.
-  pub max_results: Int? = None
-  /// The state of the flow module.
-  pub contact_flow_module_state: ContactFlowModuleState? = None
-}
-
-pub struct ListContactFlowModulesResponse {
-  /// Information about the flow module.
-  pub contact_flow_modules_summary_list: List[ContactFlowModuleSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactFlowVersionsRequest {
-  /// The identifier of the Connect Customer instance.
-  pub instance_id: Str? = None
-  /// The identifier of the flow.
-  pub contact_flow_id: Str? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page. The default MaxResult
-  /// size is 100.
-  pub max_results: Int? = None
-}
-
-pub struct ListContactFlowVersionsResponse {
-  /// A list of flow version summaries.
-  pub contact_flow_version_summary_list: List[ContactFlowVersionSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactFlowsRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The type of flow.
-  pub contact_flow_types: List[ContactFlowType]? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results.
-  pub next_token: Str? = None
-  /// The maximum number of results to return per page. The default MaxResult
-  /// size is 100.
-  pub max_results: Int? = None
-}
-
-pub struct ListContactFlowsResponse {
-  /// Information about the flows.
-  pub contact_flow_summary_list: List[ContactFlowSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactReferencesRequest {
-  /// The identifier of the Connect Customer instance. You can find the
-  /// instance ID in the Amazon Resource Name (ARN) of the instance.
-  pub instance_id: Str? = None
-  /// The identifier of the initial contact.
-  pub contact_id: Str? = None
-  /// The type of reference.
-  pub reference_types: List[ReferenceType]? = None
-  /// The token for the next set of results. Use the value returned in the
-  /// previous response in the next request to retrieve the next set of
-  /// results. This is not expected to be set, because the value returned in
-  /// the previous response is always null.
-  pub next_token: Str? = None
-}
-
-pub struct ListContactReferencesResponse {
-  /// Information about the flows.
-  pub reference_summary_list: List[ReferenceSummary]? = None
-  /// If there are additional results, this is the token for the next set of
-  /// results. This is always returned as null in the response.
   pub next_token: Str? = None
 }

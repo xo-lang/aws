@@ -78,7 +78,32 @@ fn jmes_of_get_certificate_association_response(v: GetCertificateAssociationResp
   if let Some(x) = v.updated_at {
     fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
   }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
+  }
   json.Value.Object(fs)
+}
+
+fn jmes_of_error_details(v: List[ErrorDetail]) -> json.Value {
+  json.Value.List(v.map(fn(x: ErrorDetail) -> json.Value { jmes_of_error_detail(x) }))
+}
+
+fn jmes_of_error_detail(v: ErrorDetail) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.code {
+    fs.push(("code", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  if let Some(x) = v.resource_ids {
+    fs.push(("resourceIds", jmes_of_aws_resource_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_aws_resource_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
 
 fn jmes_of_get_inbound_external_link_response(v: GetInboundExternalLinkResponse) -> json.Value {
@@ -118,6 +143,15 @@ fn jmes_of_get_inbound_external_link_response(v: GetInboundExternalLinkResponse)
   }
   if let Some(x) = v.connectivity_type {
     fs.push(("connectivityType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
+  }
+  if let Some(x) = v.lock_token {
+    fs.push(("lockToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.flows {
+    fs.push(("flows", jmes_of_flow_list(x)))
   }
   json.Value.Object(fs)
 }
@@ -320,6 +354,88 @@ fn jmes_of_link_application_log_sampling(v: LinkApplicationLogSampling) -> json.
   json.Value.Object(fs)
 }
 
+fn jmes_of_flow_list(v: List[Flow]) -> json.Value {
+  json.Value.List(v.map(fn(x: Flow) -> json.Value { jmes_of_flow(x) }))
+}
+
+fn jmes_of_flow(v: Flow) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pipeline {
+    fs.push(("pipeline", jmes_of_flow_pipeline(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_flow_pipeline(v: FlowPipeline) -> json.Value {
+  match v {
+    Sequential(x) => json.Value.Object([("sequential", jmes_of_sequential_pipeline(x))])
+    Phased(x) => json.Value.Object([("phased", jmes_of_phased_pipeline(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn jmes_of_sequential_pipeline(v: SequentialPipeline) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.modules {
+    fs.push(("modules", jmes_of_flow_module_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_flow_module_list(v: List[FlowModule]) -> json.Value {
+  json.Value.List(v.map(fn(x: FlowModule) -> json.Value { jmes_of_flow_module(x) }))
+}
+
+fn jmes_of_flow_module(v: FlowModule) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.module_version_arn {
+    fs.push(("moduleVersionArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.selected_actions {
+    fs.push(("selectedActions", jmes_of_selected_action_list(x)))
+  }
+  if let Some(x) = v.failure_mode {
+    fs.push(("failureMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.activation_percentage {
+    fs.push(("activationPercentage", jsonv.float(Float(x))))
+  }
+  if let Some(x) = v.configuration_values {
+    fs.push(("configurationValues", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_selected_action_list(v: List[ConfigurableAction]) -> json.Value {
+  json.Value.List(v.map(fn(x: ConfigurableAction) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn jmes_of_phased_pipeline(v: PhasedPipeline) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.phases {
+    fs.push(("phases", jmes_of_flow_phase_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_flow_phase_list(v: List[FlowPhase]) -> json.Value {
+  json.Value.List(v.map(fn(x: FlowPhase) -> json.Value { jmes_of_flow_phase(x) }))
+}
+
+fn jmes_of_flow_phase(v: FlowPhase) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.modules {
+    fs.push(("modules", jmes_of_flow_module_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
 fn jmes_of_get_link_response(v: GetLinkResponse) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.gateway_id {
@@ -355,6 +471,9 @@ fn jmes_of_get_link_response(v: GetLinkResponse) -> json.Value {
   if let Some(x) = v.connectivity_type {
     fs.push(("connectivityType", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
+  }
   if let Some(x) = v.link_id {
     fs.push(("linkId", json.Value.Str(x)))
   }
@@ -366,6 +485,12 @@ fn jmes_of_get_link_response(v: GetLinkResponse) -> json.Value {
   }
   if let Some(x) = v.timeout_in_millis {
     fs.push(("timeoutInMillis", json.Value.Int(x)))
+  }
+  if let Some(x) = v.lock_token {
+    fs.push(("lockToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.flows {
+    fs.push(("flows", jmes_of_flow_list(x)))
   }
   json.Value.Object(fs)
 }
@@ -398,6 +523,9 @@ fn jmes_of_get_link_routing_rule_response(v: GetLinkRoutingRuleResponse) -> json
   }
   if let Some(x) = v.tags {
     fs.push(("tags", jmes_of_tags_map(x)))
+  }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
   }
   json.Value.Object(fs)
 }
@@ -474,6 +602,15 @@ fn jmes_of_get_outbound_external_link_response(v: GetOutboundExternalLinkRespons
   if let Some(x) = v.connectivity_type {
     fs.push(("connectivityType", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
+  }
+  if let Some(x) = v.lock_token {
+    fs.push(("lockToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.flows {
+    fs.push(("flows", jmes_of_flow_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -493,6 +630,9 @@ fn jmes_of_get_requester_gateway_response(v: GetRequesterGatewayResponse) -> jso
   }
   if let Some(x) = v.updated_at {
     fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
   }
   if let Some(x) = v.vpc_id {
     fs.push(("vpcId", json.Value.Str(x)))
@@ -548,6 +688,9 @@ fn jmes_of_get_responder_gateway_response(v: GetResponderGatewayResponse) -> jso
   }
   if let Some(x) = v.updated_at {
     fs.push(("updatedAt", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", jmes_of_error_details(x)))
   }
   if let Some(x) = v.domain_name {
     fs.push(("domainName", json.Value.Str(x)))
@@ -805,6 +948,9 @@ pub fn wait_until_inbound_external_link_active(c: Client, input: GetInboundExter
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_inbound_external_link(input) {
       Ok(out) => {
         let o = jmes_of_get_inbound_external_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACTIVE") {
           state = "success"
         }
@@ -854,6 +1000,9 @@ pub fn wait_until_inbound_external_link_deleted(c: Client, input: GetInboundExte
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_inbound_external_link(input) {
       Ok(out) => {
         let o = jmes_of_get_inbound_external_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETED") {
           state = "success"
         }
@@ -897,6 +1046,9 @@ pub fn wait_until_link_accepted(c: Client, input: GetLinkRequest, max_wait: Dura
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_link(input) {
       Ok(out) => {
         let o = jmes_of_get_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACCEPTED") {
           state = "success"
         }
@@ -943,6 +1095,9 @@ pub fn wait_until_link_active(c: Client, input: GetLinkRequest, max_wait: Durati
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_link(input) {
       Ok(out) => {
         let o = jmes_of_get_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACTIVE") {
           state = "success"
         }
@@ -989,6 +1144,9 @@ pub fn wait_until_link_deleted(c: Client, input: GetLinkRequest, max_wait: Durat
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_link(input) {
       Ok(out) => {
         let o = jmes_of_get_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETED") {
           state = "success"
         }
@@ -1032,6 +1190,9 @@ pub fn wait_until_link_routing_rule_active(c: Client, input: GetLinkRoutingRuleR
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_link_routing_rule(input) {
       Ok(out) => {
         let o = jmes_of_get_link_routing_rule_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACTIVE") {
           state = "success"
         }
@@ -1075,6 +1236,9 @@ pub fn wait_until_link_routing_rule_deleted(c: Client, input: GetLinkRoutingRule
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_link_routing_rule(input) {
       Ok(out) => {
         let o = jmes_of_get_link_routing_rule_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETED") {
           state = "success"
         }
@@ -1119,6 +1283,9 @@ pub fn wait_until_outbound_external_link_active(c: Client, input: GetOutboundExt
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_outbound_external_link(input) {
       Ok(out) => {
         let o = jmes_of_get_outbound_external_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACTIVE") {
           state = "success"
         }
@@ -1168,6 +1335,9 @@ pub fn wait_until_outbound_external_link_deleted(c: Client, input: GetOutboundEx
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_outbound_external_link(input) {
       Ok(out) => {
         let o = jmes_of_get_outbound_external_link_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETED") {
           state = "success"
         }
@@ -1211,6 +1381,9 @@ pub fn wait_until_requester_gateway_active(c: Client, input: GetRequesterGateway
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_requester_gateway(input) {
       Ok(out) => {
         let o = jmes_of_get_requester_gateway_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACTIVE") {
           state = "success"
         }
@@ -1254,6 +1427,9 @@ pub fn wait_until_requester_gateway_deleted(c: Client, input: GetRequesterGatewa
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_requester_gateway(input) {
       Ok(out) => {
         let o = jmes_of_get_requester_gateway_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETED") {
           state = "success"
         }
@@ -1298,6 +1474,9 @@ pub fn wait_until_responder_gateway_active(c: Client, input: GetResponderGateway
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_responder_gateway(input) {
       Ok(out) => {
         let o = jmes_of_get_responder_gateway_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "ACTIVE") {
           state = "success"
         }
@@ -1341,6 +1520,9 @@ pub fn wait_until_responder_gateway_deleted(c: Client, input: GetResponderGatewa
     match (c with {transport: transport.with_feature(c.transport, "B")}).get_responder_gateway(input) {
       Ok(out) => {
         let o = jmes_of_get_responder_gateway_response(out)
+        if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
         if state == "" && waiter.path_matches(o, "status", "stringEquals", "DELETED") {
           state = "success"
         }

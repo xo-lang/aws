@@ -50,9 +50,9 @@ pub enum ActiveDirectoryErrorType: Str {
 /// Windows, Lustre, OpenZFS, or ONTAP file system or volume.
 pub struct AdministrativeAction {
   pub administrative_action_type: AdministrativeActionType? = None
-  /// The percentage-complete status of a STORAGE_OPTIMIZATION or
-  /// DOWNLOAD_DATA_FROM_BACKUP administrative action. Does not apply to any
-  /// other administrative action type.
+  /// The percentage-complete status of a STORAGE_OPTIMIZATION ,
+  /// DOWNLOAD_DATA_FROM_BACKUP , or VOLUME_CLONE_SPLIT administrative action.
+  /// Does not apply to any other administrative action type.
   pub progress_percent: Int? = None
   /// The time that the administrative action request was received.
   pub request_time: Time? = None
@@ -61,19 +61,20 @@ pub struct AdministrativeAction {
   /// Amazon FSx is processing the administrative action. PENDING - Amazon FSx
   /// is waiting to process the administrative action. COMPLETED - Amazon FSx
   /// has finished processing the administrative task. For a backup restore to
-  /// a second-generation FSx for ONTAP file system, indicates that all data
-  /// has been downloaded to the volume, and clients now have read-write
-  /// access to volume. UPDATED_OPTIMIZING - For a storage-capacity increase
-  /// update, Amazon FSx has updated the file system with the new storage
-  /// capacity, and is now performing the storage-optimization process.
-  /// PENDING - For a backup restore to a second-generation FSx for ONTAP file
-  /// system, indicates that the file metadata is being downloaded onto the
-  /// volume. The volume's Lifecycle state is CREATING. IN_PROGRESS - For a
-  /// backup restore to a second-generation FSx for ONTAP file system,
-  /// indicates that all metadata has been downloaded to the new volume and
-  /// client can access data with read-only access while Amazon FSx downloads
-  /// the file data to the volume. Track the progress of this process with the
-  /// ProgressPercent element.
+  /// a second-generation or third-generation FSx for ONTAP file system,
+  /// indicates that all data has been downloaded to the volume, and clients
+  /// now have read-write access to volume. UPDATED_OPTIMIZING - For a
+  /// storage-capacity increase update, Amazon FSx has updated the file system
+  /// with the new storage capacity, and is now performing the
+  /// storage-optimization process. PENDING - For a backup restore to a
+  /// second-generation or third-generation FSx for ONTAP file system,
+  /// indicates that the file metadata is being downloaded onto the volume.
+  /// The volume's Lifecycle state is CREATING. IN_PROGRESS - For a backup
+  /// restore to a second-generation or third-generation FSx for ONTAP file
+  /// system, indicates that all metadata has been downloaded to the new
+  /// volume and client can access data with read-only access while Amazon FSx
+  /// downloads the file data to the volume. Track the progress of this
+  /// process with the ProgressPercent element.
   pub status: Status? = None
   /// The target value for the administration action, provided in the
   /// UpdateFileSystem operation. Returned for FILE_SYSTEM_UPDATE
@@ -149,17 +150,21 @@ pub struct AdministrativeActionFailureDetails {
 /// API ( UpdateSnapshot ), or CLI ( update-snapshot ). RELEASE_NFS_V3_LOCKS
 /// - Tracks the release of Network File System (NFS) V3 locks on an Amazon
 /// FSx for OpenZFS file system. DOWNLOAD_DATA_FROM_BACKUP - An FSx for
-/// ONTAP backup is being restored to a new volume on a second-generation
-/// file system. Once the all the file metadata is loaded onto the volume,
-/// you can mount the volume with read-only access. during this process.
-/// VOLUME_INITIALIZE_WITH_SNAPSHOT - A volume is being created from a
-/// snapshot on a different FSx for OpenZFS file system. You can initiate
-/// this from the Amazon FSx console, API ( CreateVolume ), or CLI (
-/// create-volume ) when using the using the FULL_COPY strategy.
+/// ONTAP backup is being restored to a new volume on a second-generation or
+/// third-generation file system. Once the all the file metadata is loaded
+/// onto the volume, you can mount the volume with read-only access. during
+/// this process. VOLUME_INITIALIZE_WITH_SNAPSHOT - A volume is being
+/// created from a snapshot on a different FSx for OpenZFS file system. You
+/// can initiate this from the Amazon FSx console, API ( CreateVolume ), or
+/// CLI ( create-volume ) when using the using the FULL_COPY strategy.
 /// VOLUME_UPDATE_WITH_SNAPSHOT - A volume is being updated from a snapshot
 /// on a different FSx for OpenZFS file system. You can initiate this from
 /// the Amazon FSx console, API ( CopySnapshotAndUpdateVolume ), or CLI (
-/// copy-snapshot-and-update-volume ).
+/// copy-snapshot-and-update-volume ). VOLUME_CLONE_SPLIT - An FSx for ONTAP
+/// volume clone is being split from its parent volume. You can initiate
+/// this from the Amazon FSx console, Amazon FSx API ( UpdateVolume ) or CLI
+/// ( update-volume ) by setting SplitAction to START in the volume's
+/// CloneConfiguration .
 pub enum AdministrativeActionType: Str {
   FileSystemUpdate = "FILE_SYSTEM_UPDATE"
   StorageOptimization = "STORAGE_OPTIMIZATION"
@@ -176,6 +181,7 @@ pub enum AdministrativeActionType: Str {
   VolumeUpdateWithSnapshot = "VOLUME_UPDATE_WITH_SNAPSHOT"
   VolumeInitializeWithSnapshot = "VOLUME_INITIALIZE_WITH_SNAPSHOT"
   DownloadDataFromBackup = "DOWNLOAD_DATA_FROM_BACKUP"
+  VolumeCloneSplit = "VOLUME_CLONE_SPLIT"
   Unknown(value: Str)
 }
 
@@ -230,6 +236,13 @@ pub enum AliasLifecycle: Str {
   Deleting = "DELETING"
   CreateFailed = "CREATE_FAILED"
   DeleteFailed = "DELETE_FAILED"
+  Unknown(value: Str)
+}
+
+pub enum AllowedSvmMode: Str {
+  All = "ALL"
+  None = "NONE"
+  Specified = "SPECIFIED"
   Unknown(value: Str)
 }
 
@@ -465,6 +478,97 @@ pub struct CancelDataRepositoryTaskResponse {
   pub task_id: Str? = None
 }
 
+/// Describes the parent volume, and the snapshot if one was specified, that
+/// an FSx for ONTAP volume clone was created from.
+pub struct CloneConfiguration {
+  /// The ID of the parent volume that the clone was created from.
+  pub parent_volume_id: Str? = None
+  /// The ID of the snapshot of the parent volume that the clone was created
+  /// from, if you specified one when you created the clone.
+  pub snapshot_id: Str? = None
+}
+
+pub enum CloneSplitAction: Str {
+  Start = "START"
+  Unknown(value: Str)
+}
+
+/// Describes an Amazon FSx for NetApp ONTAP cluster peer relationship.
+pub struct ClusterPeer {
+  pub resource_arn: Str? = None
+  /// The system-generated, unique ID of the cluster peer.
+  pub cluster_peer_id: Str? = None
+  /// The globally unique ID of the file system, assigned by Amazon FSx.
+  pub file_system_id: Str? = None
+  /// The lifecycle status of the cluster peer can be one of the following:
+  /// CREATED – The cluster peer is fully available for use. CREATING –
+  /// Amazon FSx is creating the cluster peer. DELETING – Amazon FSx is
+  /// deleting the cluster peer. FAILED – Amazon FSx was unable to create
+  /// the cluster peer.
+  pub lifecycle: ClusterPeerLifecycle? = None
+  /// The reason why the cluster peer lifecycle status changed.
+  pub lifecycle_transition_reason: LifecycleTransitionReason? = None
+  pub tags: List[Tag]? = None
+  /// The IP addresses of the intercluster logical interfaces (LIFs) on the
+  /// peer cluster.
+  pub peer_addresses: List[Str]? = None
+  /// The name that the file system uses to identify the peer cluster.
+  pub peer_cluster_name: Str? = None
+  /// The Amazon Resource Name (ARN) of the Amazon Web Services Secrets
+  /// Manager secret containing the cluster peering passphrase.
+  pub passphrase_secret_arn: Str? = None
+  /// Indicates which SVMs on the file system are preauthorized for SVM
+  /// peering with the peer cluster.
+  pub allowed_svm_mode: AllowedSvmMode? = None
+  /// The IDs of the SVMs on the file system that are preauthorized for SVM
+  /// peering with the peer cluster, if AllowedSvmMode is SPECIFIED .
+  pub allowed_svm_ids: List[Str]? = None
+  /// The status of the connection to the peer cluster.
+  pub status: Str? = None
+  /// The cluster peer's universally unique identifier (UUID).
+  pub uuid: Str? = None
+  /// The authentication status of the cluster peer relationship.
+  pub authentication_status: ClusterPeerAuthenticationStatus? = None
+}
+
+/// Describes the authentication status of an Amazon FSx for NetApp ONTAP
+/// cluster peer relationship.
+pub struct ClusterPeerAuthenticationStatus {
+  /// The authentication state of the cluster peer relationship.
+  pub state: Str? = None
+  /// The status of the authentication that the cluster peer relationship is
+  /// using.
+  pub in_use: Str? = None
+}
+
+/// A filter used to restrict the results of describe calls for Amazon FSx
+/// for NetApp ONTAP cluster peers.
+pub struct ClusterPeerFilter {
+  /// The name for this filter.
+  pub name: ClusterPeerFilterName? = None
+  /// The values of the filter. These are all the values for any of the
+  /// applied filters.
+  pub values: List[Str]? = None
+}
+
+pub enum ClusterPeerFilterName: Str {
+  FileSystemId = "file-system-id"
+  Unknown(value: Str)
+}
+
+pub enum ClusterPeerLifecycle: Str {
+  Creating = "CREATING"
+  Created = "CREATED"
+  Deleting = "DELETING"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// No Amazon FSx cluster peers were found based on the supplied parameters.
+pub struct ClusterPeerNotFound {
+  pub message: Str? = None
+}
+
 /// Provides a report detailing the data repository task results of the
 /// files processed that match the criteria specified in the report Scope
 /// parameter. FSx delivers the report to the file system's linked data
@@ -480,11 +584,17 @@ pub struct CompletionReport {
   /// Required if Enabled is set to true . Specifies the location of the
   /// report on the file system's linked S3 data repository. An absolute path
   /// that defines where the completion report will be stored in the
-  /// destination location. The Path you provide must be located within the
-  /// file system’s ExportPath. An example Path value is
-  /// "s3://amzn-s3-demo-bucket/myExportPath/optionalPrefix". The report
-  /// provides the following information for each file in the report:
-  /// FilePath, FileStatus, and ErrorCode.
+  /// destination location. The Path you provide must be within the Amazon S3
+  /// location that the file system is linked to. That location depends on how
+  /// the file system is configured: The DataRepositoryPath of one of the
+  /// associations, if the file system has data repository associations The
+  /// ExportPath , if the file system was created with an ImportPath and an
+  /// ExportPath For example, if an association links to
+  /// s3://amzn-s3-demo-bucket/myPrefix , then
+  /// s3://amzn-s3-demo-bucket/myPrefix/reports is valid. The path
+  /// s3://amzn-s3-demo-bucket/reports is not. The report provides the
+  /// following information for each file in the report: FilePath, FileStatus,
+  /// and ErrorCode.
   pub path: Str? = None
   /// Required if Enabled is set to true . Specifies the format of the
   /// CompletionReport . REPORT_CSV_20191124 is the only format currently
@@ -604,8 +714,8 @@ pub struct CreateAndAttachS3AccessPointRequest {
   pub client_request_token: Str? = None
   /// The name you want to assign to this S3 access point.
   pub name: Str? = None
-  /// The type of S3 access point you want to create. Only OpenZFS is
-  /// supported.
+  /// The type of S3 access point you want to create. Valid values are OPENZFS
+  /// and ONTAP .
   pub type_value: S3AccessPointAttachmentType? = None
   /// Specifies the configuration to use when creating and attaching an S3
   /// access point to an FSx for OpenZFS volume.
@@ -661,6 +771,56 @@ pub struct CreateBackupResponse {
   pub backup: Backup? = None
 }
 
+/// Specifies the parent volume, and optionally the snapshot, that an FSx
+/// for ONTAP volume clone is created from.
+pub struct CreateCloneConfiguration {
+  /// Specifies the ID of the volume to clone.
+  pub parent_volume_id: Str? = None
+  /// Specifies the ID of a snapshot of the parent volume to create the clone
+  /// from. The snapshot's lifecycle state must be AVAILABLE . If you don't
+  /// specify a snapshot, ONTAP creates a new snapshot of the parent volume
+  /// and creates the clone from it.
+  pub snapshot_id: Str? = None
+}
+
+pub struct CreateClusterPeerRequest {
+  pub client_request_token: Str? = None
+  /// Specifies the ID of the Amazon FSx for NetApp ONTAP file system on which
+  /// to create the cluster peer relationship.
+  pub file_system_id: Str? = None
+  /// Specifies the IP addresses of the intercluster logical interfaces (LIFs)
+  /// on the peer cluster.
+  pub peer_addresses: List[Str]? = None
+  /// Specifies the Amazon Resource Name (ARN) of the Amazon Web Services
+  /// Secrets Manager secret containing the cluster peering passphrase. Store
+  /// the passphrase as a plaintext secret value, not as a key-value pair. The
+  /// secret must be in the same Amazon Web Services Region as the file
+  /// system. You must use the same passphrase when you create the cluster
+  /// peer relationship on the peer cluster.
+  pub passphrase_secret_arn: Str? = None
+  /// Specifies the name that the file system uses to identify the peer
+  /// cluster.
+  pub peer_cluster_name: Str? = None
+  /// Specifies which SVMs on the file system are preauthorized for SVM
+  /// peering with the peer cluster. ALL – All SVMs on the file system are
+  /// preauthorized. You can't specify AllowedSvmIds along with this property.
+  /// NONE – No SVMs on the file system are preauthorized. You can't specify
+  /// AllowedSvmIds along with this property. SPECIFIED – Only the SVMs in
+  /// AllowedSvmIds are preauthorized. You must specify AllowedSvmIds along
+  /// with this property.
+  pub allowed_svm_mode: AllowedSvmMode? = None
+  /// Specifies the IDs of the SVMs on the file system that are preauthorized
+  /// for SVM peering with the peer cluster. You can specify AllowedSvmIds
+  /// only when AllowedSvmMode is SPECIFIED .
+  pub allowed_svm_ids: List[Str]? = None
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateClusterPeerResponse {
+  /// A description of the cluster peer.
+  pub cluster_peer: ClusterPeer? = None
+}
+
 pub struct CreateDataRepositoryAssociationRequest {
   pub file_system_id: Str? = None
   /// A path on the file system that points to a high-level directory (such as
@@ -669,11 +829,13 @@ pub struct CreateDataRepositoryAssociationRequest {
   /// required. Two data repository associations cannot have overlapping file
   /// system paths. For example, if a data repository is associated with file
   /// system path /ns1/ , then you cannot link another data repository with
-  /// file system path /ns1/ns2 . This path specifies where in your file
-  /// system files will be exported from or imported to. This file system
-  /// directory can be linked to only one Amazon S3 bucket, and no other S3
-  /// bucket can be linked to the directory. If you specify only a forward
-  /// slash ( / ) as the file system path, you can link only one data
+  /// file system path /ns1/ns2 . You must specify this path when you create a
+  /// data repository association. There is no default value; a request that
+  /// omits it fails with a BadRequest error. This path specifies where in
+  /// your file system files will be exported from or imported to. This file
+  /// system directory can be linked to only one Amazon S3 bucket, and no
+  /// other S3 bucket can be linked to the directory. If you specify only a
+  /// forward slash ( / ) as the file system path, you can link only one data
   /// repository to the file system. You can only specify "/" as the file
   /// system path for the first data repository associated with a file system.
   pub file_system_path: Str? = None
@@ -1045,7 +1207,9 @@ pub struct CreateFileSystemLustreConfiguration {
   pub data_compression_type: DataCompressionType? = None
   /// (Optional) Specifies whether Elastic Fabric Adapter (EFA) and GPUDirect
   /// Storage (GDS) support is enabled for the Amazon FSx for Lustre file
-  /// system. (Default = false )
+  /// system. On file systems that use the Intelligent-Tiering storage class,
+  /// you can enable EFA only when ThroughputCapacity is 4000 MBps or a
+  /// multiple of 4000 MBps. (Default = false )
   pub efa_enabled: Bool? = None
   /// The Lustre logging configuration used when creating an Amazon FSx for
   /// Lustre file system. When logging is enabled, Lustre logs error and
@@ -1061,8 +1225,9 @@ pub struct CreateFileSystemLustreConfiguration {
   pub metadata_configuration: CreateFileSystemLustreMetadataConfiguration? = None
   /// Specifies the throughput of an FSx for Lustre file system using the
   /// Intelligent-Tiering storage class, measured in megabytes per second
-  /// (MBps). Valid values are 4000 MBps or multiples of 4000 MBps. You pay
-  /// for the amount of throughput that you provision.
+  /// (MBps). Valid values are 1000 MBps, 2000 MBps, and multiples of 4000
+  /// MBps, up to a maximum of 2000000 MBps. You pay for the amount of
+  /// throughput that you provision.
   pub throughput_capacity: Int? = None
   /// Specifies the optional provisioned SSD read cache on FSx for Lustre file
   /// systems that use the Intelligent-Tiering storage class. Required when
@@ -1083,17 +1248,20 @@ pub struct CreateFileSystemLustreMetadataConfiguration {
   /// metadata disk IOPS supported by the file system. For SSD file systems,
   /// valid values are 1500 , 3000 , 6000 , 12000 , and multiples of 12000 up
   /// to a maximum of 192000 . For Intelligent-Tiering file systems, valid
-  /// values are 6000 and 12000 . Iops doesn’t have a default value. If
-  /// you're using USER_PROVISIONED mode, you can choose to specify a valid
-  /// value. If you're using AUTOMATIC mode, you cannot specify a value
-  /// because FSx for Lustre automatically sets the value based on your file
-  /// system storage capacity.
+  /// values are 1500 , 3000 , 6000 , 12000 , and multiples of 12000 up to a
+  /// maximum of 192000 . You can't provision fewer Metadata IOPS than
+  /// AUTOMATIC mode provisions for your file system. Iops doesn’t have a
+  /// default value. If you're using USER_PROVISIONED mode, you can choose to
+  /// specify a valid value. If you're using AUTOMATIC mode, you cannot
+  /// specify a value because FSx for Lustre automatically sets the value
+  /// based on your file system's storage capacity for SSD file systems, and
+  /// on throughput capacity for Intelligent-Tiering file systems.
   pub iops: Int? = None
   /// The metadata configuration mode for provisioning Metadata IOPS for an
   /// FSx for Lustre file system using a PERSISTENT_2 deployment type. In
-  /// AUTOMATIC mode (supported only on SSD file systems), FSx for Lustre
-  /// automatically provisions and scales the number of Metadata IOPS for your
-  /// file system based on your file system storage capacity. In
+  /// AUTOMATIC mode, FSx for Lustre provisions and scales Metadata IOPS for
+  /// you. For SSD file systems, the number is based on storage capacity. For
+  /// Intelligent-Tiering file systems, it is based on throughput capacity. In
   /// USER_PROVISIONED mode, you specify the number of Metadata IOPS to
   /// provision for your file system.
   pub mode: MetadataConfigurationMode? = None
@@ -1102,6 +1270,10 @@ pub struct CreateFileSystemLustreMetadataConfiguration {
 /// The ONTAP configuration properties of the FSx for ONTAP file system that
 /// you are creating.
 pub struct CreateFileSystemOntapConfiguration {
+  /// The number of days to retain automatic backups. Setting this property to
+  /// 0 disables automatic backups and deletes all existing automatic backups
+  /// for the file system's volumes. You can retain automatic backups for a
+  /// maximum of 90 days. The default is 30 .
   pub automatic_backup_retention_days: Int? = None
   pub daily_automatic_backup_start_time: Str? = None
   /// Specifies the FSx for ONTAP file system deployment type to use in
@@ -1114,7 +1286,12 @@ pub struct CreateFileSystemOntapConfiguration {
   /// configured for Single-AZ redundancy. This is a first-generation FSx for
   /// ONTAP file system. SINGLE_AZ_2 - A file system configured with multiple
   /// high-availability (HA) pairs for Single-AZ redundancy. This is a
-  /// second-generation FSx for ONTAP file system. For information about the
+  /// second-generation FSx for ONTAP file system. MULTI_AZ_3 - A high
+  /// availability file system configured for Multi-AZ redundancy to tolerate
+  /// temporary AZ unavailability. This is a third-generation FSx for ONTAP
+  /// file system. SINGLE_AZ_3 - A file system configured with multiple
+  /// high-availability (HA) pairs for Single-AZ redundancy. This is a
+  /// third-generation FSx for ONTAP file system. For information about the
   /// use cases for Multi-AZ and Single-AZ deployments, refer to Choosing a
   /// file system deployment type .
   pub deployment_type: OntapDeploymentType? = None
@@ -1132,9 +1309,9 @@ pub struct CreateFileSystemOntapConfiguration {
   pub fsx_admin_password: Str? = None
   /// The SSD IOPS configuration for the FSx for ONTAP file system.
   pub disk_iops_configuration: DiskIopsConfiguration? = None
-  /// Required when DeploymentType is set to MULTI_AZ_1 or MULTI_AZ_2 . This
-  /// specifies the subnet in which you want the preferred file server to be
-  /// located.
+  /// Required when DeploymentType is set to MULTI_AZ_1 , MULTI_AZ_2 , or
+  /// MULTI_AZ_3 . This specifies the subnet in which you want the preferred
+  /// file server to be located.
   pub preferred_subnet_id: Str? = None
   /// (Multi-AZ only) Specifies the route tables in which Amazon FSx creates
   /// the rules for routing traffic to the correct file server. You should
@@ -1158,18 +1335,19 @@ pub struct CreateFileSystemOntapConfiguration {
   pub weekly_maintenance_start_time: Str? = None
   /// Specifies how many high-availability (HA) pairs of file servers will
   /// power your file system. First-generation file systems are powered by 1
-  /// HA pair. Second-generation multi-AZ file systems are powered by 1 HA
-  /// pair. Second generation single-AZ file systems are powered by up to 12
-  /// HA pairs. The default value is 1. The value of this property affects the
-  /// values of StorageCapacity , Iops , and ThroughputCapacity . For more
-  /// information, see High-availability (HA) pairs in the FSx for ONTAP user
-  /// guide. Block storage protocol support (iSCSI and NVMe over TCP) is
-  /// disabled on file systems with more than 6 HA pairs. For more
-  /// information, see Using block storage protocols . Amazon FSx responds
-  /// with an HTTP status code 400 (Bad Request) for the following conditions:
-  /// The value of HAPairs is less than 1 or greater than 12. The value of
-  /// HAPairs is greater than 1 and the value of DeploymentType is SINGLE_AZ_1
-  /// , MULTI_AZ_1 , or MULTI_AZ_2 .
+  /// HA pair. Second-generation and third-generation multi-AZ file systems
+  /// are powered by 1 HA pair. Second-generation and third-generation
+  /// single-AZ file systems are powered by up to 12 HA pairs. The default
+  /// value is 1. The value of this property affects the values of
+  /// StorageCapacity , Iops , and ThroughputCapacity . For more information,
+  /// see High-availability (HA) pairs in the FSx for ONTAP user guide. Block
+  /// storage protocol support (iSCSI and NVMe over TCP) is disabled on file
+  /// systems with more than 6 HA pairs. For more information, see Using block
+  /// storage protocols . Amazon FSx responds with an HTTP status code 400
+  /// (Bad Request) for the following conditions: The value of HAPairs is less
+  /// than 1 or greater than 12. The value of HAPairs is greater than 1 and
+  /// the value of DeploymentType is SINGLE_AZ_1 , MULTI_AZ_1 , MULTI_AZ_2 ,
+  /// or MULTI_AZ_3 .
   pub ha_pairs: Int? = None
   /// Use to choose the throughput capacity per HA pair, rather than the total
   /// throughput for the file system. You can define either the
@@ -1179,13 +1357,15 @@ pub struct CreateFileSystemOntapConfiguration {
   /// MULTI_AZ_1 file systems, valid values are 128, 256, 512, 1024, 2048, or
   /// 4096 MBps. For SINGLE_AZ_2 , valid values are 1536, 3072, or 6144 MBps.
   /// For MULTI_AZ_2 , valid values are 384, 768, 1536, 3072, or 6144 MBps.
-  /// Amazon FSx responds with an HTTP status code 400 (Bad Request) for the
-  /// following conditions: The value of ThroughputCapacity and
-  /// ThroughputCapacityPerHAPair are not the same value for file systems with
-  /// one HA pair. The value of deployment type is SINGLE_AZ_2 and
-  /// ThroughputCapacity / ThroughputCapacityPerHAPair is not a valid HA pair
-  /// (a value between 1 and 12). The value of ThroughputCapacityPerHAPair is
-  /// not a valid value.
+  /// For SINGLE_AZ_3 , valid values are 1536, 3072, 6144, 12288, or 18432
+  /// MBps. For MULTI_AZ_3 , valid values are 384, 768, 1536, 3072, 6144,
+  /// 12288, or 18432 MBps. Amazon FSx responds with an HTTP status code 400
+  /// (Bad Request) for the following conditions: The value of
+  /// ThroughputCapacity and ThroughputCapacityPerHAPair are not the same
+  /// value for file systems with one HA pair. The value of deployment type is
+  /// SINGLE_AZ_2 or SINGLE_AZ_3 and ThroughputCapacity /
+  /// ThroughputCapacityPerHAPair is not a valid HA pair (a value between 1
+  /// and 12). The value of ThroughputCapacityPerHAPair is not a valid value.
   pub throughput_capacity_per_ha_pair: Int? = None
   /// (Multi-AZ only) Specifies the IPv6 address range in which the endpoints
   /// to access your file system will be created. By default in the Amazon FSx
@@ -1464,6 +1644,23 @@ pub struct CreateFileSystemWindowsConfiguration {
   pub fsrm_configuration: WindowsFsrmConfiguration? = None
 }
 
+/// Specifies the configuration of the ONTAP snapshot that you are creating.
+pub struct CreateOntapSnapshotConfiguration {
+  /// Specifies the SnapMirror label to assign to the snapshot. SnapMirror
+  /// policies use labels to select which snapshots to replicate to a
+  /// destination volume.
+  pub snapmirror_label: Str? = None
+  /// Specifies the date and time when the snapshot expires. You can't delete
+  /// the snapshot before this time.
+  pub expiry_time: Time? = None
+  /// Specifies the date and time until which the snapshot is locked. This
+  /// setting takes effect only if snapshot locking is enabled on the volume.
+  /// Snapshot locking is separate from SnapLock, and enabling SnapLock on a
+  /// volume doesn't enable snapshot locking. You can't delete the snapshot
+  /// before this time.
+  pub snaplock_expiry_time: Time? = None
+}
+
 /// Specifies the configuration of the ONTAP volume that you are creating.
 pub struct CreateOntapVolumeConfiguration {
   /// Specifies the location in the SVM's namespace where the volume is
@@ -1535,6 +1732,10 @@ pub struct CreateOntapVolumeConfiguration {
   pub aggregate_configuration: CreateAggregateConfiguration? = None
   /// Specifies the configured size of the volume, in bytes.
   pub size_in_bytes: Int? = None
+  /// Specifies the configuration to use when creating the volume as a clone
+  /// of another FSx for ONTAP volume. A clone is a writable, point-in-time
+  /// copy of its parent volume.
+  pub clone_configuration: CreateCloneConfiguration? = None
 }
 
 /// The snapshot configuration to use when creating an Amazon FSx for
@@ -1667,6 +1868,121 @@ pub struct CreateSnaplockConfiguration {
   pub volume_append_mode_enabled: Bool? = None
 }
 
+/// Specifies the destination endpoint of the Amazon FSx for NetApp ONTAP
+/// SnapMirror relationship that you are creating.
+pub struct CreateSnapmirrorDestination {
+  /// Specifies the ID of the destination volume.
+  pub volume_id: Str? = None
+}
+
+pub struct CreateSnapmirrorPolicyRequest {
+  pub client_request_token: Str? = None
+  /// Specifies the ID of the Amazon FSx for NetApp ONTAP file system on which
+  /// to create the SnapMirror policy. You must specify either a FileSystemId
+  /// or a StorageVirtualMachineId , but not both.
+  pub file_system_id: Str? = None
+  /// Specifies the ID of the SVM on which to create the SnapMirror policy.
+  /// You must specify either a FileSystemId or a StorageVirtualMachineId ,
+  /// but not both.
+  pub storage_virtual_machine_id: Str? = None
+  /// Specifies the name of the SnapMirror policy.
+  pub name: Str? = None
+  /// Specifies which snapshots SnapMirror transfers to the destination
+  /// volume: COPY_ALL_SOURCE_SNAPSHOTS – SnapMirror copies all snapshots of
+  /// the source volume to the destination volume on a transfer. You can't
+  /// specify RetentionRules along with this property.
+  /// COPY_LATEST_SOURCE_SNAPSHOT – SnapMirror copies the latest snapshot of
+  /// the source volume to the destination volume on a transfer. You can't
+  /// specify RetentionRules along with this property.
+  /// NO_CREATE_SNAPSHOT_ON_SOURCE – SnapMirror doesn't create a snapshot on
+  /// the source volume at beginning of an update or resync operation. You
+  /// must specify RetentionRules along with this property. If you don't
+  /// specify a SnapshotCopyMode , SnapMirror creates a new snapshot of the
+  /// source volume and copies it, along with any snapshots that match
+  /// RetentionRules , to the destination volume on a transfer. RetentionRules
+  /// is optional.
+  pub snapshot_copy_mode: SnapmirrorPolicySnapshotCopyMode? = None
+  /// Specifies the rules that determine which snapshots SnapMirror retains on
+  /// the destination volume, based on their SnapMirror labels.
+  pub retention_rules: List[SnapmirrorPolicyRetentionRule]? = None
+  /// Specifies the name of the ONTAP schedule that determines when SnapMirror
+  /// transfers data.
+  pub transfer_schedule: Str? = None
+  /// Specifies whether SnapMirror compresses data when it transfers the data
+  /// over the network. This value defaults to false .
+  pub network_compression_enabled: Bool? = None
+  /// Specifies the maximum bandwidth, in kilobytes per second (KBps), that
+  /// SnapMirror uses to transfer data. A value of 0 means that the bandwidth
+  /// is unlimited.
+  pub throttle_in_kbps: Int? = None
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateSnapmirrorPolicyResponse {
+  /// A description of the SnapMirror policy.
+  pub snapmirror_policy: SnapmirrorPolicy? = None
+}
+
+pub struct CreateSnapmirrorRelationshipRequest {
+  pub client_request_token: Str? = None
+  /// Specifies the source endpoint of the SnapMirror relationship.
+  pub source: CreateSnapmirrorSource? = None
+  /// Specifies the destination endpoint of the SnapMirror relationship.
+  pub destination: CreateSnapmirrorDestination? = None
+  /// Specifies the ID of the SnapMirror policy that the SnapMirror
+  /// relationship uses.
+  pub policy_id: Str? = None
+  /// Specifies the name of the ONTAP schedule that determines when SnapMirror
+  /// transfers data for the relationship. This schedule overrides the
+  /// transfer schedule of the SnapMirror policy.
+  pub transfer_schedule: Str? = None
+  /// Specifies the maximum bandwidth, in kilobytes per second (KBps), that
+  /// SnapMirror uses to transfer data for the relationship. A value of 0
+  /// means that the bandwidth is unlimited. This value overrides the throttle
+  /// of the SnapMirror policy.
+  pub throttle_in_kbps: Int? = None
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateSnapmirrorRelationshipResponse {
+  /// A description of the SnapMirror relationship.
+  pub snapmirror_relationship: SnapmirrorRelationship? = None
+}
+
+/// Specifies the source endpoint of the Amazon FSx for NetApp ONTAP
+/// SnapMirror relationship that you are creating.
+pub struct CreateSnapmirrorSource {
+  /// Specifies the path of the source volume, in the format
+  /// svm_name:volume_name .
+  pub path: Str? = None
+}
+
+pub struct CreateSnapshotPolicyRequest {
+  pub client_request_token: Str? = None
+  /// Specifies the ID of the Amazon FSx for NetApp ONTAP file system on which
+  /// to create the snapshot policy. You must specify either a FileSystemId or
+  /// a StorageVirtualMachineId , but not both.
+  pub file_system_id: Str? = None
+  /// Specifies the ID of the SVM on which to create the snapshot policy. You
+  /// must specify either a FileSystemId or a StorageVirtualMachineId , but
+  /// not both.
+  pub storage_virtual_machine_id: Str? = None
+  /// Specifies the name of the snapshot policy.
+  pub name: Str? = None
+  /// Specifies whether the snapshot policy is enabled. This value defaults to
+  /// true .
+  pub enabled: Bool? = None
+  /// Specifies the schedules on which ONTAP creates snapshots for the
+  /// snapshot policy.
+  pub schedules: List[SnapshotPolicySchedule]? = None
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateSnapshotPolicyResponse {
+  /// A description of the snapshot policy.
+  pub snapshot_policy: SnapshotPolicy? = None
+}
+
 pub struct CreateSnapshotRequest {
   pub client_request_token: Str? = None
   /// The name of the snapshot.
@@ -1674,11 +1990,34 @@ pub struct CreateSnapshotRequest {
   /// The ID of the volume that you are taking a snapshot of.
   pub volume_id: Str? = None
   pub tags: List[Tag]? = None
+  /// Specifies the configuration to use when creating the ONTAP snapshot.
+  pub ontap_configuration: CreateOntapSnapshotConfiguration? = None
 }
 
 pub struct CreateSnapshotResponse {
   /// A description of the snapshot.
   pub snapshot: Snapshot? = None
+}
+
+pub struct CreateStorageVirtualMachinePeerRequest {
+  pub client_request_token: Str? = None
+  /// Specifies the ID of the SVM on which to create the SVM peer
+  /// relationship.
+  pub storage_virtual_machine_id: Str? = None
+  /// Specifies the name of the SVM to peer with.
+  pub peer_svm_name: Str? = None
+  /// Specifies the name of the peer cluster that the peer SVM is on.
+  pub peer_cluster_name: Str? = None
+  /// Specifies the applications that the SVM peer relationship authorizes.
+  pub applications: List[StorageVirtualMachinePeerApplication]? = None
+  /// Specifies the name that the local cluster uses to identify the peer SVM.
+  pub peer_svm_alias: Str? = None
+  pub tags: List[Tag]? = None
+}
+
+pub struct CreateStorageVirtualMachinePeerResponse {
+  /// A description of the SVM peer.
+  pub storage_virtual_machine_peer: StorageVirtualMachinePeer? = None
 }
 
 pub struct CreateStorageVirtualMachineRequest {
@@ -2125,6 +2464,20 @@ pub struct DeleteBackupResponse {
   pub lifecycle: BackupLifecycle? = None
 }
 
+pub struct DeleteClusterPeerRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the cluster peer that you are deleting.
+  pub cluster_peer_id: Str? = None
+}
+
+pub struct DeleteClusterPeerResponse {
+  /// The ID of the cluster peer that's being deleted.
+  pub cluster_peer_id: Str? = None
+  /// The lifecycle state of the cluster peer being deleted. If the
+  /// DeleteClusterPeer operation is successful, this value is DELETING .
+  pub lifecycle: ClusterPeerLifecycle? = None
+}
+
 pub struct DeleteDataRepositoryAssociationRequest {
   /// The ID of the data repository association that you want to delete.
   pub association_id: Str? = None
@@ -2271,6 +2624,49 @@ pub enum DeleteOpenZFSVolumeOption: Str {
   Unknown(value: Str)
 }
 
+pub struct DeleteSnapmirrorPolicyRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the SnapMirror policy that you are deleting.
+  pub snapmirror_policy_id: Str? = None
+}
+
+pub struct DeleteSnapmirrorPolicyResponse {
+  /// The ID of the SnapMirror policy that's being deleted.
+  pub snapmirror_policy_id: Str? = None
+  /// The lifecycle state of the SnapMirror policy being deleted. If the
+  /// DeleteSnapmirrorPolicy operation is successful, this value is DELETING .
+  pub lifecycle: SnapmirrorPolicyLifecycle? = None
+}
+
+pub struct DeleteSnapmirrorRelationshipRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the SnapMirror relationship that you are deleting.
+  pub snapmirror_relationship_id: Str? = None
+}
+
+pub struct DeleteSnapmirrorRelationshipResponse {
+  /// The ID of the SnapMirror relationship that's being deleted.
+  pub snapmirror_relationship_id: Str? = None
+  /// The lifecycle state of the SnapMirror relationship being deleted. If the
+  /// DeleteSnapmirrorRelationship operation is successful, this value is
+  /// DELETING .
+  pub lifecycle: SnapmirrorRelationshipLifecycle? = None
+}
+
+pub struct DeleteSnapshotPolicyRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the snapshot policy that you are deleting.
+  pub snapshot_policy_id: Str? = None
+}
+
+pub struct DeleteSnapshotPolicyResponse {
+  /// The ID of the snapshot policy that's being deleted.
+  pub snapshot_policy_id: Str? = None
+  /// The lifecycle state of the snapshot policy being deleted. If the
+  /// DeleteSnapshotPolicy operation is successful, this value is DELETING .
+  pub lifecycle: SnapshotPolicyLifecycle? = None
+}
+
 pub struct DeleteSnapshotRequest {
   pub client_request_token: Str? = None
   /// The ID of the snapshot that you want to delete.
@@ -2283,6 +2679,21 @@ pub struct DeleteSnapshotResponse {
   /// The lifecycle status of the snapshot. If the DeleteSnapshot operation is
   /// successful, this status is DELETING .
   pub lifecycle: SnapshotLifecycle? = None
+}
+
+pub struct DeleteStorageVirtualMachinePeerRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the SVM peer that you are deleting.
+  pub storage_virtual_machine_peer_id: Str? = None
+}
+
+pub struct DeleteStorageVirtualMachinePeerResponse {
+  /// The ID of the SVM peer that's being deleted.
+  pub storage_virtual_machine_peer_id: Str? = None
+  /// The lifecycle state of the SVM peer being deleted. If the
+  /// DeleteStorageVirtualMachinePeer operation is successful, this value is
+  /// DELETING .
+  pub lifecycle: StorageVirtualMachinePeerLifecycle? = None
 }
 
 pub struct DeleteStorageVirtualMachineRequest {
@@ -2381,6 +2792,25 @@ pub struct DescribeBackupsResponse {
   /// A NextToken value is present if there are more backups than returned in
   /// the response. You can use the NextToken value in the subsequent request
   /// to fetch the backups.
+  pub next_token: Str? = None
+}
+
+pub struct DescribeClusterPeersRequest {
+  /// The IDs of the cluster peers that you want to retrieve. If you also
+  /// specify Filters , only cluster peers that match both the IDs and the
+  /// filters are returned. If any IDs aren't found, or if a filter excludes
+  /// any of them, a ClusterPeerNotFound error occurs.
+  pub cluster_peer_ids: List[Str]? = None
+  /// The filters structure. The supported name is file-system-id .
+  pub filters: List[ClusterPeerFilter]? = None
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeClusterPeersResponse {
+  /// Describes each cluster peer returned by the DescribeClusterPeers
+  /// operation.
+  pub cluster_peers: List[ClusterPeer]? = None
   pub next_token: Str? = None
 }
 
@@ -2514,10 +2944,74 @@ pub struct DescribeSharedVpcConfigurationResponse {
   pub enable_fsx_route_table_updates_from_participant_accounts: Str? = None
 }
 
-pub struct DescribeSnapshotsRequest {
-  /// The IDs of the snapshots that you want to retrieve. This parameter value
-  /// overrides any filters. If any IDs aren't found, a SnapshotNotFound error
+pub struct DescribeSnapmirrorPoliciesRequest {
+  /// The IDs of the SnapMirror policies that you want to retrieve. If you
+  /// also specify Filters , only SnapMirror policies that match both the IDs
+  /// and the filters are returned. If any IDs aren't found, or if a filter
+  /// excludes any of them, a SnapmirrorPolicyNotFound error occurs.
+  pub snapmirror_policy_ids: List[Str]? = None
+  /// The filters structure. The supported names are file-system-id or
+  /// storage-virtual-machine-id .
+  pub filters: List[SnapmirrorPolicyFilter]? = None
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeSnapmirrorPoliciesResponse {
+  /// Describes each SnapMirror policy returned by the
+  /// DescribeSnapmirrorPolicies operation.
+  pub snapmirror_policies: List[SnapmirrorPolicy]? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeSnapmirrorRelationshipsRequest {
+  /// The IDs of the SnapMirror relationships that you want to retrieve. If
+  /// you also specify Filters , only SnapMirror relationships that match both
+  /// the IDs and the filters are returned. If any IDs aren't found, or if a
+  /// filter excludes any of them, a SnapmirrorRelationshipNotFound error
   /// occurs.
+  pub snapmirror_relationship_ids: List[Str]? = None
+  /// The filters structure. The supported names are file-system-id or
+  /// destination-volume-id .
+  pub filters: List[SnapmirrorRelationshipFilter]? = None
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeSnapmirrorRelationshipsResponse {
+  /// Describes each SnapMirror relationship returned by the
+  /// DescribeSnapmirrorRelationships operation.
+  pub snapmirror_relationships: List[SnapmirrorRelationship]? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeSnapshotPoliciesRequest {
+  /// The IDs of the snapshot policies that you want to retrieve. If you also
+  /// specify Filters , only snapshot policies that match both the IDs and the
+  /// filters are returned. If any IDs aren't found, or if a filter excludes
+  /// any of them, a SnapshotPolicyNotFound error occurs.
+  pub snapshot_policy_ids: List[Str]? = None
+  /// The filters structure. The supported names are file-system-id or
+  /// storage-virtual-machine-id .
+  pub filters: List[SnapshotPolicyFilter]? = None
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeSnapshotPoliciesResponse {
+  /// Describes each snapshot policy returned by the DescribeSnapshotPolicies
+  /// operation.
+  pub snapshot_policies: List[SnapshotPolicy]? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeSnapshotsRequest {
+  /// The IDs of the snapshots that you want to retrieve. You can include
+  /// snapshots of Amazon FSx for OpenZFS and Amazon FSx for NetApp ONTAP
+  /// volumes in the same request. If you also specify Filters , only
+  /// snapshots that match both the IDs and the filters are returned. If any
+  /// IDs aren't found, or if a filter excludes any of them, a
+  /// SnapshotNotFound error occurs.
   pub snapshot_ids: List[Str]? = None
   /// The filters structure. The supported names are file-system-id or
   /// volume-id .
@@ -2534,6 +3028,26 @@ pub struct DescribeSnapshotsRequest {
 pub struct DescribeSnapshotsResponse {
   /// An array of snapshots.
   pub snapshots: List[Snapshot]? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeStorageVirtualMachinePeersRequest {
+  /// The IDs of the SVM peers that you want to retrieve. If you also specify
+  /// Filters , only SVM peers that match both the IDs and the filters are
+  /// returned. If any IDs aren't found, or if a filter excludes any of them,
+  /// a StorageVirtualMachinePeerNotFound error occurs.
+  pub storage_virtual_machine_peer_ids: List[Str]? = None
+  /// The filters structure. The supported names are file-system-id or
+  /// storage-virtual-machine-id .
+  pub filters: List[StorageVirtualMachinePeerFilter]? = None
+  pub max_results: Int? = None
+  pub next_token: Str? = None
+}
+
+pub struct DescribeStorageVirtualMachinePeersResponse {
+  /// Describes each SVM peer returned by the
+  /// DescribeStorageVirtualMachinePeers operation.
+  pub storage_virtual_machine_peers: List[StorageVirtualMachinePeer]? = None
   pub next_token: Str? = None
 }
 
@@ -3015,14 +3529,15 @@ pub struct FileSystemLustreMetadataConfiguration {
   /// The number of Metadata IOPS provisioned for the file system. For SSD
   /// file systems, valid values are 1500 , 3000 , 6000 , 12000 , and
   /// multiples of 12000 up to a maximum of 192000 . For Intelligent-Tiering
-  /// file systems, valid values are 6000 and 12000 .
+  /// file systems, valid values are 1500 , 3000 , 6000 , 12000 , and
+  /// multiples of 12000 up to a maximum of 192000 .
   pub iops: Int? = None
   /// The metadata configuration mode for provisioning Metadata IOPS for the
-  /// file system. In AUTOMATIC mode (supported only on SSD file systems), FSx
-  /// for Lustre automatically provisions and scales the number of Metadata
-  /// IOPS on your file system based on your file system storage capacity. In
-  /// USER_PROVISIONED mode, you can choose to specify the number of Metadata
-  /// IOPS to provision for your file system.
+  /// file system. In AUTOMATIC mode, FSx for Lustre provisions and scales
+  /// Metadata IOPS for you. For SSD file systems, the number is based on
+  /// storage capacity. For Intelligent-Tiering file systems, it is based on
+  /// throughput capacity. In USER_PROVISIONED mode, you can choose to specify
+  /// the number of Metadata IOPS to provision for your file system.
   pub mode: MetadataConfigurationMode? = None
 }
 
@@ -3174,6 +3689,9 @@ pub struct InvalidSourceKmsKey {
 /// Describes why a resource lifecycle state changed.
 pub struct LifecycleTransitionReason {
   pub message: Str? = None
+  /// The error returned by ONTAP when an operation on the resource fails.
+  /// Returned only for certain FSx for ONTAP resources.
+  pub ontap_error: OntapError? = None
 }
 
 /// The request object for ListTagsForResource operation.
@@ -3356,8 +3874,8 @@ pub struct LustreReadCacheConfiguration {
   /// Required if SizingMode is set to USER_PROVISIONED . Specifies the size
   /// of the file system's SSD read cache, in gibibytes (GiB). The SSD read
   /// cache size is distributed across provisioned file servers in your file
-  /// system. Intelligent-Tiering file systems support a minimum of 32 GiB and
-  /// maximum of 131072 GiB for SSD read cache size for every 4,000 MB/s of
+  /// system. Intelligent-Tiering file systems support a minimum of 8 GiB and
+  /// maximum of 32768 GiB for SSD read cache size for every 1000 MBps of
   /// throughput capacity provisioned.
   pub size_gi_b: Int? = None
 }
@@ -3460,11 +3978,26 @@ pub enum OntapDeploymentType: Str {
   SingleAz1 = "SINGLE_AZ_1"
   SingleAz2 = "SINGLE_AZ_2"
   MultiAz2 = "MULTI_AZ_2"
+  SingleAz3 = "SINGLE_AZ_3"
+  MultiAz3 = "MULTI_AZ_3"
   Unknown(value: Str)
+}
+
+/// An error returned by ONTAP for an operation on an Amazon FSx for NetApp
+/// ONTAP resource.
+pub struct OntapError {
+  /// The error message returned by ONTAP.
+  pub message: Str? = None
+  /// The error code returned by ONTAP.
+  pub code: Str? = None
 }
 
 /// Configuration for the FSx for NetApp ONTAP file system.
 pub struct OntapFileSystemConfiguration {
+  /// The number of days to retain automatic backups. Setting this property to
+  /// 0 disables automatic backups and deletes all existing automatic backups
+  /// for the file system's volumes. You can retain automatic backups for a
+  /// maximum of 90 days. The default is 30 .
   pub automatic_backup_retention_days: Int? = None
   pub daily_automatic_backup_start_time: Str? = None
   /// Specifies the FSx for ONTAP file system deployment type in use in the
@@ -3477,7 +4010,12 @@ pub struct OntapFileSystemConfiguration {
   /// configured for Single-AZ redundancy. This is a first-generation FSx for
   /// ONTAP file system. SINGLE_AZ_2 - A file system configured with multiple
   /// high-availability (HA) pairs for Single-AZ redundancy. This is a
-  /// second-generation FSx for ONTAP file system. For information about the
+  /// second-generation FSx for ONTAP file system. MULTI_AZ_3 - A high
+  /// availability file system configured for Multi-AZ redundancy to tolerate
+  /// temporary AZ unavailability. This is a third-generation FSx for ONTAP
+  /// file system. SINGLE_AZ_3 - A file system configured with multiple
+  /// high-availability (HA) pairs for Single-AZ redundancy. This is a
+  /// third-generation FSx for ONTAP file system. For information about the
   /// use cases for Multi-AZ and Single-AZ deployments, refer to Choosing
   /// Multi-AZ or Single-AZ file system deployment .
   pub deployment_type: OntapDeploymentType? = None
@@ -3513,7 +4051,8 @@ pub struct OntapFileSystemConfiguration {
   /// ONTAP user guide. Amazon FSx responds with an HTTP status code 400 (Bad
   /// Request) for the following conditions: The value of HAPairs is less than
   /// 1 or greater than 12. The value of HAPairs is greater than 1 and the
-  /// value of DeploymentType is SINGLE_AZ_1 , MULTI_AZ_1 , or MULTI_AZ_2 .
+  /// value of DeploymentType is SINGLE_AZ_1 , MULTI_AZ_1 , MULTI_AZ_2 , or
+  /// MULTI_AZ_3 .
   pub ha_pairs: Int? = None
   /// Use to choose the throughput capacity per HA pair. When the value of
   /// HAPairs is equal to 1, the value of ThroughputCapacityPerHAPair is the
@@ -3523,10 +4062,12 @@ pub struct OntapFileSystemConfiguration {
   /// For SINGLE_AZ_1 and MULTI_AZ_1 file systems, valid values are 128, 256,
   /// 512, 1024, 2048, or 4096 MBps. For SINGLE_AZ_2 , valid values are 1536,
   /// 3072, or 6144 MBps. For MULTI_AZ_2 , valid values are 384, 768, 1536,
-  /// 3072, or 6144 MBps. Amazon FSx responds with an HTTP status code 400
-  /// (Bad Request) for the following conditions: The value of
+  /// 3072, or 6144 MBps. For SINGLE_AZ_3 , valid values are 1536, 3072, 6144,
+  /// 12288, or 18432 MBps. For MULTI_AZ_3 , valid values are 384, 768, 1536,
+  /// 3072, 6144, 12288, or 18432 MBps. Amazon FSx responds with an HTTP
+  /// status code 400 (Bad Request) for the following conditions: The value of
   /// ThroughputCapacity and ThroughputCapacityPerHAPair are not the same
-  /// value. The value of deployment type is SINGLE_AZ_2 and
+  /// value. The value of deployment type is SINGLE_AZ_2 or SINGLE_AZ_3 and
   /// ThroughputCapacity / ThroughputCapacityPerHAPair is not a valid HA pair
   /// (a value between 1 and 12). The value of ThroughputCapacityPerHAPair is
   /// not a valid value.
@@ -3557,6 +4098,26 @@ pub enum OntapFileSystemUserType: Str {
   Unix = "UNIX"
   Windows = "WINDOWS"
   Unknown(value: Str)
+}
+
+/// The configuration of an Amazon FSx for NetApp ONTAP snapshot.
+pub struct OntapSnapshotConfiguration {
+  /// The configured size of the snapshot, in megabytes (MBs).
+  pub size_in_megabytes: Int? = None
+  /// The SnapMirror label of the snapshot. SnapMirror policies use labels to
+  /// select which snapshots to replicate to a destination volume.
+  pub snapmirror_label: Str? = None
+  /// The date and time when the snapshot expires. You can't delete the
+  /// snapshot before this time.
+  pub expiry_time: Time? = None
+  /// The date and time until which the snapshot is locked. This setting takes
+  /// effect only if snapshot locking is enabled on the volume. Snapshot
+  /// locking is separate from SnapLock, and enabling SnapLock on a volume
+  /// doesn't enable snapshot locking. You can't delete the snapshot before
+  /// this time.
+  pub snaplock_expiry_time: Time? = None
+  /// The snapshot's universally unique identifier (UUID).
+  pub uuid: Str? = None
 }
 
 /// The FSx for ONTAP UNIX file system user that is used for authorizing all
@@ -3642,6 +4203,10 @@ pub struct OntapVolumeConfiguration {
   pub aggregate_configuration: AggregateConfiguration? = None
   /// The configured size of the volume, in bytes.
   pub size_in_bytes: Int? = None
+  /// The clone configuration of the volume, if the volume is a clone. This
+  /// property doesn't appear for a volume that isn't a clone, or for a clone
+  /// that has been split from its parent volume.
+  pub clone_configuration: CloneConfiguration? = None
 }
 
 pub enum OntapVolumeType: Str {
@@ -4127,8 +4692,11 @@ pub struct S3AccessPointAttachment {
   /// access point and attachment DELETING - Amazon FSx is deleting the S3
   /// access point and attachment FAILED - The S3 access point attachment is
   /// in a failed state. Delete and detach the S3 access point attachment, and
-  /// create a new one. UPDATING - Amazon FSx is updating the S3 access point
-  /// attachment
+  /// create a new one. MISCONFIGURED - The S3 access point attachment has a
+  /// configuration issue that prevents it from serving requests. Amazon FSx
+  /// periodically checks for this condition and automatically returns the
+  /// access point to AVAILABLE when the issue is resolved. UPDATING - Amazon
+  /// FSx is updating the S3 access point attachment
   pub lifecycle: S3AccessPointAttachmentLifecycle? = None
   pub lifecycle_transition_reason: LifecycleTransitionReason? = None
   pub creation_time: Time? = None
@@ -4254,8 +4822,9 @@ pub struct SelfManagedActiveDirectoryAttributes {
   /// The user name for the service account on your self-managed AD domain
   /// that FSx uses to join to your AD domain.
   pub user_name: Str? = None
-  /// A list of up to three IP addresses of DNS servers or domain controllers
-  /// in the self-managed AD directory.
+  /// A list of IP addresses of DNS servers or domain controllers in the
+  /// self-managed AD directory. FSx for ONTAP SVMs support up to three IP
+  /// addresses, FSx for Windows supports up to two.
   pub dns_ips: List[Str]? = None
   /// The Amazon Resource Name (ARN) of the Amazon Web Services Secrets
   /// Manager secret containing the service account credentials used to join
@@ -4298,8 +4867,9 @@ pub struct SelfManagedActiveDirectoryConfiguration {
   /// The password for the service account on your self-managed AD domain that
   /// Amazon FSx will use to join to your AD domain.
   pub password: Str? = None
-  /// A list of up to three IP addresses of DNS servers or domain controllers
-  /// in the self-managed AD directory.
+  /// A list of IP addresses of DNS servers or domain controllers in the
+  /// self-managed AD directory. FSx for ONTAP SVMs support up to three IP
+  /// addresses, FSx for Windows supports up to two.
   pub dns_ips: List[Str]? = None
   /// The Amazon Resource Name (ARN) of the Amazon Web Services Secrets
   /// Manager secret containing the self-managed Active Directory domain join
@@ -4329,8 +4899,9 @@ pub struct SelfManagedActiveDirectoryConfigurationUpdates {
   /// self-managed Active Directory domain. Amazon FSx uses this account to
   /// join to your self-managed Active Directory domain.
   pub password: Str? = None
-  /// A list of up to three DNS server or domain controller IP addresses in
-  /// your self-managed Active Directory domain.
+  /// A list of IP addresses of DNS servers or domain controllers in the
+  /// self-managed AD directory. FSx for ONTAP SVMs support up to three IP
+  /// addresses, FSx for Windows supports up to two.
   pub dns_ips: List[Str]? = None
   /// Specifies an updated fully qualified domain name of your self-managed
   /// Active Directory configuration.
@@ -4445,7 +5016,262 @@ pub enum SnaplockType: Str {
   Unknown(value: Str)
 }
 
-/// A snapshot of an Amazon FSx for OpenZFS volume.
+/// Describes the destination endpoint of an Amazon FSx for NetApp ONTAP
+/// SnapMirror relationship. The destination volume is always an Amazon FSx
+/// for NetApp ONTAP volume.
+pub struct SnapmirrorDestination {
+  /// The path of the destination volume, in the format svm_name:volume_name .
+  pub path: Str? = None
+  /// The ID of the destination volume.
+  pub volume_id: Str? = None
+}
+
+/// Describes the latest snapshot that SnapMirror transferred to the
+/// destination volume of an Amazon FSx for NetApp ONTAP SnapMirror
+/// relationship.
+pub struct SnapmirrorExportedSnapshot {
+  /// The ID of the snapshot, if Amazon FSx manages the snapshot.
+  pub snapshot_id: Str? = None
+  /// The name of the snapshot in ONTAP.
+  pub snapshot_name: Str? = None
+}
+
+/// Describes an Amazon FSx for NetApp ONTAP SnapMirror policy.
+pub struct SnapmirrorPolicy {
+  pub resource_arn: Str? = None
+  /// The system-generated, unique ID of the SnapMirror policy.
+  pub snapmirror_policy_id: Str? = None
+  /// The globally unique ID of the file system, assigned by Amazon FSx.
+  pub file_system_id: Str? = None
+  /// The ID of the SnapMirror policy's storage virtual machine, if you
+  /// created the SnapMirror policy on a storage virtual machine.
+  pub storage_virtual_machine_id: Str? = None
+  /// The name of the SnapMirror policy.
+  pub name: Str? = None
+  /// The snapshot copy mode of the SnapMirror policy, which determines which
+  /// snapshots SnapMirror transfers to the destination volume.
+  pub snapshot_copy_mode: SnapmirrorPolicySnapshotCopyMode? = None
+  /// The rules that determine which snapshots SnapMirror retains on the
+  /// destination volume.
+  pub retention_rules: List[SnapmirrorPolicyRetentionRule]? = None
+  /// The name of the ONTAP schedule that determines when SnapMirror transfers
+  /// data.
+  pub transfer_schedule: Str? = None
+  /// Specifies whether SnapMirror compresses data when it transfers the data
+  /// over the network. This value defaults to false .
+  pub network_compression_enabled: Bool? = None
+  /// The maximum bandwidth, in kilobytes per second (KBps), that SnapMirror
+  /// uses to transfer data. A value of 0 means that the bandwidth is
+  /// unlimited.
+  pub throttle_in_kbps: Int? = None
+  /// The scope of the SnapMirror policy can be one of the following:
+  /// FILESYSTEM – The SnapMirror policy was created on the file system. SVM
+  /// – The SnapMirror policy was created on an SVM.
+  pub scope: SnapmirrorPolicyScope? = None
+  /// The lifecycle status of the SnapMirror policy can be one of the
+  /// following: CREATED – The SnapMirror policy is fully available for use.
+  /// CREATING – Amazon FSx is creating the SnapMirror policy. DELETING –
+  /// Amazon FSx is deleting the SnapMirror policy. FAILED – Amazon FSx was
+  /// unable to create the SnapMirror policy.
+  pub lifecycle: SnapmirrorPolicyLifecycle? = None
+  /// The SnapMirror policy's universally unique identifier (UUID).
+  pub uuid: Str? = None
+  /// The reason why the SnapMirror policy lifecycle status changed.
+  pub lifecycle_transition_reason: LifecycleTransitionReason? = None
+  pub tags: List[Tag]? = None
+}
+
+/// A filter used to restrict the results of describe calls for Amazon FSx
+/// for NetApp ONTAP SnapMirror policies.
+pub struct SnapmirrorPolicyFilter {
+  /// The name for this filter.
+  pub name: SnapmirrorPolicyFilterName? = None
+  /// The values of the filter. These are all the values for any of the
+  /// applied filters.
+  pub values: List[Str]? = None
+}
+
+pub enum SnapmirrorPolicyFilterName: Str {
+  FileSystemId = "file-system-id"
+  StorageVirtualMachineId = "storage-virtual-machine-id"
+  Unknown(value: Str)
+}
+
+pub enum SnapmirrorPolicyLifecycle: Str {
+  Creating = "CREATING"
+  Created = "CREATED"
+  Deleting = "DELETING"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// No Amazon FSx SnapMirror policies were found based on the supplied
+/// parameters.
+pub struct SnapmirrorPolicyNotFound {
+  pub message: Str? = None
+}
+
+/// Specifies a snapshot retention rule for an Amazon FSx for NetApp ONTAP
+/// SnapMirror policy.
+pub struct SnapmirrorPolicyRetentionRule {
+  /// The SnapMirror label of the snapshots that the rule applies to.
+  pub label: Str? = None
+  /// The number of snapshots with the label to retain on the destination
+  /// volume.
+  pub count: Int? = None
+  /// The name of the ONTAP schedule on which SnapMirror creates snapshots
+  /// with the label directly on the destination volume.
+  pub creation_schedule: Str? = None
+}
+
+pub enum SnapmirrorPolicyScope: Str {
+  Filesystem = "FILESYSTEM"
+  Svm = "SVM"
+  Unknown(value: Str)
+}
+
+pub enum SnapmirrorPolicySnapshotCopyMode: Str {
+  CopyAllSourceSnapshots = "COPY_ALL_SOURCE_SNAPSHOTS"
+  CopyLatestSourceSnapshot = "COPY_LATEST_SOURCE_SNAPSHOT"
+  NoCreateSnapshotOnSource = "NO_CREATE_SNAPSHOT_ON_SOURCE"
+  Unknown(value: Str)
+}
+
+/// Describes an Amazon FSx for NetApp ONTAP SnapMirror relationship.
+pub struct SnapmirrorRelationship {
+  pub resource_arn: Str? = None
+  /// The system-generated, unique ID of the SnapMirror relationship.
+  pub snapmirror_relationship_id: Str? = None
+  /// The globally unique ID of the file system that the destination volume is
+  /// on, assigned by Amazon FSx.
+  pub file_system_id: Str? = None
+  /// The lifecycle status of the SnapMirror relationship can be one of the
+  /// following: CREATED – The SnapMirror relationship is fully available
+  /// for use. CREATING – Amazon FSx is creating the SnapMirror
+  /// relationship. DELETING – Amazon FSx is deleting the SnapMirror
+  /// relationship. FAILED – Amazon FSx was unable to create the SnapMirror
+  /// relationship.
+  pub lifecycle: SnapmirrorRelationshipLifecycle? = None
+  /// The reason why the SnapMirror relationship lifecycle status changed.
+  pub lifecycle_transition_reason: LifecycleTransitionReason? = None
+  pub tags: List[Tag]? = None
+  /// The source endpoint of the SnapMirror relationship.
+  pub source: SnapmirrorSource? = None
+  /// The destination endpoint of the SnapMirror relationship.
+  pub destination: SnapmirrorDestination? = None
+  /// The SnapMirror policy that the SnapMirror relationship uses.
+  pub snapmirror_policy: SnapmirrorRelationshipPolicy? = None
+  /// The name of the ONTAP schedule that determines when SnapMirror transfers
+  /// data for the relationship. This schedule overrides the transfer schedule
+  /// of the SnapMirror policy.
+  pub transfer_schedule: Str? = None
+  /// The maximum bandwidth, in kilobytes per second (KBps), that SnapMirror
+  /// uses to transfer data for the relationship. A value of 0 means that the
+  /// bandwidth is unlimited. This value overrides the throttle of the
+  /// SnapMirror policy.
+  pub throttle_in_kbps: Int? = None
+  /// The state of the SnapMirror relationship in ONTAP can be one of the
+  /// following: UNINITIALIZED – SnapMirror hasn't transferred the baseline
+  /// copy of the source volume to the destination volume. TRANSFERRING –
+  /// SnapMirror is transferring data to the destination volume. SNAPMIRRORED
+  /// – SnapMirror transferred the baseline copy, and the destination volume
+  /// receives updates from the source volume. PAUSED – SnapMirror transfers
+  /// for the relationship are paused. BROKEN_OFF – The relationship is
+  /// broken off, and the destination volume is writable. SnapMirror doesn't
+  /// transfer data to the destination volume.
+  pub state: SnapmirrorRelationshipState? = None
+  /// Indicates whether ONTAP reports the SnapMirror relationship as healthy.
+  pub healthy: Bool? = None
+  /// The reason that ONTAP reports for why the SnapMirror relationship is
+  /// unhealthy, if Healthy is false .
+  pub unhealthy_reason: Str? = None
+  /// The time, in minutes, since ONTAP created the latest snapshot that
+  /// SnapMirror transferred to the destination volume.
+  pub lag_time_in_minutes: Int? = None
+  /// The latest snapshot that SnapMirror transferred to the destination
+  /// volume.
+  pub exported_snapshot: SnapmirrorExportedSnapshot? = None
+  /// The latest SnapMirror transfer for the relationship. If a transfer is in
+  /// progress, this is the in-progress transfer. Otherwise, it's the most
+  /// recently completed transfer.
+  pub transfer_state: SnapmirrorTransferState? = None
+  /// The SnapMirror relationship's universally unique identifier (UUID).
+  pub uuid: Str? = None
+}
+
+/// A filter used to restrict the results of describe calls for Amazon FSx
+/// for NetApp ONTAP SnapMirror relationships.
+pub struct SnapmirrorRelationshipFilter {
+  /// The name for this filter.
+  pub name: SnapmirrorRelationshipFilterName? = None
+  /// The values of the filter. These are all the values for any of the
+  /// applied filters.
+  pub values: List[Str]? = None
+}
+
+pub enum SnapmirrorRelationshipFilterName: Str {
+  FileSystemId = "file-system-id"
+  DestinationVolumeId = "destination-volume-id"
+  Unknown(value: Str)
+}
+
+pub enum SnapmirrorRelationshipLifecycle: Str {
+  Creating = "CREATING"
+  Created = "CREATED"
+  Deleting = "DELETING"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// No Amazon FSx SnapMirror relationships were found based on the supplied
+/// parameters.
+pub struct SnapmirrorRelationshipNotFound {
+  pub message: Str? = None
+}
+
+/// Describes the SnapMirror policy that an Amazon FSx for NetApp ONTAP
+/// SnapMirror relationship uses.
+pub struct SnapmirrorRelationshipPolicy {
+  /// The ID of the SnapMirror policy.
+  pub policy_id: Str? = None
+  /// The name of the SnapMirror policy in ONTAP.
+  pub policy_name: Str? = None
+}
+
+pub enum SnapmirrorRelationshipState: Str {
+  Uninitialized = "UNINITIALIZED"
+  Transferring = "TRANSFERRING"
+  Snapmirrored = "SNAPMIRRORED"
+  Paused = "PAUSED"
+  BrokenOff = "BROKEN_OFF"
+  Unknown(value: Str)
+}
+
+/// Describes the source endpoint of an Amazon FSx for NetApp ONTAP
+/// SnapMirror relationship. The source volume can be on an Amazon FSx for
+/// NetApp ONTAP file system or on another ONTAP cluster.
+pub struct SnapmirrorSource {
+  /// The path of the source volume, in the format svm_name:volume_name .
+  pub path: Str? = None
+}
+
+/// Describes the latest transfer of an Amazon FSx for NetApp ONTAP
+/// SnapMirror relationship.
+pub struct SnapmirrorTransferState {
+  /// The state of the transfer that ONTAP reports.
+  pub state: Str? = None
+  /// The type of the transfer that ONTAP reports.
+  pub type_value: Str? = None
+  /// The number of bytes that the transfer transferred.
+  pub bytes_transferred: Int? = None
+  /// The duration of the transfer, in ISO 8601 duration format.
+  pub duration: Str? = None
+  /// The time that the transfer ended.
+  pub end_time: Time? = None
+}
+
+/// A snapshot of an Amazon FSx for OpenZFS or Amazon FSx for NetApp ONTAP
+/// volume.
 pub struct Snapshot {
   pub resource_arn: Str? = None
   /// The ID of the snapshot.
@@ -4458,14 +5284,20 @@ pub struct Snapshot {
   /// The lifecycle status of the snapshot. PENDING - Amazon FSx hasn't
   /// started creating the snapshot. CREATING - Amazon FSx is creating the
   /// snapshot. DELETING - Amazon FSx is deleting the snapshot. AVAILABLE -
-  /// The snapshot is fully available.
+  /// The snapshot is fully available. FAILED - Amazon FSx was unable to
+  /// create the snapshot.
   pub lifecycle: SnapshotLifecycle? = None
+  /// The type of the snapshot.
+  pub snapshot_type: SnapshotType? = None
+  /// The reason why the snapshot lifecycle status changed.
   pub lifecycle_transition_reason: LifecycleTransitionReason? = None
   pub tags: List[Tag]? = None
   /// A list of administrative actions for the file system that are in process
   /// or waiting to be processed. Administrative actions describe changes to
   /// the Amazon FSx system.
   pub administrative_actions: List[AdministrativeAction]? = None
+  /// The configuration of an Amazon FSx for NetApp ONTAP snapshot.
+  pub ontap_configuration: OntapSnapshotConfiguration? = None
 }
 
 /// A filter used to restrict the results of DescribeSnapshots calls. You
@@ -4490,12 +5322,130 @@ pub enum SnapshotLifecycle: Str {
   Creating = "CREATING"
   Deleting = "DELETING"
   Available = "AVAILABLE"
+  Failed = "FAILED"
   Unknown(value: Str)
 }
 
 /// No Amazon FSx snapshots were found based on the supplied parameters.
 pub struct SnapshotNotFound {
   pub message: Str? = None
+}
+
+/// Describes an Amazon FSx for NetApp ONTAP snapshot policy.
+pub struct SnapshotPolicy {
+  pub resource_arn: Str? = None
+  /// The system-generated, unique ID of the snapshot policy.
+  pub snapshot_policy_id: Str? = None
+  /// The globally unique ID of the file system, assigned by Amazon FSx.
+  pub file_system_id: Str? = None
+  /// The ID of the snapshot policy's storage virtual machine, if you created
+  /// the snapshot policy on a storage virtual machine.
+  pub storage_virtual_machine_id: Str? = None
+  /// The name of the snapshot policy.
+  pub name: Str? = None
+  /// Specifies whether the snapshot policy is enabled. This value defaults to
+  /// true .
+  pub enabled: Bool? = None
+  /// The schedules on which ONTAP creates snapshots for the snapshot policy.
+  pub schedules: List[SnapshotPolicySchedule]? = None
+  /// The scope of the snapshot policy can be one of the following: FILESYSTEM
+  /// – The snapshot policy was created on the file system. SVM – The
+  /// snapshot policy was created on an SVM.
+  pub scope: SnapshotPolicyScope? = None
+  /// The lifecycle status of the snapshot policy can be one of the following:
+  /// CREATED – The snapshot policy is fully available for use. CREATING –
+  /// Amazon FSx is creating the snapshot policy. DELETING – Amazon FSx is
+  /// deleting the snapshot policy. FAILED – Amazon FSx was unable to create
+  /// the snapshot policy.
+  pub lifecycle: SnapshotPolicyLifecycle? = None
+  /// The snapshot policy's universally unique identifier (UUID).
+  pub uuid: Str? = None
+  /// The reason why the snapshot policy lifecycle status changed.
+  pub lifecycle_transition_reason: LifecycleTransitionReason? = None
+  pub tags: List[Tag]? = None
+}
+
+/// A filter used to restrict the results of describe calls for Amazon FSx
+/// for NetApp ONTAP snapshot policies.
+pub struct SnapshotPolicyFilter {
+  /// The name for this filter.
+  pub name: SnapshotPolicyFilterName? = None
+  /// The values of the filter. These are all the values for any of the
+  /// applied filters.
+  pub values: List[Str]? = None
+}
+
+pub enum SnapshotPolicyFilterName: Str {
+  FileSystemId = "file-system-id"
+  StorageVirtualMachineId = "storage-virtual-machine-id"
+  Unknown(value: Str)
+}
+
+pub enum SnapshotPolicyLifecycle: Str {
+  Creating = "CREATING"
+  Created = "CREATED"
+  Deleting = "DELETING"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// No Amazon FSx snapshot policies were found based on the supplied
+/// parameters.
+pub struct SnapshotPolicyNotFound {
+  pub message: Str? = None
+}
+
+/// The length of time that snapshots created by this schedule are locked.
+/// This setting applies only to volumes that have snapshot locking enabled.
+pub struct SnapshotPolicyRetentionPeriod {
+  /// The unit of time for the retention period. If you set it to INFINITE ,
+  /// the snapshots are retained forever.
+  pub type_value: SnapshotPolicyRetentionPeriodType? = None
+  /// Defines the amount of time for the retention period. You can't set a
+  /// value for INFINITE .
+  pub value: Int? = None
+}
+
+pub enum SnapshotPolicyRetentionPeriodType: Str {
+  Seconds = "SECONDS"
+  Minutes = "MINUTES"
+  Hours = "HOURS"
+  Days = "DAYS"
+  Months = "MONTHS"
+  Years = "YEARS"
+  Infinite = "INFINITE"
+  Unknown(value: Str)
+}
+
+/// Specifies a schedule for an Amazon FSx for NetApp ONTAP snapshot policy.
+pub struct SnapshotPolicySchedule {
+  /// The name of the ONTAP schedule that determines when snapshots are
+  /// created.
+  pub name: Str? = None
+  /// The number of snapshots to retain for the schedule.
+  pub count: Int? = None
+  /// The prefix for the schedule to use when creating snapshots.
+  pub prefix: Str? = None
+  /// The SnapMirror label to assign to the snapshots that the schedule
+  /// creates. SnapMirror policies use labels to select which snapshots to
+  /// replicate to a destination volume.
+  pub snapmirror_label: Str? = None
+  /// The length of time that the snapshots that the schedule creates are
+  /// locked. This setting applies only to volumes that have snapshot locking
+  /// enabled.
+  pub retention_period: SnapshotPolicyRetentionPeriod? = None
+}
+
+pub enum SnapshotPolicyScope: Str {
+  Filesystem = "FILESYSTEM"
+  Svm = "SVM"
+  Unknown(value: Str)
+}
+
+pub enum SnapshotType: Str {
+  Ontap = "ONTAP"
+  Openzfs = "OPENZFS"
+  Unknown(value: Str)
 }
 
 /// The request was rejected because the lifecycle status of the source
@@ -4598,6 +5548,103 @@ pub enum StorageVirtualMachineLifecycle: Str {
 /// No FSx for ONTAP SVMs were found based upon the supplied parameters.
 pub struct StorageVirtualMachineNotFound {
   pub message: Str? = None
+}
+
+/// Describes an Amazon FSx for NetApp ONTAP storage virtual machine (SVM)
+/// peer relationship.
+pub struct StorageVirtualMachinePeer {
+  pub resource_arn: Str? = None
+  /// The system-generated, unique ID of the SVM peer.
+  pub storage_virtual_machine_peer_id: Str? = None
+  /// The ID of the SVM on the file system that the SVM peer relationship
+  /// belongs to.
+  pub storage_virtual_machine_id: Str? = None
+  /// The globally unique ID of the file system, assigned by Amazon FSx.
+  pub file_system_id: Str? = None
+  /// The lifecycle status of the SVM peer can be one of the following:
+  /// CREATED – The SVM peer is fully available for use. CREATING – Amazon
+  /// FSx is creating the SVM peer. DELETING – Amazon FSx is deleting the
+  /// SVM peer. FAILED – Amazon FSx was unable to create the SVM peer.
+  pub lifecycle: StorageVirtualMachinePeerLifecycle? = None
+  /// The reason why the SVM peer lifecycle status changed.
+  pub lifecycle_transition_reason: LifecycleTransitionReason? = None
+  pub tags: List[Tag]? = None
+  /// The name of the SVM on the peer cluster.
+  pub peer_svm_name: Str? = None
+  /// The name that the local cluster uses to identify the peer SVM.
+  pub peer_svm_alias: Str? = None
+  /// The name of the peer cluster that the peer SVM is on.
+  pub peer_cluster_name: Str? = None
+  /// The applications that the SVM peer relationship authorizes. The
+  /// applications can be one or more of the following: SNAPMIRROR –
+  /// SnapMirror replication. FILE_COPY – File copy. LUN_COPY – LUN copy.
+  /// FLEXCACHE – FlexCache.
+  pub applications: List[StorageVirtualMachinePeerApplication]? = None
+  /// The state of the SVM peer relationship in ONTAP can be one of the
+  /// following: PEERED – The SVM peer relationship is established.
+  /// INITIATED – The local cluster sent a peering request to the peer SVM.
+  /// PENDING – A peering request from the peer SVM is waiting for
+  /// acceptance. INITIALIZING – ONTAP is setting up the SVM peer
+  /// relationship. SUSPENDED – The SVM peer relationship is suspended.
+  /// REJECTED – The peering request was rejected.
+  pub state: StorageVirtualMachinePeerState? = None
+  /// The SVM peer's universally unique identifier (UUID).
+  pub uuid: Str? = None
+}
+
+pub enum StorageVirtualMachinePeerApplication: Str {
+  Snapmirror = "SNAPMIRROR"
+  FileCopy = "FILE_COPY"
+  LunCopy = "LUN_COPY"
+  Flexcache = "FLEXCACHE"
+  Unknown(value: Str)
+}
+
+/// A filter used to restrict the results of describe calls for Amazon FSx
+/// for NetApp ONTAP storage virtual machine (SVM) peers.
+pub struct StorageVirtualMachinePeerFilter {
+  /// The name for this filter.
+  pub name: StorageVirtualMachinePeerFilterName? = None
+  /// The values of the filter. These are all the values for any of the
+  /// applied filters.
+  pub values: List[Str]? = None
+}
+
+pub enum StorageVirtualMachinePeerFilterName: Str {
+  FileSystemId = "file-system-id"
+  StorageVirtualMachineId = "storage-virtual-machine-id"
+  Unknown(value: Str)
+}
+
+pub enum StorageVirtualMachinePeerLifecycle: Str {
+  Creating = "CREATING"
+  Created = "CREATED"
+  Deleting = "DELETING"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// No Amazon FSx storage virtual machine (SVM) peers were found based on
+/// the supplied parameters.
+pub struct StorageVirtualMachinePeerNotFound {
+  pub message: Str? = None
+}
+
+pub enum StorageVirtualMachinePeerState: Str {
+  Peered = "PEERED"
+  Rejected = "REJECTED"
+  Suspended = "SUSPENDED"
+  Initiated = "INITIATED"
+  Pending = "PENDING"
+  Initializing = "INITIALIZING"
+  Unknown(value: Str)
+}
+
+pub enum StorageVirtualMachinePeerUpdateState: Str {
+  Peered = "PEERED"
+  Rejected = "REJECTED"
+  Suspended = "SUSPENDED"
+  Unknown(value: Str)
 }
 
 pub enum StorageVirtualMachineRootVolumeSecurityStyle: Str {
@@ -4750,6 +5797,51 @@ pub struct UntagResourceRequest {
 pub struct UntagResourceResponse {
 }
 
+pub enum UpdatableSnapmirrorRelationshipState: Str {
+  Snapmirrored = "SNAPMIRRORED"
+  Paused = "PAUSED"
+  BrokenOff = "BROKEN_OFF"
+  Unknown(value: Str)
+}
+
+/// Specifies changes to the clone configuration of an FSx for ONTAP volume.
+pub struct UpdateCloneConfiguration {
+  /// Set to START to split the clone from its parent volume. Splitting copies
+  /// the data that the clone shares with the parent volume, so that the clone
+  /// becomes an independent volume that no longer depends on the parent.
+  /// After the split, the volume uses storage for all of its data. When you
+  /// split a clone, keep the following in mind: SplitAction must be the only
+  /// property that you change in the UpdateVolume request. You can't split a
+  /// data protection ( DP ) clone. The split fails if the clone has locked
+  /// snapshots, such as snapshots that a SnapMirror relationship uses or that
+  /// a retention period protects, or if a backup of the clone is in progress.
+  /// To allow the split, Amazon FSx deletes the snapshots that it created for
+  /// backups of the clone, so the next backup transfers more data. Amazon FSx
+  /// doesn't delete snapshots that you created. The split runs in the
+  /// background. To monitor its progress, use the VOLUME_CLONE_SPLIT
+  /// administrative action in the volume's AdministrativeActions . When the
+  /// split completes, the volume no longer has a CloneConfiguration .
+  pub split_action: CloneSplitAction? = None
+}
+
+pub struct UpdateClusterPeerRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the cluster peer that you want to update.
+  pub cluster_peer_id: Str? = None
+  /// Specifies the name that the file system uses to identify the peer
+  /// cluster.
+  pub peer_cluster_name: Str? = None
+  /// Specifies the IP addresses of the intercluster logical interfaces (LIFs)
+  /// on the peer cluster. The addresses that you specify replace the existing
+  /// peer addresses.
+  pub peer_addresses: List[Str]? = None
+}
+
+pub struct UpdateClusterPeerResponse {
+  /// A description of the cluster peer that was just updated.
+  pub cluster_peer: ClusterPeer? = None
+}
+
 pub struct UpdateDataRepositoryAssociationRequest {
   /// The ID of the data repository association that you are updating.
   pub association_id: Str? = None
@@ -4857,10 +5949,11 @@ pub struct UpdateFileSystemLustreConfiguration {
   /// configuration is enabled, the file system supports increasing metadata
   /// performance.
   pub metadata_configuration: UpdateFileSystemLustreMetadataConfiguration? = None
-  /// The throughput of an Amazon FSx for Lustre file system using an
+  /// The throughput of an FSx for Lustre file system using the
   /// Intelligent-Tiering storage class, measured in megabytes per second
-  /// (MBps). You can only increase your file system's throughput. Valid
-  /// values are 4000 MBps or multiples of 4000 MBps.
+  /// (MBps). You can only increase your file system's throughput capacity.
+  /// Valid values are 1000 MBps, 2000 MBps, and multiples of 4000 MBps, up to
+  /// a maximum of 2000000 MBps.
   pub throughput_capacity: Int? = None
   /// Specifies the optional provisioned SSD read cache on Amazon FSx for
   /// Lustre file systems that use the Intelligent-Tiering storage class.
@@ -4877,30 +5970,37 @@ pub struct UpdateFileSystemLustreMetadataConfiguration {
   /// (USER_PROVISIONED mode only) Specifies the number of Metadata IOPS to
   /// provision for your file system. For SSD file systems, valid values are
   /// 1500 , 3000 , 6000 , 12000 , and multiples of 12000 up to a maximum of
-  /// 192000 . For Intelligent-Tiering file systems, valid values are 6000 and
-  /// 12000 . The value you provide must be greater than or equal to the
-  /// current number of Metadata IOPS provisioned for the file system.
+  /// 192000 . For Intelligent-Tiering file systems, valid values are 1500 ,
+  /// 3000 , 6000 , 12000 , and multiples of 12000 up to a maximum of 192000 .
+  /// The value you provide must be greater than or equal to the current
+  /// number of Metadata IOPS provisioned for the file system. You can't
+  /// provision fewer Metadata IOPS than AUTOMATIC mode provisions for your
+  /// file system.
   pub iops: Int? = None
   /// The metadata configuration mode for provisioning Metadata IOPS for an
   /// FSx for Lustre file system using a PERSISTENT_2 deployment type. To
-  /// increase the Metadata IOPS or to switch an SSD file system from
-  /// AUTOMATIC, specify USER_PROVISIONED as the value for this parameter.
-  /// Then use the Iops parameter to provide a Metadata IOPS value that is
-  /// greater than or equal to the current number of Metadata IOPS provisioned
-  /// for the file system. To switch from USER_PROVISIONED mode on an SSD file
-  /// system, specify AUTOMATIC as the value for this parameter, but do not
-  /// input a value for Iops. If you request to switch from USER_PROVISIONED
-  /// to AUTOMATIC mode and the current Metadata IOPS value is greater than
-  /// the automated default, FSx for Lustre rejects the request because
-  /// downscaling Metadata IOPS is not supported. AUTOMATIC mode is not
-  /// supported on Intelligent-Tiering file systems. For Intelligent-Tiering
-  /// file systems, use USER_PROVISIONED mode.
+  /// increase the Metadata IOPS or to switch from AUTOMATIC mode, specify
+  /// USER_PROVISIONED as the value for this parameter. Then use the Iops
+  /// parameter to provide a Metadata IOPS value that is greater than or equal
+  /// to the current number of Metadata IOPS provisioned for the file system.
+  /// To switch from USER_PROVISIONED mode, specify AUTOMATIC as the value for
+  /// this parameter, but do not input a value for Iops. FSx for Lustre
+  /// rejects a switch to AUTOMATIC mode when your current Metadata IOPS value
+  /// is greater than what AUTOMATIC mode provisions, because decreasing
+  /// Metadata IOPS is not supported. To unblock the switch, increase storage
+  /// capacity for SSD file systems, or throughput capacity for
+  /// Intelligent-Tiering file systems, until AUTOMATIC mode provisions at
+  /// least your current Metadata IOPS.
   pub mode: MetadataConfigurationMode? = None
 }
 
 /// The configuration updates for an Amazon FSx for NetApp ONTAP file
 /// system.
 pub struct UpdateFileSystemOntapConfiguration {
+  /// The number of days to retain automatic backups. Setting this property to
+  /// 0 disables automatic backups and deletes all existing automatic backups
+  /// for the file system's volumes. You can retain automatic backups for a
+  /// maximum of 90 days. The default is 30 .
   pub automatic_backup_retention_days: Int? = None
   pub daily_automatic_backup_start_time: Str? = None
   /// Update the password for the fsxadmin user by entering a new password.
@@ -4942,22 +6042,24 @@ pub struct UpdateFileSystemOntapConfiguration {
   /// SINGLE_AZ_1 and MULTI_AZ_1 file systems, valid values are 128, 256, 512,
   /// 1024, 2048, or 4096 MBps. For SINGLE_AZ_2 , valid values are 1536, 3072,
   /// or 6144 MBps. For MULTI_AZ_2 , valid values are 384, 768, 1536, 3072, or
-  /// 6144 MBps. Amazon FSx responds with an HTTP status code 400 (Bad
-  /// Request) for the following conditions: The value of ThroughputCapacity
-  /// and ThroughputCapacityPerHAPair are not the same value for file systems
-  /// with one HA pair. The value of deployment type is SINGLE_AZ_2 and
-  /// ThroughputCapacity / ThroughputCapacityPerHAPair is not a valid HA pair
-  /// (a value between 1 and 12). The value of ThroughputCapacityPerHAPair is
-  /// not a valid value.
+  /// 6144 MBps. For SINGLE_AZ_3 , valid values are 1536, 3072, 6144, 12288,
+  /// or 18432 MBps. For MULTI_AZ_3 , valid values are 384, 768, 1536, 3072,
+  /// 6144, 12288, or 18432 MBps. Amazon FSx responds with an HTTP status code
+  /// 400 (Bad Request) for the following conditions: The value of
+  /// ThroughputCapacity and ThroughputCapacityPerHAPair are not the same
+  /// value for file systems with one HA pair. The value of deployment type is
+  /// SINGLE_AZ_2 or SINGLE_AZ_3 and ThroughputCapacity /
+  /// ThroughputCapacityPerHAPair is not a valid HA pair (a value between 1
+  /// and 12). The value of ThroughputCapacityPerHAPair is not a valid value.
   pub throughput_capacity_per_ha_pair: Int? = None
   /// Use to update the number of high-availability (HA) pairs for a
-  /// second-generation single-AZ file system. If you increase the number of
-  /// HA pairs for your file system, you must specify proportional increases
-  /// for StorageCapacity , Iops , and ThroughputCapacity . For more
-  /// information, see High-availability (HA) pairs in the FSx for ONTAP user
-  /// guide. Block storage protocol support (iSCSI and NVMe over TCP) is
-  /// disabled on file systems with more than 6 HA pairs. For more
-  /// information, see Using block storage protocols .
+  /// second-generation or third-generation single-AZ file system. If you
+  /// increase the number of HA pairs for your file system, you must specify
+  /// proportional increases for StorageCapacity , Iops , and
+  /// ThroughputCapacity . For more information, see High-availability (HA)
+  /// pairs in the FSx for ONTAP user guide. Block storage protocol support
+  /// (iSCSI and NVMe over TCP) is disabled on file systems with more than 6
+  /// HA pairs. For more information, see Using block storage protocols .
   pub ha_pairs: Int? = None
   /// (Multi-AZ only) Specifies the IPv6 address range in which the endpoints
   /// to access your file system will be created. By default in the Amazon FSx
@@ -5029,35 +6131,38 @@ pub struct UpdateFileSystemRequest {
   pub client_request_token: Str? = None
   /// Use this parameter to increase the storage capacity of an FSx for
   /// Windows File Server, FSx for Lustre, FSx for OpenZFS, or FSx for ONTAP
-  /// file system. For second-generation FSx for ONTAP file systems, you can
-  /// also decrease the storage capacity. Specifies the storage capacity
-  /// target value, in GiB, for the file system that you're updating. You
-  /// can't make a storage capacity increase request if there is an existing
-  /// storage capacity increase request in progress. For Lustre file systems,
-  /// the storage capacity target value can be the following: For SCRATCH_2 ,
-  /// PERSISTENT_1 , and PERSISTENT_2 SSD deployment types, valid values are
-  /// in multiples of 2400 GiB. The value must be greater than the current
-  /// storage capacity. For PERSISTENT HDD file systems, valid values are
-  /// multiples of 6000 GiB for 12-MBps throughput per TiB file systems and
-  /// multiples of 1800 GiB for 40-MBps throughput per TiB file systems. The
-  /// values must be greater than the current storage capacity. For SCRATCH_1
-  /// file systems, you can't increase the storage capacity. For more
-  /// information, see Managing storage and throughput capacity in the FSx for
-  /// Lustre User Guide . For FSx for OpenZFS file systems, the storage
-  /// capacity target value must be at least 10 percent greater than the
-  /// current storage capacity value. For more information, see Managing
-  /// storage capacity in the FSx for OpenZFS User Guide . For Windows file
+  /// file system. For second-generation and third-generation FSx for ONTAP
+  /// file systems, you can also decrease the storage capacity. Specifies the
+  /// storage capacity target value, in GiB, for the file system that you're
+  /// updating. You can't make a storage capacity increase request if there is
+  /// an existing storage capacity increase request in progress. For Lustre
+  /// file systems, the storage capacity target value can be the following:
+  /// For SCRATCH_2 , PERSISTENT_1 , and PERSISTENT_2 SSD deployment types,
+  /// valid values are in multiples of 2400 GiB. The value must be greater
+  /// than the current storage capacity. For PERSISTENT HDD file systems,
+  /// valid values are multiples of 6000 GiB for 12-MBps throughput per TiB
+  /// file systems and multiples of 1800 GiB for 40-MBps throughput per TiB
+  /// file systems. The values must be greater than the current storage
+  /// capacity. For SCRATCH_1 file systems, you can't increase the storage
+  /// capacity. For more information, see Managing storage and throughput
+  /// capacity in the FSx for Lustre User Guide . For FSx for OpenZFS file
   /// systems, the storage capacity target value must be at least 10 percent
-  /// greater than the current storage capacity value. To increase storage
-  /// capacity, the file system must have at least 16 MBps of throughput
-  /// capacity. For more information, see Managing storage capacity in the
-  /// Amazon FSxfor Windows File Server User Guide . For ONTAP file systems,
-  /// when increasing storage capacity, the storage capacity target value must
-  /// be at least 10 percent greater than the current storage capacity value.
-  /// When decreasing storage capacity on second-generation file systems, the
-  /// target value must be at least 9 percent smaller than the current SSD
-  /// storage capacity. For more information, see File system storage capacity
-  /// and IOPS in the Amazon FSx for NetApp ONTAP User Guide.
+  /// greater than the current storage capacity value. For more information,
+  /// see Managing storage capacity in the FSx for OpenZFS User Guide . For
+  /// Windows file systems, the storage capacity target value must be at least
+  /// 10 percent greater than the current storage capacity value. To increase
+  /// storage capacity, the file system must have at least 16 MBps of
+  /// throughput capacity. For more information, see Managing storage capacity
+  /// in the Amazon FSxfor Windows File Server User Guide . For ONTAP file
+  /// systems, when increasing storage capacity, the storage capacity target
+  /// value must be at least 10 percent greater than the current storage
+  /// capacity value. If that increase would reach or exceed the maximum SSD
+  /// storage capacity for your file system's configuration, you can specify
+  /// any greater value up to that maximum. When decreasing storage capacity
+  /// on second-generation and third-generation file systems, the target value
+  /// must be at least 9 percent smaller than the current SSD storage
+  /// capacity. For more information, see File system storage capacity and
+  /// IOPS in the Amazon FSx for NetApp ONTAP User Guide.
   pub storage_capacity: Int? = None
   /// The configuration updates for an Amazon FSx for Windows File Server file
   /// system.
@@ -5125,6 +6230,23 @@ pub struct UpdateFileSystemWindowsConfiguration {
   pub fsrm_configuration: WindowsFsrmConfiguration? = None
 }
 
+/// Used to specify changes to the ONTAP configuration for the snapshot you
+/// are updating.
+pub struct UpdateOntapSnapshotConfiguration {
+  /// Specifies the SnapMirror label for the snapshot. SnapMirror policies use
+  /// labels to select which snapshots to replicate to a destination volume.
+  pub snapmirror_label: Str? = None
+  /// Specifies the date and time when the snapshot expires. You can't delete
+  /// the snapshot before this time.
+  pub expiry_time: Time? = None
+  /// Specifies the date and time until which the snapshot is locked. This
+  /// setting takes effect only if snapshot locking is enabled on the volume.
+  /// Snapshot locking is separate from SnapLock, and enabling SnapLock on a
+  /// volume doesn't enable snapshot locking. You can't delete the snapshot
+  /// before this time.
+  pub snaplock_expiry_time: Time? = None
+}
+
 /// Used to specify changes to the ONTAP configuration for the volume you
 /// are updating.
 pub struct UpdateOntapVolumeConfiguration {
@@ -5167,6 +6289,9 @@ pub struct UpdateOntapVolumeConfiguration {
   pub snaplock_configuration: UpdateSnaplockConfiguration? = None
   /// The configured size of the volume, in bytes.
   pub size_in_bytes: Int? = None
+  /// Specifies the clone configuration changes to make to the volume. Use
+  /// this property to split a clone from its parent volume.
+  pub clone_configuration: UpdateCloneConfiguration? = None
 }
 
 /// Used to specify changes to the OpenZFS configuration for the volume that
@@ -5258,6 +6383,81 @@ pub struct UpdateSnaplockConfiguration {
   pub volume_append_mode_enabled: Bool? = None
 }
 
+pub struct UpdateSnapmirrorPolicyRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the SnapMirror policy that you want to update.
+  pub snapmirror_policy_id: Str? = None
+  /// Specifies the rules that determine which snapshots SnapMirror retains on
+  /// the destination volume, based on their SnapMirror labels. The rules that
+  /// you specify replace all the SnapMirror policy's existing retention
+  /// rules. To keep an existing rule, include it in the list. To remove all
+  /// retention rules, specify an empty list.
+  pub retention_rules: List[SnapmirrorPolicyRetentionRule]? = None
+  /// Specifies the name of the ONTAP schedule that determines when SnapMirror
+  /// transfers data. To remove the transfer schedule, specify an empty
+  /// string.
+  pub transfer_schedule: Str? = None
+  /// Specifies whether SnapMirror compresses data when it transfers the data
+  /// over the network.
+  pub network_compression_enabled: Bool? = None
+  /// Specifies the maximum bandwidth, in kilobytes per second (KBps), that
+  /// SnapMirror uses to transfer data. A value of 0 means that the bandwidth
+  /// is unlimited.
+  pub throttle_in_kbps: Int? = None
+}
+
+pub struct UpdateSnapmirrorPolicyResponse {
+  /// A description of the SnapMirror policy that was just updated.
+  pub snapmirror_policy: SnapmirrorPolicy? = None
+}
+
+pub struct UpdateSnapmirrorRelationshipRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the SnapMirror relationship that you want to update.
+  pub snapmirror_relationship_id: Str? = None
+  /// Specifies the ID of the SnapMirror policy that the SnapMirror
+  /// relationship uses.
+  pub policy_id: Str? = None
+  /// Specifies the name of the ONTAP schedule that determines when SnapMirror
+  /// transfers data for the relationship. This schedule overrides the
+  /// transfer schedule of the SnapMirror policy.
+  pub transfer_schedule: Str? = None
+  /// Specifies the maximum bandwidth, in kilobytes per second (KBps), that
+  /// SnapMirror uses to transfer data for the relationship. A value of 0
+  /// means that the bandwidth is unlimited. This value overrides the throttle
+  /// of the SnapMirror policy.
+  pub throttle_in_kbps: Int? = None
+  /// Specifies the state to set for the SnapMirror relationship: SNAPMIRRORED
+  /// – Resumes a paused SnapMirror relationship, or resynchronizes a
+  /// broken-off SnapMirror relationship. PAUSED – Pauses SnapMirror
+  /// transfers for the relationship. BROKEN_OFF – Breaks off the SnapMirror
+  /// relationship, which makes the destination volume writable. Setting State
+  /// to SNAPMIRRORED on a relationship that is BROKEN_OFF might resynchronize
+  /// the relationship. A resync overwrites the destination volume with data
+  /// from the source volume, and discards any data written to the destination
+  /// volume that isn't present on the source volume. Use caution when you
+  /// resynchronize a relationship.
+  pub state: UpdatableSnapmirrorRelationshipState? = None
+}
+
+pub struct UpdateSnapmirrorRelationshipResponse {
+  /// A description of the SnapMirror relationship that was just updated.
+  pub snapmirror_relationship: SnapmirrorRelationship? = None
+}
+
+pub struct UpdateSnapshotPolicyRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the snapshot policy that you want to update.
+  pub snapshot_policy_id: Str? = None
+  /// Specifies whether the snapshot policy is enabled.
+  pub enabled: Bool? = None
+}
+
+pub struct UpdateSnapshotPolicyResponse {
+  /// A description of the snapshot policy that was just updated.
+  pub snapshot_policy: SnapshotPolicy? = None
+}
+
 pub struct UpdateSnapshotRequest {
   pub client_request_token: Str? = None
   /// The name of the snapshot to update.
@@ -5265,12 +6465,35 @@ pub struct UpdateSnapshotRequest {
   /// The ID of the snapshot that you want to update, in the format
   /// fsvolsnap-0123456789abcdef0 .
   pub snapshot_id: Str? = None
+  /// The configuration of the ONTAP snapshot that you are updating.
+  pub ontap_configuration: UpdateOntapSnapshotConfiguration? = None
 }
 
 pub struct UpdateSnapshotResponse {
   /// Returned after a successful UpdateSnapshot operation, describing the
   /// snapshot that you updated.
   pub snapshot: Snapshot? = None
+}
+
+pub struct UpdateStorageVirtualMachinePeerRequest {
+  pub client_request_token: Str? = None
+  /// The ID of the SVM peer that you want to update.
+  pub storage_virtual_machine_peer_id: Str? = None
+  /// Specifies the applications that the SVM peer relationship authorizes.
+  /// The applications that you specify replace the existing applications.
+  pub applications: List[StorageVirtualMachinePeerApplication]? = None
+  /// Specifies the name that the local cluster uses to identify the peer SVM.
+  pub peer_svm_alias: Str? = None
+  /// Specifies the state to set for the SVM peer relationship: PEERED –
+  /// Accepts a pending peering request, or resumes a suspended SVM peer
+  /// relationship. SUSPENDED – Suspends the SVM peer relationship. REJECTED
+  /// – Rejects a pending peering request.
+  pub state: StorageVirtualMachinePeerUpdateState? = None
+}
+
+pub struct UpdateStorageVirtualMachinePeerResponse {
+  /// A description of the SVM peer that was just updated.
+  pub storage_virtual_machine_peer: StorageVirtualMachinePeer? = None
 }
 
 pub struct UpdateStorageVirtualMachineRequest {

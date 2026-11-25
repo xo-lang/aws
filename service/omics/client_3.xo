@@ -8,6 +8,58 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_put_s3_access_policy(resp: http.Response) -> PutS3AccessPolicyResponse ! Str {
+  var out = PutS3AccessPolicyResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "s3AccessPointArn" => out.s3_access_point_arn = jsonv.read_str(fv)?
+      "storeId" => out.store_id = jsonv.read_str(fv)?
+      "storeType" => out.store_type = StoreType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of PutS3AccessPolicy.
+pub enum PutS3AccessPolicyErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  NotSupportedOperationException(e: NotSupportedOperationException)
+  RequestTimeoutException(e: RequestTimeoutException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: PutS3AccessPolicyErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    NotSupportedOperationException(x) => "NotSupportedOperationException: ${x:?}"
+    RequestTimeoutException(x) => "RequestTimeoutException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
 pub fn deserialize_put_s3_access_policy_error(resp: http.Response) -> PutS3AccessPolicyErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
@@ -904,6 +956,12 @@ pub fn serialize_start_run(ep: rest.Endpoint, input: StartRunRequest, idempotenc
   }
   if let Some(x) = input.output_uri_prefix_mode {
     fs.push(("outputUriPrefixMode", json.Value.Str(x)))
+  }
+  if let Some(x) = input.requester_pays_enabled {
+    fs.push(("requesterPaysEnabled", json.Value.Bool(x)))
+  }
+  if let Some(x) = input.parameters_uri {
+    fs.push(("parametersUri", json.Value.Str(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))

@@ -8,6 +8,726 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_get_alarms(resp: http.Response) -> GetAlarmsResult ! Str {
+  var out = GetAlarmsResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "alarms" => out.alarms = from_json_alarms_list(fv)?
+      "nextPageToken" => out.next_page_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetAlarms.
+pub enum GetAlarmsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InvalidInputException(e: InvalidInputException)
+  NotFoundException(e: NotFoundException)
+  OperationFailureException(e: OperationFailureException)
+  RegionSetupInProgressException(e: RegionSetupInProgressException)
+  ServiceException(e: ServiceException)
+  UnauthenticatedException(e: UnauthenticatedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetAlarmsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    OperationFailureException(x) => "OperationFailureException: ${x:?}"
+    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
+    ServiceException(x) => "ServiceException: ${x:?}"
+    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_alarms_error(resp: http.Response) -> GetAlarmsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.AccessDeniedException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.InvalidInputException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.NotFoundException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.OperationFailureException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.RegionSetupInProgressException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    "ServiceException" => match read_error_service_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.ServiceException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
+      Ok(x) => return GetAlarmsErr.UnauthenticatedException(x)
+      Err(msg) => return GetAlarmsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetAlarmsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns information about the configured alarms. Specify an alarm name
+/// in your request to return information about a specific alarm, or specify
+/// a monitored resource name to return information about all alarms for a
+/// specific resource. An alarm is used to monitor a single metric for one
+/// of your resources. When a metric condition is met, the alarm can notify
+/// you by email, SMS text message, and a banner displayed on the Amazon
+/// Lightsail console. For more information, see Alarms in Amazon Lightsail
+/// .
+pub fn (c: Client) get_alarms(input: GetAlarmsRequest) -> GetAlarmsResult ! GetAlarmsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_alarms(c.params, input)) ?? e => return Err(GetAlarmsErr.InvalidInput(e))
+  var req = serialize_get_alarms(ep, input, "") ?? e => return Err(GetAlarmsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAlarmsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_alarms_error(resp))
+  }
+  deserialize_get_alarms(resp) ?? e => Err(GetAlarmsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_auto_snapshots(base: EndpointParameters, input: GetAutoSnapshotsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetAutoSnapshots.
+pub fn serialize_get_auto_snapshots(ep: rest.Endpoint, input: GetAutoSnapshotsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.resource_name {
+    fs.push(("resourceName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Lightsail_20161128.GetAutoSnapshots"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_auto_snapshots(resp: http.Response) -> GetAutoSnapshotsResult ! Str {
+  var out = GetAutoSnapshotsResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "resourceName" => out.resource_name = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = ResourceType.from(jsonv.read_str(fv)?)
+      "autoSnapshots" => out.auto_snapshots = from_json_auto_snapshot_details_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetAutoSnapshots.
+pub enum GetAutoSnapshotsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InvalidInputException(e: InvalidInputException)
+  NotFoundException(e: NotFoundException)
+  OperationFailureException(e: OperationFailureException)
+  RegionSetupInProgressException(e: RegionSetupInProgressException)
+  ServiceException(e: ServiceException)
+  UnauthenticatedException(e: UnauthenticatedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetAutoSnapshotsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    OperationFailureException(x) => "OperationFailureException: ${x:?}"
+    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
+    ServiceException(x) => "ServiceException: ${x:?}"
+    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_auto_snapshots_error(resp: http.Response) -> GetAutoSnapshotsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.AccessDeniedException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.InvalidInputException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.NotFoundException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.OperationFailureException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.RegionSetupInProgressException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    "ServiceException" => match read_error_service_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.ServiceException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
+      Ok(x) => return GetAutoSnapshotsErr.UnauthenticatedException(x)
+      Err(msg) => return GetAutoSnapshotsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetAutoSnapshotsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the available automatic snapshots for an instance or disk. For
+/// more information, see the Amazon Lightsail Developer Guide .
+pub fn (c: Client) get_auto_snapshots(input: GetAutoSnapshotsRequest) -> GetAutoSnapshotsResult ! GetAutoSnapshotsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_auto_snapshots(c.params, input)) ?? e => return Err(GetAutoSnapshotsErr.InvalidInput(e))
+  var req = serialize_get_auto_snapshots(ep, input, "") ?? e => return Err(GetAutoSnapshotsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAutoSnapshotsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_auto_snapshots_error(resp))
+  }
+  deserialize_get_auto_snapshots(resp) ?? e => Err(GetAutoSnapshotsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_blueprints(base: EndpointParameters, input: GetBlueprintsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBlueprints.
+pub fn serialize_get_blueprints(ep: rest.Endpoint, input: GetBlueprintsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.include_inactive {
+    fs.push(("includeInactive", json.Value.Bool(x)))
+  }
+  if let Some(x) = input.page_token {
+    fs.push(("pageToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.app_category {
+    fs.push(("appCategory", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Lightsail_20161128.GetBlueprints"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_blueprints(resp: http.Response) -> GetBlueprintsResult ! Str {
+  var out = GetBlueprintsResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "blueprints" => out.blueprints = from_json_blueprint_list(fv)?
+      "nextPageToken" => out.next_page_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetBlueprints.
+pub enum GetBlueprintsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  AccountSetupInProgressException(e: AccountSetupInProgressException)
+  InvalidInputException(e: InvalidInputException)
+  NotFoundException(e: NotFoundException)
+  OperationFailureException(e: OperationFailureException)
+  RegionSetupInProgressException(e: RegionSetupInProgressException)
+  ServiceException(e: ServiceException)
+  UnauthenticatedException(e: UnauthenticatedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetBlueprintsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    AccountSetupInProgressException(x) => "AccountSetupInProgressException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    OperationFailureException(x) => "OperationFailureException: ${x:?}"
+    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
+    ServiceException(x) => "ServiceException: ${x:?}"
+    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_blueprints_error(resp: http.Response) -> GetBlueprintsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.AccessDeniedException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "AccountSetupInProgressException" => match read_error_account_setup_in_progress_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.AccountSetupInProgressException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.InvalidInputException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.NotFoundException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.OperationFailureException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.RegionSetupInProgressException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "ServiceException" => match read_error_service_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.ServiceException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
+      Ok(x) => return GetBlueprintsErr.UnauthenticatedException(x)
+      Err(msg) => return GetBlueprintsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetBlueprintsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the list of available instance images, or blueprints . You can
+/// use a blueprint to create a new instance already running a specific
+/// operating system, as well as a preinstalled app or development stack.
+/// The software each instance is running depends on the blueprint image you
+/// choose. Use active blueprints when creating new instances. Inactive
+/// blueprints are listed to support customers with existing instances and
+/// are not necessarily available to create new instances. Blueprints are
+/// marked inactive when they become outdated due to operating system
+/// updates or new application releases.
+pub fn (c: Client) get_blueprints(input: GetBlueprintsRequest) -> GetBlueprintsResult ! GetBlueprintsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_blueprints(c.params, input)) ?? e => return Err(GetBlueprintsErr.InvalidInput(e))
+  var req = serialize_get_blueprints(ep, input, "") ?? e => return Err(GetBlueprintsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetBlueprintsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_blueprints_error(resp))
+  }
+  deserialize_get_blueprints(resp) ?? e => Err(GetBlueprintsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_bucket_access_keys(base: EndpointParameters, input: GetBucketAccessKeysRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBucketAccessKeys.
+pub fn serialize_get_bucket_access_keys(ep: rest.Endpoint, input: GetBucketAccessKeysRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.bucket_name {
+    fs.push(("bucketName", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Lightsail_20161128.GetBucketAccessKeys"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_bucket_access_keys(resp: http.Response) -> GetBucketAccessKeysResult ! Str {
+  var out = GetBucketAccessKeysResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "accessKeys" => out.access_keys = from_json_access_key_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetBucketAccessKeys.
+pub enum GetBucketAccessKeysErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InvalidInputException(e: InvalidInputException)
+  NotFoundException(e: NotFoundException)
+  RegionSetupInProgressException(e: RegionSetupInProgressException)
+  ServiceException(e: ServiceException)
+  UnauthenticatedException(e: UnauthenticatedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetBucketAccessKeysErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
+    ServiceException(x) => "ServiceException: ${x:?}"
+    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_bucket_access_keys_error(resp: http.Response) -> GetBucketAccessKeysErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetBucketAccessKeysErr.AccessDeniedException(x)
+      Err(msg) => return GetBucketAccessKeysErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetBucketAccessKeysErr.InvalidInputException(x)
+      Err(msg) => return GetBucketAccessKeysErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetBucketAccessKeysErr.NotFoundException(x)
+      Err(msg) => return GetBucketAccessKeysErr.Deserialize(msg)
+    }
+    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
+      Ok(x) => return GetBucketAccessKeysErr.RegionSetupInProgressException(x)
+      Err(msg) => return GetBucketAccessKeysErr.Deserialize(msg)
+    }
+    "ServiceException" => match read_error_service_exception(resp, body) {
+      Ok(x) => return GetBucketAccessKeysErr.ServiceException(x)
+      Err(msg) => return GetBucketAccessKeysErr.Deserialize(msg)
+    }
+    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
+      Ok(x) => return GetBucketAccessKeysErr.UnauthenticatedException(x)
+      Err(msg) => return GetBucketAccessKeysErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetBucketAccessKeysErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the existing access key IDs for the specified Amazon Lightsail
+/// bucket. This action does not return the secret access key value of an
+/// access key. You can get a secret access key only when you create it from
+/// the response of the CreateBucketAccessKey action. If you lose the secret
+/// access key, you must create a new access key.
+pub fn (c: Client) get_bucket_access_keys(input: GetBucketAccessKeysRequest) -> GetBucketAccessKeysResult ! GetBucketAccessKeysErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_bucket_access_keys(c.params, input)) ?? e => return Err(GetBucketAccessKeysErr.InvalidInput(e))
+  var req = serialize_get_bucket_access_keys(ep, input, "") ?? e => return Err(GetBucketAccessKeysErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetBucketAccessKeysErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_bucket_access_keys_error(resp))
+  }
+  deserialize_get_bucket_access_keys(resp) ?? e => Err(GetBucketAccessKeysErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_bucket_bundles(base: EndpointParameters, input: GetBucketBundlesRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBucketBundles.
+pub fn serialize_get_bucket_bundles(ep: rest.Endpoint, input: GetBucketBundlesRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.include_inactive {
+    fs.push(("includeInactive", json.Value.Bool(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Lightsail_20161128.GetBucketBundles"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_bucket_bundles(resp: http.Response) -> GetBucketBundlesResult ! Str {
+  var out = GetBucketBundlesResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "bundles" => out.bundles = from_json_bucket_bundle_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetBucketBundles.
+pub enum GetBucketBundlesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InvalidInputException(e: InvalidInputException)
+  RegionSetupInProgressException(e: RegionSetupInProgressException)
+  ServiceException(e: ServiceException)
+  UnauthenticatedException(e: UnauthenticatedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetBucketBundlesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
+    ServiceException(x) => "ServiceException: ${x:?}"
+    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_bucket_bundles_error(resp: http.Response) -> GetBucketBundlesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetBucketBundlesErr.AccessDeniedException(x)
+      Err(msg) => return GetBucketBundlesErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetBucketBundlesErr.InvalidInputException(x)
+      Err(msg) => return GetBucketBundlesErr.Deserialize(msg)
+    }
+    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
+      Ok(x) => return GetBucketBundlesErr.RegionSetupInProgressException(x)
+      Err(msg) => return GetBucketBundlesErr.Deserialize(msg)
+    }
+    "ServiceException" => match read_error_service_exception(resp, body) {
+      Ok(x) => return GetBucketBundlesErr.ServiceException(x)
+      Err(msg) => return GetBucketBundlesErr.Deserialize(msg)
+    }
+    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
+      Ok(x) => return GetBucketBundlesErr.UnauthenticatedException(x)
+      Err(msg) => return GetBucketBundlesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetBucketBundlesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the bundles that you can apply to a Amazon Lightsail bucket. The
+/// bucket bundle specifies the monthly cost, storage quota, and data
+/// transfer quota for a bucket. Use the UpdateBucketBundle action to update
+/// the bundle for a bucket.
+pub fn (c: Client) get_bucket_bundles(input: GetBucketBundlesRequest) -> GetBucketBundlesResult ! GetBucketBundlesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_bucket_bundles(c.params, input)) ?? e => return Err(GetBucketBundlesErr.InvalidInput(e))
+  var req = serialize_get_bucket_bundles(ep, input, "") ?? e => return Err(GetBucketBundlesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetBucketBundlesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_bucket_bundles_error(resp))
+  }
+  deserialize_get_bucket_bundles(resp) ?? e => Err(GetBucketBundlesErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_bucket_metric_data(base: EndpointParameters, input: GetBucketMetricDataRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetBucketMetricData.
+pub fn serialize_get_bucket_metric_data(ep: rest.Endpoint, input: GetBucketMetricDataRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.bucket_name {
+    fs.push(("bucketName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.metric_name {
+    fs.push(("metricName", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.start_time {
+    fs.push(("startTime", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.end_time {
+    fs.push(("endTime", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = input.period {
+    fs.push(("period", json.Value.Int(x)))
+  }
+  if let Some(x) = input.statistics {
+    fs.push(("statistics", json_of_metric_statistic_list(x)))
+  }
+  if let Some(x) = input.unit {
+    fs.push(("unit", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Lightsail_20161128.GetBucketMetricData"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_bucket_metric_data(resp: http.Response) -> GetBucketMetricDataResult ! Str {
+  var out = GetBucketMetricDataResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "metricName" => out.metric_name = BucketMetricName.from(jsonv.read_str(fv)?)
+      "metricData" => out.metric_data = from_json_metric_datapoint_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 /// The errors of GetBucketMetricData.
 pub enum GetBucketMetricDataErr {
   AccessDeniedException(e: AccessDeniedException)
@@ -2951,7 +3671,11 @@ pub fn deserialize_get_distributions_error(resp: http.Response) -> GetDistributi
 }
 
 /// Returns information about one or more of your Amazon Lightsail content
-/// delivery network (CDN) distributions.
+/// delivery network (CDN) distributions. The defaultRootObject and
+/// customErrorResponses values are returned only when you specify
+/// distributionName to retrieve a single distribution. When you call
+/// GetDistributions without a distribution name to list all distributions,
+/// these two fields aren't included in the response.
 pub fn (c: Client) get_distributions(input: GetDistributionsRequest) -> GetDistributionsResult ! GetDistributionsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_distributions(c.params, input)) ?? e => return Err(GetDistributionsErr.InvalidInput(e))
   var req = serialize_get_distributions(ep, input, "") ?? e => return Err(GetDistributionsErr.InvalidInput(e))
@@ -8391,6 +9115,135 @@ pub fn (c: Client) get_static_ips(input: GetStaticIpsRequest) -> GetStaticIpsRes
   deserialize_get_static_ips(resp) ?? e => Err(GetStaticIpsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_get_subdomains(base: EndpointParameters, input: GetSubdomainsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetSubdomains.
+pub fn serialize_get_subdomains(ep: rest.Endpoint, input: GetSubdomainsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.subdomain_name {
+    fs.push(("subdomainName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.page_token {
+    fs.push(("pageToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "Lightsail_20161128.GetSubdomains"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_subdomains(resp: http.Response) -> GetSubdomainsResult ! Str {
+  var out = GetSubdomainsResult{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "subdomains" => out.subdomains = from_json_subdomain_list(fv)?
+      "nextPageToken" => out.next_page_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetSubdomains.
+pub enum GetSubdomainsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InvalidInputException(e: InvalidInputException)
+  NotFoundException(e: NotFoundException)
+  ServiceException(e: ServiceException)
+  UnauthenticatedException(e: UnauthenticatedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetSubdomainsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceException(x) => "ServiceException: ${x:?}"
+    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_subdomains_error(resp: http.Response) -> GetSubdomainsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetSubdomainsErr.AccessDeniedException(x)
+      Err(msg) => return GetSubdomainsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetSubdomainsErr.InvalidInputException(x)
+      Err(msg) => return GetSubdomainsErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetSubdomainsErr.NotFoundException(x)
+      Err(msg) => return GetSubdomainsErr.Deserialize(msg)
+    }
+    "ServiceException" => match read_error_service_exception(resp, body) {
+      Ok(x) => return GetSubdomainsErr.ServiceException(x)
+      Err(msg) => return GetSubdomainsErr.Deserialize(msg)
+    }
+    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
+      Ok(x) => return GetSubdomainsErr.UnauthenticatedException(x)
+      Err(msg) => return GetSubdomainsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetSubdomainsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns information about one or more of your Lightsail subdomains. When
+/// you don't specify a subdomain, the response lists your top-level
+/// subdomains, and each top-level subdomain includes its nested subdomains.
+/// The results are paginated. To get the next page of results, use the
+/// pageToken parameter.
+pub fn (c: Client) get_subdomains(input: GetSubdomainsRequest) -> GetSubdomainsResult ! GetSubdomainsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_subdomains(c.params, input)) ?? e => return Err(GetSubdomainsErr.InvalidInput(e))
+  var req = serialize_get_subdomains(ep, input, "") ?? e => return Err(GetSubdomainsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetSubdomainsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_subdomains_error(resp))
+  }
+  deserialize_get_subdomains(resp) ?? e => Err(GetSubdomainsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_import_key_pair(base: EndpointParameters, input: ImportKeyPairRequest) -> EndpointParameters {
   let _ = input
   base
@@ -9562,828 +10415,4 @@ pub fn (c: Client) reboot_relational_database(input: RebootRelationalDatabaseReq
     return Err(deserialize_reboot_relational_database_error(resp))
   }
   deserialize_reboot_relational_database(resp) ?? e => Err(RebootRelationalDatabaseErr.Deserialize(e))
-}
-
-pub fn endpoint_params_register_container_image(base: EndpointParameters, input: RegisterContainerImageRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of RegisterContainerImage.
-pub fn serialize_register_container_image(ep: rest.Endpoint, input: RegisterContainerImageRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.service_name {
-    fs.push(("serviceName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.label {
-    fs.push(("label", json.Value.Str(x)))
-  }
-  if let Some(x) = input.digest {
-    fs.push(("digest", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Lightsail_20161128.RegisterContainerImage"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_register_container_image(resp: http.Response) -> RegisterContainerImageResult ! Str {
-  var out = RegisterContainerImageResult{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "containerImage" => out.container_image = from_json_container_image(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of RegisterContainerImage.
-pub enum RegisterContainerImageErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InvalidInputException(e: InvalidInputException)
-  NotFoundException(e: NotFoundException)
-  RegionSetupInProgressException(e: RegionSetupInProgressException)
-  ServiceException(e: ServiceException)
-  UnauthenticatedException(e: UnauthenticatedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: RegisterContainerImageErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_register_container_image_error(resp: http.Response) -> RegisterContainerImageErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return RegisterContainerImageErr.AccessDeniedException(x)
-      Err(msg) => return RegisterContainerImageErr.Deserialize(msg)
-    }
-    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return RegisterContainerImageErr.InvalidInputException(x)
-      Err(msg) => return RegisterContainerImageErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return RegisterContainerImageErr.NotFoundException(x)
-      Err(msg) => return RegisterContainerImageErr.Deserialize(msg)
-    }
-    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
-      Ok(x) => return RegisterContainerImageErr.RegionSetupInProgressException(x)
-      Err(msg) => return RegisterContainerImageErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return RegisterContainerImageErr.ServiceException(x)
-      Err(msg) => return RegisterContainerImageErr.Deserialize(msg)
-    }
-    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
-      Ok(x) => return RegisterContainerImageErr.UnauthenticatedException(x)
-      Err(msg) => return RegisterContainerImageErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  RegisterContainerImageErr.Api(restjson.api_error(resp, body))
-}
-
-/// Registers a container image to your Amazon Lightsail container service.
-/// This action is not required if you install and use the Lightsail Control
-/// (lightsailctl) plugin to push container images to your Lightsail
-/// container service. For more information, see Pushing and managing
-/// container images on your Amazon Lightsail container services in the
-/// Amazon Lightsail Developer Guide .
-pub fn (c: Client) register_container_image(input: RegisterContainerImageRequest) -> RegisterContainerImageResult ! RegisterContainerImageErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_register_container_image(c.params, input)) ?? e => return Err(RegisterContainerImageErr.InvalidInput(e))
-  var req = serialize_register_container_image(ep, input, "") ?? e => return Err(RegisterContainerImageErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(RegisterContainerImageErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_register_container_image_error(resp))
-  }
-  deserialize_register_container_image(resp) ?? e => Err(RegisterContainerImageErr.Deserialize(e))
-}
-
-pub fn endpoint_params_release_static_ip(base: EndpointParameters, input: ReleaseStaticIpRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ReleaseStaticIp.
-pub fn serialize_release_static_ip(ep: rest.Endpoint, input: ReleaseStaticIpRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.static_ip_name {
-    fs.push(("staticIpName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Lightsail_20161128.ReleaseStaticIp"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_release_static_ip(resp: http.Response) -> ReleaseStaticIpResult ! Str {
-  var out = ReleaseStaticIpResult{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "operations" => out.operations = from_json_operation_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ReleaseStaticIp.
-pub enum ReleaseStaticIpErr {
-  AccessDeniedException(e: AccessDeniedException)
-  AccountSetupInProgressException(e: AccountSetupInProgressException)
-  InvalidInputException(e: InvalidInputException)
-  NotFoundException(e: NotFoundException)
-  OperationFailureException(e: OperationFailureException)
-  RegionSetupInProgressException(e: RegionSetupInProgressException)
-  ServiceException(e: ServiceException)
-  UnauthenticatedException(e: UnauthenticatedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ReleaseStaticIpErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    AccountSetupInProgressException(x) => "AccountSetupInProgressException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    OperationFailureException(x) => "OperationFailureException: ${x:?}"
-    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_release_static_ip_error(resp: http.Response) -> ReleaseStaticIpErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.AccessDeniedException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "AccountSetupInProgressException" => match read_error_account_setup_in_progress_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.AccountSetupInProgressException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.InvalidInputException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.NotFoundException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.OperationFailureException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.RegionSetupInProgressException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.ServiceException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
-      Ok(x) => return ReleaseStaticIpErr.UnauthenticatedException(x)
-      Err(msg) => return ReleaseStaticIpErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ReleaseStaticIpErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a specific static IP from your account.
-pub fn (c: Client) release_static_ip(input: ReleaseStaticIpRequest) -> ReleaseStaticIpResult ! ReleaseStaticIpErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_release_static_ip(c.params, input)) ?? e => return Err(ReleaseStaticIpErr.InvalidInput(e))
-  var req = serialize_release_static_ip(ep, input, "") ?? e => return Err(ReleaseStaticIpErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ReleaseStaticIpErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_release_static_ip_error(resp))
-  }
-  deserialize_release_static_ip(resp) ?? e => Err(ReleaseStaticIpErr.Deserialize(e))
-}
-
-pub fn endpoint_params_reset_distribution_cache(base: EndpointParameters, input: ResetDistributionCacheRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ResetDistributionCache.
-pub fn serialize_reset_distribution_cache(ep: rest.Endpoint, input: ResetDistributionCacheRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.distribution_name {
-    fs.push(("distributionName", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Lightsail_20161128.ResetDistributionCache"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_reset_distribution_cache(resp: http.Response) -> ResetDistributionCacheResult ! Str {
-  var out = ResetDistributionCacheResult{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "status" => out.status = jsonv.read_str(fv)?
-      "createTime" => out.create_time = jsonv.read_time(fv, "epoch-seconds")?
-      "operation" => out.operation = from_json_operation(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ResetDistributionCache.
-pub enum ResetDistributionCacheErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InvalidInputException(e: InvalidInputException)
-  NotFoundException(e: NotFoundException)
-  OperationFailureException(e: OperationFailureException)
-  ServiceException(e: ServiceException)
-  UnauthenticatedException(e: UnauthenticatedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: ResetDistributionCacheErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    OperationFailureException(x) => "OperationFailureException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_reset_distribution_cache_error(resp: http.Response) -> ResetDistributionCacheErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return ResetDistributionCacheErr.AccessDeniedException(x)
-      Err(msg) => return ResetDistributionCacheErr.Deserialize(msg)
-    }
-    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return ResetDistributionCacheErr.InvalidInputException(x)
-      Err(msg) => return ResetDistributionCacheErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return ResetDistributionCacheErr.NotFoundException(x)
-      Err(msg) => return ResetDistributionCacheErr.Deserialize(msg)
-    }
-    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
-      Ok(x) => return ResetDistributionCacheErr.OperationFailureException(x)
-      Err(msg) => return ResetDistributionCacheErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return ResetDistributionCacheErr.ServiceException(x)
-      Err(msg) => return ResetDistributionCacheErr.Deserialize(msg)
-    }
-    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
-      Ok(x) => return ResetDistributionCacheErr.UnauthenticatedException(x)
-      Err(msg) => return ResetDistributionCacheErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  ResetDistributionCacheErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes currently cached content from your Amazon Lightsail content
-/// delivery network (CDN) distribution. After resetting the cache, the next
-/// time a content request is made, your distribution pulls, serves, and
-/// caches it from the origin.
-pub fn (c: Client) reset_distribution_cache(input: ResetDistributionCacheRequest) -> ResetDistributionCacheResult ! ResetDistributionCacheErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_reset_distribution_cache(c.params, input)) ?? e => return Err(ResetDistributionCacheErr.InvalidInput(e))
-  var req = serialize_reset_distribution_cache(ep, input, "") ?? e => return Err(ResetDistributionCacheErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResetDistributionCacheErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_reset_distribution_cache_error(resp))
-  }
-  deserialize_reset_distribution_cache(resp) ?? e => Err(ResetDistributionCacheErr.Deserialize(e))
-}
-
-pub fn endpoint_params_send_contact_method_verification(base: EndpointParameters, input: SendContactMethodVerificationRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of SendContactMethodVerification.
-pub fn serialize_send_contact_method_verification(ep: rest.Endpoint, input: SendContactMethodVerificationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.protocol {
-    fs.push(("protocol", json.Value.Str(x.value())))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Lightsail_20161128.SendContactMethodVerification"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_send_contact_method_verification(resp: http.Response) -> SendContactMethodVerificationResult ! Str {
-  var out = SendContactMethodVerificationResult{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "operations" => out.operations = from_json_operation_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of SendContactMethodVerification.
-pub enum SendContactMethodVerificationErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InvalidInputException(e: InvalidInputException)
-  NotFoundException(e: NotFoundException)
-  OperationFailureException(e: OperationFailureException)
-  RegionSetupInProgressException(e: RegionSetupInProgressException)
-  ServiceException(e: ServiceException)
-  UnauthenticatedException(e: UnauthenticatedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: SendContactMethodVerificationErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    OperationFailureException(x) => "OperationFailureException: ${x:?}"
-    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_send_contact_method_verification_error(resp: http.Response) -> SendContactMethodVerificationErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.AccessDeniedException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.InvalidInputException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.NotFoundException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.OperationFailureException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.RegionSetupInProgressException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.ServiceException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
-      Ok(x) => return SendContactMethodVerificationErr.UnauthenticatedException(x)
-      Err(msg) => return SendContactMethodVerificationErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  SendContactMethodVerificationErr.Api(restjson.api_error(resp, body))
-}
-
-/// Sends a verification request to an email contact method to ensure it's
-/// owned by the requester. SMS contact methods don't need to be verified. A
-/// contact method is used to send you notifications about your Amazon
-/// Lightsail resources. You can add one email address and one mobile phone
-/// number contact method in each Amazon Web Services Region. However, SMS
-/// text messaging is not supported in some Amazon Web Services Regions, and
-/// SMS text messages cannot be sent to some countries/regions. For more
-/// information, see Notifications in Amazon Lightsail . A verification
-/// request is sent to the contact method when you initially create it. Use
-/// this action to send another verification request if a previous
-/// verification request was deleted, or has expired. Notifications are not
-/// sent to an email contact method until after it is verified, and
-/// confirmed as valid.
-pub fn (c: Client) send_contact_method_verification(input: SendContactMethodVerificationRequest) -> SendContactMethodVerificationResult ! SendContactMethodVerificationErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_send_contact_method_verification(c.params, input)) ?? e => return Err(SendContactMethodVerificationErr.InvalidInput(e))
-  var req = serialize_send_contact_method_verification(ep, input, "") ?? e => return Err(SendContactMethodVerificationErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SendContactMethodVerificationErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_send_contact_method_verification_error(resp))
-  }
-  deserialize_send_contact_method_verification(resp) ?? e => Err(SendContactMethodVerificationErr.Deserialize(e))
-}
-
-pub fn endpoint_params_set_ip_address_type(base: EndpointParameters, input: SetIpAddressTypeRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of SetIpAddressType.
-pub fn serialize_set_ip_address_type(ep: rest.Endpoint, input: SetIpAddressTypeRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.resource_type {
-    fs.push(("resourceType", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.resource_name {
-    fs.push(("resourceName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.ip_address_type {
-    fs.push(("ipAddressType", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.accept_bundle_update {
-    fs.push(("acceptBundleUpdate", json.Value.Bool(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Lightsail_20161128.SetIpAddressType"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_set_ip_address_type(resp: http.Response) -> SetIpAddressTypeResult ! Str {
-  var out = SetIpAddressTypeResult{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "operations" => out.operations = from_json_operation_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of SetIpAddressType.
-pub enum SetIpAddressTypeErr {
-  AccessDeniedException(e: AccessDeniedException)
-  AccountSetupInProgressException(e: AccountSetupInProgressException)
-  InvalidInputException(e: InvalidInputException)
-  NotFoundException(e: NotFoundException)
-  OperationFailureException(e: OperationFailureException)
-  RegionSetupInProgressException(e: RegionSetupInProgressException)
-  ServiceException(e: ServiceException)
-  UnauthenticatedException(e: UnauthenticatedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: SetIpAddressTypeErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    AccountSetupInProgressException(x) => "AccountSetupInProgressException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    OperationFailureException(x) => "OperationFailureException: ${x:?}"
-    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_set_ip_address_type_error(resp: http.Response) -> SetIpAddressTypeErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.AccessDeniedException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "AccountSetupInProgressException" => match read_error_account_setup_in_progress_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.AccountSetupInProgressException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.InvalidInputException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.NotFoundException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "OperationFailureException" => match read_error_operation_failure_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.OperationFailureException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.RegionSetupInProgressException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.ServiceException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
-      Ok(x) => return SetIpAddressTypeErr.UnauthenticatedException(x)
-      Err(msg) => return SetIpAddressTypeErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  SetIpAddressTypeErr.Api(restjson.api_error(resp, body))
-}
-
-/// Sets the IP address type for an Amazon Lightsail resource. Use this
-/// action to enable dual-stack for a resource, which enables IPv4 and IPv6
-/// for the specified resource. Alternately, you can use this action to
-/// disable dual-stack, and enable IPv4 only.
-pub fn (c: Client) set_ip_address_type(input: SetIpAddressTypeRequest) -> SetIpAddressTypeResult ! SetIpAddressTypeErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_set_ip_address_type(c.params, input)) ?? e => return Err(SetIpAddressTypeErr.InvalidInput(e))
-  var req = serialize_set_ip_address_type(ep, input, "") ?? e => return Err(SetIpAddressTypeErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(SetIpAddressTypeErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_set_ip_address_type_error(resp))
-  }
-  deserialize_set_ip_address_type(resp) ?? e => Err(SetIpAddressTypeErr.Deserialize(e))
-}
-
-pub fn endpoint_params_set_resource_access_for_bucket(base: EndpointParameters, input: SetResourceAccessForBucketRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of SetResourceAccessForBucket.
-pub fn serialize_set_resource_access_for_bucket(ep: rest.Endpoint, input: SetResourceAccessForBucketRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.resource_name {
-    fs.push(("resourceName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.bucket_name {
-    fs.push(("bucketName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.access {
-    fs.push(("access", json.Value.Str(x.value())))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "Lightsail_20161128.SetResourceAccessForBucket"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_set_resource_access_for_bucket(resp: http.Response) -> SetResourceAccessForBucketResult ! Str {
-  var out = SetResourceAccessForBucketResult{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "operations" => out.operations = from_json_operation_list(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of SetResourceAccessForBucket.
-pub enum SetResourceAccessForBucketErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InvalidInputException(e: InvalidInputException)
-  NotFoundException(e: NotFoundException)
-  RegionSetupInProgressException(e: RegionSetupInProgressException)
-  ServiceException(e: ServiceException)
-  UnauthenticatedException(e: UnauthenticatedException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: SetResourceAccessForBucketErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    NotFoundException(x) => "NotFoundException: ${x:?}"
-    RegionSetupInProgressException(x) => "RegionSetupInProgressException: ${x:?}"
-    ServiceException(x) => "ServiceException: ${x:?}"
-    UnauthenticatedException(x) => "UnauthenticatedException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_set_resource_access_for_bucket_error(resp: http.Response) -> SetResourceAccessForBucketErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return SetResourceAccessForBucketErr.AccessDeniedException(x)
-      Err(msg) => return SetResourceAccessForBucketErr.Deserialize(msg)
-    }
-    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
-      Ok(x) => return SetResourceAccessForBucketErr.InvalidInputException(x)
-      Err(msg) => return SetResourceAccessForBucketErr.Deserialize(msg)
-    }
-    "NotFoundException" => match read_error_not_found_exception(resp, body) {
-      Ok(x) => return SetResourceAccessForBucketErr.NotFoundException(x)
-      Err(msg) => return SetResourceAccessForBucketErr.Deserialize(msg)
-    }
-    "RegionSetupInProgressException" => match read_error_region_setup_in_progress_exception(resp, body) {
-      Ok(x) => return SetResourceAccessForBucketErr.RegionSetupInProgressException(x)
-      Err(msg) => return SetResourceAccessForBucketErr.Deserialize(msg)
-    }
-    "ServiceException" => match read_error_service_exception(resp, body) {
-      Ok(x) => return SetResourceAccessForBucketErr.ServiceException(x)
-      Err(msg) => return SetResourceAccessForBucketErr.Deserialize(msg)
-    }
-    "UnauthenticatedException" => match read_error_unauthenticated_exception(resp, body) {
-      Ok(x) => return SetResourceAccessForBucketErr.UnauthenticatedException(x)
-      Err(msg) => return SetResourceAccessForBucketErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  SetResourceAccessForBucketErr.Api(restjson.api_error(resp, body))
 }

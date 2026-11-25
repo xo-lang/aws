@@ -21,6 +21,10 @@ pub struct AWSConfiguration {
   /// PENDING_CONFIRMATION (validation in progress), VALID (role validated),
   /// INVALID (validation failed).
   pub agent_elevated_role_arn_status: ValidationStatus? = None
+  /// The Amazon Resource Name (ARN) of the Organizations service-managed role
+  /// that AIDevOps uses to deploy and manage resources across the accounts in
+  /// your Amazon Web Services Organization.
+  pub service_management_role_arn: Str? = None
 }
 
 /// Access to the requested resource is denied due to insufficient
@@ -80,6 +84,11 @@ pub struct AgentSpace {
   /// The preferences configured on the agent space. Preferences that are not
   /// set take their default values.
   pub preferences: Map[Str, Bool]? = None
+  /// The Amazon Web Services source mode for the AgentSpace, indicating
+  /// whether its Amazon Web Services source configuration targets an
+  /// individual Amazon Web Services account or an Amazon Web Services
+  /// Organization.
+  pub aws_source_mode: AwsSourceMode? = None
 }
 
 /// The key of a preference that can be configured on an agent space. The
@@ -330,6 +339,12 @@ pub enum AuthFlow: Str {
   Unknown(value: Str)
 }
 
+pub enum AwsSourceMode: Str {
+  Standalone = "standalone"
+  Organization = "organization"
+  Unknown(value: Str)
+}
+
 /// Configuration for Azure subscription integration.
 pub struct AzureConfiguration {
   /// Azure subscription ID corresponding to provided resources.
@@ -361,6 +376,14 @@ pub struct CapabilityConfiguration {
 pub enum CapabilityType: Str {
   ReleaseReadinessReview = "RELEASE_READINESS_REVIEW"
   ReleaseReadinessReviewAutomatedTesting = "RELEASE_READINESS_REVIEW_AUTOMATED_TESTING"
+  CodeChangeRiskAnalysis = "CODE_CHANGE_RISK_ANALYSIS"
+  CodeChangeRiskAnalysisAutomatedTesting = "CODE_CHANGE_RISK_ANALYSIS_AUTOMATED_TESTING"
+  Unknown(value: Str)
+}
+
+pub enum ChatArchiveStatus: Str {
+  Active = "ACTIVE"
+  Archived = "ARCHIVED"
   Unknown(value: Str)
 }
 
@@ -374,12 +397,24 @@ pub struct ChatExecution {
   pub updated_at: Time? = None
   /// Summary or title of the chat
   pub summary: Str? = None
+  /// Indicates whether the chat execution is archived or active.
+  pub archive_status: ChatArchiveStatus? = None
 }
 
 /// The request conflicts with the current state of the resource.
 pub struct ConflictException {
   /// Detailed error message describing the conflict.
   pub message: Str? = None
+  /// A machine-readable reason code that explains why the request conflicted
+  /// with the current state of the resource. For example, CHAT_ARCHIVED
+  /// indicates that the request acted on a chat that is archived. This field
+  /// is absent when no specific reason applies.
+  pub reason: ConflictExceptionReason? = None
+}
+
+pub enum ConflictExceptionReason: Str {
+  ChatArchived = "CHAT_ARCHIVED"
+  Unknown(value: Str)
 }
 
 /// This exception is thrown when the content size exceeds the allowed
@@ -409,6 +444,10 @@ pub struct CreateAgentSpaceInput {
   /// The preferences to configure on the agent space. Preferences not
   /// provided take their default values.
   pub preferences: Map[Str, Bool]? = None
+  /// Specifies whether the AgentSpace's Amazon Web Services source
+  /// configuration targets an individual Amazon Web Services account or an
+  /// Amazon Web Services Organization.
+  pub aws_source_mode: AwsSourceMode? = None
 }
 
 /// Output containing the newly created AgentSpace.
@@ -996,6 +1035,27 @@ pub struct GetBacklogTaskResponse {
   pub task: Task? = None
 }
 
+pub struct GetChatRequest {
+  /// The unique identifier of the agent space that contains the chat
+  /// execution.
+  pub agent_space_id: Str? = None
+  /// The unique identifier of the chat execution to retrieve.
+  pub execution_id: Str? = None
+}
+
+pub struct GetChatResponse {
+  /// The unique identifier of the chat execution.
+  pub execution_id: Str? = None
+  /// The summary of the chat execution.
+  pub summary: Str? = None
+  /// The date and time at which the chat execution was created.
+  pub created_at: Time? = None
+  /// The date and time at which the chat execution was last updated.
+  pub updated_at: Time? = None
+  /// Indicates whether the chat execution is archived or active.
+  pub archive_status: ChatArchiveStatus? = None
+}
+
 /// Input for retrieving Operator App configuration.
 pub struct GetOperatorAppInput {
   /// The unique identifier of the AgentSpace
@@ -1469,6 +1529,9 @@ pub struct ListChatsRequest {
   pub max_results: Int? = None
   /// Token for pagination
   pub next_token: Str? = None
+  /// The archive status to filter by. Use this parameter to list only
+  /// archived chat executions or only active ones.
+  pub archive_status: ChatArchiveStatus? = None
 }
 
 /// Response structure for listing chats
@@ -1867,6 +1930,21 @@ pub struct MCPToolDetail {
   pub tool_classification: ToolClassification? = None
 }
 
+/// Configuration for bidirectional communication with a Microsoft Teams
+/// channel. When enabled, the agent receives and responds to mentions in
+/// the configured channel in addition to sending notifications.
+pub struct MSTeamsBidirectionalConfiguration {
+  /// The Amazon Resource Name (ARN) of the IAM role that the agent assumes to
+  /// exchange messages with the Microsoft Teams team for this association.
+  pub role_arn: Str? = None
+  /// Specifies whether bidirectional communication is enabled for this
+  /// association. If you set this value to true , you can mention the agent
+  /// in the configured Microsoft Teams channel and it responds in that
+  /// channel. If you omit this parameter or set it to false , the agent only
+  /// sends one-way notifications.
+  pub enabled: Bool? = None
+}
+
 /// Represents a channel in a Microsoft Teams team that the DevOps Agent
 /// service can send notifications to.
 pub struct MSTeamsChannel {
@@ -1889,6 +1967,10 @@ pub struct MSTeamsConfiguration {
   pub team_name: Str? = None
   /// The Microsoft Teams channels that receive agent notifications.
   pub transmission_target: MSTeamsTransmissionTarget? = None
+  /// The bidirectional communication configuration for the Microsoft Teams
+  /// integration. Provide this configuration with enabled set to true to
+  /// allow users to interact with the agent directly from Microsoft Teams.
+  pub bidirectional: MSTeamsBidirectionalConfiguration? = None
 }
 
 /// Specifies the Microsoft Teams channels that receive different types of
@@ -1979,6 +2061,45 @@ pub enum OrderType: Str {
   Asc = "ASC"
   Desc = "DESC"
   Unknown(value: Str)
+}
+
+pub enum OrgSourceAccountReasonCode: Str {
+  AccountSuspended = "accountSuspended"
+  AccountNotInScope = "accountNotInScope"
+  ManagementAccountNotSupported = "managementAccountNotSupported"
+  StackInstanceInoperable = "stackInstanceInoperable"
+  AccessDenied = "accessDenied"
+  DeploymentFailed = "deploymentFailed"
+  SecondaryAccountLimitExceeded = "secondaryAccountLimitExceeded"
+  Unknown(value: Str)
+}
+
+/// Describes the current rollout state of an Amazon Web Services
+/// Organization source configuration, including the number of accounts that
+/// have been deployed to and any issues encountered during deployment.
+pub struct OrgSourceDeploymentState {
+  /// The number of accounts in the targeted Amazon Web Services Organization
+  /// or organizational unit that have successfully been deployed to.
+  pub deployed_account_count: Int? = None
+  /// The issues encountered while deploying the source configuration across
+  /// the accounts in the Amazon Web Services Organization.
+  pub issues: List[OrgSourceIssue]? = None
+  /// The timestamp of the most recent evaluation of the organization-wide
+  /// deployment state.
+  pub last_evaluated_at: Time? = None
+}
+
+/// Describes an issue encountered while deploying or evaluating an Amazon
+/// Web Services Organization source configuration.
+pub struct OrgSourceIssue {
+  /// A code that identifies the reason for the issue.
+  pub reason_code: OrgSourceAccountReasonCode? = None
+  /// The number of accounts affected by this issue.
+  pub account_count: Int? = None
+  /// The Amazon Web Services account IDs affected by this issue.
+  pub account_ids: List[Str]? = None
+  /// A description of the issue.
+  pub message: Str? = None
 }
 
 /// Authorization configuration options for PagerDuty service.
@@ -2799,6 +2920,7 @@ pub enum Service: Str {
 /// own specific configuration structure.
 pub enum ServiceConfiguration {
   SourceAws(value: SourceAwsConfiguration)
+  SourceAwsOrg(value: SourceAwsOrgConfiguration)
   Aws(value: AWSConfiguration)
   Github(value: GitHubConfiguration)
   Slack(value: SlackConfiguration)
@@ -2992,6 +3114,32 @@ pub struct SourceAwsConfiguration {
   pub agent_elevated_role_arn_status: ValidationStatus? = None
 }
 
+/// Configuration for Amazon Web Services Organization-wide source account
+/// integration. Use this configuration to monitor Amazon Web Services
+/// resources across multiple accounts within an organization or within
+/// targeted organizational units.
+pub struct SourceAwsOrgConfiguration {
+  /// The account type for this configuration. For Amazon Web Services
+  /// Organization-level configurations, this value is source .
+  pub account_type: SourceAccountType? = None
+  /// The organizational units within the Amazon Web Services Organization
+  /// that are targeted for source monitoring.
+  pub organizational_unit: SourceAwsOrgUnit? = None
+  /// The current deployment state of the Amazon Web Services
+  /// Organization-wide source configuration.
+  pub deployment_state: OrgSourceDeploymentState? = None
+}
+
+/// Identifies an Organizations organizational unit and its member accounts
+/// that are targeted for source monitoring.
+pub struct SourceAwsOrgUnit {
+  /// The identifier of the Organizations organizational unit.
+  pub organizational_unit_id: Str? = None
+  /// The Amazon Web Services account IDs that belong to this organizational
+  /// unit and are targeted for source monitoring.
+  pub account_ids: List[Str]? = None
+}
+
 pub struct TagResourceRequest {
   /// The ARN of the resource to tag.
   pub resource_arn: Str? = None
@@ -3093,6 +3241,7 @@ pub enum TaskType: Str {
   Evaluation = "EVALUATION"
   ReleaseReadinessReview = "RELEASE_READINESS_REVIEW"
   ReleaseTesting = "RELEASE_TESTING"
+  CodeChangeRiskAnalysis = "CODE_CHANGE_RISK_ANALYSIS"
   Unknown(value: Str)
 }
 
@@ -3197,6 +3346,11 @@ pub struct UpdateAgentSpaceInput {
   /// included revert to their default values. When omitted, the current
   /// preferences are left unchanged.
   pub preferences: Map[Str, Bool]? = None
+  /// Specifies whether the AgentSpace's Amazon Web Services source
+  /// configuration targets an individual Amazon Web Services account or an
+  /// Amazon Web Services Organization. Use this parameter to switch an
+  /// existing AgentSpace between source modes.
+  pub aws_source_mode: AwsSourceMode? = None
 }
 
 /// Output containing the updated AgentSpace.
@@ -3351,6 +3505,35 @@ pub struct UpdateBacklogTaskRequest {
 pub struct UpdateBacklogTaskResponse {
   /// The updated task object
   pub task: Task? = None
+}
+
+pub struct UpdateChatRequest {
+  /// The unique identifier of the agent space that contains the chat
+  /// execution to update.
+  pub agent_space_id: Str? = None
+  /// The unique identifier of the chat execution to update.
+  pub execution_id: Str? = None
+  /// The new summary to set for the chat execution.
+  pub summary: Str? = None
+  /// The archive status to set for the chat execution. Use this parameter to
+  /// archive the chat execution, hiding it from the default chat list, or to
+  /// unarchive it, restoring it to the default chat list.
+  pub archive_status: ChatArchiveStatus? = None
+  /// A unique, case-sensitive identifier to ensure that the operation
+  /// completes no more than one time. If this token matches a previous
+  /// request, the service ignores the request, but does not return an error.
+  pub client_token: Str? = None
+}
+
+pub struct UpdateChatResponse {
+  /// The unique identifier of the updated chat execution.
+  pub execution_id: Str? = None
+  /// The summary of the chat execution after the update.
+  pub summary: Str? = None
+  /// The date and time at which the chat execution was last updated.
+  pub updated_at: Time? = None
+  /// The archive status of the chat execution after the update.
+  pub archive_status: ChatArchiveStatus? = None
 }
 
 /// Request structure for updating a goal

@@ -1306,6 +1306,7 @@ pub enum IntegrationStatus: Str {
 /// provider.
 pub enum IntegrationType: Str {
   AwsConfigSlrec = "AWS_CONFIG_SLREC"
+  AwsConfigAzureSlrec = "AWS_CONFIG_AZURE_SLREC"
   Slack = "SLACK"
   ExternalAgent = "EXTERNAL_AGENT"
   AwsIntegration = "AWS_INTEGRATION"
@@ -1606,7 +1607,17 @@ pub struct Metadata {
   pub traces: List[TraceMetadata]? = None
 }
 
-/// A single metric observed on a context graph node.
+/// Describes how an aggregating metric reports values over time. A delta
+/// value covers the preceding reporting interval. A cumulative value covers
+/// a fixed start time through the current reporting time, restarting when
+/// the stream resets.
+pub enum MetricAggregationTemporality: Str {
+  Delta = "delta"
+  Cumulative = "cumulative"
+  Unknown(value: Str)
+}
+
+/// A single metric observed on a context graph node or edge.
 pub struct MetricMetadata {
   /// The metric name as emitted, such as "Duration".
   pub name: Str? = None
@@ -1621,16 +1632,35 @@ pub struct MetricMetadata {
   /// Keys are the metric store's own label names, not bare OTel attribute
   /// names: service identity arrives as "@resource.service.name" and
   /// "@resource.service.namespace", and the instrumentation scope as
-  /// "@instrumentation.@name", while span-derived metrics label the service
-  /// as a bare "service.name". Cloud provider, account and region are not
-  /// repeated per metric — read those from the node. Values are RAW,
-  /// deliberately NOT the node's normalized or merged identity, so a selector
-  /// built from them matches the emitted series. A merged node can carry
-  /// different values per metric, which is why these live here rather than on
-  /// the node.
+  /// "@instrumentation.@name". Span-derived metrics can additionally carry
+  /// the service as a bare data point "service.name" label. Cloud provider,
+  /// account and region are not repeated per metric — read those from the
+  /// node. Values are RAW, deliberately NOT the node's merged identity, so a
+  /// selector built from them matches the emitted series. A merged node can
+  /// carry different values per metric, which is why these live here rather
+  /// than on the node.
   pub attributes: Map[Str, Str]? = None
   /// What the metric means and the unit it is reported in.
   pub semantics: MetricSemantics? = None
+  /// Aggregation temporality for the selected metric stream represented by
+  /// this metadata entry. Present when known, including cumulative for OTel
+  /// Summary metrics. Absent for Gauge metrics or when the information is
+  /// unavailable.
+  pub aggregation_temporality: MetricAggregationTemporality? = None
+  /// Whether the selected Sum metric stream represented by this metadata
+  /// entry is a non-negative accumulation. Absent for metrics other than Sum
+  /// or when the information is unavailable.
+  pub monotonicity: MetricMonotonicity? = None
+}
+
+/// Describes whether a Sum is a non-negative accumulation. For a monotonic
+/// Sum, delta values are non-negative and cumulative values do not decrease
+/// except when the stream resets. A non-monotonic Sum can report positive
+/// or negative changes.
+pub enum MetricMonotonicity: Str {
+  Monotonic = "monotonic"
+  NonMonotonic = "non_monotonic"
+  Unknown(value: Str)
 }
 
 /// The meaning and unit of a single metric.

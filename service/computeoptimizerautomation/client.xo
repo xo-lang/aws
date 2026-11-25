@@ -146,6 +146,9 @@ fn json_of_account_info(v: AccountInfo) -> json.Value {
   if let Some(x) = v.organization_rule_mode {
     fs.push(("organizationRuleMode", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.organization_rule_mode_source {
+    fs.push(("organizationRuleModeSource", json_of_organization_rule_mode_source(x)))
+  }
   if let Some(x) = v.status_reason {
     fs.push(("statusReason", json.Value.Str(x)))
   }
@@ -165,6 +168,7 @@ fn from_json_account_info(v: json.Value) -> AccountInfo ! Str {
       "accountId" => out.account_id = jsonv.read_str(fv)?
       "status" => out.status = EnrollmentStatus.from(jsonv.read_str(fv)?)
       "organizationRuleMode" => out.organization_rule_mode = OrganizationRuleMode.from(jsonv.read_str(fv)?)
+      "organizationRuleModeSource" => out.organization_rule_mode_source = from_json_organization_rule_mode_source(fv)?
       "statusReason" => out.status_reason = jsonv.read_str(fv)?
       "lastUpdatedTimestamp" => out.last_updated_timestamp = jsonv.read_time(fv, "epoch-seconds")?
       _ => {}
@@ -583,6 +587,28 @@ fn from_json_automation_rules(v: json.Value) -> List[AutomationRule] ! Str {
   Ok(out)
 }
 
+fn json_of_conflict_exception(v: ConflictException) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_conflict_exception(v: json.Value) -> ConflictException ! Str {
+  var out = ConflictException{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_create_automation_rule_request(v: CreateAutomationRuleRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.name {
@@ -806,6 +832,47 @@ fn json_of_delete_automation_rule_response(v: DeleteAutomationRuleResponse) -> j
 
 fn from_json_delete_automation_rule_response(v: json.Value) -> DeleteAutomationRuleResponse ! Str {
   var out = DeleteAutomationRuleResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_delete_organization_enrollment_configuration_request(v: DeleteOrganizationEnrollmentConfigurationRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.target_value {
+    fs.push(("target", json_of_organization_target(x)))
+  }
+  if let Some(x) = v.configuration_types {
+    fs.push(("configurationTypes", json_of_organization_enrollment_configuration_types(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_organization_enrollment_configuration_request(v: json.Value) -> DeleteOrganizationEnrollmentConfigurationRequest ! Str {
+  var out = DeleteOrganizationEnrollmentConfigurationRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "target" => out.target_value = from_json_organization_target(fv)?
+      "configurationTypes" => out.configuration_types = from_json_organization_enrollment_configuration_types(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_organization_enrollment_configuration_response(v: DeleteOrganizationEnrollmentConfigurationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_organization_enrollment_configuration_response(v: json.Value) -> DeleteOrganizationEnrollmentConfigurationResponse ! Str {
+  var out = DeleteOrganizationEnrollmentConfigurationResponse{}
   let _ = jsonv.fields(v)?
   Ok(out)
 }
@@ -1319,6 +1386,9 @@ fn json_of_get_enrollment_configuration_response(v: GetEnrollmentConfigurationRe
   if let Some(x) = v.last_updated_timestamp {
     fs.push(("lastUpdatedTimestamp", jsonv.time(x, "epoch-seconds")))
   }
+  if let Some(x) = v.organization_enrollment_configuration_status {
+    fs.push(("organizationEnrollmentConfigurationStatus", json.Value.Str(x.value())))
+  }
   json.Value.Object(fs)
 }
 
@@ -1333,6 +1403,7 @@ fn from_json_get_enrollment_configuration_response(v: json.Value) -> GetEnrollme
       "statusReason" => out.status_reason = jsonv.read_str(fv)?
       "organizationRuleMode" => out.organization_rule_mode = OrganizationRuleMode.from(jsonv.read_str(fv)?)
       "lastUpdatedTimestamp" => out.last_updated_timestamp = jsonv.read_time(fv, "epoch-seconds")?
+      "organizationEnrollmentConfigurationStatus" => out.organization_enrollment_configuration_status = OrganizationEnrollmentConfigurationStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -1598,6 +1669,9 @@ fn json_of_list_automation_event_summaries_request(v: ListAutomationEventSummari
   if let Some(x) = v.filters {
     fs.push(("filters", json_of_automation_event_filter_list(x)))
   }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
+  }
   if let Some(x) = v.start_date_inclusive {
     fs.push(("startDateInclusive", json.Value.Str(x)))
   }
@@ -1621,6 +1695,7 @@ fn from_json_list_automation_event_summaries_request(v: json.Value) -> ListAutom
     }
     match k {
       "filters" => out.filters = from_json_automation_event_filter_list(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organizational_unit_ids(fv)?
       "startDateInclusive" => out.start_date_inclusive = jsonv.read_str(fv)?
       "endDateExclusive" => out.end_date_exclusive = jsonv.read_str(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
@@ -1662,6 +1737,9 @@ fn json_of_list_automation_events_request(v: ListAutomationEventsRequest) -> jso
   if let Some(x) = v.filters {
     fs.push(("filters", json_of_automation_event_filter_list(x)))
   }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
+  }
   if let Some(x) = v.start_time_inclusive {
     fs.push(("startTimeInclusive", jsonv.time(x, "epoch-seconds")))
   }
@@ -1685,6 +1763,7 @@ fn from_json_list_automation_events_request(v: json.Value) -> ListAutomationEven
     }
     match k {
       "filters" => out.filters = from_json_automation_event_filter_list(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organizational_unit_ids(fv)?
       "startTimeInclusive" => out.start_time_inclusive = jsonv.read_time(fv, "epoch-seconds")?
       "endTimeExclusive" => out.end_time_exclusive = jsonv.read_time(fv, "epoch-seconds")?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
@@ -1913,10 +1992,125 @@ fn from_json_list_automation_rules_response(v: json.Value) -> ListAutomationRule
   Ok(out)
 }
 
+fn json_of_list_organization_enrollment_configurations_request(v: ListOrganizationEnrollmentConfigurationsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.target_type {
+    fs.push(("targetType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_organization_enrollment_configurations_request(v: json.Value) -> ListOrganizationEnrollmentConfigurationsRequest ! Str {
+  var out = ListOrganizationEnrollmentConfigurationsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "targetType" => out.target_type = OrganizationTargetType.from(jsonv.read_str(fv)?)
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_organization_enrollment_configurations_response(v: ListOrganizationEnrollmentConfigurationsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organization_enrollment_configurations {
+    fs.push(("organizationEnrollmentConfigurations", json_of_organization_enrollment_configurations(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_organization_enrollment_configurations_response(v: json.Value) -> ListOrganizationEnrollmentConfigurationsResponse ! Str {
+  var out = ListOrganizationEnrollmentConfigurationsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationEnrollmentConfigurations" => out.organization_enrollment_configurations = from_json_organization_enrollment_configurations(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_organizational_units_request(v: ListOrganizationalUnitsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_organizational_units_request(v: json.Value) -> ListOrganizationalUnitsRequest ! Str {
+  var out = ListOrganizationalUnitsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organizational_unit_ids(fv)?
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_organizational_units_response(v: ListOrganizationalUnitsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_units {
+    fs.push(("organizationalUnits", json_of_organizational_unit_info_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_organizational_units_response(v: json.Value) -> ListOrganizationalUnitsResponse ! Str {
+  var out = ListOrganizationalUnitsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnits" => out.organizational_units = from_json_organizational_unit_info_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_list_recommended_action_summaries_request(v: ListRecommendedActionSummariesRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.filters {
     fs.push(("filters", json_of_recommended_action_filter_list(x)))
+  }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
   }
   if let Some(x) = v.max_results {
     fs.push(("maxResults", json.Value.Int(x)))
@@ -1935,6 +2129,7 @@ fn from_json_list_recommended_action_summaries_request(v: json.Value) -> ListRec
     }
     match k {
       "filters" => out.filters = from_json_recommended_action_filter_list(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organizational_unit_ids(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -1974,6 +2169,9 @@ fn json_of_list_recommended_actions_request(v: ListRecommendedActionsRequest) ->
   if let Some(x) = v.filters {
     fs.push(("filters", json_of_recommended_action_filter_list(x)))
   }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
+  }
   if let Some(x) = v.max_results {
     fs.push(("maxResults", json.Value.Int(x)))
   }
@@ -1991,6 +2189,7 @@ fn from_json_list_recommended_actions_request(v: json.Value) -> ListRecommendedA
     }
     match k {
       "filters" => out.filters = from_json_recommended_action_filter_list(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organizational_unit_ids(fv)?
       "maxResults" => out.max_results = jsonv.read_int(fv)?
       "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
@@ -2121,6 +2320,15 @@ fn json_of_organization_configuration(v: OrganizationConfiguration) -> json.Valu
   if let Some(x) = v.account_ids {
     fs.push(("accountIds", json_of_organization_configuration_account_ids(x)))
   }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organization_configuration_organizational_unit_ids(x)))
+  }
+  if let Some(x) = v.excluded_organizational_unit_ids {
+    fs.push(("excludedOrganizationalUnitIds", json_of_organization_configuration_organizational_unit_ids(x)))
+  }
+  if let Some(x) = v.excluded_account_ids {
+    fs.push(("excludedAccountIds", json_of_organization_configuration_account_ids(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2133,6 +2341,9 @@ fn from_json_organization_configuration(v: json.Value) -> OrganizationConfigurat
     match k {
       "ruleApplyOrder" => out.rule_apply_order = RuleApplyOrder.from(jsonv.read_str(fv)?)
       "accountIds" => out.account_ids = from_json_organization_configuration_account_ids(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organization_configuration_organizational_unit_ids(fv)?
+      "excludedOrganizationalUnitIds" => out.excluded_organizational_unit_ids = from_json_organization_configuration_organizational_unit_ids(fv)?
+      "excludedAccountIds" => out.excluded_account_ids = from_json_organization_configuration_account_ids(fv)?
       _ => {}
     }
   }
@@ -2155,10 +2366,123 @@ fn from_json_organization_configuration_account_ids(v: json.Value) -> List[Str] 
   Ok(out)
 }
 
+fn json_of_organization_configuration_organizational_unit_ids(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_organization_configuration_organizational_unit_ids(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_enrollment_configuration(v: OrganizationEnrollmentConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.target_id {
+    fs.push(("targetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.target_type {
+    fs.push(("targetType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.organization_rule_mode {
+    fs.push(("organizationRuleMode", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organization_enrollment_configuration(v: json.Value) -> OrganizationEnrollmentConfiguration ! Str {
+  var out = OrganizationEnrollmentConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "targetId" => out.target_id = jsonv.read_str(fv)?
+      "targetType" => out.target_type = OrganizationTargetType.from(jsonv.read_str(fv)?)
+      "organizationRuleMode" => out.organization_rule_mode = OrganizationRuleMode.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organization_enrollment_configuration_types(v: List[OrganizationEnrollmentConfigurationType]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationEnrollmentConfigurationType) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_organization_enrollment_configuration_types(v: json.Value) -> List[OrganizationEnrollmentConfigurationType] ! Str {
+  var out: List[OrganizationEnrollmentConfigurationType] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(OrganizationEnrollmentConfigurationType.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_organization_enrollment_configurations(v: List[OrganizationEnrollmentConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationEnrollmentConfiguration) -> json.Value { json_of_organization_enrollment_configuration(x) }))
+}
+
+fn from_json_organization_enrollment_configurations(v: json.Value) -> List[OrganizationEnrollmentConfiguration] ! Str {
+  var out: List[OrganizationEnrollmentConfiguration] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organization_enrollment_configuration(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organization_rule_mode_source(v: OrganizationRuleModeSource) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.source_type {
+    fs.push(("sourceType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.source_target_id {
+    fs.push(("sourceTargetId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organization_rule_mode_source(v: json.Value) -> OrganizationRuleModeSource ! Str {
+  var out = OrganizationRuleModeSource{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "sourceType" => out.source_type = OrganizationRuleModeSourceType.from(jsonv.read_str(fv)?)
+      "sourceTargetId" => out.source_target_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_organization_scope(v: OrganizationScope) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.account_ids {
     fs.push(("accountIds", json_of_organization_configuration_account_ids(x)))
+  }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organization_configuration_organizational_unit_ids(x)))
+  }
+  if let Some(x) = v.excluded_organizational_unit_ids {
+    fs.push(("excludedOrganizationalUnitIds", json_of_organization_configuration_organizational_unit_ids(x)))
+  }
+  if let Some(x) = v.excluded_account_ids {
+    fs.push(("excludedAccountIds", json_of_organization_configuration_account_ids(x)))
   }
   json.Value.Object(fs)
 }
@@ -2171,8 +2495,99 @@ fn from_json_organization_scope(v: json.Value) -> OrganizationScope ! Str {
     }
     match k {
       "accountIds" => out.account_ids = from_json_organization_configuration_account_ids(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organization_configuration_organizational_unit_ids(fv)?
+      "excludedOrganizationalUnitIds" => out.excluded_organizational_unit_ids = from_json_organization_configuration_organizational_unit_ids(fv)?
+      "excludedAccountIds" => out.excluded_account_ids = from_json_organization_configuration_account_ids(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_organization_target(v: OrganizationTarget) -> json.Value {
+  match v {
+    AccountId(x) => json.Value.Object([("accountId", json.Value.Str(x))])
+    OrganizationalUnitId(x) => json.Value.Object([("organizationalUnitId", json.Value.Str(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_organization_target(v: json.Value) -> OrganizationTarget ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "accountId" => Ok(OrganizationTarget.AccountId(jsonv.read_str(fv)?))
+      "organizationalUnitId" => Ok(OrganizationTarget.OrganizationalUnitId(jsonv.read_str(fv)?))
+      _ => Ok(OrganizationTarget.Unknown(k))
+    }
+  }
+  Err("OrganizationTarget: no member set")
+}
+
+fn json_of_organizational_unit_ids(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_organizational_unit_ids(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_unit_info(v: OrganizationalUnitInfo) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_unit_id {
+    fs.push(("organizationalUnitId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.auto_enroll_member_accounts {
+    fs.push(("autoEnrollMemberAccounts", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.organization_rule_mode {
+    fs.push(("organizationRuleMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.organization_rule_mode_source {
+    fs.push(("organizationRuleModeSource", json_of_organization_rule_mode_source(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organizational_unit_info(v: json.Value) -> OrganizationalUnitInfo ! Str {
+  var out = OrganizationalUnitInfo{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnitId" => out.organizational_unit_id = jsonv.read_str(fv)?
+      "autoEnrollMemberAccounts" => out.auto_enroll_member_accounts = AutoEnrollMemberAccounts.from(jsonv.read_str(fv)?)
+      "organizationRuleMode" => out.organization_rule_mode = OrganizationRuleMode.from(jsonv.read_str(fv)?)
+      "organizationRuleModeSource" => out.organization_rule_mode_source = from_json_organization_rule_mode_source(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_unit_info_list(v: List[OrganizationalUnitInfo]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationalUnitInfo) -> json.Value { json_of_organizational_unit_info(x) }))
+}
+
+fn from_json_organizational_unit_info_list(v: json.Value) -> List[OrganizationalUnitInfo] ! Str {
+  var out: List[OrganizationalUnitInfo] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organizational_unit_info(fv)?)
   }
   Ok(out)
 }
@@ -2310,6 +2725,47 @@ fn from_json_preview_results(v: json.Value) -> List[PreviewResult] ! Str {
     }
     out.push(from_json_preview_result(fv)?)
   }
+  Ok(out)
+}
+
+fn json_of_put_organization_enrollment_configuration_request(v: PutOrganizationEnrollmentConfigurationRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.target_value {
+    fs.push(("target", json_of_organization_target(x)))
+  }
+  if let Some(x) = v.organization_rule_mode {
+    fs.push(("organizationRuleMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_put_organization_enrollment_configuration_request(v: json.Value) -> PutOrganizationEnrollmentConfigurationRequest ! Str {
+  var out = PutOrganizationEnrollmentConfigurationRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "target" => out.target_value = from_json_organization_target(fv)?
+      "organizationRuleMode" => out.organization_rule_mode = OrganizationRuleMode.from(jsonv.read_str(fv)?)
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_put_organization_enrollment_configuration_response(v: PutOrganizationEnrollmentConfigurationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_put_organization_enrollment_configuration_response(v: json.Value) -> PutOrganizationEnrollmentConfigurationResponse ! Str {
+  var out = PutOrganizationEnrollmentConfigurationResponse{}
+  let _ = jsonv.fields(v)?
   Ok(out)
 }
 
@@ -3374,6 +3830,21 @@ fn read_error_access_denied_exception(resp: http.Response, body: json.Value) -> 
   Ok(out)
 }
 
+fn read_error_conflict_exception(resp: http.Response, body: json.Value) -> ConflictException ! Str {
+  let _ = (resp, body)
+  var out = ConflictException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn read_error_forbidden_exception(resp: http.Response, body: json.Value) -> ForbiddenException ! Str {
   let _ = (resp, body)
   var out = ForbiddenException{}
@@ -3691,8 +4162,9 @@ pub fn deserialize_associate_accounts_error(resp: http.Response) -> AssociateAcc
 /// management account to create Automation rules that automatically apply
 /// actions to that account. If the member account has not previously
 /// enabled the Automation feature, the association process automatically
-/// enables it. Only the management account or a delegated administrator can
-/// perform this action.
+/// enables it. Requests that include an account to which an organization
+/// enrollment configuration applies are rejected. Only the management
+/// account or a delegated administrator can perform this action.
 pub fn (c: Client) associate_accounts(input: AssociateAccountsRequest) -> AssociateAccountsResponse ! AssociateAccountsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_associate_accounts(c.params, input)) ?? e => return Err(AssociateAccountsErr.InvalidInput(e))
   var req = serialize_associate_accounts(ep, input, rest.uuid(c.rand)) ?? e => return Err(AssociateAccountsErr.InvalidInput(e))
@@ -4058,6 +4530,161 @@ pub fn (c: Client) delete_automation_rule(input: DeleteAutomationRuleRequest) ->
   deserialize_delete_automation_rule(resp) ?? e => Err(DeleteAutomationRuleErr.Deserialize(e))
 }
 
+pub fn endpoint_params_delete_organization_enrollment_configuration(base: EndpointParameters, input: DeleteOrganizationEnrollmentConfigurationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DeleteOrganizationEnrollmentConfiguration.
+pub fn serialize_delete_organization_enrollment_configuration(ep: rest.Endpoint, input: DeleteOrganizationEnrollmentConfigurationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.target_value {
+    fs.push(("target", json_of_organization_target(x)))
+  }
+  if let Some(x) = input.configuration_types {
+    fs.push(("configurationTypes", json_of_organization_enrollment_configuration_types(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "ComputeOptimizerAutomationService.DeleteOrganizationEnrollmentConfiguration"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_delete_organization_enrollment_configuration(resp: http.Response) -> DeleteOrganizationEnrollmentConfigurationResponse ! Str {
+  var out = DeleteOrganizationEnrollmentConfigurationResponse{}
+  Ok(out)
+}
+
+/// The errors of DeleteOrganizationEnrollmentConfiguration.
+pub enum DeleteOrganizationEnrollmentConfigurationErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  IdempotencyTokenInUseException(e: IdempotencyTokenInUseException)
+  IdempotentParameterMismatchException(e: IdempotentParameterMismatchException)
+  InternalServerException(e: InternalServerException)
+  InvalidParameterValueException(e: InvalidParameterValueException)
+  OptInRequiredException(e: OptInRequiredException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DeleteOrganizationEnrollmentConfigurationErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    IdempotencyTokenInUseException(x) => "IdempotencyTokenInUseException: ${x:?}"
+    IdempotentParameterMismatchException(x) => "IdempotentParameterMismatchException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
+    OptInRequiredException(x) => "OptInRequiredException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_delete_organization_enrollment_configuration_error(resp: http.Response) -> DeleteOrganizationEnrollmentConfigurationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.AccessDeniedException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.ConflictException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.ForbiddenException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "IdempotencyTokenInUseException" => match read_error_idempotency_token_in_use_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.IdempotencyTokenInUseException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "IdempotentParameterMismatchException" => match read_error_idempotent_parameter_mismatch_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.IdempotentParameterMismatchException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.InternalServerException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.InvalidParameterValueException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "OptInRequiredException" => match read_error_opt_in_required_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.OptInRequiredException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.ServiceUnavailableException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DeleteOrganizationEnrollmentConfigurationErr.ThrottlingException(x)
+      Err(msg) => return DeleteOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DeleteOrganizationEnrollmentConfigurationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Deletes the specified configuration types from an organization
+/// enrollment configuration. After deletion, Automation stays enabled for
+/// affected accounts and earlier account associations aren't restored.
+/// Affected accounts inherit the organization rule mode from the closest
+/// parent that has an organization enrollment configuration, or get None
+/// allowed if no parent has one. Only the management account or a delegated
+/// administrator can perform this action.
+pub fn (c: Client) delete_organization_enrollment_configuration(input: DeleteOrganizationEnrollmentConfigurationRequest) -> DeleteOrganizationEnrollmentConfigurationResponse ! DeleteOrganizationEnrollmentConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_delete_organization_enrollment_configuration(c.params, input)) ?? e => return Err(DeleteOrganizationEnrollmentConfigurationErr.InvalidInput(e))
+  var req = serialize_delete_organization_enrollment_configuration(ep, input, rest.uuid(c.rand)) ?? e => return Err(DeleteOrganizationEnrollmentConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteOrganizationEnrollmentConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_delete_organization_enrollment_configuration_error(resp))
+  }
+  deserialize_delete_organization_enrollment_configuration(resp) ?? e => Err(DeleteOrganizationEnrollmentConfigurationErr.Deserialize(e))
+}
+
 pub fn endpoint_params_disassociate_accounts(base: EndpointParameters, input: DisassociateAccountsRequest) -> EndpointParameters {
   let _ = input
   base
@@ -4204,9 +4831,11 @@ pub fn deserialize_disassociate_accounts_error(resp: http.Response) -> Disassoci
 /// Disassociates member accounts from your organization's management
 /// account, removing centralized automation capabilities. Once
 /// disassociated, organization rules no longer apply to the member account,
-/// and the management account (or delegated administrator) cannot create
-/// Automation rules for that account. Only the management account or a
-/// delegated administrator can perform this action.
+/// and the management account (or delegated administrator) can't create
+/// automation rules for that account. Requests that include an account to
+/// which an organization enrollment configuration applies are rejected.
+/// Only the management account or a delegated administrator can perform
+/// this action.
 pub fn (c: Client) disassociate_accounts(input: DisassociateAccountsRequest) -> DisassociateAccountsResponse ! DisassociateAccountsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_disassociate_accounts(c.params, input)) ?? e => return Err(DisassociateAccountsErr.InvalidInput(e))
   var req = serialize_disassociate_accounts(ep, input, rest.uuid(c.rand)) ?? e => return Err(DisassociateAccountsErr.InvalidInput(e))
@@ -4568,6 +5197,7 @@ pub fn deserialize_get_enrollment_configuration(resp: http.Response) -> GetEnrol
       "statusReason" => out.status_reason = jsonv.read_str(fv)?
       "organizationRuleMode" => out.organization_rule_mode = OrganizationRuleMode.from(jsonv.read_str(fv)?)
       "lastUpdatedTimestamp" => out.last_updated_timestamp = jsonv.read_time(fv, "epoch-seconds")?
+      "organizationEnrollmentConfigurationStatus" => out.organization_enrollment_configuration_status = OrganizationEnrollmentConfigurationStatus.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -4973,6 +5603,9 @@ pub fn serialize_list_automation_event_summaries(ep: rest.Endpoint, input: ListA
   if let Some(x) = input.filters {
     fs.push(("filters", json_of_automation_event_filter_list(x)))
   }
+  if let Some(x) = input.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
+  }
   if let Some(x) = input.start_date_inclusive {
     fs.push(("startDateInclusive", json.Value.Str(x)))
   }
@@ -5119,6 +5752,9 @@ pub fn serialize_list_automation_events(ep: rest.Endpoint, input: ListAutomation
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = input.filters {
     fs.push(("filters", json_of_automation_event_filter_list(x)))
+  }
+  if let Some(x) = input.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
   }
   if let Some(x) = input.start_time_inclusive {
     fs.push(("startTimeInclusive", jsonv.time(x, "epoch-seconds")))
@@ -5692,6 +6328,293 @@ pub fn (c: Client) list_automation_rules(input: ListAutomationRulesRequest) -> L
   deserialize_list_automation_rules(resp) ?? e => Err(ListAutomationRulesErr.Deserialize(e))
 }
 
+pub fn endpoint_params_list_organization_enrollment_configurations(base: EndpointParameters, input: ListOrganizationEnrollmentConfigurationsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListOrganizationEnrollmentConfigurations.
+pub fn serialize_list_organization_enrollment_configurations(ep: rest.Endpoint, input: ListOrganizationEnrollmentConfigurationsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.target_type {
+    fs.push(("targetType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "ComputeOptimizerAutomationService.ListOrganizationEnrollmentConfigurations"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_organization_enrollment_configurations(resp: http.Response) -> ListOrganizationEnrollmentConfigurationsResponse ! Str {
+  var out = ListOrganizationEnrollmentConfigurationsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationEnrollmentConfigurations" => out.organization_enrollment_configurations = from_json_organization_enrollment_configurations(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListOrganizationEnrollmentConfigurations.
+pub enum ListOrganizationEnrollmentConfigurationsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerException(e: InternalServerException)
+  InvalidParameterValueException(e: InvalidParameterValueException)
+  OptInRequiredException(e: OptInRequiredException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListOrganizationEnrollmentConfigurationsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
+    OptInRequiredException(x) => "OptInRequiredException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_organization_enrollment_configurations_error(resp: http.Response) -> ListOrganizationEnrollmentConfigurationsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.AccessDeniedException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.ForbiddenException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.InternalServerException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.InvalidParameterValueException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    "OptInRequiredException" => match read_error_opt_in_required_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.OptInRequiredException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.ServiceUnavailableException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListOrganizationEnrollmentConfigurationsErr.ThrottlingException(x)
+      Err(msg) => return ListOrganizationEnrollmentConfigurationsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListOrganizationEnrollmentConfigurationsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the organization enrollment configurations that are stored
+/// directly on accounts, organizational units (OUs), and the organization
+/// root. Only the management account or a delegated administrator can
+/// perform this action.
+pub fn (c: Client) list_organization_enrollment_configurations(input: ListOrganizationEnrollmentConfigurationsRequest) -> ListOrganizationEnrollmentConfigurationsResponse ! ListOrganizationEnrollmentConfigurationsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_organization_enrollment_configurations(c.params, input)) ?? e => return Err(ListOrganizationEnrollmentConfigurationsErr.InvalidInput(e))
+  var req = serialize_list_organization_enrollment_configurations(ep, input, "") ?? e => return Err(ListOrganizationEnrollmentConfigurationsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListOrganizationEnrollmentConfigurationsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_organization_enrollment_configurations_error(resp))
+  }
+  deserialize_list_organization_enrollment_configurations(resp) ?? e => Err(ListOrganizationEnrollmentConfigurationsErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_organizational_units(base: EndpointParameters, input: ListOrganizationalUnitsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListOrganizationalUnits.
+pub fn serialize_list_organizational_units(ep: rest.Endpoint, input: ListOrganizationalUnitsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "ComputeOptimizerAutomationService.ListOrganizationalUnits"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_organizational_units(resp: http.Response) -> ListOrganizationalUnitsResponse ! Str {
+  var out = ListOrganizationalUnitsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnits" => out.organizational_units = from_json_organizational_unit_info_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListOrganizationalUnits.
+pub enum ListOrganizationalUnitsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerException(e: InternalServerException)
+  InvalidParameterValueException(e: InvalidParameterValueException)
+  OptInRequiredException(e: OptInRequiredException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListOrganizationalUnitsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
+    OptInRequiredException(x) => "OptInRequiredException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_organizational_units_error(resp: http.Response) -> ListOrganizationalUnitsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.AccessDeniedException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.ForbiddenException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.InternalServerException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.InvalidParameterValueException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    "OptInRequiredException" => match read_error_opt_in_required_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.OptInRequiredException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.ServiceUnavailableException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListOrganizationalUnitsErr.ThrottlingException(x)
+      Err(msg) => return ListOrganizationalUnitsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListOrganizationalUnitsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the organization root and organizational units (OUs), including
+/// whether an applicable organization enrollment configuration enables
+/// Automation for member accounts and the effective organization rule mode
+/// for each root or OU. Only the management account or a delegated
+/// administrator can perform this action.
+pub fn (c: Client) list_organizational_units(input: ListOrganizationalUnitsRequest) -> ListOrganizationalUnitsResponse ! ListOrganizationalUnitsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_organizational_units(c.params, input)) ?? e => return Err(ListOrganizationalUnitsErr.InvalidInput(e))
+  var req = serialize_list_organizational_units(ep, input, "") ?? e => return Err(ListOrganizationalUnitsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListOrganizationalUnitsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_organizational_units_error(resp))
+  }
+  deserialize_list_organizational_units(resp) ?? e => Err(ListOrganizationalUnitsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_recommended_action_summaries(base: EndpointParameters, input: ListRecommendedActionSummariesRequest) -> EndpointParameters {
   let _ = input
   base
@@ -5706,6 +6629,9 @@ pub fn serialize_list_recommended_action_summaries(ep: rest.Endpoint, input: Lis
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = input.filters {
     fs.push(("filters", json_of_recommended_action_filter_list(x)))
+  }
+  if let Some(x) = input.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
   }
   if let Some(x) = input.max_results {
     fs.push(("maxResults", json.Value.Int(x)))
@@ -5820,8 +6746,9 @@ pub fn deserialize_list_recommended_action_summaries_error(resp: http.Response) 
 
 /// Provides a summary of recommended actions based on specified filters.
 /// Management accounts and delegated administrators can retrieve
-/// recommended actions that include associated member accounts. You can
-/// associate a member account using AssociateAccounts .
+/// recommended action summaries for member accounts that are associated
+/// using AssociateAccounts or have an applicable organization enrollment
+/// configuration with organizationRuleMode set to AnyAllowed .
 pub fn (c: Client) list_recommended_action_summaries(input: ListRecommendedActionSummariesRequest) -> ListRecommendedActionSummariesResponse ! ListRecommendedActionSummariesErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_recommended_action_summaries(c.params, input)) ?? e => return Err(ListRecommendedActionSummariesErr.InvalidInput(e))
   var req = serialize_list_recommended_action_summaries(ep, input, "") ?? e => return Err(ListRecommendedActionSummariesErr.InvalidInput(e))
@@ -5849,6 +6776,9 @@ pub fn serialize_list_recommended_actions(ep: rest.Endpoint, input: ListRecommen
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = input.filters {
     fs.push(("filters", json_of_recommended_action_filter_list(x)))
+  }
+  if let Some(x) = input.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_ids(x)))
   }
   if let Some(x) = input.max_results {
     fs.push(("maxResults", json.Value.Int(x)))
@@ -5961,10 +6891,11 @@ pub fn deserialize_list_recommended_actions_error(resp: http.Response) -> ListRe
   ListRecommendedActionsErr.Api(restjson.api_error(resp, body))
 }
 
-/// Lists the recommended actions based that match specified filters.
+/// Lists the recommended actions that match the specified filters.
 /// Management accounts and delegated administrators can retrieve
-/// recommended actions that include associated member accounts. You can
-/// associate a member account using AssociateAccounts .
+/// recommended actions for member accounts that are associated using
+/// AssociateAccounts or have an applicable organization enrollment
+/// configuration with organizationRuleMode set to AnyAllowed .
 pub fn (c: Client) list_recommended_actions(input: ListRecommendedActionsRequest) -> ListRecommendedActionsResponse ! ListRecommendedActionsErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_recommended_actions(c.params, input)) ?? e => return Err(ListRecommendedActionsErr.InvalidInput(e))
   var req = serialize_list_recommended_actions(ep, input, "") ?? e => return Err(ListRecommendedActionsErr.InvalidInput(e))
@@ -6117,6 +7048,165 @@ pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> 
   deserialize_list_tags_for_resource(resp) ?? e => Err(ListTagsForResourceErr.Deserialize(e))
 }
 
+pub fn endpoint_params_put_organization_enrollment_configuration(base: EndpointParameters, input: PutOrganizationEnrollmentConfigurationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of PutOrganizationEnrollmentConfiguration.
+pub fn serialize_put_organization_enrollment_configuration(ep: rest.Endpoint, input: PutOrganizationEnrollmentConfigurationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.target_value {
+    fs.push(("target", json_of_organization_target(x)))
+  }
+  if let Some(x) = input.organization_rule_mode {
+    fs.push(("organizationRuleMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "ComputeOptimizerAutomationService.PutOrganizationEnrollmentConfiguration"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_put_organization_enrollment_configuration(resp: http.Response) -> PutOrganizationEnrollmentConfigurationResponse ! Str {
+  var out = PutOrganizationEnrollmentConfigurationResponse{}
+  Ok(out)
+}
+
+/// The errors of PutOrganizationEnrollmentConfiguration.
+pub enum PutOrganizationEnrollmentConfigurationErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  IdempotencyTokenInUseException(e: IdempotencyTokenInUseException)
+  IdempotentParameterMismatchException(e: IdempotentParameterMismatchException)
+  InternalServerException(e: InternalServerException)
+  InvalidParameterValueException(e: InvalidParameterValueException)
+  OptInRequiredException(e: OptInRequiredException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: PutOrganizationEnrollmentConfigurationErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    IdempotencyTokenInUseException(x) => "IdempotencyTokenInUseException: ${x:?}"
+    IdempotentParameterMismatchException(x) => "IdempotentParameterMismatchException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    InvalidParameterValueException(x) => "InvalidParameterValueException: ${x:?}"
+    OptInRequiredException(x) => "OptInRequiredException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_put_organization_enrollment_configuration_error(resp: http.Response) -> PutOrganizationEnrollmentConfigurationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.AccessDeniedException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.ConflictException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.ForbiddenException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "IdempotencyTokenInUseException" => match read_error_idempotency_token_in_use_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.IdempotencyTokenInUseException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "IdempotentParameterMismatchException" => match read_error_idempotent_parameter_mismatch_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.IdempotentParameterMismatchException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.InternalServerException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "InvalidParameterValueException" => match read_error_invalid_parameter_value_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.InvalidParameterValueException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "OptInRequiredException" => match read_error_opt_in_required_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.OptInRequiredException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.ServiceUnavailableException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return PutOrganizationEnrollmentConfigurationErr.ThrottlingException(x)
+      Err(msg) => return PutOrganizationEnrollmentConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  PutOrganizationEnrollmentConfigurationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates or updates an organization enrollment configuration. The
+/// organization enrollment configuration sets the organization rule mode on
+/// the specified account, organizational unit (OU), or organization root
+/// and enables Automation for affected member accounts that have opted in
+/// to Compute Optimizer, including accounts that join later. Changes on an
+/// OU or the organization root can take up to 5 minutes. Organization
+/// enrollment configurations take precedence over settings made by
+/// AssociateAccounts and DisassociateAccounts . You must specify at least
+/// one configuration in the request. Only the management account or a
+/// delegated administrator can perform this action. Organization enrollment
+/// configurations can't be created for the management account.
+pub fn (c: Client) put_organization_enrollment_configuration(input: PutOrganizationEnrollmentConfigurationRequest) -> PutOrganizationEnrollmentConfigurationResponse ! PutOrganizationEnrollmentConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_put_organization_enrollment_configuration(c.params, input)) ?? e => return Err(PutOrganizationEnrollmentConfigurationErr.InvalidInput(e))
+  var req = serialize_put_organization_enrollment_configuration(ep, input, rest.uuid(c.rand)) ?? e => return Err(PutOrganizationEnrollmentConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(PutOrganizationEnrollmentConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_put_organization_enrollment_configuration_error(resp))
+  }
+  deserialize_put_organization_enrollment_configuration(resp) ?? e => Err(PutOrganizationEnrollmentConfigurationErr.Deserialize(e))
+}
+
 pub fn endpoint_params_rollback_automation_event(base: EndpointParameters, input: RollbackAutomationEventRequest) -> EndpointParameters {
   let _ = input
   base
@@ -6261,9 +7351,10 @@ pub fn deserialize_rollback_automation_event_error(resp: http.Response) -> Rollb
 }
 
 /// Initiates a rollback for a completed automation event. Management
-/// accounts and delegated administrators can only initiate a rollback for
-/// events belonging to associated member accounts. You can associate a
-/// member account using AssociateAccounts .
+/// accounts and delegated administrators can initiate a rollback for events
+/// belonging to member accounts that are associated using AssociateAccounts
+/// or have an applicable organization enrollment configuration with
+/// organizationRuleMode set to AnyAllowed .
 pub fn (c: Client) rollback_automation_event(input: RollbackAutomationEventRequest) -> RollbackAutomationEventResponse ! RollbackAutomationEventErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_rollback_automation_event(c.params, input)) ?? e => return Err(RollbackAutomationEventErr.InvalidInput(e))
   var req = serialize_rollback_automation_event(ep, input, rest.uuid(c.rand)) ?? e => return Err(RollbackAutomationEventErr.InvalidInput(e))
@@ -6428,9 +7519,10 @@ pub fn deserialize_start_automation_event_error(resp: http.Response) -> StartAut
 }
 
 /// Initiates a one-time, on-demand automation for the specified recommended
-/// action. Management accounts and delegated administrators can only
-/// initiate recommended actions for associated member accounts. You can
-/// associate a member account using AssociateAccounts .
+/// action. Management accounts and delegated administrators can initiate
+/// recommended actions for member accounts that are associated using
+/// AssociateAccounts or have an applicable organization enrollment
+/// configuration with organizationRuleMode set to AnyAllowed .
 pub fn (c: Client) start_automation_event(input: StartAutomationEventRequest) -> StartAutomationEventResponse ! StartAutomationEventErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_start_automation_event(c.params, input)) ?? e => return Err(StartAutomationEventErr.InvalidInput(e))
   var req = serialize_start_automation_event(ep, input, rest.uuid(c.rand)) ?? e => return Err(StartAutomationEventErr.InvalidInput(e))

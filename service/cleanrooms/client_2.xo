@@ -8,6 +8,98 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn from_json_schema_list(v: json.Value) -> List[Schema] ! Str {
+  var out: List[Schema] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_schema(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_schema_status_detail(v: SchemaStatusDetail) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.reasons {
+    fs.push(("reasons", json_of_schema_status_reason_list(x)))
+  }
+  if let Some(x) = v.analysis_rule_type {
+    fs.push(("analysisRuleType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.configurations {
+    fs.push(("configurations", json_of_schema_configuration_list(x)))
+  }
+  if let Some(x) = v.analysis_type {
+    fs.push(("analysisType", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_schema_status_detail(v: json.Value) -> SchemaStatusDetail ! Str {
+  var out = SchemaStatusDetail{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = SchemaStatus.from(jsonv.read_str(fv)?)
+      "reasons" => out.reasons = from_json_schema_status_reason_list(fv)?
+      "analysisRuleType" => out.analysis_rule_type = AnalysisRuleType.from(jsonv.read_str(fv)?)
+      "configurations" => out.configurations = from_json_schema_configuration_list(fv)?
+      "analysisType" => out.analysis_type = AnalysisType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_schema_status_detail_list(v: List[SchemaStatusDetail]) -> json.Value {
+  json.Value.List(v.map(fn(x: SchemaStatusDetail) -> json.Value { json_of_schema_status_detail(x) }))
+}
+
+fn from_json_schema_status_detail_list(v: json.Value) -> List[SchemaStatusDetail] ! Str {
+  var out: List[SchemaStatusDetail] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_schema_status_detail(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_schema_status_reason(v: SchemaStatusReason) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.code {
+    fs.push(("code", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_schema_status_reason(v: json.Value) -> SchemaStatusReason ! Str {
+  var out = SchemaStatusReason{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "code" => out.code = SchemaStatusReasonCode.from(jsonv.read_str(fv)?)
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_schema_status_reason_list(v: List[SchemaStatusReason]) -> json.Value {
   json.Value.List(v.map(fn(x: SchemaStatusReason) -> json.Value { json_of_schema_status_reason(x) }))
 }
@@ -10571,82 +10663,4 @@ pub fn deserialize_list_configured_table_associations_error(resp: http.Response)
     _ => {}
   }
   ListConfiguredTableAssociationsErr.Api(restjson.api_error(resp, body))
-}
-
-/// Lists configured table associations for a membership.
-pub fn (c: Client) list_configured_table_associations(input: ListConfiguredTableAssociationsInput) -> ListConfiguredTableAssociationsOutput ! ListConfiguredTableAssociationsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_configured_table_associations(c.params, input)) ?? e => return Err(ListConfiguredTableAssociationsErr.InvalidInput(e))
-  var req = serialize_list_configured_table_associations(ep, input, "") ?? e => return Err(ListConfiguredTableAssociationsErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListConfiguredTableAssociationsErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_list_configured_table_associations_error(resp))
-  }
-  deserialize_list_configured_table_associations(resp) ?? e => Err(ListConfiguredTableAssociationsErr.Deserialize(e))
-}
-
-pub fn endpoint_params_list_configured_tables(base: EndpointParameters, input: ListConfiguredTablesInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of ListConfiguredTables.
-pub fn serialize_list_configured_tables(ep: rest.Endpoint, input: ListConfiguredTablesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  if let Some(v) = input.next_token {
-    qs.push(("nextToken", v))
-  }
-  if let Some(v) = input.max_results {
-    qs.push(("maxResults", "${v}"))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "GET",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/configuredTables"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_list_configured_tables(resp: http.Response) -> ListConfiguredTablesOutput ! Str {
-  var out = ListConfiguredTablesOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "configuredTableSummaries" => out.configured_table_summaries = from_json_configured_table_summary_list(fv)?
-      "nextToken" => out.next_token = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of ListConfiguredTables.
-pub enum ListConfiguredTablesErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
 }

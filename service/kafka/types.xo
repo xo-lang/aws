@@ -14,6 +14,86 @@ pub struct ApacheKafkaCluster {
   pub bootstrap_broker_string: Str? = None
 }
 
+/// A single finding from an assessment, describing a specific issue or
+/// observation.
+pub struct AssessmentFinding {
+  /// The category of this finding.
+  pub category: FindingCategory? = None
+  /// A deterministic content-based identifier for this finding. Generated
+  /// from hash(category + resource + check_type). The same resource with the
+  /// same problem always produces the same findingId across assessment runs.
+  pub finding_id: Str? = None
+  /// Human-readable description of what is wrong, why it matters, and what to
+  /// do.
+  pub message: Str? = None
+  /// Guidance for resolving this finding. Absent when no specific remediation
+  /// applies.
+  pub remediation: FindingRemediation? = None
+  /// The specific resource affected (e.g., topic name). Absent for
+  /// cluster-level findings.
+  pub resource: Str? = None
+  /// The severity of this finding.
+  pub severity: FindingSeverity? = None
+}
+
+/// Summary information about an assessment, returned by ListAssessments.
+pub struct AssessmentInfo {
+  /// The Amazon Resource Name (ARN) of the assessment.
+  pub assessment_arn: Str? = None
+  /// The type of assessment.
+  pub assessment_type: AssessmentType? = None
+  /// The Amazon Resource Name (ARN) of the cluster that was assessed.
+  pub cluster_arn: Str? = None
+  /// The time when the assessment was created.
+  pub creation_time: Time? = None
+  /// The current status of the assessment.
+  pub status: AssessmentStatus? = None
+  /// The tags attached to the assessment.
+  pub tags: Map[Str, Str]? = None
+}
+
+/// Type-specific parameters for the assessment. All fields are optional.
+pub struct AssessmentParameters {
+  /// The target instance type to assess against (for example,
+  /// express.m7g.large). Optional: when omitted, the assessment reports a
+  /// recommended instance type as a CAPACITY finding. Supply it to assess
+  /// readiness for a specific instance type.
+  pub target_instance_type: Str? = None
+}
+
+/// The lifecycle status of an assessment.
+pub enum AssessmentStatus: Str {
+  InProgress = "IN_PROGRESS"
+  Complete = "COMPLETE"
+  Failed = "FAILED"
+  Deleting = "DELETING"
+  Unknown(value: Str)
+}
+
+/// Summary of assessment findings broken down by category and severity.
+pub struct AssessmentSummary {
+  /// Count of findings grouped by category.
+  pub by_category: Map[Str, Int]? = None
+  /// Count of findings grouped by severity.
+  pub by_severity: Map[Str, Int]? = None
+  /// True when the assessment detected more findings than it stores. Resolve
+  /// the reported findings and re-run the assessment to surface the remaining
+  /// ones.
+  pub findings_capped: Bool? = None
+  /// True when the assessment detected at least one ERROR-severity finding.
+  /// ERROR findings block the migration until resolved.
+  pub has_blocking_findings: Bool? = None
+  /// The total number of findings detected by the assessment, including any
+  /// findings beyond the stored-findings cap.
+  pub total_findings: Int? = None
+}
+
+/// The type of assessment to perform.
+pub enum AssessmentType: Str {
+  UpdateBrokerType = "UPDATE_BROKER_TYPE"
+  Unknown(value: Str)
+}
+
 /// The authorizer logs configuration for this MSK cluster.
 pub struct AuthorizerLogs {
   /// Details of the CloudWatch Logs destination for authorizer logs.
@@ -140,6 +220,11 @@ pub struct BrokerNodeInfo {
   pub attached_eni_id: Str? = None
   /// The ID of the broker.
   pub broker_id: Float? = None
+  /// Whether this broker is a Standard broker or an Express broker. While an
+  /// UpdateBrokerType operation upgrades a cluster in place from Standard
+  /// brokers to Express brokers, the cluster contains brokers of both types
+  /// and this field tells them apart.
+  pub broker_node_type: BrokerNodeType? = None
   /// The client subnet to which this broker node belongs.
   pub client_subnet: Str? = None
   /// The virtual private cloud (VPC) of the client.
@@ -149,6 +234,16 @@ pub struct BrokerNodeInfo {
   pub current_broker_software_info: BrokerSoftwareInfo? = None
   /// Endpoints for accessing the broker.
   pub endpoints: List[Str]? = None
+}
+
+/// The broker type of an individual broker node. STANDARD: a Standard
+/// broker. EXPRESS: an Express broker. A cluster contains brokers of both
+/// types while an UpdateBrokerType operation upgrades it in place from
+/// Standard brokers to Express brokers.
+pub enum BrokerNodeType: Str {
+  Standard = "STANDARD"
+  Express = "EXPRESS"
+  Unknown(value: Str)
 }
 
 /// Information about the current software installed on the cluster.
@@ -161,6 +256,19 @@ pub struct BrokerSoftwareInfo {
   pub configuration_revision: Int? = None
   /// The version of Apache Kafka.
   pub kafka_version: Str? = None
+}
+
+/// Information about the topic reassignment of an UpdateBrokerType
+/// operation that upgrades a cluster from Standard brokers to Express
+/// brokers. Present only on the operation that initiated the upgrade.
+pub struct BrokerTypeUpgradeInfo {
+  /// How topics are reassigned to the Express brokers.
+  pub topic_reassignment_mode: TopicReassignmentMode? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation that
+  /// Amazon MSK started for this upgrade. Present once that reassignment has
+  /// started. Under MANUAL you start reassignments yourself, so Amazon MSK
+  /// starts none.
+  pub topic_reassignment_operation_arn: Str? = None
 }
 
 /// Configuration of the AWS Glue Data Catalog and S3 Tables warehouse used
@@ -360,6 +468,9 @@ pub struct ClusterInfo {
 
 /// Returns information about a cluster operation.
 pub struct ClusterOperationInfo {
+  /// Topic reassignment details of the UpdateBrokerType operation that
+  /// started an upgrade from Standard brokers to Express brokers.
+  pub broker_type_upgrade_info: BrokerTypeUpgradeInfo? = None
   /// The ID of the API request that triggered this operation.
   pub client_request_id: Str? = None
   /// ARN of the cluster.
@@ -427,6 +538,9 @@ pub struct ClusterOperationV2 {
 
 /// Returns information about a provisioned cluster operation.
 pub struct ClusterOperationV2Provisioned {
+  /// Topic reassignment details of the UpdateBrokerType operation that
+  /// started an upgrade from Standard brokers to Express brokers.
+  pub broker_type_upgrade_info: BrokerTypeUpgradeInfo? = None
   /// Steps completed during the operation.
   pub operation_steps: List[ClusterOperationStep]? = None
   /// Information about cluster attributes before a cluster is updated.
@@ -625,6 +739,33 @@ pub struct ControllerMovedException {
 pub struct ControllerNodeInfo {
   /// Endpoints for accessing the Controller.
   pub endpoints: List[Str]? = None
+}
+
+/// Creates a new assessment for a cluster. Kicks off an asynchronous scan
+/// and returns immediately with an assessment ARN and status.
+pub struct CreateAssessmentRequest {
+  /// Optional type-specific parameters for the assessment.
+  pub assessment_parameters: AssessmentParameters? = None
+  /// The type of assessment to perform.
+  pub assessment_type: AssessmentType? = None
+  /// The Amazon Resource Name (ARN) of the cluster to assess.
+  pub cluster_arn: Str? = None
+  /// The tags to attach to the assessment.
+  pub tags: Map[Str, Str]? = None
+}
+
+/// Returns information about the created assessment.
+pub struct CreateAssessmentResponse {
+  /// The Amazon Resource Name (ARN) of the assessment.
+  pub assessment_arn: Str? = None
+  /// The type of assessment.
+  pub assessment_type: AssessmentType? = None
+  /// The Amazon Resource Name (ARN) of the cluster being assessed.
+  pub cluster_arn: Str? = None
+  /// The time when the assessment was created.
+  pub creation_time: Time? = None
+  /// The current status of the assessment.
+  pub status: AssessmentStatus? = None
 }
 
 /// Creates a Channel that streams records from an Amazon MSK Express
@@ -862,6 +1003,21 @@ pub struct DeadLetterQueueS3 {
   pub expected_bucket_owner: Str? = None
 }
 
+pub struct DeleteAssessmentRequest {
+  /// The Amazon Resource Name (ARN) of the assessment to delete.
+  pub assessment_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+}
+
+/// Returns the result of deleting an assessment.
+pub struct DeleteAssessmentResponse {
+  /// The Amazon Resource Name (ARN) of the assessment being deleted.
+  pub assessment_arn: Str? = None
+  /// The current status of the assessment. Will be DELETING.
+  pub status: AssessmentStatus? = None
+}
+
 pub struct DeleteChannelRequest {
   /// The Amazon Resource Name (ARN) that uniquely identifies the channel.
   pub channel_arn: Str? = None
@@ -958,6 +1114,40 @@ pub struct DeleteVpcConnectionResponse {
   pub vpc_connection_arn: Str? = None
   /// The state of the VPC connection.
   pub state: VpcConnectionState? = None
+}
+
+pub struct DescribeAssessmentRequest {
+  /// The Amazon Resource Name (ARN) of the assessment.
+  pub assessment_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+}
+
+/// Returns the status and summary of an assessment.
+pub struct DescribeAssessmentResponse {
+  /// The Amazon Resource Name (ARN) of the assessment.
+  pub assessment_arn: Str? = None
+  /// The parameters that were provided when creating the assessment.
+  pub assessment_parameters: AssessmentParameters? = None
+  /// The type of assessment.
+  pub assessment_type: AssessmentType? = None
+  /// The Amazon Resource Name (ARN) of the cluster that was assessed.
+  pub cluster_arn: Str? = None
+  /// The time when the assessment completed. Present only when status is
+  /// COMPLETE or FAILED.
+  pub completion_time: Time? = None
+  /// The time when the assessment was created.
+  pub creation_time: Time? = None
+  /// The current status of the assessment.
+  pub status: AssessmentStatus? = None
+  /// Additional information about the current status. Present when status is
+  /// FAILED.
+  pub status_message: Str? = None
+  /// Summary of findings by category and severity. Present only when status
+  /// is COMPLETE.
+  pub summary: AssessmentSummary? = None
+  /// The tags attached to the assessment.
+  pub tags: Map[Str, Str]? = None
 }
 
 pub struct DescribeChannelRequest {
@@ -1153,6 +1343,43 @@ pub struct DescribeTopicPartitionsResponse {
   pub next_token: Str? = None
 }
 
+pub struct DescribeTopicReassignmentRequest {
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation.
+  pub topic_reassignment_operation_arn: Str? = None
+}
+
+/// Returns the status and progress of a topic reassignment operation.
+pub struct DescribeTopicReassignmentResponse {
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// Number of topics fully migrated to the target broker type.
+  pub completed_topics: Int? = None
+  /// When the operation was created.
+  pub creation_time: Time? = None
+  /// Error details. Present only when status is FAILED.
+  pub error_info: ErrorInfo? = None
+  /// Last time the status or progress counters were updated.
+  pub last_update_time: Time? = None
+  /// Number of partitions confirmed on the target broker type.
+  pub migrated_partitions: Int? = None
+  /// The current status of the reassignment operation.
+  pub status: TopicReassignmentStatus? = None
+  /// The target broker instance type for this reassignment.
+  pub target_instance_type: Str? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation.
+  pub topic_reassignment_operation_arn: Str? = None
+  /// The original exclude patterns provided in the request.
+  pub topics_to_exclude: List[Str]? = None
+  /// The original include patterns provided in the request.
+  pub topics_to_include: List[Str]? = None
+  /// Total number of partitions across all matched topics.
+  pub total_partitions: Int? = None
+  /// Total number of topics matching the selector at resolution time.
+  pub total_topics: Int? = None
+}
+
 pub struct DescribeTopicRequest {
   /// The Amazon Resource Name (ARN) that uniquely identifies the cluster.
   pub cluster_arn: Str? = None
@@ -1173,6 +1400,8 @@ pub struct DescribeTopicResponse {
   pub configs: Str? = None
   /// The status of the topic.
   pub status: TopicState? = None
+  /// The broker IDs hosting replicas of this topic's partitions.
+  pub replica_ids: List[Int]? = None
 }
 
 pub struct DescribeVpcConnectionRequest {
@@ -1283,6 +1512,33 @@ pub struct ErrorInfo {
   pub error_code: Str? = None
   /// An optional field to provide more details about the error.
   pub error_string: Str? = None
+}
+
+/// The category of an assessment finding.
+pub enum FindingCategory: Str {
+  Infrastructure = "INFRASTRUCTURE"
+  BrokerConfiguration = "BROKER_CONFIGURATION"
+  TopicConfiguration = "TOPIC_CONFIGURATION"
+  Capacity = "CAPACITY"
+  Health = "HEALTH"
+  Unknown(value: Str)
+}
+
+/// Guidance for resolving a finding.
+pub struct FindingRemediation {
+  /// The recommended action to resolve this finding.
+  pub action: Str? = None
+  /// A link to documentation with more detail about this finding and how to
+  /// resolve it.
+  pub documentation_url: Str? = None
+}
+
+/// The severity level of an assessment finding.
+pub enum FindingSeverity: Str {
+  Error = "ERROR"
+  Warning = "WARNING"
+  Info = "INFO"
+  Unknown(value: Str)
 }
 
 pub struct Firehose {
@@ -1633,6 +1889,52 @@ pub enum KafkaVersionStatus: Str {
   Unknown(value: Str)
 }
 
+pub struct ListAssessmentFindingsRequest {
+  /// The Amazon Resource Name (ARN) of the assessment.
+  pub assessment_arn: Str? = None
+  /// Optional filter. Only return findings matching this category.
+  pub category: Str? = None
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// Maximum number of findings to return. Default 100, maximum 500.
+  pub max_results: Int? = None
+  /// If the response is truncated, it returns a nextToken. Send this in the
+  /// subsequent request to get the remaining results.
+  pub next_token: Str? = None
+  /// Optional filter. Only return findings matching this severity.
+  pub severity: Str? = None
+}
+
+/// Returns the findings for a completed assessment.
+pub struct ListAssessmentFindingsResponse {
+  /// A list of findings from the assessment.
+  pub findings: List[AssessmentFinding]? = None
+  /// If the response is truncated, it returns a nextToken. Send this in the
+  /// subsequent request to get the remaining results.
+  pub next_token: Str? = None
+}
+
+pub struct ListAssessmentsRequest {
+  /// Optional filter. The type of assessment to filter by.
+  pub assessment_type: Str? = None
+  /// The Amazon Resource Name (ARN) of the cluster to list assessments for.
+  pub cluster_arn: Str? = None
+  /// Maximum number of assessments to return. Default 25, maximum 100.
+  pub max_results: Int? = None
+  /// If the response is truncated, it returns a nextToken. Send this in the
+  /// subsequent request to get the remaining results.
+  pub next_token: Str? = None
+}
+
+/// Returns a list of assessments.
+pub struct ListAssessmentsResponse {
+  /// A list of assessment summaries.
+  pub assessments: List[AssessmentInfo]? = None
+  /// If the response is truncated, it returns a nextToken. Send this in the
+  /// subsequent request to get the remaining results.
+  pub next_token: Str? = None
+}
+
 pub struct ListChannelsRequest {
   /// The Amazon Resource Name (ARN) that uniquely identifies the cluster.
   pub cluster_arn: Str? = None
@@ -1886,6 +2188,28 @@ pub struct ListTagsForResourceRequest {
 pub struct ListTagsForResourceResponse {
   /// The key-value pair for the resource tag.
   pub tags: Map[Str, Str]? = None
+}
+
+pub struct ListTopicReassignmentsRequest {
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// Maximum number of reassignment operations to return. Default 50, maximum
+  /// 100.
+  pub max_results: Int? = None
+  /// If the response is truncated, it returns a nextToken. Send this in the
+  /// subsequent request to get the remaining results.
+  pub next_token: Str? = None
+  /// Optional filter. Only return reassignments matching these statuses.
+  pub status_filter: Str? = None
+}
+
+/// Returns a list of topic reassignment operations for a cluster.
+pub struct ListTopicReassignmentsResponse {
+  /// If the response is truncated, it returns a nextToken. Send this in the
+  /// subsequent request to get the remaining results.
+  pub next_token: Str? = None
+  /// A list of topic reassignment operation summaries.
+  pub reassignments: List[TopicReassignmentInfo]? = None
 }
 
 pub struct ListTopicsRequest {
@@ -2546,9 +2870,58 @@ pub struct ServiceUnavailableException {
   pub message: Str? = None
 }
 
+/// Initiates topic partition reassignment between broker types in a
+/// mixed-mode cluster.
+pub struct StartTopicReassignmentRequest {
+  /// A unique, case-sensitive identifier that you provide to ensure the
+  /// idempotency of the request. If you retry a request with the same client
+  /// token within 24 hours, the API returns the original response without
+  /// creating a duplicate operation.
+  pub client_token: Str? = None
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// Instance type of the target brokers. Must exist in the cluster. Use
+  /// Express instance type (e.g., express.m7g.large) for Standard-to-Express
+  /// migration. Use Standard instance type (e.g., kafka.m7g.large) to move
+  /// topics back to Standard.
+  pub target_instance_type: Str? = None
+  /// Regex patterns for topics to exclude from reassignment. Evaluated after
+  /// include patterns.
+  pub topics_to_exclude: List[Str]? = None
+  /// Regex patterns for topics to reassign. Use ['.*'] for all topics. Max 10
+  /// patterns.
+  pub topics_to_include: List[Str]? = None
+}
+
+/// Returns information about the initiated topic reassignment operation.
+pub struct StartTopicReassignmentResponse {
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// The current status of the reassignment operation.
+  pub status: TopicReassignmentStatus? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation.
+  pub topic_reassignment_operation_arn: Str? = None
+}
+
 pub struct StateInfo {
   pub code: Str? = None
   pub message: Str? = None
+}
+
+pub struct StopTopicReassignmentRequest {
+  /// The Amazon Resource Name (ARN) of the cluster.
+  pub cluster_arn: Str? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation to
+  /// stop.
+  pub topic_reassignment_operation_arn: Str? = None
+}
+
+/// Returns the result of stopping a topic reassignment operation.
+pub struct StopTopicReassignmentResponse {
+  /// The current status of the operation. Will be STOPPING.
+  pub status: TopicReassignmentStatus? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation.
+  pub topic_reassignment_operation_arn: Str? = None
 }
 
 /// Contains information about storage volumes attached to MSK broker nodes.
@@ -2647,6 +3020,8 @@ pub struct TopicInfo {
   pub partition_count: Int? = None
   /// Number of out-of-sync replicas for a topic.
   pub out_of_sync_replica_count: Int? = None
+  /// The broker IDs hosting replicas of this topic's partitions.
+  pub replica_ids: List[Int]? = None
 }
 
 /// Contains information about a topic partition.
@@ -2659,6 +3034,50 @@ pub struct TopicPartitionInfo {
   pub replicas: List[Int]? = None
   /// The list of in-sync replica broker IDs for the partition.
   pub isr: List[Int]? = None
+}
+
+/// Controls automatic topic reassignment when entering mixed broker mode.
+pub enum TopicReassignment: Str {
+  Auto = "AUTO"
+  Manual = "MANUAL"
+  Unknown(value: Str)
+}
+
+/// Summary information about a topic reassignment operation.
+pub struct TopicReassignmentInfo {
+  /// Number of topics fully migrated.
+  pub completed_topics: Int? = None
+  /// When the operation was created.
+  pub creation_time: Time? = None
+  /// The current status of the reassignment operation.
+  pub status: TopicReassignmentStatus? = None
+  /// The target broker instance type for this reassignment.
+  pub target_instance_type: Str? = None
+  /// The Amazon Resource Name (ARN) of the topic reassignment operation.
+  pub topic_reassignment_operation_arn: Str? = None
+  /// Total number of topics matching the selector.
+  pub total_topics: Int? = None
+}
+
+/// How topics are reassigned to the target broker type after an
+/// UpdateBrokerType operation adds brokers of that type. AUTO: Amazon MSK
+/// reassigns all topics. MANUAL: you reassign topics with the
+/// StartTopicReassignment operation.
+pub enum TopicReassignmentMode: Str {
+  Auto = "AUTO"
+  Manual = "MANUAL"
+  Unknown(value: Str)
+}
+
+/// The lifecycle status of a topic reassignment operation.
+pub enum TopicReassignmentStatus: Str {
+  Pending = "PENDING"
+  InProgress = "IN_PROGRESS"
+  Stopping = "STOPPING"
+  Complete = "COMPLETE"
+  Failed = "FAILED"
+  Stopped = "STOPPED"
+  Unknown(value: Str)
 }
 
 /// Details about topic replication.
@@ -2801,9 +3220,18 @@ pub struct UpdateBrokerTypeRequest {
   /// The cluster version that you want to change. After this operation
   /// completes successfully, the cluster will have a new version.
   pub current_version: Str? = None
-  /// The Amazon MSK broker type that you want all of the brokers in this
-  /// cluster to be.
+  /// The type of Amazon EC2 instances to use for Kafka brokers. For in-place
+  /// upgrades to Express, use the composite format to initiate mixed mode,
+  /// the Express instance type to complete the upgrade, or the Standard
+  /// instance type to rollback.
   pub target_instance_type: Str? = None
+  /// Controls automatic topic reassignment when entering mixed broker mode.
+  /// When set to AUTO, MSK automatically reassigns all topics to the target
+  /// broker type after adding new brokers. When set to MANUAL (default),
+  /// customers manage topic reassignment using the StartTopicReassignment
+  /// API. Only valid when targetInstanceType is a composite mixed-mode value.
+  /// Must be set to MANUAL before completing the upgrade or rolling back.
+  pub topic_reassignment: TopicReassignment? = None
 }
 
 pub struct UpdateBrokerTypeResponse {

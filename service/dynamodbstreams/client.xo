@@ -31,6 +31,10 @@ pub struct Options {
   /// If the configured endpoint does not have a FIPS compliant endpoint,
   /// dispatching the request will return an error.
   pub use_fips: Bool? = None
+  /// The AWS AccountId used for the request.
+  pub account_id: Str? = None
+  /// The AccountId Endpoint Mode.
+  pub account_id_endpoint_mode: Str? = None
 }
 
 pub struct Client {
@@ -51,7 +55,18 @@ pub fn new(net: Net, clock: Clock[clock], rand: Rand[rand], options: Options) ->
   if let Some(v) = options.use_fips {
     params.use_fips = v
   }
+  if let Some(v) = options.account_id {
+    params.account_id = v
+  }
+  if let Some(v) = options.account_id_endpoint_mode {
+    params.account_id_endpoint_mode = v
+  }
   var ua_features: List[Str] = ["E"]
+  ua_features.push(match options.account_id_endpoint_mode {
+    Some("disabled") => "Q"
+    Some("required") => "R"
+    _ => "P"
+  })
   Ok(Client{
     params: params,
     region: options.region,
@@ -78,12 +93,29 @@ pub fn options_from_config(cfg: aws.Config) -> Options ! Str {
   o.use_dual_stack = Some(cfg.use_dualstack)
   o.trace_id = cfg.trace_id
   o.app_id = cfg.app_id
+  o.account_id_endpoint_mode = cfg.account_id_endpoint_mode
   Ok(o)
 }
 
 /// A client from shared configuration: `new` with `options_from_config`.
 pub fn from_config(net: Net, clock: Clock[clock], rand: Rand[rand], cfg: aws.Config) -> Client ! Str {
   new(net, clock, rand, options_from_config(cfg)?)
+}
+
+/// The endpoint parameters with the credentials' account filled in.
+fn (c: Client) with_account(base: EndpointParameters) -> EndpointParameters uses (net.dial, clock, rand) {
+  var p = base
+  // aws-sdk-go-v2's default mode
+  if p.account_id_endpoint_mode.is_none() {
+    p.account_id_endpoint_mode = Some("preferred")
+  }
+  if p.account_id.is_some() || p.account_id_endpoint_mode == Some("disabled") {
+    return p
+  }
+  match c.transport.credentials.retrieve() {
+    Ok(cr) => p with {account_id: cr.account_id}
+    Err(_) => p
+  }
 }
 
 const SIGNING_NAME: Str = "dynamodb"
@@ -1015,8 +1047,11 @@ fn read_error_trimmed_data_access_exception(resp: http.Response, body: json.Valu
 }
 
 pub fn endpoint_params_describe_stream(base: EndpointParameters, input: DescribeStreamInput) -> EndpointParameters {
-  let _ = input
-  base
+  var p = base
+  if let Some(x) = input.stream_arn {
+    p.stream_arn = x
+  }
+  p
 }
 
 /// The HTTP request of DescribeStream.
@@ -1122,7 +1157,7 @@ pub fn deserialize_describe_stream_error(resp: http.Response) -> DescribeStreamE
 /// StartingSequenceNumber and EndingSequenceNumber are present, then that
 /// shard is closed and can no longer receive more data.
 pub fn (c: Client) describe_stream(input: DescribeStreamInput) -> DescribeStreamOutput ! DescribeStreamErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_describe_stream(c.params, input)) ?? e => return Err(DescribeStreamErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_describe_stream(c.params, input))) ?? e => return Err(DescribeStreamErr.InvalidInput(e))
   var req = serialize_describe_stream(ep, input, "") ?? e => return Err(DescribeStreamErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1135,8 +1170,11 @@ pub fn (c: Client) describe_stream(input: DescribeStreamInput) -> DescribeStream
 }
 
 pub fn endpoint_params_get_records(base: EndpointParameters, input: GetRecordsInput) -> EndpointParameters {
-  let _ = input
-  base
+  var p = base
+  if let Some(x) = input.shard_iterator {
+    p.shard_iterator = x
+  }
+  p
 }
 
 /// The HTTP request of GetRecords.
@@ -1254,7 +1292,7 @@ pub fn deserialize_get_records_error(resp: http.Response) -> GetRecordsErr {
 /// of the shard that contains stream records. GetRecords can retrieve a
 /// maximum of 1 MB of data or 1000 stream records, whichever comes first.
 pub fn (c: Client) get_records(input: GetRecordsInput) -> GetRecordsOutput ! GetRecordsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_records(c.params, input)) ?? e => return Err(GetRecordsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_get_records(c.params, input))) ?? e => return Err(GetRecordsErr.InvalidInput(e))
   var req = serialize_get_records(ep, input, "") ?? e => return Err(GetRecordsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1267,8 +1305,11 @@ pub fn (c: Client) get_records(input: GetRecordsInput) -> GetRecordsOutput ! Get
 }
 
 pub fn endpoint_params_get_shard_iterator(base: EndpointParameters, input: GetShardIteratorInput) -> EndpointParameters {
-  let _ = input
-  base
+  var p = base
+  if let Some(x) = input.stream_arn {
+    p.stream_arn = x
+  }
+  p
 }
 
 /// The HTTP request of GetShardIterator.
@@ -1379,7 +1420,7 @@ pub fn deserialize_get_shard_iterator_error(resp: http.Response) -> GetShardIter
 /// from the shard. A shard iterator expires 15 minutes after it is returned
 /// to the requester.
 pub fn (c: Client) get_shard_iterator(input: GetShardIteratorInput) -> GetShardIteratorOutput ! GetShardIteratorErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_get_shard_iterator(c.params, input)) ?? e => return Err(GetShardIteratorErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_get_shard_iterator(c.params, input))) ?? e => return Err(GetShardIteratorErr.InvalidInput(e))
   var req = serialize_get_shard_iterator(ep, input, "") ?? e => return Err(GetShardIteratorErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)
@@ -1492,7 +1533,7 @@ pub fn deserialize_list_streams_error(resp: http.Response) -> ListStreamsErr {
 /// return only the streams ARNs for that table. You can call ListStreams at
 /// a maximum rate of 5 times per second.
 pub fn (c: Client) list_streams(input: ListStreamsInput) -> ListStreamsOutput ! ListStreamsErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_list_streams(c.params, input)) ?? e => return Err(ListStreamsErr.InvalidInput(e))
+  let (ep, signing, extra) = c.route(c.with_account(endpoint_params_list_streams(c.params, input))) ?? e => return Err(ListStreamsErr.InvalidInput(e))
   var req = serialize_list_streams(ep, input, "") ?? e => return Err(ListStreamsErr.InvalidInput(e))
   for h in extra {
     req.headers.push(h)

@@ -289,6 +289,9 @@ fn json_of_agent_profile_summary(v: AgentProfileSummary) -> json.Value {
   if let Some(x) = v.deletion_protection {
     fs.push(("deletionProtection", json.Value.Bool(x)))
   }
+  if let Some(x) = v.profile_type {
+    fs.push(("profileType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.execution_role_arn {
     fs.push(("executionRoleArn", json.Value.Str(x)))
   }
@@ -307,9 +310,6 @@ fn json_of_agent_profile_summary(v: AgentProfileSummary) -> json.Value {
   if let Some(x) = v.field_errors {
     fs.push(("fieldErrors", json_of_field_errors(x)))
   }
-  if let Some(x) = v.tags {
-    fs.push(("tags", json_of_tags(x)))
-  }
   if let Some(x) = v.created_by {
     fs.push(("createdBy", json.Value.Str(x)))
   }
@@ -321,6 +321,9 @@ fn json_of_agent_profile_summary(v: AgentProfileSummary) -> json.Value {
   }
   if let Some(x) = v.last_modified_at {
     fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
   }
   json.Value.Object(fs)
 }
@@ -338,17 +341,18 @@ fn from_json_agent_profile_summary(v: json.Value) -> AgentProfileSummary ! Str {
       "businessOverview" => out.business_overview = jsonv.read_str(fv)?
       "pillars" => out.pillars = from_json_pillars(fv)?
       "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "profileType" => out.profile_type = ProfileType.from(jsonv.read_str(fv)?)
       "executionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
       "aggregationConfiguration" => out.aggregation_configuration = from_json_aggregation_configurations(fv)?
       "arn" => out.arn = jsonv.read_str(fv)?
       "eligibleForScheduledGeneration" => out.eligible_for_scheduled_generation = jsonv.read_bool(fv)?
       "eligibleForArchitectureGeneration" => out.eligible_for_architecture_generation = jsonv.read_bool(fv)?
       "fieldErrors" => out.field_errors = from_json_field_errors(fv)?
-      "tags" => out.tags = from_json_tags(fv)?
       "createdBy" => out.created_by = jsonv.read_str(fv)?
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
       "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
       _ => {}
     }
   }
@@ -400,6 +404,21 @@ fn json_of_agent_recommendation_generation_summary(v: AgentRecommendationGenerat
   if let Some(x) = v.last_modified_at {
     fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
   }
+  if let Some(x) = v.generation_type {
+    fs.push(("generationType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.generation_recommendation_types {
+    fs.push(("generationRecommendationTypes", json_of_generation_recommendation_types(x)))
+  }
+  if let Some(x) = v.started_at {
+    fs.push(("startedAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.ended_at {
+    fs.push(("endedAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.error_details {
+    fs.push(("errorDetails", json_of_error_details(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -419,6 +438,11 @@ fn from_json_agent_recommendation_generation_summary(v: json.Value) -> AgentReco
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
       "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      "generationType" => out.generation_type = GenerationType.from(jsonv.read_str(fv)?)
+      "generationRecommendationTypes" => out.generation_recommendation_types = from_json_generation_recommendation_types(fv)?
+      "startedAt" => out.started_at = jsonv.read_time(fv, "date-time")?
+      "endedAt" => out.ended_at = jsonv.read_time(fv, "date-time")?
+      "errorDetails" => out.error_details = from_json_error_details(fv)?
       _ => {}
     }
   }
@@ -467,6 +491,9 @@ fn json_of_agent_recommendation_item_summary(v: AgentRecommendationItemSummary) 
   if let Some(x) = v.last_modified_at {
     fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
   }
+  if let Some(x) = v.auto_remediation {
+    fs.push(("autoRemediation", json_of_auto_remediation(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -485,6 +512,7 @@ fn from_json_agent_recommendation_item_summary(v: json.Value) -> AgentRecommenda
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
       "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      "autoRemediation" => out.auto_remediation = from_json_auto_remediation(fv)?
       _ => {}
     }
   }
@@ -927,6 +955,32 @@ fn from_json_associate_profiles_input(v: json.Value) -> AssociateProfilesInput !
     match k {
       "WorkloadId" => out.workload_id = jsonv.read_str(fv)?
       "ProfileArns" => out.profile_arns = from_json_profile_arns(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_auto_remediation(v: AutoRemediation) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.deep_link {
+    fs.push(("deepLink", json.Value.Str(x)))
+  }
+  if let Some(x) = v.cli_command {
+    fs.push(("cliCommand", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_auto_remediation(v: json.Value) -> AutoRemediation ! Str {
+  var out = AutoRemediation{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "deepLink" => out.deep_link = jsonv.read_str(fv)?
+      "cliCommand" => out.cli_command = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -1556,6 +1610,9 @@ fn json_of_context_content(v: ContextContent) -> json.Value {
   if let Some(x) = v.resource_tags {
     fs.push(("resourceTags", json_of_context_resource_tag_list(x)))
   }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_context_organizational_unit_id_list(x)))
+  }
   if let Some(x) = v.application_overview {
     fs.push(("applicationOverview", json.Value.Str(x)))
   }
@@ -1589,6 +1646,7 @@ fn from_json_context_content(v: json.Value) -> ContextContent ! Str {
       "awsServices" => out.aws_services = from_json_context_aws_service_list(fv)?
       "resourceTypes" => out.resource_types = from_json_context_resource_type_list(fv)?
       "resourceTags" => out.resource_tags = from_json_context_resource_tag_list(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_context_organizational_unit_id_list(fv)?
       "applicationOverview" => out.application_overview = jsonv.read_str(fv)?
       "industry" => out.industry = jsonv.read_str(fv)?
       "applicationType" => out.application_type = ApplicationType.from(jsonv.read_str(fv)?)
@@ -1597,6 +1655,22 @@ fn from_json_context_content(v: json.Value) -> ContextContent ! Str {
       "additionalContext" => out.additional_context = jsonv.read_str(fv)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn json_of_context_organizational_unit_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_context_organizational_unit_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
   }
   Ok(out)
 }
@@ -1753,6 +1827,124 @@ fn from_json_context_summary(v: json.Value) -> ContextSummary ! Str {
   Ok(out)
 }
 
+fn json_of_coverage_summary(v: CoverageSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.total_accounts_in_scope {
+    fs.push(("totalAccountsInScope", json.Value.Int(x)))
+  }
+  if let Some(x) = v.accounts_with_profile {
+    fs.push(("accountsWithProfile", json.Value.Int(x)))
+  }
+  if let Some(x) = v.accounts_without_profile {
+    fs.push(("accountsWithoutProfile", json.Value.Int(x)))
+  }
+  if let Some(x) = v.failed_account_count {
+    fs.push(("failedAccountCount", json.Value.Int(x)))
+  }
+  if let Some(x) = v.total_profiles {
+    fs.push(("totalProfiles", json.Value.Int(x)))
+  }
+  if let Some(x) = v.total_recommendations {
+    fs.push(("totalRecommendations", json.Value.Int(x)))
+  }
+  if let Some(x) = v.recommendation_count_by_pillar {
+    fs.push(("recommendationCountByPillar", json_of_pillar_count_list(x)))
+  }
+  if let Some(x) = v.recommendation_count_by_priority {
+    fs.push(("recommendationCountByPriority", json_of_priority_count_list(x)))
+  }
+  if let Some(x) = v.failed_accounts {
+    fs.push(("failedAccounts", json_of_failed_account_list(x)))
+  }
+  if let Some(x) = v.failed_organizational_units {
+    fs.push(("failedOrganizationalUnits", json_of_failed_organizational_unit_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_coverage_summary(v: json.Value) -> CoverageSummary ! Str {
+  var out = CoverageSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "totalAccountsInScope" => out.total_accounts_in_scope = jsonv.read_int(fv)?
+      "accountsWithProfile" => out.accounts_with_profile = jsonv.read_int(fv)?
+      "accountsWithoutProfile" => out.accounts_without_profile = jsonv.read_int(fv)?
+      "failedAccountCount" => out.failed_account_count = jsonv.read_int(fv)?
+      "totalProfiles" => out.total_profiles = jsonv.read_int(fv)?
+      "totalRecommendations" => out.total_recommendations = jsonv.read_int(fv)?
+      "recommendationCountByPillar" => out.recommendation_count_by_pillar = from_json_pillar_count_list(fv)?
+      "recommendationCountByPriority" => out.recommendation_count_by_priority = from_json_priority_count_list(fv)?
+      "failedAccounts" => out.failed_accounts = from_json_failed_account_list(fv)?
+      "failedOrganizationalUnits" => out.failed_organizational_units = from_json_failed_organizational_unit_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_agent_basic_profile_request(v: CreateAgentBasicProfileRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_agent_basic_profile_request(v: json.Value) -> CreateAgentBasicProfileRequest ! Str {
+  var out = CreateAgentBasicProfileRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "tags" => out.tags = from_json_tags(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_agent_basic_profile_response(v: CreateAgentBasicProfileResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.created_by {
+    fs.push(("createdBy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.last_modified_by {
+    fs.push(("lastModifiedBy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.last_modified_at {
+    fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_agent_basic_profile_response(v: json.Value) -> CreateAgentBasicProfileResponse ! Str {
+  var out = CreateAgentBasicProfileResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "createdBy" => out.created_by = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
+      "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_create_agent_context_request(v: CreateAgentContextRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.client_token {
@@ -1867,6 +2059,202 @@ fn from_json_create_agent_goal_response(v: json.Value) -> CreateAgentGoalRespons
     }
     match k {
       "goal" => out.goal = from_json_goal_summary(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_agent_organizational_profile_request(v: CreateAgentOrganizationalProfileRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.display_name {
+    fs.push(("displayName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.business_overview {
+    fs.push(("businessOverview", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pillars {
+    fs.push(("pillars", json_of_pillars(x)))
+  }
+  if let Some(x) = v.deletion_protection {
+    fs.push(("deletionProtection", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_agent_organizational_profile_request(v: json.Value) -> CreateAgentOrganizationalProfileRequest ! Str {
+  var out = CreateAgentOrganizationalProfileRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "businessOverview" => out.business_overview = jsonv.read_str(fv)?
+      "pillars" => out.pillars = from_json_pillars(fv)?
+      "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
+      "tags" => out.tags = from_json_tags(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_agent_organizational_profile_response(v: CreateAgentOrganizationalProfileResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.display_name {
+    fs.push(("displayName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.business_overview {
+    fs.push(("businessOverview", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pillars {
+    fs.push(("pillars", json_of_pillars(x)))
+  }
+  if let Some(x) = v.deletion_protection {
+    fs.push(("deletionProtection", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.organization_id {
+    fs.push(("organizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.eligible_for_scheduled_generation {
+    fs.push(("eligibleForScheduledGeneration", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.eligible_for_architecture_generation {
+    fs.push(("eligibleForArchitectureGeneration", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.field_errors {
+    fs.push(("fieldErrors", json_of_field_errors(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags(x)))
+  }
+  if let Some(x) = v.created_by {
+    fs.push(("createdBy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.last_modified_by {
+    fs.push(("lastModifiedBy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.last_modified_at {
+    fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_agent_organizational_profile_response(v: json.Value) -> CreateAgentOrganizationalProfileResponse ! Str {
+  var out = CreateAgentOrganizationalProfileResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "businessOverview" => out.business_overview = jsonv.read_str(fv)?
+      "pillars" => out.pillars = from_json_pillars(fv)?
+      "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "organizationId" => out.organization_id = jsonv.read_str(fv)?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "eligibleForScheduledGeneration" => out.eligible_for_scheduled_generation = jsonv.read_bool(fv)?
+      "eligibleForArchitectureGeneration" => out.eligible_for_architecture_generation = jsonv.read_bool(fv)?
+      "fieldErrors" => out.field_errors = from_json_field_errors(fv)?
+      "tags" => out.tags = from_json_tags(fv)?
+      "createdBy" => out.created_by = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
+      "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_agent_organizational_report_request(v: CreateAgentOrganizationalReportRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.label {
+    fs.push(("label", json.Value.Str(x)))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_organizational_report_filters(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_agent_organizational_report_request(v: json.Value) -> CreateAgentOrganizationalReportRequest ! Str {
+  var out = CreateAgentOrganizationalReportRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      "label" => out.label = jsonv.read_str(fv)?
+      "filters" => out.filters = from_json_organizational_report_filters(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_create_agent_organizational_report_response(v: CreateAgentOrganizationalReportResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.state {
+    fs.push(("state", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_create_agent_organizational_report_response(v: json.Value) -> CreateAgentOrganizationalReportResponse ! Str {
+  var out = CreateAgentOrganizationalReportResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      "state" => out.state = OrganizationalReportState.from(jsonv.read_str(fv)?)
       _ => {}
     }
   }
@@ -2733,6 +3121,72 @@ fn from_json_delete_agent_goal_response(v: json.Value) -> DeleteAgentGoalRespons
   Ok(out)
 }
 
+fn json_of_delete_agent_organizational_report_request(v: DeleteAgentOrganizationalReportRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_agent_organizational_report_request(v: json.Value) -> DeleteAgentOrganizationalReportRequest ! Str {
+  var out = DeleteAgentOrganizationalReportRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_agent_organizational_report_response(v: DeleteAgentOrganizationalReportResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_agent_organizational_report_response(v: json.Value) -> DeleteAgentOrganizationalReportResponse ! Str {
+  var out = DeleteAgentOrganizationalReportResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_delete_agent_profile_policy_request(v: DeleteAgentProfilePolicyRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.profile_arn {
+    fs.push(("profileArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_agent_profile_policy_request(v: json.Value) -> DeleteAgentProfilePolicyRequest ! Str {
+  var out = DeleteAgentProfilePolicyRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "profileArn" => out.profile_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_agent_profile_policy_response(v: DeleteAgentProfilePolicyResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_agent_profile_policy_response(v: json.Value) -> DeleteAgentProfilePolicyResponse ! Str {
+  var out = DeleteAgentProfilePolicyResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_delete_agent_profile_request(v: DeleteAgentProfileRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.profile_arn {
@@ -2762,6 +3216,39 @@ fn json_of_delete_agent_profile_response(v: DeleteAgentProfileResponse) -> json.
 
 fn from_json_delete_agent_profile_response(v: json.Value) -> DeleteAgentProfileResponse ! Str {
   var out = DeleteAgentProfileResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_delete_agent_recommendation_policy_request(v: DeleteAgentRecommendationPolicyRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.recommendation_arn {
+    fs.push(("recommendationArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_agent_recommendation_policy_request(v: json.Value) -> DeleteAgentRecommendationPolicyRequest ! Str {
+  var out = DeleteAgentRecommendationPolicyRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "recommendationArn" => out.recommendation_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_delete_agent_recommendation_policy_response(v: DeleteAgentRecommendationPolicyResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_delete_agent_recommendation_policy_response(v: json.Value) -> DeleteAgentRecommendationPolicyResponse ! Str {
+  var out = DeleteAgentRecommendationPolicyResponse{}
   let _ = jsonv.fields(v)?
   Ok(out)
 }
@@ -3120,6 +3607,90 @@ fn from_json_export_lens_output(v: json.Value) -> ExportLensOutput ! Str {
   Ok(out)
 }
 
+fn json_of_failed_account(v: FailedAccount) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_id {
+    fs.push(("accountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("reason", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_failed_account(v: json.Value) -> FailedAccount ! Str {
+  var out = FailedAccount{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "accountId" => out.account_id = jsonv.read_str(fv)?
+      "reason" => out.reason = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_failed_account_list(v: List[FailedAccount]) -> json.Value {
+  json.Value.List(v.map(fn(x: FailedAccount) -> json.Value { json_of_failed_account(x) }))
+}
+
+fn from_json_failed_account_list(v: json.Value) -> List[FailedAccount] ! Str {
+  var out: List[FailedAccount] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_failed_account(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_failed_organizational_unit(v: FailedOrganizationalUnit) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_unit_id {
+    fs.push(("organizationalUnitId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.reason {
+    fs.push(("reason", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_failed_organizational_unit(v: json.Value) -> FailedOrganizationalUnit ! Str {
+  var out = FailedOrganizationalUnit{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnitId" => out.organizational_unit_id = jsonv.read_str(fv)?
+      "reason" => out.reason = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_failed_organizational_unit_list(v: List[FailedOrganizationalUnit]) -> json.Value {
+  json.Value.List(v.map(fn(x: FailedOrganizationalUnit) -> json.Value { json_of_failed_organizational_unit(x) }))
+}
+
+fn from_json_failed_organizational_unit_list(v: json.Value) -> List[FailedOrganizationalUnit] ! Str {
+  var out: List[FailedOrganizationalUnit] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_failed_organizational_unit(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_field_errors(v: Map[Str, Str]) -> json.Value {
   json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
 }
@@ -3132,6 +3703,22 @@ fn from_json_field_errors(v: json.Value) -> Map[Str, Str] ! Str {
       continue
     }
     out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_generation_recommendation_types(v: List[RecommendationType]) -> json.Value {
+  json.Value.List(v.map(fn(x: RecommendationType) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_generation_recommendation_types(v: json.Value) -> List[RecommendationType] ! Str {
+  var out: List[RecommendationType] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(RecommendationType.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -3232,6 +3819,211 @@ fn from_json_get_agent_goal_response(v: json.Value) -> GetAgentGoalResponse ! St
   Ok(out)
 }
 
+fn json_of_get_agent_organizational_report_data_request(v: GetAgentOrganizationalReportDataRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.format {
+    fs.push(("format", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_organizational_report_data_request(v: json.Value) -> GetAgentOrganizationalReportDataRequest ! Str {
+  var out = GetAgentOrganizationalReportDataRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      "format" => out.format = OrganizationalReportFormat.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_organizational_report_data_response(v: GetAgentOrganizationalReportDataResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.download_url {
+    fs.push(("downloadUrl", json.Value.Str(x)))
+  }
+  if let Some(x) = v.expires_at {
+    fs.push(("expiresAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_organizational_report_data_response(v: json.Value) -> GetAgentOrganizationalReportDataResponse ! Str {
+  var out = GetAgentOrganizationalReportDataResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "downloadUrl" => out.download_url = jsonv.read_str(fv)?
+      "expiresAt" => out.expires_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_organizational_report_request(v: GetAgentOrganizationalReportRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_organizational_report_request(v: json.Value) -> GetAgentOrganizationalReportRequest ! Str {
+  var out = GetAgentOrganizationalReportRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_organizational_report_response(v: GetAgentOrganizationalReportResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.owner_account_id {
+    fs.push(("ownerAccountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.organization_id {
+    fs.push(("organizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.label {
+    fs.push(("label", json.Value.Str(x)))
+  }
+  if let Some(x) = v.state {
+    fs.push(("state", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.filters {
+    fs.push(("filters", json_of_organizational_report_filters(x)))
+  }
+  if let Some(x) = v.coverage_summary {
+    fs.push(("coverageSummary", json_of_coverage_summary(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_organizational_report_response(v: json.Value) -> GetAgentOrganizationalReportResponse ! Str {
+  var out = GetAgentOrganizationalReportResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      "ownerAccountId" => out.owner_account_id = jsonv.read_str(fv)?
+      "organizationId" => out.organization_id = jsonv.read_str(fv)?
+      "label" => out.label = jsonv.read_str(fv)?
+      "state" => out.state = OrganizationalReportState.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "filters" => out.filters = from_json_organizational_report_filters(fv)?
+      "coverageSummary" => out.coverage_summary = from_json_coverage_summary(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_preferences_request(v: GetAgentPreferencesRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_preferences_request(v: json.Value) -> GetAgentPreferencesRequest ! Str {
+  var out = GetAgentPreferencesRequest{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_get_agent_preferences_response(v: GetAgentPreferencesResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.preferences {
+    fs.push(("preferences", json_of_preference_entries(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_preferences_response(v: json.Value) -> GetAgentPreferencesResponse ! Str {
+  var out = GetAgentPreferencesResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "preferences" => out.preferences = from_json_preference_entries(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_profile_policy_request(v: GetAgentProfilePolicyRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.profile_arn {
+    fs.push(("profileArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_profile_policy_request(v: json.Value) -> GetAgentProfilePolicyRequest ! Str {
+  var out = GetAgentProfilePolicyRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "profileArn" => out.profile_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_profile_policy_response(v: GetAgentProfilePolicyResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.profile_arn {
+    fs.push(("profileArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.policy {
+    fs.push(("policy", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_profile_policy_response(v: json.Value) -> GetAgentProfilePolicyResponse ! Str {
+  var out = GetAgentProfilePolicyResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "profileArn" => out.profile_arn = jsonv.read_str(fv)?
+      "policy" => out.policy = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_get_agent_profile_request(v: GetAgentProfileRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.profile_arn {
@@ -3274,6 +4066,9 @@ fn json_of_get_agent_profile_response(v: GetAgentProfileResponse) -> json.Value 
   if let Some(x) = v.deletion_protection {
     fs.push(("deletionProtection", json.Value.Bool(x)))
   }
+  if let Some(x) = v.profile_type {
+    fs.push(("profileType", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.execution_role_arn {
     fs.push(("executionRoleArn", json.Value.Str(x)))
   }
@@ -3307,6 +4102,9 @@ fn json_of_get_agent_profile_response(v: GetAgentProfileResponse) -> json.Value 
   if let Some(x) = v.last_modified_at {
     fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
   }
+  if let Some(x) = v.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3323,6 +4121,7 @@ fn from_json_get_agent_profile_response(v: json.Value) -> GetAgentProfileRespons
       "businessOverview" => out.business_overview = jsonv.read_str(fv)?
       "pillars" => out.pillars = from_json_pillars(fv)?
       "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "profileType" => out.profile_type = ProfileType.from(jsonv.read_str(fv)?)
       "executionRoleArn" => out.execution_role_arn = jsonv.read_str(fv)?
       "aggregationConfiguration" => out.aggregation_configuration = from_json_aggregation_configurations(fv)?
       "arn" => out.arn = jsonv.read_str(fv)?
@@ -3334,6 +4133,7 @@ fn from_json_get_agent_profile_response(v: json.Value) -> GetAgentProfileRespons
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
       "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
       _ => {}
     }
   }
@@ -3395,11 +4195,11 @@ fn json_of_get_agent_recommendation_generation_response(v: GetAgentRecommendatio
   if let Some(x) = v.last_modified_at {
     fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
   }
-  if let Some(x) = v.additional_context {
-    fs.push(("additionalContext", x))
+  if let Some(x) = v.generation_type {
+    fs.push(("generationType", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.scope {
-    fs.push(("scope", json_of_scope(x)))
+  if let Some(x) = v.generation_recommendation_types {
+    fs.push(("generationRecommendationTypes", json_of_generation_recommendation_types(x)))
   }
   if let Some(x) = v.started_at {
     fs.push(("startedAt", jsonv.time(x, "date-time")))
@@ -3407,11 +4207,17 @@ fn json_of_get_agent_recommendation_generation_response(v: GetAgentRecommendatio
   if let Some(x) = v.ended_at {
     fs.push(("endedAt", jsonv.time(x, "date-time")))
   }
-  if let Some(x) = v.progress {
-    fs.push(("progress", json_of_progress(x)))
-  }
   if let Some(x) = v.error_details {
     fs.push(("errorDetails", json_of_error_details(x)))
+  }
+  if let Some(x) = v.additional_context {
+    fs.push(("additionalContext", x))
+  }
+  if let Some(x) = v.scope {
+    fs.push(("scope", json_of_scope(x)))
+  }
+  if let Some(x) = v.progress {
+    fs.push(("progress", json_of_progress(x)))
   }
   json.Value.Object(fs)
 }
@@ -3432,12 +4238,62 @@ fn from_json_get_agent_recommendation_generation_response(v: json.Value) -> GetA
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
       "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
-      "additionalContext" => out.additional_context = fv
-      "scope" => out.scope = from_json_scope(fv)?
+      "generationType" => out.generation_type = GenerationType.from(jsonv.read_str(fv)?)
+      "generationRecommendationTypes" => out.generation_recommendation_types = from_json_generation_recommendation_types(fv)?
       "startedAt" => out.started_at = jsonv.read_time(fv, "date-time")?
       "endedAt" => out.ended_at = jsonv.read_time(fv, "date-time")?
-      "progress" => out.progress = from_json_progress(fv)?
       "errorDetails" => out.error_details = from_json_error_details(fv)?
+      "additionalContext" => out.additional_context = fv
+      "scope" => out.scope = from_json_scope(fv)?
+      "progress" => out.progress = from_json_progress(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_recommendation_policy_request(v: GetAgentRecommendationPolicyRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.recommendation_arn {
+    fs.push(("recommendationArn", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_recommendation_policy_request(v: json.Value) -> GetAgentRecommendationPolicyRequest ! Str {
+  var out = GetAgentRecommendationPolicyRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "recommendationArn" => out.recommendation_arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_agent_recommendation_policy_response(v: GetAgentRecommendationPolicyResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.recommendation_arn {
+    fs.push(("recommendationArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.policy {
+    fs.push(("policy", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_agent_recommendation_policy_response(v: json.Value) -> GetAgentRecommendationPolicyResponse ! Str {
+  var out = GetAgentRecommendationPolicyResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "recommendationArn" => out.recommendation_arn = jsonv.read_str(fv)?
+      "policy" => out.policy = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -5287,6 +6143,62 @@ fn from_json_list_agent_goals_response(v: json.Value) -> ListAgentGoalsResponse 
   Ok(out)
 }
 
+fn json_of_list_agent_organizational_reports_request(v: ListAgentOrganizationalReportsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.state {
+    fs.push(("state", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_agent_organizational_reports_request(v: json.Value) -> ListAgentOrganizationalReportsRequest ! Str {
+  var out = ListAgentOrganizationalReportsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "state" => out.state = OrganizationalReportState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_agent_organizational_reports_response(v: ListAgentOrganizationalReportsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.items {
+    fs.push(("items", json_of_organizational_report_summary_list(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_agent_organizational_reports_response(v: json.Value) -> ListAgentOrganizationalReportsResponse ! Str {
+  var out = ListAgentOrganizationalReportsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "items" => out.items = from_json_organizational_report_summary_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_list_agent_profiles_request(v: ListAgentProfilesRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.max_results {
@@ -6897,6 +7809,298 @@ fn from_json_notification_summary(v: json.Value) -> NotificationSummary ! Str {
   Ok(out)
 }
 
+fn json_of_organizational_account_entry(v: OrganizationalAccountEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_id {
+    fs.push(("accountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.regions {
+    fs.push(("regions", json_of_regions(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organizational_account_entry(v: json.Value) -> OrganizationalAccountEntry ! Str {
+  var out = OrganizationalAccountEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "accountId" => out.account_id = jsonv.read_str(fv)?
+      "regions" => out.regions = from_json_regions(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_account_entry_list(v: List[OrganizationalAccountEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationalAccountEntry) -> json.Value { json_of_organizational_account_entry(x) }))
+}
+
+fn from_json_organizational_account_entry_list(v: json.Value) -> List[OrganizationalAccountEntry] ! Str {
+  var out: List[OrganizationalAccountEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organizational_account_entry(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_aggregation_configuration(v: OrganizationalAggregationConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_units {
+    fs.push(("organizationalUnits", json_of_organizational_unit_entry_list(x)))
+  }
+  if let Some(x) = v.accounts {
+    fs.push(("accounts", json_of_organizational_account_entry_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organizational_aggregation_configuration(v: json.Value) -> OrganizationalAggregationConfiguration ! Str {
+  var out = OrganizationalAggregationConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnits" => out.organizational_units = from_json_organizational_unit_entry_list(fv)?
+      "accounts" => out.accounts = from_json_organizational_account_entry_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_report_account_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_organizational_report_account_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_report_filters(v: OrganizationalReportFilters) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_ids {
+    fs.push(("accountIds", json_of_organizational_report_account_id_list(x)))
+  }
+  if let Some(x) = v.organizational_unit_ids {
+    fs.push(("organizationalUnitIds", json_of_organizational_unit_id_list(x)))
+  }
+  if let Some(x) = v.pillars {
+    fs.push(("pillars", json_of_pillar_list(x)))
+  }
+  if let Some(x) = v.recommendation_types {
+    fs.push(("recommendationTypes", json_of_recommendation_type_list(x)))
+  }
+  if let Some(x) = v.statuses {
+    fs.push(("statuses", json_of_recommendation_status_list(x)))
+  }
+  if let Some(x) = v.priorities {
+    fs.push(("priorities", json_of_priority_list(x)))
+  }
+  if let Some(x) = v.created_at_range {
+    fs.push(("createdAtRange", json_of_time_window(x)))
+  }
+  if let Some(x) = v.updated_at_range {
+    fs.push(("updatedAtRange", json_of_time_window(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organizational_report_filters(v: json.Value) -> OrganizationalReportFilters ! Str {
+  var out = OrganizationalReportFilters{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "accountIds" => out.account_ids = from_json_organizational_report_account_id_list(fv)?
+      "organizationalUnitIds" => out.organizational_unit_ids = from_json_organizational_unit_id_list(fv)?
+      "pillars" => out.pillars = from_json_pillar_list(fv)?
+      "recommendationTypes" => out.recommendation_types = from_json_recommendation_type_list(fv)?
+      "statuses" => out.statuses = from_json_recommendation_status_list(fv)?
+      "priorities" => out.priorities = from_json_priority_list(fv)?
+      "createdAtRange" => out.created_at_range = from_json_time_window(fv)?
+      "updatedAtRange" => out.updated_at_range = from_json_time_window(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_report_summary(v: OrganizationalReportSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.owner_account_id {
+    fs.push(("ownerAccountId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.organization_id {
+    fs.push(("organizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.label {
+    fs.push(("label", json.Value.Str(x)))
+  }
+  if let Some(x) = v.state {
+    fs.push(("state", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organizational_report_summary(v: json.Value) -> OrganizationalReportSummary ! Str {
+  var out = OrganizationalReportSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      "ownerAccountId" => out.owner_account_id = jsonv.read_str(fv)?
+      "organizationId" => out.organization_id = jsonv.read_str(fv)?
+      "label" => out.label = jsonv.read_str(fv)?
+      "state" => out.state = OrganizationalReportState.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_report_summary_list(v: List[OrganizationalReportSummary]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationalReportSummary) -> json.Value { json_of_organizational_report_summary(x) }))
+}
+
+fn from_json_organizational_report_summary_list(v: json.Value) -> List[OrganizationalReportSummary] ! Str {
+  var out: List[OrganizationalReportSummary] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organizational_report_summary(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_unit_entry(v: OrganizationalUnitEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.organizational_unit_id {
+    fs.push(("organizationalUnitId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.regions {
+    fs.push(("regions", json_of_regions(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_organizational_unit_entry(v: json.Value) -> OrganizationalUnitEntry ! Str {
+  var out = OrganizationalUnitEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "organizationalUnitId" => out.organizational_unit_id = jsonv.read_str(fv)?
+      "regions" => out.regions = from_json_regions(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_unit_entry_list(v: List[OrganizationalUnitEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: OrganizationalUnitEntry) -> json.Value { json_of_organizational_unit_entry(x) }))
+}
+
+fn from_json_organizational_unit_entry_list(v: json.Value) -> List[OrganizationalUnitEntry] ! Str {
+  var out: List[OrganizationalUnitEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_organizational_unit_entry(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_organizational_unit_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_organizational_unit_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_pillar_count(v: PillarCount) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.pillar {
+    fs.push(("pillar", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.count {
+    fs.push(("count", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_pillar_count(v: json.Value) -> PillarCount ! Str {
+  var out = PillarCount{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "pillar" => out.pillar = Pillar.from(jsonv.read_str(fv)?)
+      "count" => out.count = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_pillar_count_list(v: List[PillarCount]) -> json.Value {
+  json.Value.List(v.map(fn(x: PillarCount) -> json.Value { json_of_pillar_count(x) }))
+}
+
+fn from_json_pillar_count_list(v: json.Value) -> List[PillarCount] ! Str {
+  var out: List[PillarCount] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_pillar_count(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_pillar_difference(v: PillarDifference) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.pillar_id {
@@ -6985,6 +8189,22 @@ fn from_json_pillar_items(v: json.Value) -> List[PillarItem] ! Str {
       continue
     }
     out.push(from_json_pillar_item(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_pillar_list(v: List[Pillar]) -> json.Value {
+  json.Value.List(v.map(fn(x: Pillar) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_pillar_list(v: json.Value) -> List[Pillar] ! Str {
+  var out: List[Pillar] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(Pillar.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -7117,6 +8337,152 @@ fn from_json_pillars(v: json.Value) -> List[Pillar] ! Str {
       continue
     }
     out.push(Pillar.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_preference_entries(v: List[PreferenceEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: PreferenceEntry) -> json.Value { json_of_preference_entry(x) }))
+}
+
+fn from_json_preference_entries(v: json.Value) -> List[PreferenceEntry] ! Str {
+  var out: List[PreferenceEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_preference_entry(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_preference_entry(v: PreferenceEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.detail {
+    fs.push(("detail", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_preference_entry(v: json.Value) -> PreferenceEntry ! Str {
+  var out = PreferenceEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = PreferenceKey.from(jsonv.read_str(fv)?)
+      "status" => out.status = PreferenceStatus.from(jsonv.read_str(fv)?)
+      "detail" => out.detail = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_preference_update(v: PreferenceUpdate) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("key", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.state {
+    fs.push(("state", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_preference_update(v: json.Value) -> PreferenceUpdate ! Str {
+  var out = PreferenceUpdate{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "key" => out.key = PreferenceKey.from(jsonv.read_str(fv)?)
+      "state" => out.state = PreferenceState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_preference_updates(v: List[PreferenceUpdate]) -> json.Value {
+  json.Value.List(v.map(fn(x: PreferenceUpdate) -> json.Value { json_of_preference_update(x) }))
+}
+
+fn from_json_preference_updates(v: json.Value) -> List[PreferenceUpdate] ! Str {
+  var out: List[PreferenceUpdate] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_preference_update(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_priority_count(v: PriorityCount) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.priority {
+    fs.push(("priority", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.count {
+    fs.push(("count", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_priority_count(v: json.Value) -> PriorityCount ! Str {
+  var out = PriorityCount{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "priority" => out.priority = Priority.from(jsonv.read_str(fv)?)
+      "count" => out.count = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_priority_count_list(v: List[PriorityCount]) -> json.Value {
+  json.Value.List(v.map(fn(x: PriorityCount) -> json.Value { json_of_priority_count(x) }))
+}
+
+fn from_json_priority_count_list(v: json.Value) -> List[PriorityCount] ! Str {
+  var out: List[PriorityCount] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_priority_count(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_priority_list(v: List[Priority]) -> json.Value {
+  json.Value.List(v.map(fn(x: Priority) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_priority_list(v: json.Value) -> List[Priority] ! Str {
+  var out: List[Priority] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(Priority.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -7671,6 +9037,76 @@ fn from_json_progress(v: json.Value) -> Progress ! Str {
   Ok(out)
 }
 
+fn json_of_put_agent_preferences_request(v: PutAgentPreferencesRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.preferences {
+    fs.push(("preferences", json_of_preference_updates(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_put_agent_preferences_request(v: json.Value) -> PutAgentPreferencesRequest ! Str {
+  var out = PutAgentPreferencesRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "preferences" => out.preferences = from_json_preference_updates(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_put_agent_preferences_response(v: PutAgentPreferencesResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_put_agent_preferences_response(v: json.Value) -> PutAgentPreferencesResponse ! Str {
+  var out = PutAgentPreferencesResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_put_agent_profile_policy_request(v: PutAgentProfilePolicyRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.profile_arn {
+    fs.push(("profileArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.policy {
+    fs.push(("policy", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_put_agent_profile_policy_request(v: json.Value) -> PutAgentProfilePolicyRequest ! Str {
+  var out = PutAgentProfilePolicyRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "profileArn" => out.profile_arn = jsonv.read_str(fv)?
+      "policy" => out.policy = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_put_agent_profile_policy_response(v: PutAgentProfilePolicyResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_put_agent_profile_policy_response(v: json.Value) -> PutAgentProfilePolicyResponse ! Str {
+  var out = PutAgentProfilePolicyResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_put_agent_recommendation_feedback_request(v: PutAgentRecommendationFeedbackRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.recommendation_arn {
@@ -7712,6 +9148,43 @@ fn json_of_put_agent_recommendation_feedback_response(v: PutAgentRecommendationF
 
 fn from_json_put_agent_recommendation_feedback_response(v: json.Value) -> PutAgentRecommendationFeedbackResponse ! Str {
   var out = PutAgentRecommendationFeedbackResponse{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_put_agent_recommendation_policy_request(v: PutAgentRecommendationPolicyRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.recommendation_arn {
+    fs.push(("recommendationArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.policy {
+    fs.push(("policy", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_put_agent_recommendation_policy_request(v: json.Value) -> PutAgentRecommendationPolicyRequest ! Str {
+  var out = PutAgentRecommendationPolicyRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "recommendationArn" => out.recommendation_arn = jsonv.read_str(fv)?
+      "policy" => out.policy = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_put_agent_recommendation_policy_response(v: PutAgentRecommendationPolicyResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_put_agent_recommendation_policy_response(v: json.Value) -> PutAgentRecommendationPolicyResponse ! Str {
+  var out = PutAgentRecommendationPolicyResponse{}
   let _ = jsonv.fields(v)?
   Ok(out)
 }
@@ -7874,6 +9347,38 @@ fn from_json_recommendation_source_list(v: json.Value) -> List[RecommendationSou
       continue
     }
     out.push(RecommendationSource.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_recommendation_status_list(v: List[RecommendationStatus]) -> json.Value {
+  json.Value.List(v.map(fn(x: RecommendationStatus) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_recommendation_status_list(v: json.Value) -> List[RecommendationStatus] ! Str {
+  var out: List[RecommendationStatus] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(RecommendationStatus.from(jsonv.read_str(fv)?))
+  }
+  Ok(out)
+}
+
+fn json_of_recommendation_type_list(v: List[RecommendationType]) -> json.Value {
+  json.Value.List(v.map(fn(x: RecommendationType) -> json.Value { json.Value.Str(x.value()) }))
+}
+
+fn from_json_recommendation_type_list(v: json.Value) -> List[RecommendationType] ! Str {
+  var out: List[RecommendationType] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(RecommendationType.from(jsonv.read_str(fv)?))
   }
   Ok(out)
 }
@@ -8672,6 +10177,62 @@ fn from_json_selected_question_ids(v: json.Value) -> List[Str] ! Str {
   Ok(out)
 }
 
+fn json_of_send_agent_organizational_report_data_to_s3_request(v: SendAgentOrganizationalReportDataToS3Request) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.report_id {
+    fs.push(("reportId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.format {
+    fs.push(("format", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.bucket_arn {
+    fs.push(("bucketArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.object_key {
+    fs.push(("objectKey", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_send_agent_organizational_report_data_to_s3_request(v: json.Value) -> SendAgentOrganizationalReportDataToS3Request ! Str {
+  var out = SendAgentOrganizationalReportDataToS3Request{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      "format" => out.format = OrganizationalReportFormat.from(jsonv.read_str(fv)?)
+      "bucketArn" => out.bucket_arn = jsonv.read_str(fv)?
+      "objectKey" => out.object_key = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_send_agent_organizational_report_data_to_s3_response(v: SendAgentOrganizationalReportDataToS3Response) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.delivered_to {
+    fs.push(("deliveredTo", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_send_agent_organizational_report_data_to_s3_response(v: json.Value) -> SendAgentOrganizationalReportDataToS3Response ! Str {
+  var out = SendAgentOrganizationalReportDataToS3Response{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "deliveredTo" => out.delivered_to = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_service_quota_exceeded_exception(v: ServiceQuotaExceededException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -9157,6 +10718,32 @@ fn from_json_throttling_exception(v: json.Value) -> ThrottlingException ! Str {
   Ok(out)
 }
 
+fn json_of_time_window(v: TimeWindow) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.from_value {
+    fs.push(("from", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.to {
+    fs.push(("to", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_time_window(v: json.Value) -> TimeWindow ! Str {
+  var out = TimeWindow{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "from" => out.from_value = jsonv.read_time(fv, "date-time")?
+      "to" => out.to = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_trade_off(v: TradeOff) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.pillar {
@@ -9376,6 +10963,138 @@ fn from_json_update_agent_goal_response(v: json.Value) -> UpdateAgentGoalRespons
   Ok(out)
 }
 
+fn json_of_update_agent_organizational_profile_request(v: UpdateAgentOrganizationalProfileRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.profile_arn {
+    fs.push(("profileArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.display_name {
+    fs.push(("displayName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.business_overview {
+    fs.push(("businessOverview", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pillars {
+    fs.push(("pillars", json_of_pillars(x)))
+  }
+  if let Some(x) = v.deletion_protection {
+    fs.push(("deletionProtection", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_agent_organizational_profile_request(v: json.Value) -> UpdateAgentOrganizationalProfileRequest ! Str {
+  var out = UpdateAgentOrganizationalProfileRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      "profileArn" => out.profile_arn = jsonv.read_str(fv)?
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "businessOverview" => out.business_overview = jsonv.read_str(fv)?
+      "pillars" => out.pillars = from_json_pillars(fv)?
+      "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_agent_organizational_profile_response(v: UpdateAgentOrganizationalProfileResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.display_name {
+    fs.push(("displayName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = v.business_overview {
+    fs.push(("businessOverview", json.Value.Str(x)))
+  }
+  if let Some(x) = v.pillars {
+    fs.push(("pillars", json_of_pillars(x)))
+  }
+  if let Some(x) = v.deletion_protection {
+    fs.push(("deletionProtection", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.organization_id {
+    fs.push(("organizationId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.eligible_for_scheduled_generation {
+    fs.push(("eligibleForScheduledGeneration", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.eligible_for_architecture_generation {
+    fs.push(("eligibleForArchitectureGeneration", json.Value.Bool(x)))
+  }
+  if let Some(x) = v.field_errors {
+    fs.push(("fieldErrors", json_of_field_errors(x)))
+  }
+  if let Some(x) = v.created_by {
+    fs.push(("createdBy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.last_modified_by {
+    fs.push(("lastModifiedBy", json.Value.Str(x)))
+  }
+  if let Some(x) = v.last_modified_at {
+    fs.push(("lastModifiedAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_agent_organizational_profile_response(v: json.Value) -> UpdateAgentOrganizationalProfileResponse ! Str {
+  var out = UpdateAgentOrganizationalProfileResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "businessOverview" => out.business_overview = jsonv.read_str(fv)?
+      "pillars" => out.pillars = from_json_pillars(fv)?
+      "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "organizationId" => out.organization_id = jsonv.read_str(fv)?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "eligibleForScheduledGeneration" => out.eligible_for_scheduled_generation = jsonv.read_bool(fv)?
+      "eligibleForArchitectureGeneration" => out.eligible_for_architecture_generation = jsonv.read_bool(fv)?
+      "fieldErrors" => out.field_errors = from_json_field_errors(fv)?
+      "createdBy" => out.created_by = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
+      "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_update_agent_profile_request(v: UpdateAgentProfileRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.client_token {
@@ -9468,9 +11187,6 @@ fn json_of_update_agent_profile_response(v: UpdateAgentProfileResponse) -> json.
   if let Some(x) = v.field_errors {
     fs.push(("fieldErrors", json_of_field_errors(x)))
   }
-  if let Some(x) = v.tags {
-    fs.push(("tags", json_of_tags(x)))
-  }
   if let Some(x) = v.created_by {
     fs.push(("createdBy", json.Value.Str(x)))
   }
@@ -9505,7 +11221,6 @@ fn from_json_update_agent_profile_response(v: json.Value) -> UpdateAgentProfileR
       "eligibleForScheduledGeneration" => out.eligible_for_scheduled_generation = jsonv.read_bool(fv)?
       "eligibleForArchitectureGeneration" => out.eligible_for_architecture_generation = jsonv.read_bool(fv)?
       "fieldErrors" => out.field_errors = from_json_field_errors(fv)?
-      "tags" => out.tags = from_json_tags(fv)?
       "createdBy" => out.created_by = jsonv.read_str(fv)?
       "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
@@ -11378,6 +13093,142 @@ pub fn (c: Client) associate_profiles(input: AssociateProfilesInput) -> () ! Ass
   deserialize_associate_profiles(resp) ?? e => Err(AssociateProfilesErr.Deserialize(e))
 }
 
+pub fn endpoint_params_create_agent_basic_profile(base: EndpointParameters, input: CreateAgentBasicProfileRequest) -> EndpointParameters {
+  let _ = input
+  var p = base
+  p.sub_service_type = "AGENT"
+  p
+}
+
+/// The HTTP request of CreateAgentBasicProfile.
+pub fn serialize_create_agent_basic_profile(ep: rest.Endpoint, input: CreateAgentBasicProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.tags {
+    fs.push(("tags", json_of_tags(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/api/v1/agent-basic-profile"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_agent_basic_profile(resp: http.Response) -> CreateAgentBasicProfileResponse ! Str {
+  var out = CreateAgentBasicProfileResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "createdBy" => out.created_by = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
+      "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateAgentBasicProfile.
+pub enum CreateAgentBasicProfileErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateAgentBasicProfileErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_agent_basic_profile_error(resp: http.Response) -> CreateAgentBasicProfileErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateAgentBasicProfileErr.AccessDeniedException(x)
+      Err(msg) => return CreateAgentBasicProfileErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateAgentBasicProfileErr.ConflictException(x)
+      Err(msg) => return CreateAgentBasicProfileErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateAgentBasicProfileErr.InternalServerException(x)
+      Err(msg) => return CreateAgentBasicProfileErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CreateAgentBasicProfileErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateAgentBasicProfileErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateAgentBasicProfileErr.ThrottlingException(x)
+      Err(msg) => return CreateAgentBasicProfileErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateAgentBasicProfileErr.ValidationException(x)
+      Err(msg) => return CreateAgentBasicProfileErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateAgentBasicProfileErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates a Basic profile for the calling account. No configuration input
+/// is required because the account and region are inferred from the caller.
+/// The profile uses the reserved name basic . This operation is idempotent.
+/// Calling it twice returns the same ARN. Each account can have at most one
+/// Basic profile.
+pub fn (c: Client) create_agent_basic_profile(input: CreateAgentBasicProfileRequest) -> CreateAgentBasicProfileResponse ! CreateAgentBasicProfileErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_agent_basic_profile(c.params, input)) ?? e => return Err(CreateAgentBasicProfileErr.InvalidInput(e))
+  var req = serialize_create_agent_basic_profile(ep, input, "") ?? e => return Err(CreateAgentBasicProfileErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateAgentBasicProfileErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_agent_basic_profile_error(resp))
+  }
+  deserialize_create_agent_basic_profile(resp) ?? e => Err(CreateAgentBasicProfileErr.Deserialize(e))
+}
+
 pub fn endpoint_params_create_agent_context(base: EndpointParameters, input: CreateAgentContextRequest) -> EndpointParameters {
   let _ = input
   var p = base
@@ -11683,6 +13534,329 @@ pub fn (c: Client) create_agent_goal(input: CreateAgentGoalRequest) -> CreateAge
     return Err(deserialize_create_agent_goal_error(resp))
   }
   deserialize_create_agent_goal(resp) ?? e => Err(CreateAgentGoalErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_agent_organizational_profile(base: EndpointParameters, input: CreateAgentOrganizationalProfileRequest) -> EndpointParameters {
+  let _ = input
+  var p = base
+  p.sub_service_type = "AGENT"
+  p
+}
+
+/// The HTTP request of CreateAgentOrganizationalProfile.
+pub fn serialize_create_agent_organizational_profile(ep: rest.Endpoint, input: CreateAgentOrganizationalProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = input.display_name {
+    fs.push(("displayName", json.Value.Str(x)))
+  }
+  if let Some(x) = input.description {
+    fs.push(("description", json.Value.Str(x)))
+  }
+  if let Some(x) = input.business_overview {
+    fs.push(("businessOverview", json.Value.Str(x)))
+  }
+  if let Some(x) = input.pillars {
+    fs.push(("pillars", json_of_pillars(x)))
+  }
+  if let Some(x) = input.deletion_protection {
+    fs.push(("deletionProtection", json.Value.Bool(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.organizational_aggregation_configuration {
+    fs.push(("organizationalAggregationConfiguration", json_of_organizational_aggregation_configuration(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("tags", json_of_tags(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/api/v1/agent-organizational-profiles"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_agent_organizational_profile(resp: http.Response) -> CreateAgentOrganizationalProfileResponse ! Str {
+  var out = CreateAgentOrganizationalProfileResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "businessOverview" => out.business_overview = jsonv.read_str(fv)?
+      "pillars" => out.pillars = from_json_pillars(fv)?
+      "deletionProtection" => out.deletion_protection = jsonv.read_bool(fv)?
+      "organizationId" => out.organization_id = jsonv.read_str(fv)?
+      "organizationalAggregationConfiguration" => out.organizational_aggregation_configuration = from_json_organizational_aggregation_configuration(fv)?
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "eligibleForScheduledGeneration" => out.eligible_for_scheduled_generation = jsonv.read_bool(fv)?
+      "eligibleForArchitectureGeneration" => out.eligible_for_architecture_generation = jsonv.read_bool(fv)?
+      "fieldErrors" => out.field_errors = from_json_field_errors(fv)?
+      "tags" => out.tags = from_json_tags(fv)?
+      "createdBy" => out.created_by = jsonv.read_str(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "lastModifiedBy" => out.last_modified_by = jsonv.read_str(fv)?
+      "lastModifiedAt" => out.last_modified_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateAgentOrganizationalProfile.
+pub enum CreateAgentOrganizationalProfileErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateAgentOrganizationalProfileErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_agent_organizational_profile_error(resp: http.Response) -> CreateAgentOrganizationalProfileErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.AccessDeniedException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.ConflictException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.InternalServerException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.ResourceNotFoundException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.ThrottlingException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalProfileErr.ValidationException(x)
+      Err(msg) => return CreateAgentOrganizationalProfileErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateAgentOrganizationalProfileErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates an Organizational Profile for use with AWS Organizations
+/// integration. Organizational Profiles are scoped to an AWS Organization
+/// and do not require an execution role or aggregation configuration. The
+/// organization is inferred from the caller's identity.
+pub fn (c: Client) create_agent_organizational_profile(input: CreateAgentOrganizationalProfileRequest) -> CreateAgentOrganizationalProfileResponse ! CreateAgentOrganizationalProfileErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_agent_organizational_profile(c.params, input)) ?? e => return Err(CreateAgentOrganizationalProfileErr.InvalidInput(e))
+  var req = serialize_create_agent_organizational_profile(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateAgentOrganizationalProfileErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateAgentOrganizationalProfileErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_agent_organizational_profile_error(resp))
+  }
+  deserialize_create_agent_organizational_profile(resp) ?? e => Err(CreateAgentOrganizationalProfileErr.Deserialize(e))
+}
+
+pub fn endpoint_params_create_agent_organizational_report(base: EndpointParameters, input: CreateAgentOrganizationalReportRequest) -> EndpointParameters {
+  let _ = input
+  var p = base
+  p.sub_service_type = "AGENT"
+  p
+}
+
+/// The HTTP request of CreateAgentOrganizationalReport.
+pub fn serialize_create_agent_organizational_report(ep: rest.Endpoint, input: CreateAgentOrganizationalReportRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.label {
+    fs.push(("label", json.Value.Str(x)))
+  }
+  if let Some(x) = input.filters {
+    fs.push(("filters", json_of_organizational_report_filters(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/api/v1/agent-organizational-reports"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_create_agent_organizational_report(resp: http.Response) -> CreateAgentOrganizationalReportResponse ! Str {
+  var out = CreateAgentOrganizationalReportResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "reportId" => out.report_id = jsonv.read_str(fv)?
+      "state" => out.state = OrganizationalReportState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of CreateAgentOrganizationalReport.
+pub enum CreateAgentOrganizationalReportErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: CreateAgentOrganizationalReportErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_create_agent_organizational_report_error(resp: http.Response) -> CreateAgentOrganizationalReportErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalReportErr.AccessDeniedException(x)
+      Err(msg) => return CreateAgentOrganizationalReportErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalReportErr.ConflictException(x)
+      Err(msg) => return CreateAgentOrganizationalReportErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalReportErr.InternalServerException(x)
+      Err(msg) => return CreateAgentOrganizationalReportErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalReportErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateAgentOrganizationalReportErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalReportErr.ThrottlingException(x)
+      Err(msg) => return CreateAgentOrganizationalReportErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return CreateAgentOrganizationalReportErr.ValidationException(x)
+      Err(msg) => return CreateAgentOrganizationalReportErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  CreateAgentOrganizationalReportErr.Api(restjson.api_error(resp, body))
+}
+
+/// Creates an Organizational Report, which is an
+/// asynchronously-materialized, point-in-time snapshot of recommendations
+/// across all Agent Profiles within the caller's AWS Organization. You can
+/// optionally narrow the scope with filters. The operation is idempotent on
+/// the caller-supplied clientToken. The AWS Organization the report belongs
+/// to is inferred from the caller's authorization context. Reports are
+/// retained for 90 days from creation, after which they are automatically
+/// deleted. Use DeleteAgentOrganizationalReport to delete a report earlier.
+pub fn (c: Client) create_agent_organizational_report(input: CreateAgentOrganizationalReportRequest) -> CreateAgentOrganizationalReportResponse ! CreateAgentOrganizationalReportErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_create_agent_organizational_report(c.params, input)) ?? e => return Err(CreateAgentOrganizationalReportErr.InvalidInput(e))
+  var req = serialize_create_agent_organizational_report(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateAgentOrganizationalReportErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateAgentOrganizationalReportErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_create_agent_organizational_report_error(resp))
+  }
+  deserialize_create_agent_organizational_report(resp) ?? e => Err(CreateAgentOrganizationalReportErr.Deserialize(e))
 }
 
 pub fn endpoint_params_create_agent_profile(base: EndpointParameters, input: CreateAgentProfileRequest) -> EndpointParameters {
@@ -12063,1817 +14237,4 @@ pub fn serialize_create_lens_version(ep: rest.Endpoint, input: CreateLensVersion
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_create_lens_version(resp: http.Response) -> CreateLensVersionOutput ! Str {
-  var out = CreateLensVersionOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "LensArn" => out.lens_arn = jsonv.read_str(fv)?
-      "LensVersion" => out.lens_version = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateLensVersion.
-pub enum CreateLensVersionErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateLensVersionErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_lens_version_error(resp: http.Response) -> CreateLensVersionErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.AccessDeniedException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.ConflictException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.InternalServerException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.ThrottlingException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateLensVersionErr.ValidationException(x)
-      Err(msg) => return CreateLensVersionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateLensVersionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a new lens version. A lens can have up to 100 versions. Use this
-/// operation to publish a new lens version after you have imported a lens.
-/// The LensAlias is used to identify the lens to be published. The owner of
-/// a lens can share the lens with other Amazon Web Services accounts and
-/// users in the same Amazon Web Services Region. Only the owner of a lens
-/// can delete it.
-pub fn (c: Client) create_lens_version(input: CreateLensVersionInput) -> CreateLensVersionOutput ! CreateLensVersionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_lens_version(c.params, input)) ?? e => return Err(CreateLensVersionErr.InvalidInput(e))
-  var req = serialize_create_lens_version(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateLensVersionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateLensVersionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_lens_version_error(resp))
-  }
-  deserialize_create_lens_version(resp) ?? e => Err(CreateLensVersionErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_milestone(base: EndpointParameters, input: CreateMilestoneInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateMilestone.
-pub fn serialize_create_milestone(ep: rest.Endpoint, input: CreateMilestoneInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_workload_id = match input.workload_id {
-    Some(v) => v
-    None => return Err("input member WorkloadId is required")
-  }
-  if label_workload_id == "" {
-    return Err("input member WorkloadId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.milestone_name {
-    fs.push(("MilestoneName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/workloads/${rest.escape(label_workload_id, false)}/milestones"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_milestone(resp: http.Response) -> CreateMilestoneOutput ! Str {
-  var out = CreateMilestoneOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "WorkloadId" => out.workload_id = jsonv.read_str(fv)?
-      "MilestoneNumber" => out.milestone_number = jsonv.read_int(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateMilestone.
-pub enum CreateMilestoneErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateMilestoneErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_milestone_error(resp: http.Response) -> CreateMilestoneErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.AccessDeniedException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.ConflictException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.InternalServerException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.ThrottlingException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateMilestoneErr.ValidationException(x)
-      Err(msg) => return CreateMilestoneErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateMilestoneErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a milestone for an existing workload.
-pub fn (c: Client) create_milestone(input: CreateMilestoneInput) -> CreateMilestoneOutput ! CreateMilestoneErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_milestone(c.params, input)) ?? e => return Err(CreateMilestoneErr.InvalidInput(e))
-  var req = serialize_create_milestone(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateMilestoneErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateMilestoneErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_milestone_error(resp))
-  }
-  deserialize_create_milestone(resp) ?? e => Err(CreateMilestoneErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_profile(base: EndpointParameters, input: CreateProfileInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateProfile.
-pub fn serialize_create_profile(ep: rest.Endpoint, input: CreateProfileInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.profile_name {
-    fs.push(("ProfileName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.profile_description {
-    fs.push(("ProfileDescription", json.Value.Str(x)))
-  }
-  if let Some(x) = input.profile_questions {
-    fs.push(("ProfileQuestions", json_of_profile_question_updates(x)))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("Tags", json_of_tag_map(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/profiles"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_profile(resp: http.Response) -> CreateProfileOutput ! Str {
-  var out = CreateProfileOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ProfileArn" => out.profile_arn = jsonv.read_str(fv)?
-      "ProfileVersion" => out.profile_version = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateProfile.
-pub enum CreateProfileErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateProfileErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_profile_error(resp: http.Response) -> CreateProfileErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateProfileErr.AccessDeniedException(x)
-      Err(msg) => return CreateProfileErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateProfileErr.ConflictException(x)
-      Err(msg) => return CreateProfileErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateProfileErr.InternalServerException(x)
-      Err(msg) => return CreateProfileErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateProfileErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateProfileErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateProfileErr.ThrottlingException(x)
-      Err(msg) => return CreateProfileErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateProfileErr.ValidationException(x)
-      Err(msg) => return CreateProfileErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateProfileErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a profile.
-pub fn (c: Client) create_profile(input: CreateProfileInput) -> CreateProfileOutput ! CreateProfileErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_profile(c.params, input)) ?? e => return Err(CreateProfileErr.InvalidInput(e))
-  var req = serialize_create_profile(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateProfileErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateProfileErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_profile_error(resp))
-  }
-  deserialize_create_profile(resp) ?? e => Err(CreateProfileErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_profile_share(base: EndpointParameters, input: CreateProfileShareInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateProfileShare.
-pub fn serialize_create_profile_share(ep: rest.Endpoint, input: CreateProfileShareInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_profile_arn = match input.profile_arn {
-    Some(v) => v
-    None => return Err("input member ProfileArn is required")
-  }
-  if label_profile_arn == "" {
-    return Err("input member ProfileArn must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.shared_with {
-    fs.push(("SharedWith", json.Value.Str(x)))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/profiles/${rest.escape(label_profile_arn, false)}/shares"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_profile_share(resp: http.Response) -> CreateProfileShareOutput ! Str {
-  var out = CreateProfileShareOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "ShareId" => out.share_id = jsonv.read_str(fv)?
-      "ProfileArn" => out.profile_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateProfileShare.
-pub enum CreateProfileShareErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateProfileShareErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_profile_share_error(resp: http.Response) -> CreateProfileShareErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.AccessDeniedException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.ConflictException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.InternalServerException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.ThrottlingException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateProfileShareErr.ValidationException(x)
-      Err(msg) => return CreateProfileShareErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateProfileShareErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a profile share.
-pub fn (c: Client) create_profile_share(input: CreateProfileShareInput) -> CreateProfileShareOutput ! CreateProfileShareErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_profile_share(c.params, input)) ?? e => return Err(CreateProfileShareErr.InvalidInput(e))
-  var req = serialize_create_profile_share(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateProfileShareErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateProfileShareErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_profile_share_error(resp))
-  }
-  deserialize_create_profile_share(resp) ?? e => Err(CreateProfileShareErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_review_template(base: EndpointParameters, input: CreateReviewTemplateInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateReviewTemplate.
-pub fn serialize_create_review_template(ep: rest.Endpoint, input: CreateReviewTemplateInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.template_name {
-    fs.push(("TemplateName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.lenses {
-    fs.push(("Lenses", json_of_review_template_lenses(x)))
-  }
-  if let Some(x) = input.notes {
-    fs.push(("Notes", json.Value.Str(x)))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("Tags", json_of_tag_map(x)))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/reviewTemplates"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_review_template(resp: http.Response) -> CreateReviewTemplateOutput ! Str {
-  var out = CreateReviewTemplateOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "TemplateArn" => out.template_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateReviewTemplate.
-pub enum CreateReviewTemplateErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateReviewTemplateErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_review_template_error(resp: http.Response) -> CreateReviewTemplateErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.AccessDeniedException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.ConflictException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.InternalServerException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.ThrottlingException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateReviewTemplateErr.ValidationException(x)
-      Err(msg) => return CreateReviewTemplateErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateReviewTemplateErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a review template. Disclaimer Do not include or gather personal
-/// identifiable information (PII) of end users or other identifiable
-/// individuals in or via your review templates. If your review template or
-/// those shared with you and used in your account do include or collect PII
-/// you are responsible for: ensuring that the included PII is processed in
-/// accordance with applicable law, providing adequate privacy notices, and
-/// obtaining necessary consents for processing such data.
-pub fn (c: Client) create_review_template(input: CreateReviewTemplateInput) -> CreateReviewTemplateOutput ! CreateReviewTemplateErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_review_template(c.params, input)) ?? e => return Err(CreateReviewTemplateErr.InvalidInput(e))
-  var req = serialize_create_review_template(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateReviewTemplateErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateReviewTemplateErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_review_template_error(resp))
-  }
-  deserialize_create_review_template(resp) ?? e => Err(CreateReviewTemplateErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_template_share(base: EndpointParameters, input: CreateTemplateShareInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateTemplateShare.
-pub fn serialize_create_template_share(ep: rest.Endpoint, input: CreateTemplateShareInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_template_arn = match input.template_arn {
-    Some(v) => v
-    None => return Err("input member TemplateArn is required")
-  }
-  if label_template_arn == "" {
-    return Err("input member TemplateArn must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.shared_with {
-    fs.push(("SharedWith", json.Value.Str(x)))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/templates/shares/${rest.escape(label_template_arn, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_template_share(resp: http.Response) -> CreateTemplateShareOutput ! Str {
-  var out = CreateTemplateShareOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "TemplateArn" => out.template_arn = jsonv.read_str(fv)?
-      "ShareId" => out.share_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateTemplateShare.
-pub enum CreateTemplateShareErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateTemplateShareErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_template_share_error(resp: http.Response) -> CreateTemplateShareErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.AccessDeniedException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.ConflictException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.InternalServerException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.ThrottlingException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateTemplateShareErr.ValidationException(x)
-      Err(msg) => return CreateTemplateShareErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateTemplateShareErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a review template share. The owner of a review template can share
-/// it with other Amazon Web Services accounts, users, an organization, and
-/// organizational units (OUs) in the same Amazon Web Services Region.
-/// Shared access to a review template is not removed until the review
-/// template share invitation is deleted. If you share a review template
-/// with an organization or OU, all accounts in the organization or OU are
-/// granted access to the review template. Disclaimer By sharing your review
-/// template with other Amazon Web Services accounts, you acknowledge that
-/// Amazon Web Services will make your review template available to those
-/// other accounts.
-pub fn (c: Client) create_template_share(input: CreateTemplateShareInput) -> CreateTemplateShareOutput ! CreateTemplateShareErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_template_share(c.params, input)) ?? e => return Err(CreateTemplateShareErr.InvalidInput(e))
-  var req = serialize_create_template_share(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateTemplateShareErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateTemplateShareErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_template_share_error(resp))
-  }
-  deserialize_create_template_share(resp) ?? e => Err(CreateTemplateShareErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_workload(base: EndpointParameters, input: CreateWorkloadInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateWorkload.
-pub fn serialize_create_workload(ep: rest.Endpoint, input: CreateWorkloadInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.workload_name {
-    fs.push(("WorkloadName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.environment {
-    fs.push(("Environment", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.account_ids {
-    fs.push(("AccountIds", json_of_workload_account_ids(x)))
-  }
-  if let Some(x) = input.aws_regions {
-    fs.push(("AwsRegions", json_of_workload_aws_regions(x)))
-  }
-  if let Some(x) = input.non_aws_regions {
-    fs.push(("NonAwsRegions", json_of_workload_non_aws_regions(x)))
-  }
-  if let Some(x) = input.pillar_priorities {
-    fs.push(("PillarPriorities", json_of_workload_pillar_priorities(x)))
-  }
-  if let Some(x) = input.architectural_design {
-    fs.push(("ArchitecturalDesign", json.Value.Str(x)))
-  }
-  if let Some(x) = input.review_owner {
-    fs.push(("ReviewOwner", json.Value.Str(x)))
-  }
-  if let Some(x) = input.industry_type {
-    fs.push(("IndustryType", json.Value.Str(x)))
-  }
-  if let Some(x) = input.industry {
-    fs.push(("Industry", json.Value.Str(x)))
-  }
-  if let Some(x) = input.lenses {
-    fs.push(("Lenses", json_of_workload_lenses(x)))
-  }
-  if let Some(x) = input.notes {
-    fs.push(("Notes", json.Value.Str(x)))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.tags {
-    fs.push(("Tags", json_of_tag_map(x)))
-  }
-  if let Some(x) = input.discovery_config {
-    fs.push(("DiscoveryConfig", json_of_workload_discovery_config(x)))
-  }
-  if let Some(x) = input.applications {
-    fs.push(("Applications", json_of_workload_applications(x)))
-  }
-  if let Some(x) = input.profile_arns {
-    fs.push(("ProfileArns", json_of_workload_profile_arns(x)))
-  }
-  if let Some(x) = input.review_template_arns {
-    fs.push(("ReviewTemplateArns", json_of_review_template_arns(x)))
-  }
-  if let Some(x) = input.jira_configuration {
-    fs.push(("JiraConfiguration", json_of_workload_jira_configuration_input(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/workloads"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_workload(resp: http.Response) -> CreateWorkloadOutput ! Str {
-  var out = CreateWorkloadOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "WorkloadId" => out.workload_id = jsonv.read_str(fv)?
-      "WorkloadArn" => out.workload_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateWorkload.
-pub enum CreateWorkloadErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateWorkloadErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_workload_error(resp: http.Response) -> CreateWorkloadErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.AccessDeniedException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.ConflictException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.InternalServerException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.ThrottlingException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateWorkloadErr.ValidationException(x)
-      Err(msg) => return CreateWorkloadErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateWorkloadErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a new workload. The owner of a workload can share the workload
-/// with other Amazon Web Services accounts, users, an organization, and
-/// organizational units (OUs) in the same Amazon Web Services Region. Only
-/// the owner of a workload can delete it. For more information, see
-/// Defining a Workload in the Well-Architected Tool User Guide . Either
-/// AwsRegions , NonAwsRegions , or both must be specified when creating a
-/// workload. You also must specify ReviewOwner , even though the parameter
-/// is listed as not being required in the following section. When creating
-/// a workload using a review template, you must have the following IAM
-/// permissions: wellarchitected:GetReviewTemplate
-/// wellarchitected:GetReviewTemplateAnswer
-/// wellarchitected:ListReviewTemplateAnswers
-/// wellarchitected:GetReviewTemplateLensReview
-pub fn (c: Client) create_workload(input: CreateWorkloadInput) -> CreateWorkloadOutput ! CreateWorkloadErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_workload(c.params, input)) ?? e => return Err(CreateWorkloadErr.InvalidInput(e))
-  var req = serialize_create_workload(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateWorkloadErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateWorkloadErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_workload_error(resp))
-  }
-  deserialize_create_workload(resp) ?? e => Err(CreateWorkloadErr.Deserialize(e))
-}
-
-pub fn endpoint_params_create_workload_share(base: EndpointParameters, input: CreateWorkloadShareInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of CreateWorkloadShare.
-pub fn serialize_create_workload_share(ep: rest.Endpoint, input: CreateWorkloadShareInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_workload_id = match input.workload_id {
-    Some(v) => v
-    None => return Err("input member WorkloadId is required")
-  }
-  if label_workload_id == "" {
-    return Err("input member WorkloadId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.shared_with {
-    fs.push(("SharedWith", json.Value.Str(x)))
-  }
-  if let Some(x) = input.permission_type {
-    fs.push(("PermissionType", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.client_request_token {
-    fs.push(("ClientRequestToken", json.Value.Str(x)))
-  } else if idempotency_token != "" {
-    fs.push(("ClientRequestToken", json.Value.Str(idempotency_token)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/workloads/${rest.escape(label_workload_id, false)}/shares"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_create_workload_share(resp: http.Response) -> CreateWorkloadShareOutput ! Str {
-  var out = CreateWorkloadShareOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "WorkloadId" => out.workload_id = jsonv.read_str(fv)?
-      "ShareId" => out.share_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of CreateWorkloadShare.
-pub enum CreateWorkloadShareErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: CreateWorkloadShareErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_create_workload_share_error(resp: http.Response) -> CreateWorkloadShareErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.AccessDeniedException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.ConflictException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.InternalServerException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.ResourceNotFoundException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.ServiceQuotaExceededException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.ThrottlingException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return CreateWorkloadShareErr.ValidationException(x)
-      Err(msg) => return CreateWorkloadShareErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  CreateWorkloadShareErr.Api(restjson.api_error(resp, body))
-}
-
-/// Create a workload share. The owner of a workload can share it with other
-/// Amazon Web Services accounts and users in the same Amazon Web Services
-/// Region. Shared access to a workload is not removed until the workload
-/// invitation is deleted. If you share a workload with an organization or
-/// OU, all accounts in the organization or OU are granted access to the
-/// workload. For more information, see Sharing a workload in the
-/// Well-Architected Tool User Guide .
-pub fn (c: Client) create_workload_share(input: CreateWorkloadShareInput) -> CreateWorkloadShareOutput ! CreateWorkloadShareErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_create_workload_share(c.params, input)) ?? e => return Err(CreateWorkloadShareErr.InvalidInput(e))
-  var req = serialize_create_workload_share(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateWorkloadShareErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(CreateWorkloadShareErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_create_workload_share_error(resp))
-  }
-  deserialize_create_workload_share(resp) ?? e => Err(CreateWorkloadShareErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_agent_context(base: EndpointParameters, input: DeleteAgentContextRequest) -> EndpointParameters {
-  let _ = input
-  var p = base
-  p.sub_service_type = "AGENT"
-  p
-}
-
-/// The HTTP request of DeleteAgentContext.
-pub fn serialize_delete_agent_context(ep: rest.Endpoint, input: DeleteAgentContextRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_profile_arn = match input.profile_arn {
-    Some(v) => v
-    None => return Err("input member profileArn is required")
-  }
-  if label_profile_arn == "" {
-    return Err("input member profileArn must not be empty")
-  }
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member id is required")
-  }
-  if label_id == "" {
-    return Err("input member id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/api/v1/agent-profiles/${rest.escape(label_profile_arn, false)}/contexts/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_agent_context(resp: http.Response) -> DeleteAgentContextResponse ! Str {
-  var out = DeleteAgentContextResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteAgentContext.
-pub enum DeleteAgentContextErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteAgentContextErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_agent_context_error(resp: http.Response) -> DeleteAgentContextErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return DeleteAgentContextErr.AccessDeniedException(x)
-      Err(msg) => return DeleteAgentContextErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return DeleteAgentContextErr.InternalServerException(x)
-      Err(msg) => return DeleteAgentContextErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteAgentContextErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteAgentContextErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return DeleteAgentContextErr.ThrottlingException(x)
-      Err(msg) => return DeleteAgentContextErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteAgentContextErr.ValidationException(x)
-      Err(msg) => return DeleteAgentContextErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteAgentContextErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes a context associated with a profile.
-pub fn (c: Client) delete_agent_context(input: DeleteAgentContextRequest) -> DeleteAgentContextResponse ! DeleteAgentContextErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_agent_context(c.params, input)) ?? e => return Err(DeleteAgentContextErr.InvalidInput(e))
-  var req = serialize_delete_agent_context(ep, input, "") ?? e => return Err(DeleteAgentContextErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteAgentContextErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_agent_context_error(resp))
-  }
-  deserialize_delete_agent_context(resp) ?? e => Err(DeleteAgentContextErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_agent_goal(base: EndpointParameters, input: DeleteAgentGoalRequest) -> EndpointParameters {
-  let _ = input
-  var p = base
-  p.sub_service_type = "AGENT"
-  p
-}
-
-/// The HTTP request of DeleteAgentGoal.
-pub fn serialize_delete_agent_goal(ep: rest.Endpoint, input: DeleteAgentGoalRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_profile_arn = match input.profile_arn {
-    Some(v) => v
-    None => return Err("input member profileArn is required")
-  }
-  if label_profile_arn == "" {
-    return Err("input member profileArn must not be empty")
-  }
-  let label_id = match input.id {
-    Some(v) => v
-    None => return Err("input member id is required")
-  }
-  if label_id == "" {
-    return Err("input member id must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/api/v1/agent-profiles/${rest.escape(label_profile_arn, false)}/goals/${rest.escape(label_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_agent_goal(resp: http.Response) -> DeleteAgentGoalResponse ! Str {
-  var out = DeleteAgentGoalResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteAgentGoal.
-pub enum DeleteAgentGoalErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteAgentGoalErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_agent_goal_error(resp: http.Response) -> DeleteAgentGoalErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return DeleteAgentGoalErr.AccessDeniedException(x)
-      Err(msg) => return DeleteAgentGoalErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return DeleteAgentGoalErr.InternalServerException(x)
-      Err(msg) => return DeleteAgentGoalErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteAgentGoalErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteAgentGoalErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return DeleteAgentGoalErr.ThrottlingException(x)
-      Err(msg) => return DeleteAgentGoalErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteAgentGoalErr.ValidationException(x)
-      Err(msg) => return DeleteAgentGoalErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteAgentGoalErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes an optimization goal from a profile.
-pub fn (c: Client) delete_agent_goal(input: DeleteAgentGoalRequest) -> DeleteAgentGoalResponse ! DeleteAgentGoalErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_agent_goal(c.params, input)) ?? e => return Err(DeleteAgentGoalErr.InvalidInput(e))
-  var req = serialize_delete_agent_goal(ep, input, "") ?? e => return Err(DeleteAgentGoalErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteAgentGoalErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_agent_goal_error(resp))
-  }
-  deserialize_delete_agent_goal(resp) ?? e => Err(DeleteAgentGoalErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_agent_profile(base: EndpointParameters, input: DeleteAgentProfileRequest) -> EndpointParameters {
-  let _ = input
-  var p = base
-  p.sub_service_type = "AGENT"
-  p
-}
-
-/// The HTTP request of DeleteAgentProfile.
-pub fn serialize_delete_agent_profile(ep: rest.Endpoint, input: DeleteAgentProfileRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_profile_arn = match input.profile_arn {
-    Some(v) => v
-    None => return Err("input member profileArn is required")
-  }
-  if label_profile_arn == "" {
-    return Err("input member profileArn must not be empty")
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/api/v1/agent-profiles/${rest.escape(label_profile_arn, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_agent_profile(resp: http.Response) -> DeleteAgentProfileResponse ! Str {
-  var out = DeleteAgentProfileResponse{}
-  Ok(out)
-}
-
-/// The errors of DeleteAgentProfile.
-pub enum DeleteAgentProfileErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteAgentProfileErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_agent_profile_error(resp: http.Response) -> DeleteAgentProfileErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return DeleteAgentProfileErr.AccessDeniedException(x)
-      Err(msg) => return DeleteAgentProfileErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteAgentProfileErr.ConflictException(x)
-      Err(msg) => return DeleteAgentProfileErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return DeleteAgentProfileErr.InternalServerException(x)
-      Err(msg) => return DeleteAgentProfileErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteAgentProfileErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteAgentProfileErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return DeleteAgentProfileErr.ThrottlingException(x)
-      Err(msg) => return DeleteAgentProfileErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteAgentProfileErr.ValidationException(x)
-      Err(msg) => return DeleteAgentProfileErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteAgentProfileErr.Api(restjson.api_error(resp, body))
-}
-
-/// Deletes an optimization profile and its associated configuration. This
-/// action cannot be undone.
-pub fn (c: Client) delete_agent_profile(input: DeleteAgentProfileRequest) -> DeleteAgentProfileResponse ! DeleteAgentProfileErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_agent_profile(c.params, input)) ?? e => return Err(DeleteAgentProfileErr.InvalidInput(e))
-  var req = serialize_delete_agent_profile(ep, input, "") ?? e => return Err(DeleteAgentProfileErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteAgentProfileErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_agent_profile_error(resp))
-  }
-  deserialize_delete_agent_profile(resp) ?? e => Err(DeleteAgentProfileErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_lens(base: EndpointParameters, input: DeleteLensInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteLens.
-pub fn serialize_delete_lens(ep: rest.Endpoint, input: DeleteLensInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_lens_alias = match input.lens_alias {
-    Some(v) => v
-    None => return Err("input member LensAlias is required")
-  }
-  if label_lens_alias == "" {
-    return Err("input member LensAlias must not be empty")
-  }
-  if let Some(v) = input.client_request_token {
-    qs.push(("ClientRequestToken", v))
-  } else if idempotency_token != "" {
-    qs.push(("ClientRequestToken", idempotency_token))
-  }
-  if let Some(v) = input.lens_status {
-    qs.push(("LensStatus", v.value()))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/lenses/${rest.escape(label_lens_alias, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_lens(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of DeleteLens.
-pub enum DeleteLensErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteLensErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_lens_error(resp: http.Response) -> DeleteLensErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return DeleteLensErr.AccessDeniedException(x)
-      Err(msg) => return DeleteLensErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteLensErr.ConflictException(x)
-      Err(msg) => return DeleteLensErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return DeleteLensErr.InternalServerException(x)
-      Err(msg) => return DeleteLensErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteLensErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteLensErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return DeleteLensErr.ThrottlingException(x)
-      Err(msg) => return DeleteLensErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteLensErr.ValidationException(x)
-      Err(msg) => return DeleteLensErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteLensErr.Api(restjson.api_error(resp, body))
-}
-
-/// Delete an existing lens. Only the owner of a lens can delete it. After
-/// the lens is deleted, Amazon Web Services accounts and users that you
-/// shared the lens with can continue to use it, but they will no longer be
-/// able to apply it to new workloads. Disclaimer By sharing your custom
-/// lenses with other Amazon Web Services accounts, you acknowledge that
-/// Amazon Web Services will make your custom lenses available to those
-/// other accounts. Those other accounts may continue to access and use your
-/// shared custom lenses even if you delete the custom lenses from your own
-/// Amazon Web Services account or terminate your Amazon Web Services
-/// account.
-pub fn (c: Client) delete_lens(input: DeleteLensInput) -> () ! DeleteLensErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_delete_lens(c.params, input)) ?? e => return Err(DeleteLensErr.InvalidInput(e))
-  var req = serialize_delete_lens(ep, input, rest.uuid(c.rand)) ?? e => return Err(DeleteLensErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DeleteLensErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_delete_lens_error(resp))
-  }
-  deserialize_delete_lens(resp) ?? e => Err(DeleteLensErr.Deserialize(e))
-}
-
-pub fn endpoint_params_delete_lens_share(base: EndpointParameters, input: DeleteLensShareInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeleteLensShare.
-pub fn serialize_delete_lens_share(ep: rest.Endpoint, input: DeleteLensShareInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_share_id = match input.share_id {
-    Some(v) => v
-    None => return Err("input member ShareId is required")
-  }
-  if label_share_id == "" {
-    return Err("input member ShareId must not be empty")
-  }
-  let label_lens_alias = match input.lens_alias {
-    Some(v) => v
-    None => return Err("input member LensAlias is required")
-  }
-  if label_lens_alias == "" {
-    return Err("input member LensAlias must not be empty")
-  }
-  if let Some(v) = input.client_request_token {
-    qs.push(("ClientRequestToken", v))
-  } else if idempotency_token != "" {
-    qs.push(("ClientRequestToken", idempotency_token))
-  }
-  var body = b""
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "DELETE",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/lenses/${rest.escape(label_lens_alias, false)}/shares/${rest.escape(label_share_id, false)}"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_lens_share(resp: http.Response) -> () ! Str {
-  let _ = resp
-  Ok(())
-}
-
-/// The errors of DeleteLensShare.
-pub enum DeleteLensShareErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeleteLensShareErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_delete_lens_share_error(resp: http.Response) -> DeleteLensShareErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return DeleteLensShareErr.AccessDeniedException(x)
-      Err(msg) => return DeleteLensShareErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return DeleteLensShareErr.ConflictException(x)
-      Err(msg) => return DeleteLensShareErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return DeleteLensShareErr.InternalServerException(x)
-      Err(msg) => return DeleteLensShareErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return DeleteLensShareErr.ResourceNotFoundException(x)
-      Err(msg) => return DeleteLensShareErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return DeleteLensShareErr.ThrottlingException(x)
-      Err(msg) => return DeleteLensShareErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return DeleteLensShareErr.ValidationException(x)
-      Err(msg) => return DeleteLensShareErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  DeleteLensShareErr.Api(restjson.api_error(resp, body))
 }

@@ -9,6 +9,155 @@ use github.com/xo-lang/aws/protocol/restxml
 use github.com/xo-lang/aws/protocol/xmlv
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_get_object_lock_configuration(base: EndpointParameters, input: GetObjectLockConfigurationRequest) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.bucket {
+    p.bucket = x
+  }
+  p
+}
+
+/// The HTTP request of GetObjectLockConfiguration.
+pub fn serialize_get_object_lock_configuration(ep: rest.Endpoint, input: GetObjectLockConfigurationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = [("object-lock", "")]
+  if input.bucket.is_none() {
+    return Err("input member Bucket is required")
+  }
+  if let Some(v) = input.expected_bucket_owner {
+    headers.push(("x-amz-expected-bucket-owner", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+    error_in_2xx: true,
+  })
+}
+
+pub fn deserialize_get_object_lock_configuration(resp: http.Response) -> GetObjectLockConfigurationOutput ! Str {
+  var out = GetObjectLockConfigurationOutput{}
+  if !resp.body.is_empty() {
+    out.object_lock_configuration = xml_read_object_lock_configuration(xmlv.parse_body(resp.body)?)?
+  }
+  Ok(out)
+}
+
+/// The errors of GetObjectLockConfiguration.
+pub enum GetObjectLockConfigurationErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetObjectLockConfigurationErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_object_lock_configuration_error(resp: http.Response) -> GetObjectLockConfigurationErr {
+  let body = restxml.error_element(resp.body) ?? xmlv.empty()
+  let _ = body
+  GetObjectLockConfigurationErr.Api(restxml.api_error(resp))
+}
+
+/// This operation is not supported for directory buckets. Gets the Object
+/// Lock configuration for a bucket. The rule specified in the Object Lock
+/// configuration will be applied by default to every new object placed in
+/// the specified bucket. For more information, see Locking Objects . The
+/// following action is related to GetObjectLockConfiguration :
+/// GetObjectAttributes You must URL encode any signed header values that
+/// contain spaces. For example, if your header value is my file.txt ,
+/// containing two spaces after my , you must URL encode this value to
+/// my%20%20file.txt .
+pub fn (c: Client) get_object_lock_configuration(input: GetObjectLockConfigurationRequest) -> GetObjectLockConfigurationOutput ! GetObjectLockConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, routed, extra) = c.route(endpoint_params_get_object_lock_configuration(c.params, input)) ?? e => return Err(GetObjectLockConfigurationErr.InvalidInput(e))
+  let signing = match c.express_session(routed) {
+    Ok(v) => v
+    Err(transport.PrecallErr.Send(e)) => return Err(GetObjectLockConfigurationErr.Send(e))
+    Err(transport.PrecallErr.Api(e)) => return Err(GetObjectLockConfigurationErr.Api(e))
+    Err(transport.PrecallErr.InvalidInput(m)) => return Err(GetObjectLockConfigurationErr.InvalidInput(m))
+    Err(transport.PrecallErr.Deserialize(m)) => return Err(GetObjectLockConfigurationErr.Deserialize(m))
+  }
+  var req = serialize_get_object_lock_configuration(ep, input, "") ?? e => return Err(GetObjectLockConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restxml.classify) ?? e => return Err(GetObjectLockConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_object_lock_configuration_error(resp))
+  }
+  deserialize_get_object_lock_configuration(resp) ?? e => Err(GetObjectLockConfigurationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_object_retention(base: EndpointParameters, input: GetObjectRetentionRequest) -> EndpointParameters {
+  var p = base
+  if let Some(x) = input.bucket {
+    p.bucket = x
+  }
+  p
+}
+
+/// The HTTP request of GetObjectRetention.
+pub fn serialize_get_object_retention(ep: rest.Endpoint, input: GetObjectRetentionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = [("retention", "")]
+  if input.bucket.is_none() {
+    return Err("input member Bucket is required")
+  }
+  let label_key = match input.key {
+    Some(v) => v
+    None => return Err("input member Key is required")
+  }
+  if label_key == "" {
+    return Err("input member Key must not be empty")
+  }
+  if let Some(v) = input.version_id {
+    qs.push(("versionId", v))
+  }
+  if let Some(v) = input.request_payer {
+    headers.push(("x-amz-request-payer", v.value()))
+  }
+  if let Some(v) = input.expected_bucket_owner {
+    headers.push(("x-amz-expected-bucket-owner", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/${rest.escape(label_key, true)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+    error_in_2xx: true,
+  })
+}
+
 pub fn deserialize_get_object_retention(resp: http.Response) -> GetObjectRetentionOutput ! Str {
   var out = GetObjectRetentionOutput{}
   if !resp.body.is_empty() {
@@ -2791,6 +2940,9 @@ pub fn deserialize_list_parts(resp: http.Response) -> ListPartsOutput ! Str {
   }
   if let Some(hv) = rest.first_header(resp, "x-amz-request-charged") {
     out.request_charged = RequestCharged.from(hv)
+  }
+  if let Some(hv) = rest.first_header(resp, "x-amz-version-id") {
+    out.version_id = hv
   }
   for c in xmlv.elements(body) {
     match c.name.local {
@@ -7550,17 +7702,17 @@ pub fn deserialize_restore_object_error(resp: http.Response) -> RestoreObjectErr
 /// restored, then Amazon S3 returns 202 Accepted in the response. If the
 /// object is previously restored, Amazon S3 returns 200 OK in the response.
 /// Special errors: Code: RestoreAlreadyInProgress Cause: Object restore is
-/// already in progress. HTTP Status Code: 409 Conflict SOAP Fault Code
-/// Prefix: Client Code: GlacierExpeditedRetrievalNotAvailable Cause:
-/// expedited retrievals are currently not available. Try again later.
-/// (Returned if there is insufficient capacity to process the Expedited
-/// request. This error applies only to Expedited retrievals and not to S3
-/// Standard or Bulk retrievals.) HTTP Status Code: 503 SOAP Fault Code
-/// Prefix: N/A The following operations are related to RestoreObject :
-/// PutBucketLifecycleConfiguration GetBucketNotificationConfiguration You
-/// must URL encode any signed header values that contain spaces. For
-/// example, if your header value is my file.txt , containing two spaces
-/// after my , you must URL encode this value to my%20%20file.txt .
+/// already in progress. HTTP Status Code: 409 Conflict Code:
+/// GlacierExpeditedRetrievalNotAvailable Cause: expedited retrievals are
+/// currently not available. Try again later. (Returned if there is
+/// insufficient capacity to process the Expedited request. This error
+/// applies only to Expedited retrievals and not to S3 Standard or Bulk
+/// retrievals.) HTTP Status Code: 503 The following operations are related
+/// to RestoreObject : PutBucketLifecycleConfiguration
+/// GetBucketNotificationConfiguration You must URL encode any signed header
+/// values that contain spaces. For example, if your header value is my
+/// file.txt , containing two spaces after my , you must URL encode this
+/// value to my%20%20file.txt .
 pub fn (c: Client) restore_object(given: RestoreObjectRequest) -> RestoreObjectOutput ! RestoreObjectErr uses (net.dial, clock, rand) {
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
@@ -8525,6 +8677,9 @@ pub fn deserialize_upload_part(resp: http.Response) -> UploadPartOutput ! Str {
   if let Some(hv) = rest.first_header(resp, "x-amz-request-charged") {
     out.request_charged = RequestCharged.from(hv)
   }
+  if let Some(hv) = rest.first_header(resp, "x-amz-version-id") {
+    out.version_id = hv
+  }
   Ok(out)
 }
 
@@ -8658,15 +8813,15 @@ pub fn deserialize_upload_part_error(resp: http.Response) -> UploadPartErr {
 /// keys (SSE-KMS) ( aws:kms ). Special errors Error Code: NoSuchUpload
 /// Description: The specified multipart upload does not exist. The upload
 /// ID might be invalid, or the multipart upload might have been aborted or
-/// completed. HTTP Status Code: 404 Not Found SOAP Fault Code Prefix:
-/// Client HTTP Host header syntax Directory buckets - The HTTP Host header
-/// syntax is Bucket-name .s3express- zone-id . region-code .amazonaws.com .
-/// The following operations are related to UploadPart :
-/// CreateMultipartUpload CompleteMultipartUpload AbortMultipartUpload
-/// ListParts ListMultipartUploads You must URL encode any signed header
-/// values that contain spaces. For example, if your header value is my
-/// file.txt , containing two spaces after my , you must URL encode this
-/// value to my%20%20file.txt .
+/// completed. HTTP Status Code: 404 Not Found HTTP Host header syntax
+/// Directory buckets - The HTTP Host header syntax is Bucket-name
+/// .s3express- zone-id . region-code .amazonaws.com . The following
+/// operations are related to UploadPart : CreateMultipartUpload
+/// CompleteMultipartUpload AbortMultipartUpload ListParts
+/// ListMultipartUploads You must URL encode any signed header values that
+/// contain spaces. For example, if your header value is my file.txt ,
+/// containing two spaces after my , you must URL encode this value to
+/// my%20%20file.txt .
 pub fn (c: Client) upload_part(given: UploadPartRequest) -> UploadPartOutput ! UploadPartErr uses (net.dial, clock, rand) {
   // CRC32 unless the call chose an algorithm or carries a checksum
   let input = if given.checksum_algorithm.is_none() && c.calculate_checksums && given.content_md5.is_none() && given.checksum_crc32.is_none() && given.checksum_crc32_c.is_none() && given.checksum_crc64_nvme.is_none() && given.checksum_sha1.is_none() && given.checksum_sha256.is_none() && given.checksum_sha512.is_none() && given.checksum_md5.is_none() && given.checksum_xxhash64.is_none() && given.checksum_xxhash3.is_none() && given.checksum_xxhash128.is_none() { given with {checksum_algorithm: ChecksumAlgorithm.Crc32} } else { given }
@@ -8822,6 +8977,9 @@ pub fn deserialize_upload_part_copy(resp: http.Response) -> UploadPartCopyOutput
   }
   if let Some(hv) = rest.first_header(resp, "x-amz-request-charged") {
     out.request_charged = RequestCharged.from(hv)
+  }
+  if let Some(hv) = rest.first_header(resp, "x-amz-version-id") {
+    out.version_id = hv
   }
   if !resp.body.is_empty() {
     out.copy_part_result = xml_read_copy_part_result(xmlv.parse_body(resp.body)?)?

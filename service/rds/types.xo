@@ -228,8 +228,9 @@ pub struct ApplyPendingMaintenanceActionMessage {
   pub resource_identifier: Str? = None
   /// The pending maintenance action to apply to this resource. Valid Values:
   /// ca-certificate-rotation db-upgrade hardware-maintenance os-upgrade
-  /// system-update For more information about these actions, see Maintenance
-  /// actions for Amazon Aurora or Maintenance actions for Amazon RDS .
+  /// serverless-platform-version-update system-update For more information
+  /// about these actions, see Maintenance actions for Amazon Aurora or
+  /// Maintenance actions for Amazon RDS .
   pub apply_action: Str? = None
   /// A value that specifies the type of opt-in request, or undoes an opt-in
   /// request. An opt-in request of type immediate can't be undone. Valid
@@ -632,6 +633,15 @@ pub struct ClusterPendingModifiedValues {
   /// only for non-Aurora Multi-AZ DB clusters.
   pub iops: Int? = None
   pub certificate_details: CertificateDetails? = None
+  /// Indicates whether the DB cluster will use VPC networking after a pending
+  /// networking change completes. For a pending move to a different DB subnet
+  /// group, the value is true . Valid for Cluster Type: Aurora DB clusters
+  /// only
+  pub vpc_networking_enabled: Bool? = None
+  /// Indicates whether the DB cluster will use an internet access gateway
+  /// after a pending networking change completes. Valid for Cluster Type:
+  /// Aurora PostgreSQL DB clusters only
+  pub internet_access_gateway_enabled: Bool? = None
 }
 
 pub enum ClusterScalabilityType: Str {
@@ -1361,12 +1371,16 @@ pub struct CreateDBClusterMessage {
   /// parameter group.
   pub db_cluster_parameter_group_name: Str? = None
   /// A list of EC2 VPC security groups to associate with this DB cluster.
-  /// Valid for Cluster Type: Aurora DB clusters and Multi-AZ DB clusters
+  /// Valid only for DB clusters inside a VPC. Don't specify it when you set
+  /// EnableVPCNetworking to false . Valid for Cluster Type: Aurora DB
+  /// clusters and Multi-AZ DB clusters
   pub vpc_security_group_ids: List[Str]? = None
   /// A DB subnet group to associate with this DB cluster. This setting is
-  /// required to create a Multi-AZ DB cluster. Valid for Cluster Type: Aurora
-  /// DB clusters and Multi-AZ DB clusters Constraints: Must match the name of
-  /// an existing DB subnet group. Example: mydbsubnetgroup
+  /// required to create a Multi-AZ DB cluster. Valid only for DB clusters
+  /// inside a VPC. Don't specify it when you set EnableVPCNetworking to false
+  /// . Valid for Cluster Type: Aurora DB clusters and Multi-AZ DB clusters
+  /// Constraints: Must match the name of an existing DB subnet group.
+  /// Example: mydbsubnetgroup
   pub db_subnet_group_name: Str? = None
   /// The database engine to use for this DB cluster. Valid for Cluster Type:
   /// Aurora DB clusters and Multi-AZ DB clusters Valid Values: aurora-mysql
@@ -1638,8 +1652,9 @@ pub struct CreateDBClusterMessage {
   /// the DBSubnetGroup specified for the DB cluster. A DBSubnetGroup can
   /// support only the IPv4 protocol or the IPv4 and the IPv6 protocols ( DUAL
   /// ). For more information, see Working with a DB instance in a VPC in the
-  /// Amazon Aurora User Guide. Valid for Cluster Type: Aurora DB clusters
-  /// only Valid Values: IPV4 | DUAL
+  /// Amazon Aurora User Guide. Don't specify it when you set
+  /// EnableVPCNetworking to false . Valid for Cluster Type: Aurora DB
+  /// clusters only Valid Values: IPV4 | DUAL
   pub network_type: Str? = None
   pub serverless_v2_scaling_configuration: ServerlessV2ScalingConfiguration? = None
   /// The interval, in seconds, between points when Enhanced Monitoring
@@ -1762,11 +1777,38 @@ pub struct CreateDBClusterMessage {
   /// clusters and Multi-AZ DB clusters This option is only valid for RDS for
   /// PostgreSQL and Aurora PostgreSQL engines.
   pub master_user_authentication_type: MasterUserAuthenticationType? = None
+  /// Specifies whether VPC networking is enabled for the DB cluster. Set to
+  /// false to create a DB cluster without VPC networking. A DB cluster
+  /// without VPC networking needs an internet access gateway and IAM database
+  /// authentication. Set EnableInternetAccessGateway and
+  /// EnableIAMDatabaseAuthentication to true , and set
+  /// MasterUserAuthenticationType to iam-db-auth . Default: true . With
+  /// WithExpressConfiguration , the default is false . Valid for Cluster
+  /// Type: Aurora PostgreSQL DB clusters only
+  pub enable_vpc_networking: Bool? = None
   /// Specifies to create an Aurora DB Cluster with express configuration in
   /// seconds. Express configuration provides a cluster with a writer instance
   /// and feature specific values set to all other input parameters of this
-  /// API. Valid for Cluster Type: Aurora DB clusters
+  /// API. By default, a DB cluster with express configuration doesn't use VPC
+  /// networking. You connect to it over the internet through an internet
+  /// access gateway. To create the DB cluster in a VPC instead, set
+  /// EnableVPCNetworking to true and EnableInternetAccessGateway to false .
+  /// You can also specify DBSubnetGroupName , VpcSecurityGroupIds , and
+  /// NetworkType . If you don't specify DBSubnetGroupName , the DB cluster
+  /// uses the default DB subnet group for your Amazon Web Services account,
+  /// in your default VPC. A DB cluster with express configuration in a VPC
+  /// takes longer to become available than one without VPC networking. Valid
+  /// for Cluster Type: Aurora DB clusters
   pub with_express_configuration: Bool? = None
+  /// Specifies whether the DB cluster uses an internet access gateway. With
+  /// an internet access gateway, you connect to the DB cluster over the
+  /// internet without a VPC. Set to true only when you set
+  /// EnableVPCNetworking to false . A DB cluster can't use VPC networking and
+  /// an internet access gateway at the same time. Default: false . With
+  /// WithExpressConfiguration , the default is true . To create a DB cluster
+  /// with express configuration in a VPC, set this parameter to false . Valid
+  /// for Cluster Type: Aurora PostgreSQL DB clusters only
+  pub enable_internet_access_gateway: Bool? = None
   /// A list of Amazon Web Services Identity and Access Management (IAM) roles
   /// to associate with the DB cluster. Each role grants the DB cluster
   /// permission to access other Amazon Web Services on your behalf. For each
@@ -3811,13 +3853,13 @@ pub struct DBCluster {
   /// The lifecycle type for the DB cluster. For more information, see
   /// CreateDBCluster.
   pub engine_lifecycle_support: Str? = None
-  /// Indicates whether the DB cluster uses VPC-based networking. This setting
-  /// is applicable only for Aurora PostgreSQL clusters created through
-  /// express configuration.
+  /// Indicates whether the DB cluster uses VPC-based networking. The value is
+  /// false only for an Aurora PostgreSQL DB cluster without VPC networking.
+  /// Valid for Cluster Type: Aurora DB clusters and Multi-AZ DB clusters
   pub vpc_networking_enabled: Bool? = None
   /// Indicates whether the DB cluster has internet-based connectivity enabled
-  /// through an internet access gateway. This setting is applicable only for
-  /// Aurora PostgreSQL clusters created through express configuration.
+  /// through an internet access gateway. Valid for Cluster Type: Aurora
+  /// PostgreSQL DB clusters only
   pub internet_access_gateway_enabled: Bool? = None
 }
 
@@ -4530,6 +4572,13 @@ pub struct DBInstance {
   /// The connection endpoint for the DB instance. The endpoint might not be
   /// shown for instances with the status of creating .
   pub endpoint: Endpoint? = None
+  /// Specifies the connection endpoint for the DB instance that currently has
+  /// the primary role. This endpoint points to the new primary DB instance
+  /// after a switchover, so you don't have to connect to a different DNS
+  /// name. A read replica reports the same primary endpoint as the DB
+  /// instance it replicates from. When you promote a read replica, it reports
+  /// its own primary endpoint.
+  pub primary_endpoint: PrimaryEndpoint? = None
   /// The amount of storage in gibibytes (GiB) allocated for the DB instance.
   pub allocated_storage: Int? = None
   /// The date and time when the DB instance was created.
@@ -4858,6 +4907,10 @@ pub struct DBInstance {
   /// instance. Amazon RDS doesn't return this value if the DB instance
   /// doesn't use a DB capacity reservation.
   pub db_capacity_reservation_identifier: Str? = None
+  /// Indicates whether the DB instance uses VPC networking. For a DB instance
+  /// in an Aurora PostgreSQL DB cluster without VPC networking, the value is
+  /// false .
+  pub vpc_networking_enabled: Bool? = None
 }
 
 /// The user already has a DB instance with the given identifier.
@@ -8559,100 +8612,4 @@ pub enum LifecycleSupportName: Str {
   OpenSourceRdsStandardSupport = "open-source-rds-standard-support"
   OpenSourceRdsExtendedSupport = "open-source-rds-extended-support"
   Unknown(value: Str)
-}
-
-/// Contains details for Aurora Limitless Database.
-pub struct LimitlessDatabase {
-  /// The status of Aurora Limitless Database.
-  pub status: LimitlessDatabaseStatus? = None
-  /// The minimum required capacity for Aurora Limitless Database in Aurora
-  /// capacity units (ACUs).
-  pub min_required_acu: Float? = None
-}
-
-pub enum LimitlessDatabaseStatus: Str {
-  Active = "active"
-  NotInUse = "not-in-use"
-  Enabled = "enabled"
-  Disabled = "disabled"
-  Enabling = "enabling"
-  Disabling = "disabling"
-  ModifyingMaxCapacity = "modifying-max-capacity"
-  Error = "error"
-  Unknown(value: Str)
-}
-
-pub struct ListTagsForResourceMessage {
-  /// The Amazon RDS resource with tags to be listed. This value is an Amazon
-  /// Resource Name (ARN). For information about creating an ARN, see
-  /// Constructing an ARN for Amazon RDS in the Amazon RDS User Guide .
-  pub resource_name: Str? = None
-  /// This parameter isn't currently supported.
-  pub filters: List[Filter]? = None
-}
-
-pub enum LocalWriteForwardingStatus: Str {
-  Enabled = "enabled"
-  Disabled = "disabled"
-  Enabling = "enabling"
-  Disabling = "disabling"
-  Requested = "requested"
-  Unknown(value: Str)
-}
-
-pub enum MasterUserAuthenticationType: Str {
-  Password = "password"
-  IamDbAuth = "iam-db-auth"
-  Unknown(value: Str)
-}
-
-/// Contains the secret managed by RDS in Amazon Web Services Secrets
-/// Manager for the master user password. For more information, see Password
-/// management with Amazon Web Services Secrets Manager in the Amazon RDS
-/// User Guide and Password management with Amazon Web Services Secrets
-/// Manager in the Amazon Aurora User Guide.
-pub struct MasterUserSecret {
-  /// The Amazon Resource Name (ARN) of the secret.
-  pub secret_arn: Str? = None
-  /// The status of the secret. The possible status values include the
-  /// following: creating - The secret is being created. active - The secret
-  /// is available for normal use and rotation. rotating - The secret is being
-  /// rotated. impaired - The secret can be used to access database
-  /// credentials, but it can't be rotated. A secret might have this status
-  /// if, for example, permissions are changed so that RDS can no longer
-  /// access either the secret or the KMS key for the secret. When a secret
-  /// has this status, you can correct the condition that caused the status.
-  /// Alternatively, modify the DB instance to turn off automatic management
-  /// of database credentials, and then modify the DB instance again to turn
-  /// on automatic management of database credentials.
-  pub secret_status: Str? = None
-  /// The Amazon Web Services KMS key identifier that is used to encrypt the
-  /// secret.
-  pub kms_key_id: Str? = None
-}
-
-/// The maximum number of DB shard groups for your Amazon Web Services
-/// account in the specified Amazon Web Services Region has been reached.
-pub struct MaxDBShardGroupLimitReached {
-  pub message: Str? = None
-}
-
-/// The representation of a metric.
-pub struct Metric {
-  /// The name of a metric.
-  pub name: Str? = None
-  /// A list of metric references (thresholds).
-  pub references: List[MetricReference]? = None
-  /// The details of different statistics for a metric. The description might
-  /// contain markdown.
-  pub statistics_details: Str? = None
-  /// The query to retrieve metric data points.
-  pub metric_query: MetricQuery? = None
-}
-
-/// The query to retrieve metric data points.
-pub struct MetricQuery {
-  /// The Performance Insights query that you can use to retrieve Performance
-  /// Insights metric data points.
-  pub performance_insights_metric_query: PerformanceInsightsMetricQuery? = None
 }

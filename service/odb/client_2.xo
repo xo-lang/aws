@@ -8,6 +8,679 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+fn json_of_validation_exception_field(v: ValidationExceptionField) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.name {
+    fs.push(("name", json.Value.Str(x)))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_validation_exception_field(v: json.Value) -> ValidationExceptionField ! Str {
+  var out = ValidationExceptionField{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "name" => out.name = jsonv.read_str(fv)?
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_validation_exception_field_list(v: List[ValidationExceptionField]) -> json.Value {
+  json.Value.List(v.map(fn(x: ValidationExceptionField) -> json.Value { json_of_validation_exception_field(x) }))
+}
+
+fn from_json_validation_exception_field_list(v: json.Value) -> List[ValidationExceptionField] ! Str {
+  var out: List[ValidationExceptionField] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_validation_exception_field(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_wallet_password_source_configuration(v: WalletPasswordSourceConfiguration) -> json.Value {
+  match v {
+    CustomerManagedAwsSecret(x) => json.Value.Object([("customerManagedAwsSecret", json_of_customer_managed_aws_secret_configuration(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_wallet_password_source_configuration(v: json.Value) -> WalletPasswordSourceConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "customerManagedAwsSecret" => Ok(WalletPasswordSourceConfiguration.CustomerManagedAwsSecret(from_json_customer_managed_aws_secret_configuration(fv)?))
+      _ => Ok(WalletPasswordSourceConfiguration.Unknown(k))
+    }
+  }
+  Err("WalletPasswordSourceConfiguration: no member set")
+}
+
+fn json_of_wallet_password_source_configuration_input(v: WalletPasswordSourceConfigurationInput) -> json.Value {
+  match v {
+    CustomerManagedAwsSecret(x) => json.Value.Object([("customerManagedAwsSecret", json_of_customer_managed_aws_secret_configuration_input(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_wallet_password_source_configuration_input(v: json.Value) -> WalletPasswordSourceConfigurationInput ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "customerManagedAwsSecret" => Ok(WalletPasswordSourceConfigurationInput.CustomerManagedAwsSecret(from_json_customer_managed_aws_secret_configuration_input(fv)?))
+      _ => Ok(WalletPasswordSourceConfigurationInput.Unknown(k))
+    }
+  }
+  Err("WalletPasswordSourceConfigurationInput: no member set")
+}
+
+fn json_of_wallet_password_source_summary(v: WalletPasswordSourceSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.password_source {
+    fs.push(("passwordSource", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.password_source_configuration {
+    fs.push(("passwordSourceConfiguration", json_of_wallet_password_source_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_wallet_password_source_summary(v: json.Value) -> WalletPasswordSourceSummary ! Str {
+  var out = WalletPasswordSourceSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "passwordSource" => out.password_source = WalletPasswordSource.from(jsonv.read_str(fv)?)
+      "passwordSourceConfiguration" => out.password_source_configuration = from_json_wallet_password_source_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_weeks_of_month(v: List[Int]) -> json.Value {
+  json.Value.List(v.map(fn(x: Int) -> json.Value { json.Value.Int(x) }))
+}
+
+fn from_json_weeks_of_month(v: json.Value) -> List[Int] ! Str {
+  var out: List[Int] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_int(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_zero_etl_access(v: ZeroEtlAccess) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.cidr {
+    fs.push(("cidr", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_zero_etl_access(v: json.Value) -> ZeroEtlAccess ! Str {
+  var out = ZeroEtlAccess{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "status" => out.status = ManagedResourceStatus.from(jsonv.read_str(fv)?)
+      "cidr" => out.cidr = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_access_denied_exception(resp: http.Response, body: json.Value) -> AccessDeniedException ! Str {
+  let _ = (resp, body)
+  var out = AccessDeniedException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_conflict_exception(resp: http.Response, body: json.Value) -> ConflictException ! Str {
+  let _ = (resp, body)
+  var out = ConflictException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_internal_server_exception(resp: http.Response, body: json.Value) -> InternalServerException ! Str {
+  let _ = (resp, body)
+  var out = InternalServerException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "retryAfterSeconds" => out.retry_after_seconds = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_resource_not_found_exception(resp: http.Response, body: json.Value) -> ResourceNotFoundException ! Str {
+  let _ = (resp, body)
+  var out = ResourceNotFoundException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_service_quota_exceeded_exception(resp: http.Response, body: json.Value) -> ServiceQuotaExceededException ! Str {
+  let _ = (resp, body)
+  var out = ServiceQuotaExceededException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "resourceId" => out.resource_id = jsonv.read_str(fv)?
+      "resourceType" => out.resource_type = jsonv.read_str(fv)?
+      "quotaCode" => out.quota_code = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_throttling_exception(resp: http.Response, body: json.Value) -> ThrottlingException ! Str {
+  let _ = (resp, body)
+  var out = ThrottlingException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "retryAfterSeconds" => out.retry_after_seconds = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn read_error_validation_exception(resp: http.Response, body: json.Value) -> ValidationException ! Str {
+  let _ = (resp, body)
+  var out = ValidationException{}
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "message" => out.message = jsonv.read_str(fv)?
+      "reason" => out.reason = ValidationExceptionReason.from(jsonv.read_str(fv)?)
+      "fieldList" => out.field_list = from_json_validation_exception_field_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+pub fn endpoint_params_accept_marketplace_registration(base: EndpointParameters, input: AcceptMarketplaceRegistrationInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of AcceptMarketplaceRegistration.
+pub fn serialize_accept_marketplace_registration(ep: rest.Endpoint, input: AcceptMarketplaceRegistrationInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.marketplace_registration_token {
+    fs.push(("marketplaceRegistrationToken", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.AcceptMarketplaceRegistration"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_accept_marketplace_registration(resp: http.Response) -> AcceptMarketplaceRegistrationOutput ! Str {
+  var out = AcceptMarketplaceRegistrationOutput{}
+  Ok(out)
+}
+
+/// The errors of AcceptMarketplaceRegistration.
+pub enum AcceptMarketplaceRegistrationErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: AcceptMarketplaceRegistrationErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_accept_marketplace_registration_error(resp: http.Response) -> AcceptMarketplaceRegistrationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return AcceptMarketplaceRegistrationErr.AccessDeniedException(x)
+      Err(msg) => return AcceptMarketplaceRegistrationErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return AcceptMarketplaceRegistrationErr.ConflictException(x)
+      Err(msg) => return AcceptMarketplaceRegistrationErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return AcceptMarketplaceRegistrationErr.InternalServerException(x)
+      Err(msg) => return AcceptMarketplaceRegistrationErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return AcceptMarketplaceRegistrationErr.ThrottlingException(x)
+      Err(msg) => return AcceptMarketplaceRegistrationErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return AcceptMarketplaceRegistrationErr.ValidationException(x)
+      Err(msg) => return AcceptMarketplaceRegistrationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  AcceptMarketplaceRegistrationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Registers the Amazon Web Services Marketplace token for your Amazon Web
+/// Services account to activate your Oracle Database@Amazon Web Services
+/// subscription.
+pub fn (c: Client) accept_marketplace_registration(input: AcceptMarketplaceRegistrationInput) -> AcceptMarketplaceRegistrationOutput ! AcceptMarketplaceRegistrationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_accept_marketplace_registration(c.params, input)) ?? e => return Err(AcceptMarketplaceRegistrationErr.InvalidInput(e))
+  var req = serialize_accept_marketplace_registration(ep, input, "") ?? e => return Err(AcceptMarketplaceRegistrationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(AcceptMarketplaceRegistrationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_accept_marketplace_registration_error(resp))
+  }
+  deserialize_accept_marketplace_registration(resp) ?? e => Err(AcceptMarketplaceRegistrationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_associate_iam_role_to_resource(base: EndpointParameters, input: AssociateIamRoleToResourceInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of AssociateIamRoleToResource.
+pub fn serialize_associate_iam_role_to_resource(ep: rest.Endpoint, input: AssociateIamRoleToResourceInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.iam_role_arn {
+    fs.push(("iamRoleArn", json.Value.Str(x)))
+  }
+  if let Some(x) = input.aws_integration {
+    fs.push(("awsIntegration", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.resource_arn {
+    fs.push(("resourceArn", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.AssociateIamRoleToResource"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_associate_iam_role_to_resource(resp: http.Response) -> AssociateIamRoleToResourceOutput ! Str {
+  var out = AssociateIamRoleToResourceOutput{}
+  Ok(out)
+}
+
+/// The errors of AssociateIamRoleToResource.
+pub enum AssociateIamRoleToResourceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: AssociateIamRoleToResourceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_associate_iam_role_to_resource_error(resp: http.Response) -> AssociateIamRoleToResourceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return AssociateIamRoleToResourceErr.AccessDeniedException(x)
+      Err(msg) => return AssociateIamRoleToResourceErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return AssociateIamRoleToResourceErr.ConflictException(x)
+      Err(msg) => return AssociateIamRoleToResourceErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return AssociateIamRoleToResourceErr.InternalServerException(x)
+      Err(msg) => return AssociateIamRoleToResourceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return AssociateIamRoleToResourceErr.ResourceNotFoundException(x)
+      Err(msg) => return AssociateIamRoleToResourceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return AssociateIamRoleToResourceErr.ThrottlingException(x)
+      Err(msg) => return AssociateIamRoleToResourceErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return AssociateIamRoleToResourceErr.ValidationException(x)
+      Err(msg) => return AssociateIamRoleToResourceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  AssociateIamRoleToResourceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Associates an Amazon Web Services Identity and Access Management (IAM)
+/// service role with a specified resource to enable Amazon Web Services
+/// service integration.
+pub fn (c: Client) associate_iam_role_to_resource(input: AssociateIamRoleToResourceInput) -> AssociateIamRoleToResourceOutput ! AssociateIamRoleToResourceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_associate_iam_role_to_resource(c.params, input)) ?? e => return Err(AssociateIamRoleToResourceErr.InvalidInput(e))
+  var req = serialize_associate_iam_role_to_resource(ep, input, "") ?? e => return Err(AssociateIamRoleToResourceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(AssociateIamRoleToResourceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_associate_iam_role_to_resource_error(resp))
+  }
+  deserialize_associate_iam_role_to_resource(resp) ?? e => Err(AssociateIamRoleToResourceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_associate_virtual_machines_to_cloud_vm_cluster(base: EndpointParameters, input: AssociateVirtualMachinesToCloudVmClusterInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of AssociateVirtualMachinesToCloudVmCluster.
+pub fn serialize_associate_virtual_machines_to_cloud_vm_cluster(ep: rest.Endpoint, input: AssociateVirtualMachinesToCloudVmClusterInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.cloud_vm_cluster_id {
+    fs.push(("cloudVmClusterId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.db_servers {
+    fs.push(("dbServers", json_of_string_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.AssociateVirtualMachinesToCloudVmCluster"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_associate_virtual_machines_to_cloud_vm_cluster(resp: http.Response) -> AssociateVirtualMachinesToCloudVmClusterOutput ! Str {
+  var out = AssociateVirtualMachinesToCloudVmClusterOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
+      "cloudVmClusterId" => out.cloud_vm_cluster_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of AssociateVirtualMachinesToCloudVmCluster.
+pub enum AssociateVirtualMachinesToCloudVmClusterErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: AssociateVirtualMachinesToCloudVmClusterErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_associate_virtual_machines_to_cloud_vm_cluster_error(resp: http.Response) -> AssociateVirtualMachinesToCloudVmClusterErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return AssociateVirtualMachinesToCloudVmClusterErr.AccessDeniedException(x)
+      Err(msg) => return AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return AssociateVirtualMachinesToCloudVmClusterErr.ConflictException(x)
+      Err(msg) => return AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return AssociateVirtualMachinesToCloudVmClusterErr.InternalServerException(x)
+      Err(msg) => return AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return AssociateVirtualMachinesToCloudVmClusterErr.ResourceNotFoundException(x)
+      Err(msg) => return AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return AssociateVirtualMachinesToCloudVmClusterErr.ThrottlingException(x)
+      Err(msg) => return AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return AssociateVirtualMachinesToCloudVmClusterErr.ValidationException(x)
+      Err(msg) => return AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  AssociateVirtualMachinesToCloudVmClusterErr.Api(restjson.api_error(resp, body))
+}
+
+/// Adds virtual machines to the specified VM cluster.
+pub fn (c: Client) associate_virtual_machines_to_cloud_vm_cluster(input: AssociateVirtualMachinesToCloudVmClusterInput) -> AssociateVirtualMachinesToCloudVmClusterOutput ! AssociateVirtualMachinesToCloudVmClusterErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_associate_virtual_machines_to_cloud_vm_cluster(c.params, input)) ?? e => return Err(AssociateVirtualMachinesToCloudVmClusterErr.InvalidInput(e))
+  var req = serialize_associate_virtual_machines_to_cloud_vm_cluster(ep, input, "") ?? e => return Err(AssociateVirtualMachinesToCloudVmClusterErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(AssociateVirtualMachinesToCloudVmClusterErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_associate_virtual_machines_to_cloud_vm_cluster_error(resp))
+  }
+  deserialize_associate_virtual_machines_to_cloud_vm_cluster(resp) ?? e => Err(AssociateVirtualMachinesToCloudVmClusterErr.Deserialize(e))
+}
+
+pub fn endpoint_params_associate_virtual_machines_to_exadb_vm_cluster(base: EndpointParameters, input: AssociateVirtualMachinesToExadbVmClusterInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of AssociateVirtualMachinesToExadbVmCluster.
+pub fn serialize_associate_virtual_machines_to_exadb_vm_cluster(ep: rest.Endpoint, input: AssociateVirtualMachinesToExadbVmClusterInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.exadb_vm_cluster_id {
+    fs.push(("exadbVmClusterId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.desired_node_count {
+    fs.push(("desiredNodeCount", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.AssociateVirtualMachinesToExadbVmCluster"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
 pub fn deserialize_associate_virtual_machines_to_exadb_vm_cluster(resp: http.Response) -> AssociateVirtualMachinesToExadbVmClusterOutput ! Str {
   var out = AssociateVirtualMachinesToExadbVmClusterOutput{}
   let body = jsonv.parse_body(resp.body)?
@@ -3082,6 +3755,139 @@ pub fn (c: Client) disassociate_iam_role_from_resource(input: DisassociateIamRol
   deserialize_disassociate_iam_role_from_resource(resp) ?? e => Err(DisassociateIamRoleFromResourceErr.Deserialize(e))
 }
 
+pub fn endpoint_params_disassociate_virtual_machines_from_cloud_vm_cluster(base: EndpointParameters, input: DisassociateVirtualMachinesFromCloudVmClusterInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of DisassociateVirtualMachinesFromCloudVmCluster.
+pub fn serialize_disassociate_virtual_machines_from_cloud_vm_cluster(ep: rest.Endpoint, input: DisassociateVirtualMachinesFromCloudVmClusterInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.cloud_vm_cluster_id {
+    fs.push(("cloudVmClusterId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.db_servers {
+    fs.push(("dbServers", json_of_string_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.DisassociateVirtualMachinesFromCloudVmCluster"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_disassociate_virtual_machines_from_cloud_vm_cluster(resp: http.Response) -> DisassociateVirtualMachinesFromCloudVmClusterOutput ! Str {
+  var out = DisassociateVirtualMachinesFromCloudVmClusterOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
+      "cloudVmClusterId" => out.cloud_vm_cluster_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of DisassociateVirtualMachinesFromCloudVmCluster.
+pub enum DisassociateVirtualMachinesFromCloudVmClusterErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: DisassociateVirtualMachinesFromCloudVmClusterErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_disassociate_virtual_machines_from_cloud_vm_cluster_error(resp: http.Response) -> DisassociateVirtualMachinesFromCloudVmClusterErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return DisassociateVirtualMachinesFromCloudVmClusterErr.AccessDeniedException(x)
+      Err(msg) => return DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return DisassociateVirtualMachinesFromCloudVmClusterErr.ConflictException(x)
+      Err(msg) => return DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return DisassociateVirtualMachinesFromCloudVmClusterErr.InternalServerException(x)
+      Err(msg) => return DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return DisassociateVirtualMachinesFromCloudVmClusterErr.ResourceNotFoundException(x)
+      Err(msg) => return DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return DisassociateVirtualMachinesFromCloudVmClusterErr.ThrottlingException(x)
+      Err(msg) => return DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return DisassociateVirtualMachinesFromCloudVmClusterErr.ValidationException(x)
+      Err(msg) => return DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  DisassociateVirtualMachinesFromCloudVmClusterErr.Api(restjson.api_error(resp, body))
+}
+
+/// Removes virtual machines from the specified VM cluster.
+pub fn (c: Client) disassociate_virtual_machines_from_cloud_vm_cluster(input: DisassociateVirtualMachinesFromCloudVmClusterInput) -> DisassociateVirtualMachinesFromCloudVmClusterOutput ! DisassociateVirtualMachinesFromCloudVmClusterErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_disassociate_virtual_machines_from_cloud_vm_cluster(c.params, input)) ?? e => return Err(DisassociateVirtualMachinesFromCloudVmClusterErr.InvalidInput(e))
+  var req = serialize_disassociate_virtual_machines_from_cloud_vm_cluster(ep, input, "") ?? e => return Err(DisassociateVirtualMachinesFromCloudVmClusterErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(DisassociateVirtualMachinesFromCloudVmClusterErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_disassociate_virtual_machines_from_cloud_vm_cluster_error(resp))
+  }
+  deserialize_disassociate_virtual_machines_from_cloud_vm_cluster(resp) ?? e => Err(DisassociateVirtualMachinesFromCloudVmClusterErr.Deserialize(e))
+}
+
 pub fn endpoint_params_disassociate_virtual_machines_from_exadb_vm_cluster(base: EndpointParameters, input: DisassociateVirtualMachinesFromExadbVmClusterInput) -> EndpointParameters {
   let _ = input
   base
@@ -5672,6 +6478,134 @@ pub fn (c: Client) list_autonomous_database_peers(input: ListAutonomousDatabaseP
     return Err(deserialize_list_autonomous_database_peers_error(resp))
   }
   deserialize_list_autonomous_database_peers(resp) ?? e => Err(ListAutonomousDatabasePeersErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_autonomous_database_refreshable_clones(base: EndpointParameters, input: ListAutonomousDatabaseRefreshableClonesInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListAutonomousDatabaseRefreshableClones.
+pub fn serialize_list_autonomous_database_refreshable_clones(ep: rest.Endpoint, input: ListAutonomousDatabaseRefreshableClonesInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.autonomous_database_id {
+    fs.push(("autonomousDatabaseId", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.ListAutonomousDatabaseRefreshableClones"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_autonomous_database_refreshable_clones(resp: http.Response) -> ListAutonomousDatabaseRefreshableClonesOutput ! Str {
+  var out = ListAutonomousDatabaseRefreshableClonesOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      "autonomousDatabaseRefreshableClones" => out.autonomous_database_refreshable_clones = from_json_autonomous_database_refreshable_clone_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListAutonomousDatabaseRefreshableClones.
+pub enum ListAutonomousDatabaseRefreshableClonesErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListAutonomousDatabaseRefreshableClonesErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_autonomous_database_refreshable_clones_error(resp: http.Response) -> ListAutonomousDatabaseRefreshableClonesErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListAutonomousDatabaseRefreshableClonesErr.AccessDeniedException(x)
+      Err(msg) => return ListAutonomousDatabaseRefreshableClonesErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListAutonomousDatabaseRefreshableClonesErr.InternalServerException(x)
+      Err(msg) => return ListAutonomousDatabaseRefreshableClonesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListAutonomousDatabaseRefreshableClonesErr.ResourceNotFoundException(x)
+      Err(msg) => return ListAutonomousDatabaseRefreshableClonesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListAutonomousDatabaseRefreshableClonesErr.ThrottlingException(x)
+      Err(msg) => return ListAutonomousDatabaseRefreshableClonesErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListAutonomousDatabaseRefreshableClonesErr.ValidationException(x)
+      Err(msg) => return ListAutonomousDatabaseRefreshableClonesErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListAutonomousDatabaseRefreshableClonesErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the refreshable clones of the specified Autonomous Database.
+pub fn (c: Client) list_autonomous_database_refreshable_clones(input: ListAutonomousDatabaseRefreshableClonesInput) -> ListAutonomousDatabaseRefreshableClonesOutput ! ListAutonomousDatabaseRefreshableClonesErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_autonomous_database_refreshable_clones(c.params, input)) ?? e => return Err(ListAutonomousDatabaseRefreshableClonesErr.InvalidInput(e))
+  var req = serialize_list_autonomous_database_refreshable_clones(ep, input, "") ?? e => return Err(ListAutonomousDatabaseRefreshableClonesErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListAutonomousDatabaseRefreshableClonesErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_autonomous_database_refreshable_clones_error(resp))
+  }
+  deserialize_list_autonomous_database_refreshable_clones(resp) ?? e => Err(ListAutonomousDatabaseRefreshableClonesErr.Deserialize(e))
 }
 
 pub fn endpoint_params_list_autonomous_database_versions(base: EndpointParameters, input: ListAutonomousDatabaseVersionsInput) -> EndpointParameters {
@@ -8586,6 +9520,143 @@ pub fn (c: Client) start_autonomous_database(input: StartAutonomousDatabaseInput
   deserialize_start_autonomous_database(resp) ?? e => Err(StartAutonomousDatabaseErr.Deserialize(e))
 }
 
+pub fn endpoint_params_start_autonomous_database_refresh(base: EndpointParameters, input: StartAutonomousDatabaseRefreshInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartAutonomousDatabaseRefresh.
+pub fn serialize_start_autonomous_database_refresh(ep: rest.Endpoint, input: StartAutonomousDatabaseRefreshInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.autonomous_database_id {
+    fs.push(("autonomousDatabaseId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.time_of_refresh_cutoff {
+    fs.push(("timeOfRefreshCutoff", jsonv.time(x, "date-time")))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.0"))
+  headers.push(("X-Amz-Target", "Odb.StartAutonomousDatabaseRefresh"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_autonomous_database_refresh(resp: http.Response) -> StartAutonomousDatabaseRefreshOutput ! Str {
+  var out = StartAutonomousDatabaseRefreshOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "autonomousDatabaseId" => out.autonomous_database_id = jsonv.read_str(fv)?
+      "displayName" => out.display_name = jsonv.read_str(fv)?
+      "status" => out.status = AutonomousDatabaseResourceStatus.from(jsonv.read_str(fv)?)
+      "statusReason" => out.status_reason = jsonv.read_str(fv)?
+      "refreshableStatus" => out.refreshable_status = RefreshableStatus.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartAutonomousDatabaseRefresh.
+pub enum StartAutonomousDatabaseRefreshErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartAutonomousDatabaseRefreshErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_autonomous_database_refresh_error(resp: http.Response) -> StartAutonomousDatabaseRefreshErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return StartAutonomousDatabaseRefreshErr.AccessDeniedException(x)
+      Err(msg) => return StartAutonomousDatabaseRefreshErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartAutonomousDatabaseRefreshErr.ConflictException(x)
+      Err(msg) => return StartAutonomousDatabaseRefreshErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return StartAutonomousDatabaseRefreshErr.InternalServerException(x)
+      Err(msg) => return StartAutonomousDatabaseRefreshErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return StartAutonomousDatabaseRefreshErr.ResourceNotFoundException(x)
+      Err(msg) => return StartAutonomousDatabaseRefreshErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return StartAutonomousDatabaseRefreshErr.ThrottlingException(x)
+      Err(msg) => return StartAutonomousDatabaseRefreshErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return StartAutonomousDatabaseRefreshErr.ValidationException(x)
+      Err(msg) => return StartAutonomousDatabaseRefreshErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartAutonomousDatabaseRefreshErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts a refresh of the specified refreshable clone Autonomous Database
+/// with data from its source database. The refresh runs asynchronously. To
+/// track its progress, check the refreshableStatus of the Autonomous
+/// Database.
+pub fn (c: Client) start_autonomous_database_refresh(input: StartAutonomousDatabaseRefreshInput) -> StartAutonomousDatabaseRefreshOutput ! StartAutonomousDatabaseRefreshErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_autonomous_database_refresh(c.params, input)) ?? e => return Err(StartAutonomousDatabaseRefreshErr.InvalidInput(e))
+  var req = serialize_start_autonomous_database_refresh(ep, input, "") ?? e => return Err(StartAutonomousDatabaseRefreshErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartAutonomousDatabaseRefreshErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_autonomous_database_refresh_error(resp))
+  }
+  deserialize_start_autonomous_database_refresh(resp) ?? e => Err(StartAutonomousDatabaseRefreshErr.Deserialize(e))
+}
+
 pub fn endpoint_params_start_db_node(base: EndpointParameters, input: StartDbNodeInput) -> EndpointParameters {
   let _ = input
   base
@@ -9608,969 +10679,4 @@ pub fn deserialize_update_autonomous_database_backup(resp: http.Response) -> Upd
     }
   }
   Ok(out)
-}
-
-/// The errors of UpdateAutonomousDatabaseBackup.
-pub enum UpdateAutonomousDatabaseBackupErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateAutonomousDatabaseBackupErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_autonomous_database_backup_error(resp: http.Response) -> UpdateAutonomousDatabaseBackupErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateAutonomousDatabaseBackupErr.AccessDeniedException(x)
-      Err(msg) => return UpdateAutonomousDatabaseBackupErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateAutonomousDatabaseBackupErr.ConflictException(x)
-      Err(msg) => return UpdateAutonomousDatabaseBackupErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateAutonomousDatabaseBackupErr.InternalServerException(x)
-      Err(msg) => return UpdateAutonomousDatabaseBackupErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateAutonomousDatabaseBackupErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateAutonomousDatabaseBackupErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateAutonomousDatabaseBackupErr.ThrottlingException(x)
-      Err(msg) => return UpdateAutonomousDatabaseBackupErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateAutonomousDatabaseBackupErr.ValidationException(x)
-      Err(msg) => return UpdateAutonomousDatabaseBackupErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateAutonomousDatabaseBackupErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the properties of an Autonomous Database backup.
-pub fn (c: Client) update_autonomous_database_backup(input: UpdateAutonomousDatabaseBackupInput) -> UpdateAutonomousDatabaseBackupOutput ! UpdateAutonomousDatabaseBackupErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_autonomous_database_backup(c.params, input)) ?? e => return Err(UpdateAutonomousDatabaseBackupErr.InvalidInput(e))
-  var req = serialize_update_autonomous_database_backup(ep, input, "") ?? e => return Err(UpdateAutonomousDatabaseBackupErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateAutonomousDatabaseBackupErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_autonomous_database_backup_error(resp))
-  }
-  deserialize_update_autonomous_database_backup(resp) ?? e => Err(UpdateAutonomousDatabaseBackupErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_cloud_exadata_infrastructure(base: EndpointParameters, input: UpdateCloudExadataInfrastructureInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateCloudExadataInfrastructure.
-pub fn serialize_update_cloud_exadata_infrastructure(ep: rest.Endpoint, input: UpdateCloudExadataInfrastructureInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cloud_exadata_infrastructure_id {
-    fs.push(("cloudExadataInfrastructureId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.maintenance_window {
-    fs.push(("maintenanceWindow", json_of_maintenance_window(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "Odb.UpdateCloudExadataInfrastructure"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_cloud_exadata_infrastructure(resp: http.Response) -> UpdateCloudExadataInfrastructureOutput ! Str {
-  var out = UpdateCloudExadataInfrastructureOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "displayName" => out.display_name = jsonv.read_str(fv)?
-      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "cloudExadataInfrastructureId" => out.cloud_exadata_infrastructure_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateCloudExadataInfrastructure.
-pub enum UpdateCloudExadataInfrastructureErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateCloudExadataInfrastructureErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_cloud_exadata_infrastructure_error(resp: http.Response) -> UpdateCloudExadataInfrastructureErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateCloudExadataInfrastructureErr.AccessDeniedException(x)
-      Err(msg) => return UpdateCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateCloudExadataInfrastructureErr.ConflictException(x)
-      Err(msg) => return UpdateCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateCloudExadataInfrastructureErr.InternalServerException(x)
-      Err(msg) => return UpdateCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateCloudExadataInfrastructureErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateCloudExadataInfrastructureErr.ThrottlingException(x)
-      Err(msg) => return UpdateCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateCloudExadataInfrastructureErr.ValidationException(x)
-      Err(msg) => return UpdateCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateCloudExadataInfrastructureErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the properties of an Exadata infrastructure resource.
-pub fn (c: Client) update_cloud_exadata_infrastructure(input: UpdateCloudExadataInfrastructureInput) -> UpdateCloudExadataInfrastructureOutput ! UpdateCloudExadataInfrastructureErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_cloud_exadata_infrastructure(c.params, input)) ?? e => return Err(UpdateCloudExadataInfrastructureErr.InvalidInput(e))
-  var req = serialize_update_cloud_exadata_infrastructure(ep, input, "") ?? e => return Err(UpdateCloudExadataInfrastructureErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateCloudExadataInfrastructureErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_cloud_exadata_infrastructure_error(resp))
-  }
-  deserialize_update_cloud_exadata_infrastructure(resp) ?? e => Err(UpdateCloudExadataInfrastructureErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_exadb_vm_cluster(base: EndpointParameters, input: UpdateExadbVmClusterInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateExadbVmCluster.
-pub fn serialize_update_exadb_vm_cluster(ep: rest.Endpoint, input: UpdateExadbVmClusterInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.exadb_vm_cluster_id {
-    fs.push(("exadbVmClusterId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.data_collection_options {
-    fs.push(("dataCollectionOptions", json_of_data_collection_options(x)))
-  }
-  if let Some(x) = input.display_name {
-    fs.push(("displayName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.enabled_ecpu_count {
-    fs.push(("enabledEcpuCount", json.Value.Int(x)))
-  }
-  if let Some(x) = input.grid_image_id {
-    fs.push(("gridImageId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.license_model {
-    fs.push(("licenseModel", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.ssh_public_keys {
-    fs.push(("sshPublicKeys", json_of_string_list(x)))
-  }
-  if let Some(x) = input.system_version {
-    fs.push(("systemVersion", json.Value.Str(x)))
-  }
-  if let Some(x) = input.total_ecpu_count {
-    fs.push(("totalEcpuCount", json.Value.Int(x)))
-  }
-  if let Some(x) = input.update_action {
-    fs.push(("updateAction", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.vm_file_system_storage_total_size_in_gbs {
-    fs.push(("vmFileSystemStorageTotalSizeInGBs", json.Value.Int(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "Odb.UpdateExadbVmCluster"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_exadb_vm_cluster(resp: http.Response) -> UpdateExadbVmClusterOutput ! Str {
-  var out = UpdateExadbVmClusterOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "displayName" => out.display_name = jsonv.read_str(fv)?
-      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "exadbVmClusterId" => out.exadb_vm_cluster_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateExadbVmCluster.
-pub enum UpdateExadbVmClusterErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateExadbVmClusterErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_exadb_vm_cluster_error(resp: http.Response) -> UpdateExadbVmClusterErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateExadbVmClusterErr.AccessDeniedException(x)
-      Err(msg) => return UpdateExadbVmClusterErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateExadbVmClusterErr.ConflictException(x)
-      Err(msg) => return UpdateExadbVmClusterErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateExadbVmClusterErr.InternalServerException(x)
-      Err(msg) => return UpdateExadbVmClusterErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateExadbVmClusterErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateExadbVmClusterErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateExadbVmClusterErr.ThrottlingException(x)
-      Err(msg) => return UpdateExadbVmClusterErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateExadbVmClusterErr.ValidationException(x)
-      Err(msg) => return UpdateExadbVmClusterErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateExadbVmClusterErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the specified Exascale VM cluster.
-pub fn (c: Client) update_exadb_vm_cluster(input: UpdateExadbVmClusterInput) -> UpdateExadbVmClusterOutput ! UpdateExadbVmClusterErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_exadb_vm_cluster(c.params, input)) ?? e => return Err(UpdateExadbVmClusterErr.InvalidInput(e))
-  var req = serialize_update_exadb_vm_cluster(ep, input, "") ?? e => return Err(UpdateExadbVmClusterErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateExadbVmClusterErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_exadb_vm_cluster_error(resp))
-  }
-  deserialize_update_exadb_vm_cluster(resp) ?? e => Err(UpdateExadbVmClusterErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_exascale_cloud_exadata_infrastructure(base: EndpointParameters, input: UpdateExascaleCloudExadataInfrastructureInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateExascaleCloudExadataInfrastructure.
-pub fn serialize_update_exascale_cloud_exadata_infrastructure(ep: rest.Endpoint, input: UpdateExascaleCloudExadataInfrastructureInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.cloud_exadata_infrastructure_id {
-    fs.push(("cloudExadataInfrastructureId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.total_storage_size_in_gbs {
-    fs.push(("totalStorageSizeInGBs", json.Value.Int(x)))
-  }
-  if let Some(x) = input.total_vm_storage_size_in_gbs {
-    fs.push(("totalVmStorageSizeInGBs", json.Value.Int(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "Odb.UpdateExascaleCloudExadataInfrastructure"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_exascale_cloud_exadata_infrastructure(resp: http.Response) -> UpdateExascaleCloudExadataInfrastructureOutput ! Str {
-  var out = UpdateExascaleCloudExadataInfrastructureOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "displayName" => out.display_name = jsonv.read_str(fv)?
-      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "cloudExadataInfrastructureId" => out.cloud_exadata_infrastructure_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateExascaleCloudExadataInfrastructure.
-pub enum UpdateExascaleCloudExadataInfrastructureErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateExascaleCloudExadataInfrastructureErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_exascale_cloud_exadata_infrastructure_error(resp: http.Response) -> UpdateExascaleCloudExadataInfrastructureErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateExascaleCloudExadataInfrastructureErr.AccessDeniedException(x)
-      Err(msg) => return UpdateExascaleCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateExascaleCloudExadataInfrastructureErr.ConflictException(x)
-      Err(msg) => return UpdateExascaleCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateExascaleCloudExadataInfrastructureErr.InternalServerException(x)
-      Err(msg) => return UpdateExascaleCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateExascaleCloudExadataInfrastructureErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateExascaleCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateExascaleCloudExadataInfrastructureErr.ThrottlingException(x)
-      Err(msg) => return UpdateExascaleCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateExascaleCloudExadataInfrastructureErr.ValidationException(x)
-      Err(msg) => return UpdateExascaleCloudExadataInfrastructureErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateExascaleCloudExadataInfrastructureErr.Api(restjson.api_error(resp, body))
-}
-
-/// Configures or updates the Exascale storage on an Exadata infrastructure.
-/// After you configure Exascale storage, you can create Exascale storage
-/// vaults on the infrastructure and VM clusters that use Exascale storage.
-pub fn (c: Client) update_exascale_cloud_exadata_infrastructure(input: UpdateExascaleCloudExadataInfrastructureInput) -> UpdateExascaleCloudExadataInfrastructureOutput ! UpdateExascaleCloudExadataInfrastructureErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_exascale_cloud_exadata_infrastructure(c.params, input)) ?? e => return Err(UpdateExascaleCloudExadataInfrastructureErr.InvalidInput(e))
-  var req = serialize_update_exascale_cloud_exadata_infrastructure(ep, input, "") ?? e => return Err(UpdateExascaleCloudExadataInfrastructureErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateExascaleCloudExadataInfrastructureErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_exascale_cloud_exadata_infrastructure_error(resp))
-  }
-  deserialize_update_exascale_cloud_exadata_infrastructure(resp) ?? e => Err(UpdateExascaleCloudExadataInfrastructureErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_exascale_db_storage_vault(base: EndpointParameters, input: UpdateExascaleDbStorageVaultInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateExascaleDbStorageVault.
-pub fn serialize_update_exascale_db_storage_vault(ep: rest.Endpoint, input: UpdateExascaleDbStorageVaultInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.exascale_db_storage_vault_id {
-    fs.push(("exascaleDbStorageVaultId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.additional_flash_cache_in_percent {
-    fs.push(("additionalFlashCacheInPercent", json.Value.Int(x)))
-  }
-  if let Some(x) = input.autoscale_limit_in_gbs {
-    fs.push(("autoscaleLimitInGBs", json.Value.Int(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.display_name {
-    fs.push(("displayName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.high_capacity_database_storage_total_size_in_gbs {
-    fs.push(("highCapacityDatabaseStorageTotalSizeInGBs", json.Value.Int(x)))
-  }
-  if let Some(x) = input.is_autoscale_enabled {
-    fs.push(("isAutoscaleEnabled", json.Value.Bool(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "Odb.UpdateExascaleDbStorageVault"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_exascale_db_storage_vault(resp: http.Response) -> UpdateExascaleDbStorageVaultOutput ! Str {
-  var out = UpdateExascaleDbStorageVaultOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "displayName" => out.display_name = jsonv.read_str(fv)?
-      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "exascaleDbStorageVaultId" => out.exascale_db_storage_vault_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateExascaleDbStorageVault.
-pub enum UpdateExascaleDbStorageVaultErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateExascaleDbStorageVaultErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_exascale_db_storage_vault_error(resp: http.Response) -> UpdateExascaleDbStorageVaultErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateExascaleDbStorageVaultErr.AccessDeniedException(x)
-      Err(msg) => return UpdateExascaleDbStorageVaultErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateExascaleDbStorageVaultErr.ConflictException(x)
-      Err(msg) => return UpdateExascaleDbStorageVaultErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateExascaleDbStorageVaultErr.InternalServerException(x)
-      Err(msg) => return UpdateExascaleDbStorageVaultErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateExascaleDbStorageVaultErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateExascaleDbStorageVaultErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateExascaleDbStorageVaultErr.ThrottlingException(x)
-      Err(msg) => return UpdateExascaleDbStorageVaultErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateExascaleDbStorageVaultErr.ValidationException(x)
-      Err(msg) => return UpdateExascaleDbStorageVaultErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateExascaleDbStorageVaultErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates the specified Exascale storage vault.
-pub fn (c: Client) update_exascale_db_storage_vault(input: UpdateExascaleDbStorageVaultInput) -> UpdateExascaleDbStorageVaultOutput ! UpdateExascaleDbStorageVaultErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_exascale_db_storage_vault(c.params, input)) ?? e => return Err(UpdateExascaleDbStorageVaultErr.InvalidInput(e))
-  var req = serialize_update_exascale_db_storage_vault(ep, input, "") ?? e => return Err(UpdateExascaleDbStorageVaultErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateExascaleDbStorageVaultErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_exascale_db_storage_vault_error(resp))
-  }
-  deserialize_update_exascale_db_storage_vault(resp) ?? e => Err(UpdateExascaleDbStorageVaultErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_odb_network(base: EndpointParameters, input: UpdateOdbNetworkInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateOdbNetwork.
-pub fn serialize_update_odb_network(ep: rest.Endpoint, input: UpdateOdbNetworkInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.odb_network_id {
-    fs.push(("odbNetworkId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.display_name {
-    fs.push(("displayName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.peered_cidrs_to_be_added {
-    fs.push(("peeredCidrsToBeAdded", json_of_string_list(x)))
-  }
-  if let Some(x) = input.peered_cidrs_to_be_removed {
-    fs.push(("peeredCidrsToBeRemoved", json_of_string_list(x)))
-  }
-  if let Some(x) = input.s3_access {
-    fs.push(("s3Access", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.zero_etl_access {
-    fs.push(("zeroEtlAccess", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.sts_access {
-    fs.push(("stsAccess", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.kms_access {
-    fs.push(("kmsAccess", json.Value.Str(x.value())))
-  }
-  if let Some(x) = input.s3_policy_document {
-    fs.push(("s3PolicyDocument", json.Value.Str(x)))
-  }
-  if let Some(x) = input.sts_policy_document {
-    fs.push(("stsPolicyDocument", json.Value.Str(x)))
-  }
-  if let Some(x) = input.kms_policy_document {
-    fs.push(("kmsPolicyDocument", json.Value.Str(x)))
-  }
-  if let Some(x) = input.cross_region_s3_restore_sources_to_enable {
-    fs.push(("crossRegionS3RestoreSourcesToEnable", json_of_string_list(x)))
-  }
-  if let Some(x) = input.cross_region_s3_restore_sources_to_disable {
-    fs.push(("crossRegionS3RestoreSourcesToDisable", json_of_string_list(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "Odb.UpdateOdbNetwork"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_odb_network(resp: http.Response) -> UpdateOdbNetworkOutput ! Str {
-  var out = UpdateOdbNetworkOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "displayName" => out.display_name = jsonv.read_str(fv)?
-      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "odbNetworkId" => out.odb_network_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateOdbNetwork.
-pub enum UpdateOdbNetworkErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateOdbNetworkErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_odb_network_error(resp: http.Response) -> UpdateOdbNetworkErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateOdbNetworkErr.AccessDeniedException(x)
-      Err(msg) => return UpdateOdbNetworkErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateOdbNetworkErr.ConflictException(x)
-      Err(msg) => return UpdateOdbNetworkErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateOdbNetworkErr.InternalServerException(x)
-      Err(msg) => return UpdateOdbNetworkErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateOdbNetworkErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateOdbNetworkErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateOdbNetworkErr.ThrottlingException(x)
-      Err(msg) => return UpdateOdbNetworkErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateOdbNetworkErr.ValidationException(x)
-      Err(msg) => return UpdateOdbNetworkErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateOdbNetworkErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates properties of a specified ODB network.
-pub fn (c: Client) update_odb_network(input: UpdateOdbNetworkInput) -> UpdateOdbNetworkOutput ! UpdateOdbNetworkErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_odb_network(c.params, input)) ?? e => return Err(UpdateOdbNetworkErr.InvalidInput(e))
-  var req = serialize_update_odb_network(ep, input, "") ?? e => return Err(UpdateOdbNetworkErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateOdbNetworkErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_odb_network_error(resp))
-  }
-  deserialize_update_odb_network(resp) ?? e => Err(UpdateOdbNetworkErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_odb_peering_connection(base: EndpointParameters, input: UpdateOdbPeeringConnectionInput) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateOdbPeeringConnection.
-pub fn serialize_update_odb_peering_connection(ep: rest.Endpoint, input: UpdateOdbPeeringConnectionInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.odb_peering_connection_id {
-    fs.push(("odbPeeringConnectionId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.display_name {
-    fs.push(("displayName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.peer_network_cidrs_to_be_added {
-    fs.push(("peerNetworkCidrsToBeAdded", json_of_peered_cidr_list(x)))
-  }
-  if let Some(x) = input.peer_network_cidrs_to_be_removed {
-    fs.push(("peerNetworkCidrsToBeRemoved", json_of_peered_cidr_list(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.0"))
-  headers.push(("X-Amz-Target", "Odb.UpdateOdbPeeringConnection"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_odb_peering_connection(resp: http.Response) -> UpdateOdbPeeringConnectionOutput ! Str {
-  var out = UpdateOdbPeeringConnectionOutput{}
-  let body = jsonv.parse_body(resp.body)?
-  for (k, fv) in jsonv.fields(body)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "displayName" => out.display_name = jsonv.read_str(fv)?
-      "status" => out.status = ResourceStatus.from(jsonv.read_str(fv)?)
-      "statusReason" => out.status_reason = jsonv.read_str(fv)?
-      "odbPeeringConnectionId" => out.odb_peering_connection_id = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of UpdateOdbPeeringConnection.
-pub enum UpdateOdbPeeringConnectionErr {
-  AccessDeniedException(e: AccessDeniedException)
-  ConflictException(e: ConflictException)
-  InternalServerException(e: InternalServerException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  ValidationException(e: ValidationException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateOdbPeeringConnectionErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    ConflictException(x) => "ConflictException: ${x:?}"
-    InternalServerException(x) => "InternalServerException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    ValidationException(x) => "ValidationException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_odb_peering_connection_error(resp: http.Response) -> UpdateOdbPeeringConnectionErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateOdbPeeringConnectionErr.AccessDeniedException(x)
-      Err(msg) => return UpdateOdbPeeringConnectionErr.Deserialize(msg)
-    }
-    "ConflictException" => match read_error_conflict_exception(resp, body) {
-      Ok(x) => return UpdateOdbPeeringConnectionErr.ConflictException(x)
-      Err(msg) => return UpdateOdbPeeringConnectionErr.Deserialize(msg)
-    }
-    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
-      Ok(x) => return UpdateOdbPeeringConnectionErr.InternalServerException(x)
-      Err(msg) => return UpdateOdbPeeringConnectionErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateOdbPeeringConnectionErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateOdbPeeringConnectionErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateOdbPeeringConnectionErr.ThrottlingException(x)
-      Err(msg) => return UpdateOdbPeeringConnectionErr.Deserialize(msg)
-    }
-    "ValidationException" => match read_error_validation_exception(resp, body) {
-      Ok(x) => return UpdateOdbPeeringConnectionErr.ValidationException(x)
-      Err(msg) => return UpdateOdbPeeringConnectionErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateOdbPeeringConnectionErr.Api(restjson.api_error(resp, body))
-}
-
-/// Modifies the settings of an Oracle Database@Amazon Web Services peering
-/// connection. You can update the display name and add or remove CIDR
-/// blocks from the peering connection.
-pub fn (c: Client) update_odb_peering_connection(input: UpdateOdbPeeringConnectionInput) -> UpdateOdbPeeringConnectionOutput ! UpdateOdbPeeringConnectionErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_odb_peering_connection(c.params, input)) ?? e => return Err(UpdateOdbPeeringConnectionErr.InvalidInput(e))
-  var req = serialize_update_odb_peering_connection(ep, input, "") ?? e => return Err(UpdateOdbPeeringConnectionErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateOdbPeeringConnectionErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_odb_peering_connection_error(resp))
-  }
-  deserialize_update_odb_peering_connection(resp) ?? e => Err(UpdateOdbPeeringConnectionErr.Deserialize(e))
 }

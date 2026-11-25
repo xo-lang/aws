@@ -8,6 +8,92 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_batch_disassociate_finding_issue(resp: http.Response) -> BatchDisassociateFindingIssueOutput ! Str {
+  var out = BatchDisassociateFindingIssueOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "errors" => out.errors = from_json_batch_disassociate_finding_issue_errors(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of BatchDisassociateFindingIssue.
+pub enum BatchDisassociateFindingIssueErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: BatchDisassociateFindingIssueErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_batch_disassociate_finding_issue_error(resp: http.Response) -> BatchDisassociateFindingIssueErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.AccessDeniedException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.ConflictException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.InternalServerException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.ResourceNotFoundException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.ServiceQuotaExceededException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.ThrottlingException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return BatchDisassociateFindingIssueErr.ValidationException(x)
+      Err(msg) => return BatchDisassociateFindingIssueErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  BatchDisassociateFindingIssueErr.Api(restjson.api_error(resp, body))
+}
+
 /// Disassociates a batch of findings from their linked issues.
 pub fn (c: Client) batch_disassociate_finding_issue(input: BatchDisassociateFindingIssueInput) -> BatchDisassociateFindingIssueOutput ! BatchDisassociateFindingIssueErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_batch_disassociate_finding_issue(c.params, input)) ?? e => return Err(BatchDisassociateFindingIssueErr.InvalidInput(e))
@@ -2332,6 +2418,9 @@ pub fn serialize_create_pentest(ep: rest.Endpoint, input: CreatePentestInput, id
   }
   if let Some(x) = input.code_remediation_strategy {
     fs.push(("codeRemediationStrategy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.clean_up_strategy {
+    fs.push(("cleanUpStrategy", json.Value.Str(x.value())))
   }
   if let Some(x) = input.disable_managed_skills {
     fs.push(("disableManagedSkills", json_of_skill_type_list(x)))
@@ -7322,6 +7411,120 @@ pub fn (c: Client) list_threats(input: ListThreatsInput) -> ListThreatsOutput ! 
   deserialize_list_threats(resp) ?? e => Err(ListThreatsErr.Deserialize(e))
 }
 
+pub fn endpoint_params_resume_pentest_job(base: EndpointParameters, input: ResumePentestJobInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ResumePentestJob.
+pub fn serialize_resume_pentest_job(ep: rest.Endpoint, input: ResumePentestJobInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.agent_space_id {
+    fs.push(("agentSpaceId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.pentest_job_id {
+    fs.push(("pentestJobId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.actors {
+    fs.push(("actors", json_of_actor_list(x)))
+  }
+  if let Some(x) = input.network_traffic_config {
+    fs.push(("networkTrafficConfig", json_of_network_traffic_config(x)))
+  }
+  if let Some(x) = input.vpc_config {
+    fs.push(("vpcConfig", json_of_vpc_config(x)))
+  }
+  if let Some(x) = input.max_task_hours {
+    fs.push(("maxTaskHours", jsonv.float(x)))
+  }
+  if let Some(x) = input.copy_config_from_pentest {
+    fs.push(("copyConfigFromPentest", json.Value.Bool(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/ResumePentestJob"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_resume_pentest_job(resp: http.Response) -> ResumePentestJobOutput ! Str {
+  var out = ResumePentestJobOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "title" => out.title = jsonv.read_str(fv)?
+      "status" => out.status = JobStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "updatedAt" => out.updated_at = jsonv.read_time(fv, "date-time")?
+      "pentestId" => out.pentest_id = jsonv.read_str(fv)?
+      "pentestJobId" => out.pentest_job_id = jsonv.read_str(fv)?
+      "version" => out.version = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ResumePentestJob.
+pub enum ResumePentestJobErr {
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ResumePentestJobErr) display() -> Str {
+  match e {
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_resume_pentest_job_error(resp: http.Response) -> ResumePentestJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  ResumePentestJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Resumes a stopped or paused pentest job from its last saved checkpoint.
+/// The job keeps its pentest job identifier and continues as a new version,
+/// keeping the findings and progress from earlier runs. You can resume a
+/// job within 7 days of when it was created.
+pub fn (c: Client) resume_pentest_job(input: ResumePentestJobInput) -> ResumePentestJobOutput ! ResumePentestJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_resume_pentest_job(c.params, input)) ?? e => return Err(ResumePentestJobErr.InvalidInput(e))
+  var req = serialize_resume_pentest_job(ep, input, "") ?? e => return Err(ResumePentestJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResumePentestJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_resume_pentest_job_error(resp))
+  }
+  deserialize_resume_pentest_job(resp) ?? e => Err(ResumePentestJobErr.Deserialize(e))
+}
+
 pub fn endpoint_params_start_code_remediation(base: EndpointParameters, input: StartCodeRemediationInput) -> EndpointParameters {
   let _ = input
   base
@@ -7810,6 +8013,9 @@ pub fn serialize_stop_pentest_job(ep: rest.Endpoint, input: StopPentestJobInput,
   }
   if let Some(x) = input.pentest_job_id {
     fs.push(("pentestJobId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.pause {
+    fs.push(("pause", json.Value.Bool(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -8859,6 +9065,9 @@ pub fn serialize_update_pentest(ep: rest.Endpoint, input: UpdatePentestInput, id
   }
   if let Some(x) = input.code_remediation_strategy {
     fs.push(("codeRemediationStrategy", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.clean_up_strategy {
+    fs.push(("cleanUpStrategy", json.Value.Str(x.value())))
   }
   if let Some(x) = input.disable_managed_skills {
     fs.push(("disableManagedSkills", json_of_skill_type_list(x)))

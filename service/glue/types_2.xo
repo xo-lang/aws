@@ -123,7 +123,10 @@ pub struct JobUpdate {
   /// available Glue versions and corresponding Spark and Python versions, see
   /// Glue version in the developer guide. If not provided in the update
   /// request, the Glue version retains the value from the existing job
-  /// definition.
+  /// definition. Set GlueVersion to auto to turn on automatic version
+  /// upgrades for the job. For more information, see Automatic version
+  /// upgrades for Glue jobs in the developer guide. For the job requirements,
+  /// see Before you start .
   pub glue_version: Str? = None
   /// The representation of a directed acyclic graph on which both the Glue
   /// Studio visual component and Glue Studio code generation is based.
@@ -2167,8 +2170,8 @@ pub struct PublishDataQualityResultV2Response {
 }
 
 pub struct PutAssetRequest {
-  /// The identifier of the asset type for the asset.
-  pub asset_type_id: Str? = None
+  /// The identifier of the asset type for the asset. This field is required.
+  pub asset_type_identifier: Str? = None
   /// The unique identifier of the asset. If an asset with this identifier
   /// already exists, it is updated.
   pub identifier: Str? = None
@@ -2178,7 +2181,7 @@ pub struct PutAssetRequest {
   pub description: Str? = None
   /// The forms to set on the asset, keyed by form name. Each entry specifies
   /// the form type and its JSON content.
-  pub forms: Map[Str, AssetFormEntry]? = None
+  pub forms: Map[Str, AssetFormInput]? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request.
   pub client_token: Str? = None
@@ -2191,30 +2194,12 @@ pub struct PutAssetResponse {
   pub name: Str? = None
   /// The description of the asset.
   pub description: Str? = None
+  /// The identifier of the asset type for this asset.
+  pub asset_type_id: Str? = None
   /// The timestamp at which the asset was created.
   pub created_at: Time? = None
   /// The forms attached to the asset, keyed by form name.
   pub forms: Map[Str, AssetFormEntry]? = None
-}
-
-pub struct PutAssetTypeRequest {
-  /// The name of the asset type.
-  pub name: Str? = None
-  /// The forms that make up the asset type, keyed by form name. Each entry
-  /// references the form type that defines the form's schema.
-  pub forms: Map[Str, AssetTypeFormReference]? = None
-  /// A unique, case-sensitive identifier that you provide to ensure the
-  /// idempotency of the request.
-  pub client_token: Str? = None
-}
-
-pub struct PutAssetTypeResponse {
-  /// The identifier of the asset type.
-  pub id: Str? = None
-  /// The name of the asset type.
-  pub name: Str? = None
-  /// The forms that make up the asset type, keyed by form name.
-  pub forms: Map[Str, AssetTypeFormReference]? = None
 }
 
 pub struct PutAttachmentRequest {
@@ -2232,8 +2217,9 @@ pub struct PutAttachmentRequest {
   /// The JSON content of the form, conforming to the schema of the specified
   /// form type.
   pub content: Str? = None
-  /// The identifier of the form type for this attachment.
-  pub form_type_id: Str? = None
+  /// The identifier of the form type for this attachment. This field is
+  /// required.
+  pub form_type_identifier: Str? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request.
   pub client_token: Str? = None
@@ -2241,11 +2227,11 @@ pub struct PutAttachmentRequest {
 
 pub struct PutAttachmentResponse {
   /// The unique identifier of the asset.
-  pub asset_identifier: Str? = None
+  pub asset_id: Str? = None
   /// The name of the iterable form, if the attachment targets an item.
   pub iterable_form_name: Str? = None
   /// The identifier of the item within the iterable form, if applicable.
-  pub item_identifier: Str? = None
+  pub item_id: Str? = None
   /// The name of the attachment.
   pub attachment_name: Str? = None
   /// The identifier of the form type for this attachment.
@@ -2264,25 +2250,27 @@ pub struct PutDataCatalogEncryptionSettingsResponse {
 }
 
 pub struct PutDataCatalogExportConfigurationInput {
-  /// The export setting for the data catalog. Specify ENABLED to start
-  /// exporting catalog metadata to S3 Tables, or DISABLED to stop exporting.
-  /// This field is required.
-  pub export_setting: ExportSetting? = None
-  /// The encryption configuration for the exported data. If not specified,
-  /// the default encryption settings are used.
-  pub encryption_configuration: ExportEncryptionConfiguration? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request.
   pub client_token: Str? = None
+  /// The S3 Tables configuration for the export. The encryption configuration
+  /// applies only when Glue creates the table bucket that holds the exported
+  /// catalog metadata. If not specified, the default encryption settings are
+  /// used.
+  pub s3_tables_configuration: S3TablesConfiguration? = None
+  /// The export setting for asset metadata. Set S3TablesExport to ENABLED to
+  /// start exporting asset metadata to S3 Tables, or to DISABLED to stop
+  /// exporting.
+  pub assets: AssetsExport? = None
 }
 
 /// The export configuration returned by the
 /// PutDataCatalogExportConfiguration operation.
 pub struct PutDataCatalogExportConfigurationOutput {
-  /// The export setting for the data catalog.
-  pub export_setting: ExportSetting? = None
-  /// The encryption configuration for the exported data.
-  pub encryption_configuration: ExportEncryptionConfiguration? = None
+  /// The S3 Tables configuration for the export.
+  pub s3_tables_configuration: S3TablesConfiguration? = None
+  /// The export setting for asset metadata.
+  pub assets: AssetsExport? = None
 }
 
 pub struct PutDataQualityProfileAnnotationRequest {
@@ -3495,6 +3483,31 @@ pub struct S3SourceAdditionalOptions {
   pub bounded_files: Int? = None
 }
 
+/// The S3 Tables configuration for a data catalog export.
+pub struct S3TablesConfiguration {
+  /// The encryption configuration for the table bucket that holds the
+  /// exported catalog metadata. It applies only when Glue creates the table
+  /// bucket.
+  pub encryption_configuration: ExportEncryptionConfiguration? = None
+}
+
+/// The S3 Tables configuration for a data catalog export, including the
+/// table bucket that holds the exported catalog metadata.
+pub struct S3TablesConfigurationResult {
+  /// The ARN of the S3 table bucket that holds the exported catalog metadata.
+  pub table_bucket_arn: Str? = None
+  /// The encryption configuration for the table bucket that holds the
+  /// exported catalog metadata.
+  pub encryption_configuration: ExportEncryptionConfiguration? = None
+}
+
+/// The state of an export to S3 Tables. Glue sets this state.
+pub struct S3TablesExportState {
+  /// The current status of the export. Valid values are ENABLING , ENABLED ,
+  /// DISABLING , DISABLED , and FAILED .
+  pub status: ExportStatus? = None
+}
+
 /// Specifies a data store in Amazon Simple Storage Service (Amazon S3).
 pub struct S3Target {
   /// The path to the Amazon S3 target.
@@ -3696,9 +3709,10 @@ pub struct SearchAssetsOutput {
 pub struct SearchAttributeFilter {
   /// The attribute name to filter on.
   pub attribute: Str? = None
-  /// The comparison operator. Valid values are equals , greaterThan ,
-  /// greaterThanOrEquals , lessThan , lessThanOrEquals , and notExists .
-  pub operator: SearchFilterOperator? = None
+  /// The comparison operator. Valid values are EQUALS , GREATER_THAN ,
+  /// GREATER_THAN_OR_EQUALS , LESS_THAN , LESS_THAN_OR_EQUALS , and
+  /// NOT_EXISTS . This field is required.
+  pub comparator: SearchFilterComparator? = None
   /// The value to compare against.
   pub value: SearchFilterValue? = None
 }
@@ -3715,13 +3729,13 @@ pub enum SearchFilterClause {
   Unknown(tag: Str)
 }
 
-pub enum SearchFilterOperator: Str {
-  Equals = "equals"
-  GreaterThan = "greaterThan"
-  GreaterThanOrEquals = "greaterThanOrEquals"
-  LessThan = "lessThan"
-  LessThanOrEquals = "lessThanOrEquals"
-  NotExists = "notExists"
+pub enum SearchFilterComparator: Str {
+  Equals = "EQUALS"
+  GreaterThan = "GREATER_THAN"
+  GreaterThanOrEquals = "GREATER_THAN_OR_EQUALS"
+  LessThan = "LESS_THAN"
+  LessThanOrEquals = "LESS_THAN_OR_EQUALS"
+  NotExists = "NOT_EXISTS"
   Unknown(value: Str)
 }
 
@@ -3756,9 +3770,11 @@ pub struct SearchResultItem {
   /// The unique identifier of the matched asset.
   pub id: Str? = None
   /// The name of the matched asset.
-  pub asset_name: Str? = None
+  pub name: Str? = None
   /// The description of the matched asset.
-  pub asset_description: Str? = None
+  pub description: Str? = None
+  /// The timestamp at which the matched asset was created.
+  pub created_at: Time? = None
   /// The timestamp at which the matched asset was last updated.
   pub updated_at: Time? = None
   /// The identifier of the asset type for the matched asset.
@@ -6233,7 +6249,8 @@ pub struct UpdateGlossaryRequest {
   pub identifier: Str? = None
   /// The updated name of the glossary.
   pub name: Str? = None
-  /// The updated description of the glossary.
+  /// The new description. Omit it to keep the current description; set it to
+  /// an empty string to clear it.
   pub description: Str? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request.
@@ -6254,9 +6271,11 @@ pub struct UpdateGlossaryTermRequest {
   pub identifier: Str? = None
   /// The updated name of the glossary term.
   pub name: Str? = None
-  /// The updated short description of the glossary term.
+  /// The new short description. Omit it to keep the current one; set it to an
+  /// empty string to clear it.
   pub short_description: Str? = None
-  /// The updated long description of the glossary term.
+  /// The new long description. Omit it to keep the current one; set it to an
+  /// empty string to clear it.
   pub long_description: Str? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request.

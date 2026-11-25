@@ -156,6 +156,9 @@ fn json_of_attribution_summary(v: AttributionSummary) -> json.Value {
   if let Some(x) = v.total_revenue_attribution_allocation_count {
     fs.push(("TotalRevenueAttributionAllocationCount", json.Value.Int(x)))
   }
+  if let Some(x) = v.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -179,6 +182,7 @@ fn from_json_attribution_summary(v: json.Value) -> AttributionSummary ! Str {
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "TotalActiveRevenueAttributionAllocationCount" => out.total_active_revenue_attribution_allocation_count = jsonv.read_int(fv)?
       "TotalRevenueAttributionAllocationCount" => out.total_revenue_attribution_allocation_count = jsonv.read_int(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -211,16 +215,77 @@ fn from_json_conflict_exception(v: json.Value) -> ConflictException ! Str {
   Ok(out)
 }
 
+fn json_of_context_filter(v: ContextFilter) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key {
+    fs.push(("Key", json.Value.Str(x)))
+  }
+  if let Some(x) = v.values {
+    fs.push(("Values", json_of_context_filter_value_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_context_filter(v: json.Value) -> ContextFilter ! Str {
+  var out = ContextFilter{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Key" => out.key = jsonv.read_str(fv)?
+      "Values" => out.values = from_json_context_filter_value_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_context_filter_list(v: List[ContextFilter]) -> json.Value {
+  json.Value.List(v.map(fn(x: ContextFilter) -> json.Value { json_of_context_filter(x) }))
+}
+
+fn from_json_context_filter_list(v: json.Value) -> List[ContextFilter] ! Str {
+  var out: List[ContextFilter] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_context_filter(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_context_filter_value_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_context_filter_value_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_create_marketplace_revenue_share_allocation_input(v: CreateMarketplaceRevenueShareAllocationInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.client_token {
     fs.push(("ClientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.marketplace_revenue_share_revision {
+    fs.push(("MarketplaceRevenueShareRevision", json.Value.Str(x)))
   }
   if let Some(x) = v.effective_from {
     fs.push(("EffectiveFrom", json.Value.Str(x)))
@@ -242,8 +307,9 @@ fn from_json_create_marketplace_revenue_share_allocation_input(v: json.Value) ->
     }
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "ClientToken" => out.client_token = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
@@ -258,14 +324,8 @@ fn json_of_create_marketplace_revenue_share_allocation_output(v: CreateMarketpla
   if let Some(x) = v.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.effective_from {
     fs.push(("EffectiveFrom", json.Value.Str(x)))
@@ -285,8 +345,11 @@ fn json_of_create_marketplace_revenue_share_allocation_output(v: CreateMarketpla
   if let Some(x) = v.last_modified_date {
     fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
   }
-  if let Some(x) = v.latest_marketplace_revenue_share_revision {
-    fs.push(("LatestMarketplaceRevenueShareRevision", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_revision {
+    fs.push(("MarketplaceRevenueShareRevision", json.Value.Str(x)))
+  }
+  if let Some(x) = v.marketplace_revenue_share_latest_revision {
+    fs.push(("MarketplaceRevenueShareLatestRevision", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -299,16 +362,15 @@ fn from_json_create_marketplace_revenue_share_allocation_output(v: json.Value) -
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestMarketplaceRevenueShareRevision" => out.latest_marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareLatestRevision" => out.marketplace_revenue_share_latest_revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -323,11 +385,11 @@ fn json_of_create_marketplace_revenue_share_input(v: CreateMarketplaceRevenueSha
   if let Some(x) = v.client_token {
     fs.push(("ClientToken", json.Value.Str(x)))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_entry_list(x)))
   }
   if let Some(x) = v.tags {
-    fs.push(("Tags", json_of_marketplace_revenue_share_tag_list(x)))
+    fs.push(("Tags", json_of_tag_list(x)))
   }
   json.Value.Object(fs)
 }
@@ -341,8 +403,8 @@ fn from_json_create_marketplace_revenue_share_input(v: json.Value) -> CreateMark
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
       "ClientToken" => out.client_token = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "Tags" => out.tags = from_json_marketplace_revenue_share_tag_list(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_entry_list(fv)?
+      "Tags" => out.tags = from_json_tag_list(fv)?
       _ => {}
     }
   }
@@ -351,8 +413,8 @@ fn from_json_create_marketplace_revenue_share_input(v: json.Value) -> CreateMark
 
 fn json_of_create_marketplace_revenue_share_output(v: CreateMarketplaceRevenueShareOutput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.id {
+    fs.push(("Id", json.Value.Str(x)))
   }
   if let Some(x) = v.arn {
     fs.push(("Arn", json.Value.Str(x)))
@@ -360,11 +422,8 @@ fn json_of_create_marketplace_revenue_share_output(v: CreateMarketplaceRevenueSh
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_code {
-    fs.push(("ProductCode", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
+  if let Some(x) = v.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_summary_list(x)))
   }
   if let Some(x) = v.created_date {
     fs.push(("CreatedDate", jsonv.time(x, "epoch-seconds")))
@@ -373,7 +432,7 @@ fn json_of_create_marketplace_revenue_share_output(v: CreateMarketplaceRevenueSh
     fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
   }
   if let Some(x) = v.revision {
-    fs.push(("Revision", json.Value.Int(x)))
+    fs.push(("Revision", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -385,14 +444,13 @@ fn from_json_create_marketplace_revenue_share_output(v: json.Value) -> CreateMar
       continue
     }
     match k {
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "Id" => out.id = jsonv.read_str(fv)?
       "Arn" => out.arn = jsonv.read_str(fv)?
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductCode" => out.product_code = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_summary_list(fv)?
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "Revision" => out.revision = jsonv.read_int(fv)?
+      "Revision" => out.revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -422,6 +480,9 @@ fn json_of_create_revenue_attribution_input(v: CreateRevenueAttributionInput) ->
   if let Some(x) = v.tags {
     fs.push(("Tags", json_of_tag_list(x)))
   }
+  if let Some(x) = v.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -439,6 +500,7 @@ fn from_json_create_revenue_attribution_input(v: json.Value) -> CreateRevenueAtt
       "TenancyModel" => out.tenancy_model = TenancyModel.from(jsonv.read_str(fv)?)
       "ProductIdentifier" => out.product_identifier = jsonv.read_str(fv)?
       "Tags" => out.tags = from_json_tag_list(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -468,6 +530,9 @@ fn json_of_create_revenue_attribution_output(v: CreateRevenueAttributionOutput) 
   if let Some(x) = v.revision {
     fs.push(("Revision", json.Value.Str(x)))
   }
+  if let Some(x) = v.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -485,6 +550,7 @@ fn from_json_create_revenue_attribution_output(v: json.Value) -> CreateRevenueAt
       "TenancyModel" => out.tenancy_model = TenancyModel.from(jsonv.read_str(fv)?)
       "MarketplaceProduct" => out.marketplace_product = from_json_marketplace_product_summary(fv)?
       "Revision" => out.revision = jsonv.read_str(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -544,8 +610,8 @@ fn json_of_get_marketplace_revenue_share_allocation_input(v: GetMarketplaceReven
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
@@ -564,7 +630,7 @@ fn from_json_get_marketplace_revenue_share_allocation_input(v: json.Value) -> Ge
     }
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
       "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
       _ => {}
@@ -578,14 +644,8 @@ fn json_of_get_marketplace_revenue_share_allocation_output(v: GetMarketplaceReve
   if let Some(x) = v.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.effective_from {
     fs.push(("EffectiveFrom", json.Value.Str(x)))
@@ -605,8 +665,11 @@ fn json_of_get_marketplace_revenue_share_allocation_output(v: GetMarketplaceReve
   if let Some(x) = v.last_modified_date {
     fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
   }
-  if let Some(x) = v.latest_marketplace_revenue_share_revision {
-    fs.push(("LatestMarketplaceRevenueShareRevision", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_revision {
+    fs.push(("MarketplaceRevenueShareRevision", json.Value.Str(x)))
+  }
+  if let Some(x) = v.marketplace_revenue_share_latest_revision {
+    fs.push(("MarketplaceRevenueShareLatestRevision", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -619,16 +682,15 @@ fn from_json_get_marketplace_revenue_share_allocation_output(v: json.Value) -> G
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestMarketplaceRevenueShareRevision" => out.latest_marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareLatestRevision" => out.marketplace_revenue_share_latest_revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -640,11 +702,11 @@ fn json_of_get_marketplace_revenue_share_input(v: GetMarketplaceRevenueShareInpu
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.identifier {
+    fs.push(("Identifier", json.Value.Str(x)))
   }
   if let Some(x) = v.revision {
-    fs.push(("Revision", json.Value.Int(x)))
+    fs.push(("Revision", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -657,8 +719,8 @@ fn from_json_get_marketplace_revenue_share_input(v: json.Value) -> GetMarketplac
     }
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "Revision" => out.revision = jsonv.read_int(fv)?
+      "Identifier" => out.identifier = jsonv.read_str(fv)?
+      "Revision" => out.revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -667,8 +729,8 @@ fn from_json_get_marketplace_revenue_share_input(v: json.Value) -> GetMarketplac
 
 fn json_of_get_marketplace_revenue_share_output(v: GetMarketplaceRevenueShareOutput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.id {
+    fs.push(("Id", json.Value.Str(x)))
   }
   if let Some(x) = v.arn {
     fs.push(("Arn", json.Value.Str(x)))
@@ -676,11 +738,8 @@ fn json_of_get_marketplace_revenue_share_output(v: GetMarketplaceRevenueShareOut
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_code {
-    fs.push(("ProductCode", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
+  if let Some(x) = v.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_detail_list(x)))
   }
   if let Some(x) = v.created_date {
     fs.push(("CreatedDate", jsonv.time(x, "epoch-seconds")))
@@ -689,10 +748,16 @@ fn json_of_get_marketplace_revenue_share_output(v: GetMarketplaceRevenueShareOut
     fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
   }
   if let Some(x) = v.revision {
-    fs.push(("Revision", json.Value.Int(x)))
+    fs.push(("Revision", json.Value.Str(x)))
   }
   if let Some(x) = v.latest_revision {
-    fs.push(("LatestRevision", json.Value.Int(x)))
+    fs.push(("LatestRevision", json.Value.Str(x)))
+  }
+  if let Some(x) = v.effective_from {
+    fs.push(("EffectiveFrom", json.Value.Str(x)))
+  }
+  if let Some(x) = v.effective_until {
+    fs.push(("EffectiveUntil", json.Value.Str(x)))
   }
   if let Some(x) = v.total_active_marketplace_revenue_share_allocation_count {
     fs.push(("TotalActiveMarketplaceRevenueShareAllocationCount", json.Value.Int(x)))
@@ -710,15 +775,16 @@ fn from_json_get_marketplace_revenue_share_output(v: json.Value) -> GetMarketpla
       continue
     }
     match k {
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "Id" => out.id = jsonv.read_str(fv)?
       "Arn" => out.arn = jsonv.read_str(fv)?
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductCode" => out.product_code = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_detail_list(fv)?
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "Revision" => out.revision = jsonv.read_int(fv)?
-      "LatestRevision" => out.latest_revision = jsonv.read_int(fv)?
+      "Revision" => out.revision = jsonv.read_str(fv)?
+      "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
+      "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
+      "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "TotalActiveMarketplaceRevenueShareAllocationCount" => out.total_active_marketplace_revenue_share_allocation_count = jsonv.read_int(fv)?
       "TotalMarketplaceRevenueShareAllocationCount" => out.total_marketplace_revenue_share_allocation_count = jsonv.read_int(fv)?
       _ => {}
@@ -996,6 +1062,9 @@ fn json_of_get_revenue_attribution_output(v: GetRevenueAttributionOutput) -> jso
   if let Some(x) = v.total_revenue_attribution_allocation_count {
     fs.push(("TotalRevenueAttributionAllocationCount", json.Value.Int(x)))
   }
+  if let Some(x) = v.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1021,6 +1090,7 @@ fn from_json_get_revenue_attribution_output(v: json.Value) -> GetRevenueAttribut
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "TotalActiveRevenueAttributionAllocationCount" => out.total_active_revenue_attribution_allocation_count = jsonv.read_int(fv)?
       "TotalRevenueAttributionAllocationCount" => out.total_revenue_attribution_allocation_count = jsonv.read_int(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -1054,17 +1124,23 @@ fn json_of_list_marketplace_revenue_share_allocations_input(v: ListMarketplaceRe
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
-  if let Some(x) = v.status {
-    fs.push(("Status", json.Value.Str(x.value())))
+  if let Some(x) = v.status_filter {
+    fs.push(("StatusFilter", json.Value.Str(x.value())))
   }
   if let Some(x) = v.after_effective_from {
     fs.push(("AfterEffectiveFrom", json.Value.Str(x)))
   }
   if let Some(x) = v.before_effective_from {
     fs.push(("BeforeEffectiveFrom", json.Value.Str(x)))
+  }
+  if let Some(x) = v.after_effective_until {
+    fs.push(("AfterEffectiveUntil", json.Value.Str(x)))
+  }
+  if let Some(x) = v.before_effective_until {
+    fs.push(("BeforeEffectiveUntil", json.Value.Str(x)))
   }
   if let Some(x) = v.sort_by {
     fs.push(("SortBy", json.Value.Str(x.value())))
@@ -1092,10 +1168,12 @@ fn from_json_list_marketplace_revenue_share_allocations_input(v: json.Value) -> 
     }
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
+      "StatusFilter" => out.status_filter = AllocationStatus.from(jsonv.read_str(fv)?)
       "AfterEffectiveFrom" => out.after_effective_from = jsonv.read_str(fv)?
       "BeforeEffectiveFrom" => out.before_effective_from = jsonv.read_str(fv)?
+      "AfterEffectiveUntil" => out.after_effective_until = jsonv.read_str(fv)?
+      "BeforeEffectiveUntil" => out.before_effective_until = jsonv.read_str(fv)?
       "SortBy" => out.sort_by = MarketplaceRevenueShareAllocationSortField.from(jsonv.read_str(fv)?)
       "SortOrder" => out.sort_order = SortOrder.from(jsonv.read_str(fv)?)
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
@@ -1138,6 +1216,9 @@ fn json_of_list_marketplace_revenue_shares_input(v: ListMarketplaceRevenueShares
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.identifiers {
+    fs.push(("Identifiers", json_of_marketplace_revenue_share_identifier_list(x)))
+  }
   if let Some(x) = v.product_ids {
     fs.push(("ProductIds", json_of_marketplace_product_id_list(x)))
   }
@@ -1173,6 +1254,7 @@ fn from_json_list_marketplace_revenue_shares_input(v: json.Value) -> ListMarketp
     }
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
+      "Identifiers" => out.identifiers = from_json_marketplace_revenue_share_identifier_list(fv)?
       "ProductIds" => out.product_ids = from_json_marketplace_product_id_list(fv)?
       "ProductCodes" => out.product_codes = from_json_product_code_list(fv)?
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
@@ -1343,6 +1425,9 @@ fn json_of_list_revenue_attributions_input(v: ListRevenueAttributionsInput) -> j
   if let Some(x) = v.next_token {
     fs.push(("NextToken", json.Value.Str(x)))
   }
+  if let Some(x) = v.context_filters {
+    fs.push(("ContextFilters", json_of_context_filter_list(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -1361,6 +1446,7 @@ fn from_json_list_revenue_attributions_input(v: json.Value) -> ListRevenueAttrib
       "SortOrder" => out.sort_order = SortOrder.from(jsonv.read_str(fv)?)
       "MaxResults" => out.max_results = jsonv.read_int(fv)?
       "NextToken" => out.next_token = jsonv.read_str(fv)?
+      "ContextFilters" => out.context_filters = from_json_context_filter_list(fv)?
       _ => {}
     }
   }
@@ -1488,14 +1574,8 @@ fn json_of_marketplace_revenue_share_allocation_summary(v: MarketplaceRevenueSha
   if let Some(x) = v.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.effective_from {
     fs.push(("EffectiveFrom", json.Value.Str(x)))
@@ -1526,9 +1606,7 @@ fn from_json_marketplace_revenue_share_allocation_summary(v: json.Value) -> Mark
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
@@ -1557,10 +1635,168 @@ fn from_json_marketplace_revenue_share_allocation_summary_list(v: json.Value) ->
   Ok(out)
 }
 
-fn json_of_marketplace_revenue_share_summary(v: MarketplaceRevenueShareSummary) -> json.Value {
+fn json_of_marketplace_revenue_share_identifier_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_marketplace_revenue_share_identifier_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_product_detail(v: MarketplaceRevenueShareProductDetail) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.product_id {
     fs.push(("ProductId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_code {
+    fs.push(("ProductCode", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_name {
+    fs.push(("ProductName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.accounts {
+    fs.push(("Accounts", json_of_revenue_share_product_account_detail_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_marketplace_revenue_share_product_detail(v: json.Value) -> MarketplaceRevenueShareProductDetail ! Str {
+  var out = MarketplaceRevenueShareProductDetail{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "ProductCode" => out.product_code = jsonv.read_str(fv)?
+      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Accounts" => out.accounts = from_json_revenue_share_product_account_detail_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_product_detail_list(v: List[MarketplaceRevenueShareProductDetail]) -> json.Value {
+  json.Value.List(v.map(fn(x: MarketplaceRevenueShareProductDetail) -> json.Value { json_of_marketplace_revenue_share_product_detail(x) }))
+}
+
+fn from_json_marketplace_revenue_share_product_detail_list(v: json.Value) -> List[MarketplaceRevenueShareProductDetail] ! Str {
+  var out: List[MarketplaceRevenueShareProductDetail] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_marketplace_revenue_share_product_detail(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_product_entry(v: MarketplaceRevenueShareProductEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.product_id {
+    fs.push(("ProductId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.accounts {
+    fs.push(("Accounts", json_of_revenue_share_product_account_entry_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_marketplace_revenue_share_product_entry(v: json.Value) -> MarketplaceRevenueShareProductEntry ! Str {
+  var out = MarketplaceRevenueShareProductEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "Accounts" => out.accounts = from_json_revenue_share_product_account_entry_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_product_entry_list(v: List[MarketplaceRevenueShareProductEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: MarketplaceRevenueShareProductEntry) -> json.Value { json_of_marketplace_revenue_share_product_entry(x) }))
+}
+
+fn from_json_marketplace_revenue_share_product_entry_list(v: json.Value) -> List[MarketplaceRevenueShareProductEntry] ! Str {
+  var out: List[MarketplaceRevenueShareProductEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_marketplace_revenue_share_product_entry(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_product_summary(v: MarketplaceRevenueShareProductSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.product_id {
+    fs.push(("ProductId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_code {
+    fs.push(("ProductCode", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_name {
+    fs.push(("ProductName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.accounts {
+    fs.push(("Accounts", json_of_revenue_share_product_account_summary_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_marketplace_revenue_share_product_summary(v: json.Value) -> MarketplaceRevenueShareProductSummary ! Str {
+  var out = MarketplaceRevenueShareProductSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "ProductCode" => out.product_code = jsonv.read_str(fv)?
+      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Accounts" => out.accounts = from_json_revenue_share_product_account_summary_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_product_summary_list(v: List[MarketplaceRevenueShareProductSummary]) -> json.Value {
+  json.Value.List(v.map(fn(x: MarketplaceRevenueShareProductSummary) -> json.Value { json_of_marketplace_revenue_share_product_summary(x) }))
+}
+
+fn from_json_marketplace_revenue_share_product_summary_list(v: json.Value) -> List[MarketplaceRevenueShareProductSummary] ! Str {
+  var out: List[MarketplaceRevenueShareProductSummary] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_marketplace_revenue_share_product_summary(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_marketplace_revenue_share_summary(v: MarketplaceRevenueShareSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.id {
+    fs.push(("Id", json.Value.Str(x)))
   }
   if let Some(x) = v.arn {
     fs.push(("Arn", json.Value.Str(x)))
@@ -1568,11 +1804,8 @@ fn json_of_marketplace_revenue_share_summary(v: MarketplaceRevenueShareSummary) 
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_code {
-    fs.push(("ProductCode", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
+  if let Some(x) = v.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_summary_list(x)))
   }
   if let Some(x) = v.created_date {
     fs.push(("CreatedDate", jsonv.time(x, "epoch-seconds")))
@@ -1581,7 +1814,13 @@ fn json_of_marketplace_revenue_share_summary(v: MarketplaceRevenueShareSummary) 
     fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
   }
   if let Some(x) = v.latest_revision {
-    fs.push(("LatestRevision", json.Value.Int(x)))
+    fs.push(("LatestRevision", json.Value.Str(x)))
+  }
+  if let Some(x) = v.effective_from {
+    fs.push(("EffectiveFrom", json.Value.Str(x)))
+  }
+  if let Some(x) = v.effective_until {
+    fs.push(("EffectiveUntil", json.Value.Str(x)))
   }
   if let Some(x) = v.total_active_marketplace_revenue_share_allocation_count {
     fs.push(("TotalActiveMarketplaceRevenueShareAllocationCount", json.Value.Int(x)))
@@ -1599,14 +1838,15 @@ fn from_json_marketplace_revenue_share_summary(v: json.Value) -> MarketplaceReve
       continue
     }
     match k {
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "Id" => out.id = jsonv.read_str(fv)?
       "Arn" => out.arn = jsonv.read_str(fv)?
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductCode" => out.product_code = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_summary_list(fv)?
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestRevision" => out.latest_revision = jsonv.read_int(fv)?
+      "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
+      "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
+      "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "TotalActiveMarketplaceRevenueShareAllocationCount" => out.total_active_marketplace_revenue_share_allocation_count = jsonv.read_int(fv)?
       "TotalMarketplaceRevenueShareAllocationCount" => out.total_marketplace_revenue_share_allocation_count = jsonv.read_int(fv)?
       _ => {}
@@ -1627,22 +1867,6 @@ fn from_json_marketplace_revenue_share_summary_list(v: json.Value) -> List[Marke
       continue
     }
     out.push(from_json_marketplace_revenue_share_summary(fv)?)
-  }
-  Ok(out)
-}
-
-fn json_of_marketplace_revenue_share_tag_list(v: List[Tag]) -> json.Value {
-  json.Value.List(v.map(fn(x: Tag) -> json.Value { json_of_tag(x) }))
-}
-
-fn from_json_marketplace_revenue_share_tag_list(v: json.Value) -> List[Tag] ! Str {
-  var out: List[Tag] = []
-  for fv in jsonv.items(v)? {
-    if fv == json.Value.Null {
-      // a dense list skips nulls
-      continue
-    }
-    out.push(from_json_tag(fv)?)
   }
   Ok(out)
 }
@@ -1833,6 +2057,22 @@ fn from_json_revenue_attribution_allocation_summary_list(v: json.Value) -> List[
   Ok(out)
 }
 
+fn json_of_revenue_attribution_context(v: Map[Str, Str]) -> json.Value {
+  json.Value.Object(v.entries().map(fn(e: (Str, Str)) -> (Str, json.Value) { (e.0, json.Value.Str(e.1)) }))
+}
+
+fn from_json_revenue_attribution_context(v: json.Value) -> Map[Str, Str] ! Str {
+  var out: Map[Str, Str] = {}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      // a dense map skips nulls
+      continue
+    }
+    out.put(k, jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_revenue_attribution_identifier_list(v: List[Str]) -> json.Value {
   json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
@@ -1931,6 +2171,152 @@ fn from_json_revenue_share_allocation_change_list(v: json.Value) -> List[Revenue
       continue
     }
     out.push(from_json_revenue_share_allocation(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_detail(v: RevenueShareProductAccountDetail) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_type {
+    fs.push(("AccountType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.count {
+    fs.push(("Count", json.Value.Int(x)))
+  }
+  if let Some(x) = v.account_ids {
+    fs.push(("AccountIds", json_of_revenue_share_product_account_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_revenue_share_product_account_detail(v: json.Value) -> RevenueShareProductAccountDetail ! Str {
+  var out = RevenueShareProductAccountDetail{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AccountType" => out.account_type = RevenueShareProductAccountType.from(jsonv.read_str(fv)?)
+      "Count" => out.count = jsonv.read_int(fv)?
+      "AccountIds" => out.account_ids = from_json_revenue_share_product_account_id_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_detail_list(v: List[RevenueShareProductAccountDetail]) -> json.Value {
+  json.Value.List(v.map(fn(x: RevenueShareProductAccountDetail) -> json.Value { json_of_revenue_share_product_account_detail(x) }))
+}
+
+fn from_json_revenue_share_product_account_detail_list(v: json.Value) -> List[RevenueShareProductAccountDetail] ! Str {
+  var out: List[RevenueShareProductAccountDetail] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_revenue_share_product_account_detail(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_entry(v: RevenueShareProductAccountEntry) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_type {
+    fs.push(("AccountType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.account_ids {
+    fs.push(("AccountIds", json_of_revenue_share_product_account_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_revenue_share_product_account_entry(v: json.Value) -> RevenueShareProductAccountEntry ! Str {
+  var out = RevenueShareProductAccountEntry{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AccountType" => out.account_type = RevenueShareProductAccountType.from(jsonv.read_str(fv)?)
+      "AccountIds" => out.account_ids = from_json_revenue_share_product_account_id_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_entry_list(v: List[RevenueShareProductAccountEntry]) -> json.Value {
+  json.Value.List(v.map(fn(x: RevenueShareProductAccountEntry) -> json.Value { json_of_revenue_share_product_account_entry(x) }))
+}
+
+fn from_json_revenue_share_product_account_entry_list(v: json.Value) -> List[RevenueShareProductAccountEntry] ! Str {
+  var out: List[RevenueShareProductAccountEntry] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_revenue_share_product_account_entry(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
+}
+
+fn from_json_revenue_share_product_account_id_list(v: json.Value) -> List[Str] ! Str {
+  var out: List[Str] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(jsonv.read_str(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_summary(v: RevenueShareProductAccountSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.account_type {
+    fs.push(("AccountType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.count {
+    fs.push(("Count", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_revenue_share_product_account_summary(v: json.Value) -> RevenueShareProductAccountSummary ! Str {
+  var out = RevenueShareProductAccountSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "AccountType" => out.account_type = RevenueShareProductAccountType.from(jsonv.read_str(fv)?)
+      "Count" => out.count = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_revenue_share_product_account_summary_list(v: List[RevenueShareProductAccountSummary]) -> json.Value {
+  json.Value.List(v.map(fn(x: RevenueShareProductAccountSummary) -> json.Value { json_of_revenue_share_product_account_summary(x) }))
+}
+
+fn from_json_revenue_share_product_account_summary_list(v: json.Value) -> List[RevenueShareProductAccountSummary] ! Str {
+  var out: List[RevenueShareProductAccountSummary] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_revenue_share_product_account_summary(fv)?)
   }
   Ok(out)
 }
@@ -2190,8 +2576,8 @@ fn json_of_update_marketplace_revenue_share_allocation_input(v: UpdateMarketplac
   if let Some(x) = v.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
@@ -2201,12 +2587,6 @@ fn json_of_update_marketplace_revenue_share_allocation_input(v: UpdateMarketplac
   }
   if let Some(x) = v.client_token {
     fs.push(("ClientToken", json.Value.Str(x)))
-  }
-  if let Some(x) = v.effective_from {
-    fs.push(("EffectiveFrom", json.Value.Str(x)))
-  }
-  if let Some(x) = v.effective_until {
-    fs.push(("EffectiveUntil", json.Value.Str(x)))
   }
   if let Some(x) = v.revenue_share_percent {
     fs.push(("RevenueSharePercent", json.Value.Str(x)))
@@ -2225,12 +2605,10 @@ fn from_json_update_marketplace_revenue_share_allocation_input(v: json.Value) ->
     }
     match k {
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
       "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
       "ClientToken" => out.client_token = jsonv.read_str(fv)?
-      "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
-      "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       _ => {}
@@ -2244,14 +2622,8 @@ fn json_of_update_marketplace_revenue_share_allocation_output(v: UpdateMarketpla
   if let Some(x) = v.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
   }
-  if let Some(x) = v.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.product_name {
-    fs.push(("ProductName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = v.effective_from {
     fs.push(("EffectiveFrom", json.Value.Str(x)))
@@ -2271,8 +2643,11 @@ fn json_of_update_marketplace_revenue_share_allocation_output(v: UpdateMarketpla
   if let Some(x) = v.last_modified_date {
     fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
   }
-  if let Some(x) = v.latest_marketplace_revenue_share_revision {
-    fs.push(("LatestMarketplaceRevenueShareRevision", json.Value.Str(x)))
+  if let Some(x) = v.marketplace_revenue_share_revision {
+    fs.push(("MarketplaceRevenueShareRevision", json.Value.Str(x)))
+  }
+  if let Some(x) = v.marketplace_revenue_share_latest_revision {
+    fs.push(("MarketplaceRevenueShareLatestRevision", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -2285,16 +2660,91 @@ fn from_json_update_marketplace_revenue_share_allocation_output(v: json.Value) -
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestMarketplaceRevenueShareRevision" => out.latest_marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareLatestRevision" => out.marketplace_revenue_share_latest_revision = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_marketplace_revenue_share_input(v: UpdateMarketplaceRevenueShareInput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.catalog {
+    fs.push(("Catalog", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.identifier {
+    fs.push(("Identifier", json.Value.Str(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  }
+  if let Some(x) = v.revision {
+    fs.push(("Revision", json.Value.Str(x)))
+  }
+  if let Some(x) = v.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_entry_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_marketplace_revenue_share_input(v: json.Value) -> UpdateMarketplaceRevenueShareInput ! Str {
+  var out = UpdateMarketplaceRevenueShareInput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
+      "Identifier" => out.identifier = jsonv.read_str(fv)?
+      "ClientToken" => out.client_token = jsonv.read_str(fv)?
+      "Revision" => out.revision = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_entry_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_update_marketplace_revenue_share_output(v: UpdateMarketplaceRevenueShareOutput) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.id {
+    fs.push(("Id", json.Value.Str(x)))
+  }
+  if let Some(x) = v.arn {
+    fs.push(("Arn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_summary_list(x)))
+  }
+  if let Some(x) = v.last_modified_date {
+    fs.push(("LastModifiedDate", jsonv.time(x, "epoch-seconds")))
+  }
+  if let Some(x) = v.latest_revision {
+    fs.push(("LatestRevision", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_update_marketplace_revenue_share_output(v: json.Value) -> UpdateMarketplaceRevenueShareOutput ! Str {
+  var out = UpdateMarketplaceRevenueShareOutput{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Id" => out.id = jsonv.read_str(fv)?
+      "Arn" => out.arn = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_summary_list(fv)?
+      "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
+      "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -2318,6 +2768,9 @@ fn json_of_update_revenue_attribution_input(v: UpdateRevenueAttributionInput) ->
   if let Some(x) = v.revision {
     fs.push(("Revision", json.Value.Str(x)))
   }
+  if let Some(x) = v.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2333,6 +2786,7 @@ fn from_json_update_revenue_attribution_input(v: json.Value) -> UpdateRevenueAtt
       "ClientToken" => out.client_token = jsonv.read_str(fv)?
       "Description" => out.description = jsonv.read_str(fv)?
       "Revision" => out.revision = jsonv.read_str(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -2356,6 +2810,9 @@ fn json_of_update_revenue_attribution_output(v: UpdateRevenueAttributionOutput) 
   if let Some(x) = v.latest_revision {
     fs.push(("LatestRevision", json.Value.Str(x)))
   }
+  if let Some(x) = v.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2371,6 +2828,7 @@ fn from_json_update_revenue_attribution_output(v: json.Value) -> UpdateRevenueAt
       "Description" => out.description = jsonv.read_str(fv)?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
       "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -2586,11 +3044,11 @@ pub fn serialize_create_marketplace_revenue_share(ep: rest.Endpoint, input: Crea
   } else if idempotency_token != "" {
     fs.push(("ClientToken", json.Value.Str(idempotency_token)))
   }
-  if let Some(x) = input.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = input.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_entry_list(x)))
   }
   if let Some(x) = input.tags {
-    fs.push(("Tags", json_of_marketplace_revenue_share_tag_list(x)))
+    fs.push(("Tags", json_of_tag_list(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -2617,14 +3075,13 @@ pub fn deserialize_create_marketplace_revenue_share(resp: http.Response) -> Crea
       continue
     }
     match k {
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "Id" => out.id = jsonv.read_str(fv)?
       "Arn" => out.arn = jsonv.read_str(fv)?
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductCode" => out.product_code = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_summary_list(fv)?
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "Revision" => out.revision = jsonv.read_int(fv)?
+      "Revision" => out.revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -2732,13 +3189,16 @@ pub fn serialize_create_marketplace_revenue_share_allocation(ep: rest.Endpoint, 
   if let Some(x) = input.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = input.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = input.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = input.client_token {
     fs.push(("ClientToken", json.Value.Str(x)))
   } else if idempotency_token != "" {
     fs.push(("ClientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.marketplace_revenue_share_revision {
+    fs.push(("MarketplaceRevenueShareRevision", json.Value.Str(x)))
   }
   if let Some(x) = input.effective_from {
     fs.push(("EffectiveFrom", json.Value.Str(x)))
@@ -2775,16 +3235,15 @@ pub fn deserialize_create_marketplace_revenue_share_allocation(resp: http.Respon
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestMarketplaceRevenueShareRevision" => out.latest_marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareLatestRevision" => out.marketplace_revenue_share_latest_revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -2797,6 +3256,7 @@ pub enum CreateMarketplaceRevenueShareAllocationErr {
   ConflictException(e: ConflictException)
   InternalServerException(e: InternalServerException)
   ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -2815,6 +3275,7 @@ pub fn (e: CreateMarketplaceRevenueShareAllocationErr) display() -> Str {
     ConflictException(x) => "ConflictException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
     ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -2843,6 +3304,10 @@ pub fn deserialize_create_marketplace_revenue_share_allocation_error(resp: http.
       Ok(x) => return CreateMarketplaceRevenueShareAllocationErr.ResourceNotFoundException(x)
       Err(msg) => return CreateMarketplaceRevenueShareAllocationErr.Deserialize(msg)
     }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return CreateMarketplaceRevenueShareAllocationErr.ServiceQuotaExceededException(x)
+      Err(msg) => return CreateMarketplaceRevenueShareAllocationErr.Deserialize(msg)
+    }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
       Ok(x) => return CreateMarketplaceRevenueShareAllocationErr.ThrottlingException(x)
       Err(msg) => return CreateMarketplaceRevenueShareAllocationErr.Deserialize(msg)
@@ -2856,8 +3321,7 @@ pub fn deserialize_create_marketplace_revenue_share_allocation_error(resp: http.
   CreateMarketplaceRevenueShareAllocationErr.Api(restjson.api_error(resp, body))
 }
 
-/// Creates a new marketplace revenue share allocation for the specified
-/// product.
+/// Creates a new allocation under the specified marketplace revenue share.
 pub fn (c: Client) create_marketplace_revenue_share_allocation(input: CreateMarketplaceRevenueShareAllocationInput) -> CreateMarketplaceRevenueShareAllocationOutput ! CreateMarketplaceRevenueShareAllocationErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_create_marketplace_revenue_share_allocation(c.params, input)) ?? e => return Err(CreateMarketplaceRevenueShareAllocationErr.InvalidInput(e))
   var req = serialize_create_marketplace_revenue_share_allocation(ep, input, rest.uuid(c.rand)) ?? e => return Err(CreateMarketplaceRevenueShareAllocationErr.InvalidInput(e))
@@ -2906,6 +3370,9 @@ pub fn serialize_create_revenue_attribution(ep: rest.Endpoint, input: CreateReve
   if let Some(x) = input.tags {
     fs.push(("Tags", json_of_tag_list(x)))
   }
+  if let Some(x) = input.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -2938,6 +3405,7 @@ pub fn deserialize_create_revenue_attribution(resp: http.Response) -> CreateReve
       "TenancyModel" => out.tenancy_model = TenancyModel.from(jsonv.read_str(fv)?)
       "MarketplaceProduct" => out.marketplace_product = from_json_marketplace_product_summary(fv)?
       "Revision" => out.revision = jsonv.read_str(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -3044,11 +3512,11 @@ pub fn serialize_get_marketplace_revenue_share(ep: rest.Endpoint, input: GetMark
   if let Some(x) = input.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = input.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = input.identifier {
+    fs.push(("Identifier", json.Value.Str(x)))
   }
   if let Some(x) = input.revision {
-    fs.push(("Revision", json.Value.Int(x)))
+    fs.push(("Revision", json.Value.Str(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -3075,15 +3543,16 @@ pub fn deserialize_get_marketplace_revenue_share(resp: http.Response) -> GetMark
       continue
     }
     match k {
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
+      "Id" => out.id = jsonv.read_str(fv)?
       "Arn" => out.arn = jsonv.read_str(fv)?
       "Catalog" => out.catalog = CatalogName.from(jsonv.read_str(fv)?)
-      "ProductCode" => out.product_code = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_detail_list(fv)?
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "Revision" => out.revision = jsonv.read_int(fv)?
-      "LatestRevision" => out.latest_revision = jsonv.read_int(fv)?
+      "Revision" => out.revision = jsonv.read_str(fv)?
+      "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
+      "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
+      "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "TotalActiveMarketplaceRevenueShareAllocationCount" => out.total_active_marketplace_revenue_share_allocation_count = jsonv.read_int(fv)?
       "TotalMarketplaceRevenueShareAllocationCount" => out.total_marketplace_revenue_share_allocation_count = jsonv.read_int(fv)?
       _ => {}
@@ -3186,8 +3655,8 @@ pub fn serialize_get_marketplace_revenue_share_allocation(ep: rest.Endpoint, inp
   if let Some(x) = input.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = input.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = input.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = input.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
@@ -3221,16 +3690,15 @@ pub fn deserialize_get_marketplace_revenue_share_allocation(resp: http.Response)
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestMarketplaceRevenueShareRevision" => out.latest_marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareLatestRevision" => out.marketplace_revenue_share_latest_revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -3372,6 +3840,7 @@ pub fn deserialize_get_revenue_attribution(resp: http.Response) -> GetRevenueAtt
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "TotalActiveRevenueAttributionAllocationCount" => out.total_active_revenue_attribution_allocation_count = jsonv.read_int(fv)?
       "TotalRevenueAttributionAllocationCount" => out.total_revenue_attribution_allocation_count = jsonv.read_int(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }
@@ -3743,17 +4212,23 @@ pub fn serialize_list_marketplace_revenue_share_allocations(ep: rest.Endpoint, i
   if let Some(x) = input.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = input.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = input.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
-  if let Some(x) = input.status {
-    fs.push(("Status", json.Value.Str(x.value())))
+  if let Some(x) = input.status_filter {
+    fs.push(("StatusFilter", json.Value.Str(x.value())))
   }
   if let Some(x) = input.after_effective_from {
     fs.push(("AfterEffectiveFrom", json.Value.Str(x)))
   }
   if let Some(x) = input.before_effective_from {
     fs.push(("BeforeEffectiveFrom", json.Value.Str(x)))
+  }
+  if let Some(x) = input.after_effective_until {
+    fs.push(("AfterEffectiveUntil", json.Value.Str(x)))
+  }
+  if let Some(x) = input.before_effective_until {
+    fs.push(("BeforeEffectiveUntil", json.Value.Str(x)))
   }
   if let Some(x) = input.sort_by {
     fs.push(("SortBy", json.Value.Str(x.value())))
@@ -3893,6 +4368,9 @@ pub fn serialize_list_marketplace_revenue_shares(ep: rest.Endpoint, input: ListM
   if let Some(x) = input.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
+  if let Some(x) = input.identifiers {
+    fs.push(("Identifiers", json_of_marketplace_revenue_share_identifier_list(x)))
+  }
   if let Some(x) = input.product_ids {
     fs.push(("ProductIds", json_of_marketplace_product_id_list(x)))
   }
@@ -3954,6 +4432,7 @@ pub fn deserialize_list_marketplace_revenue_shares(resp: http.Response) -> ListM
 pub enum ListMarketplaceRevenueSharesErr {
   AccessDeniedException(e: AccessDeniedException)
   InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
   ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
@@ -3970,6 +4449,7 @@ pub fn (e: ListMarketplaceRevenueSharesErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
@@ -3988,6 +4468,10 @@ pub fn deserialize_list_marketplace_revenue_shares_error(resp: http.Response) ->
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
       Ok(x) => return ListMarketplaceRevenueSharesErr.InternalServerException(x)
+      Err(msg) => return ListMarketplaceRevenueSharesErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ListMarketplaceRevenueSharesErr.ResourceNotFoundException(x)
       Err(msg) => return ListMarketplaceRevenueSharesErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -4217,6 +4701,9 @@ pub fn serialize_list_revenue_attributions(ep: rest.Endpoint, input: ListRevenue
   }
   if let Some(x) = input.next_token {
     fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.context_filters {
+    fs.push(("ContextFilters", json_of_context_filter_list(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -4831,6 +5318,160 @@ pub fn (c: Client) untag_resource(input: UntagResourceInput) -> () ! UntagResour
   deserialize_untag_resource(resp) ?? e => Err(UntagResourceErr.Deserialize(e))
 }
 
+pub fn endpoint_params_update_marketplace_revenue_share(base: EndpointParameters, input: UpdateMarketplaceRevenueShareInput) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of UpdateMarketplaceRevenueShare.
+pub fn serialize_update_marketplace_revenue_share(ep: rest.Endpoint, input: UpdateMarketplaceRevenueShareInput, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.catalog {
+    fs.push(("Catalog", json.Value.Str(x.value())))
+  }
+  if let Some(x) = input.identifier {
+    fs.push(("Identifier", json.Value.Str(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("ClientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.revision {
+    fs.push(("Revision", json.Value.Str(x)))
+  }
+  if let Some(x) = input.products {
+    fs.push(("Products", json_of_marketplace_revenue_share_product_entry_list(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/UpdateMarketplaceRevenueShare"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_update_marketplace_revenue_share(resp: http.Response) -> UpdateMarketplaceRevenueShareOutput ! Str {
+  var out = UpdateMarketplaceRevenueShareOutput{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Id" => out.id = jsonv.read_str(fv)?
+      "Arn" => out.arn = jsonv.read_str(fv)?
+      "Products" => out.products = from_json_marketplace_revenue_share_product_summary_list(fv)?
+      "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
+      "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of UpdateMarketplaceRevenueShare.
+pub enum UpdateMarketplaceRevenueShareErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: UpdateMarketplaceRevenueShareErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_update_marketplace_revenue_share_error(resp: http.Response) -> UpdateMarketplaceRevenueShareErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.AccessDeniedException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.ConflictException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.InternalServerException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.ResourceNotFoundException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.ServiceQuotaExceededException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.ThrottlingException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return UpdateMarketplaceRevenueShareErr.ValidationException(x)
+      Err(msg) => return UpdateMarketplaceRevenueShareErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  UpdateMarketplaceRevenueShareErr.Api(restjson.api_error(resp, body))
+}
+
+/// Replaces the products of a marketplace revenue share. The request
+/// carries the complete desired set of products and their typed account
+/// lists; a product not listed is removed and its account lists cleared,
+/// and an empty Products list closes the marketplace revenue share. Closing
+/// is one-way.
+pub fn (c: Client) update_marketplace_revenue_share(input: UpdateMarketplaceRevenueShareInput) -> UpdateMarketplaceRevenueShareOutput ! UpdateMarketplaceRevenueShareErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_update_marketplace_revenue_share(c.params, input)) ?? e => return Err(UpdateMarketplaceRevenueShareErr.InvalidInput(e))
+  var req = serialize_update_marketplace_revenue_share(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateMarketplaceRevenueShareErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateMarketplaceRevenueShareErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_update_marketplace_revenue_share_error(resp))
+  }
+  deserialize_update_marketplace_revenue_share(resp) ?? e => Err(UpdateMarketplaceRevenueShareErr.Deserialize(e))
+}
+
 pub fn endpoint_params_update_marketplace_revenue_share_allocation(base: EndpointParameters, input: UpdateMarketplaceRevenueShareAllocationInput) -> EndpointParameters {
   let _ = input
   base
@@ -4846,8 +5487,8 @@ pub fn serialize_update_marketplace_revenue_share_allocation(ep: rest.Endpoint, 
   if let Some(x) = input.catalog {
     fs.push(("Catalog", json.Value.Str(x.value())))
   }
-  if let Some(x) = input.product_id {
-    fs.push(("ProductId", json.Value.Str(x)))
+  if let Some(x) = input.marketplace_revenue_share_identifier {
+    fs.push(("MarketplaceRevenueShareIdentifier", json.Value.Str(x)))
   }
   if let Some(x) = input.marketplace_revenue_share_allocation_id {
     fs.push(("MarketplaceRevenueShareAllocationId", json.Value.Str(x)))
@@ -4859,12 +5500,6 @@ pub fn serialize_update_marketplace_revenue_share_allocation(ep: rest.Endpoint, 
     fs.push(("ClientToken", json.Value.Str(x)))
   } else if idempotency_token != "" {
     fs.push(("ClientToken", json.Value.Str(idempotency_token)))
-  }
-  if let Some(x) = input.effective_from {
-    fs.push(("EffectiveFrom", json.Value.Str(x)))
-  }
-  if let Some(x) = input.effective_until {
-    fs.push(("EffectiveUntil", json.Value.Str(x)))
   }
   if let Some(x) = input.revenue_share_percent {
     fs.push(("RevenueSharePercent", json.Value.Str(x)))
@@ -4898,16 +5533,15 @@ pub fn deserialize_update_marketplace_revenue_share_allocation(resp: http.Respon
     }
     match k {
       "MarketplaceRevenueShareAllocationId" => out.marketplace_revenue_share_allocation_id = jsonv.read_str(fv)?
-      "ProductId" => out.product_id = jsonv.read_str(fv)?
-      "ProductName" => out.product_name = jsonv.read_str(fv)?
-      "Arn" => out.arn = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareIdentifier" => out.marketplace_revenue_share_identifier = jsonv.read_str(fv)?
       "EffectiveFrom" => out.effective_from = jsonv.read_str(fv)?
       "EffectiveUntil" => out.effective_until = jsonv.read_str(fv)?
       "RevenueSharePercent" => out.revenue_share_percent = jsonv.read_str(fv)?
       "Status" => out.status = AllocationStatus.from(jsonv.read_str(fv)?)
       "CreatedDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
-      "LatestMarketplaceRevenueShareRevision" => out.latest_marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareRevision" => out.marketplace_revenue_share_revision = jsonv.read_str(fv)?
+      "MarketplaceRevenueShareLatestRevision" => out.marketplace_revenue_share_latest_revision = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -4980,8 +5614,8 @@ pub fn deserialize_update_marketplace_revenue_share_allocation_error(resp: http.
 }
 
 /// Updates an existing marketplace revenue share allocation. Supports
-/// modifying effective dates, revenue share percentage, and status with
-/// time-based mutability rules.
+/// modifying the revenue share percentage and status only, with time-based
+/// mutability rules.
 pub fn (c: Client) update_marketplace_revenue_share_allocation(input: UpdateMarketplaceRevenueShareAllocationInput) -> UpdateMarketplaceRevenueShareAllocationOutput ! UpdateMarketplaceRevenueShareAllocationErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_marketplace_revenue_share_allocation(c.params, input)) ?? e => return Err(UpdateMarketplaceRevenueShareAllocationErr.InvalidInput(e))
   var req = serialize_update_marketplace_revenue_share_allocation(ep, input, rest.uuid(c.rand)) ?? e => return Err(UpdateMarketplaceRevenueShareAllocationErr.InvalidInput(e))
@@ -5024,6 +5658,9 @@ pub fn serialize_update_revenue_attribution(ep: rest.Endpoint, input: UpdateReve
   if let Some(x) = input.revision {
     fs.push(("Revision", json.Value.Str(x)))
   }
+  if let Some(x) = input.context {
+    fs.push(("Context", json_of_revenue_attribution_context(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -5054,6 +5691,7 @@ pub fn deserialize_update_revenue_attribution(resp: http.Response) -> UpdateReve
       "Description" => out.description = jsonv.read_str(fv)?
       "LastModifiedDate" => out.last_modified_date = jsonv.read_time(fv, "epoch-seconds")?
       "LatestRevision" => out.latest_revision = jsonv.read_str(fv)?
+      "Context" => out.context = from_json_revenue_attribution_context(fv)?
       _ => {}
     }
   }

@@ -302,6 +302,52 @@ pub struct Cipher {
   pub priority: Int? = None
 }
 
+/// Describes a client certificate identity filter.
+pub struct ClientCertificateIdentityFilter {
+  /// The client certificate field to match. The possible values are:
+  /// subject-cn – The common name in the certificate subject. subject-ou
+  /// – The organizational unit in the certificate subject. san-dns – A
+  /// DNS name in the subject alternative name (SAN). san-uri – A URI in the
+  /// subject alternative name (SAN). If the client certificate doesn't
+  /// contain the field, the filter doesn't match. If the field has multiple
+  /// values, the filter matches if it matches any one of the values.
+  pub field: ClientCertificateIdentityFilterField? = None
+  /// The action to take when the client certificate matches the filter. The
+  /// only supported action is accept .
+  pub action: ClientCertificateIdentityFilterAction? = None
+  /// The match type. The possible values are exact and prefix . For the
+  /// subject-cn , subject-ou , and san-dns fields, matching is
+  /// case-insensitive. For the san-uri field, the scheme and host are matched
+  /// case-insensitively, and the rest of the URI is matched case-sensitively.
+  pub match_type: ClientCertificateIdentityFilterMatchType? = None
+  /// The value to match. The value must be 1–256 printable ASCII
+  /// characters. If the field is san-uri , the value must begin with a
+  /// letter. Before the first colon, the value can contain only letters,
+  /// digits, plus signs (+), hyphens (-), or periods (.). If the match type
+  /// is exact , the value must contain a colon. For example,
+  /// spiffe://example.com/workload is a valid value.
+  pub value: Str? = None
+}
+
+pub enum ClientCertificateIdentityFilterAction: Str {
+  Accept = "accept"
+  Unknown(value: Str)
+}
+
+pub enum ClientCertificateIdentityFilterField: Str {
+  SubjectCn = "subject-cn"
+  SubjectOu = "subject-ou"
+  SanDns = "san-dns"
+  SanUri = "san-uri"
+  Unknown(value: Str)
+}
+
+pub enum ClientCertificateIdentityFilterMatchType: Str {
+  Exact = "exact"
+  Prefix = "prefix"
+  Unknown(value: Str)
+}
+
 pub struct CreateListenerInput {
   /// The Amazon Resource Name (ARN) of the load balancer.
   pub load_balancer_arn: Str? = None
@@ -334,7 +380,8 @@ pub struct CreateListenerInput {
   pub alpn_policy: List[Str]? = None
   /// The tags to assign to the listener.
   pub tags: List[Tag]? = None
-  /// [HTTPS listeners] The mutual authentication configuration information.
+  /// [HTTPS and TLS listeners] The mutual authentication configuration
+  /// information.
   pub mutual_authentication: MutualAuthenticationAttributes? = None
 }
 
@@ -1418,7 +1465,12 @@ pub struct LoadBalancerAttribute {
   /// header has information about the cipher suite negotiated with the
   /// client. Both headers are in OpenSSL format. The possible values for the
   /// attribute are true and false . The default is false .
-  /// routing.http.xff_client_port.enabled - Indicates whether the
+  /// routing.http.x_amzn_tls_kx.enabled - Indicates whether the x-amzn-tls-kx
+  /// header, which contains information about the negotiated key exchange
+  /// group, is added to the client request before sending it to the target.
+  /// The x-amzn-tls-kx header uses IANA TLS Supported Groups registry naming.
+  /// The possible values for the attribute are true and false . The default
+  /// is false . routing.http.xff_client_port.enabled - Indicates whether the
   /// X-Forwarded-For header should preserve the source port that the client
   /// used to connect to the load balancer. The possible values are true and
   /// false . The default is false . routing.http.xff_header_processing.mode -
@@ -1602,7 +1654,8 @@ pub struct ModifyListenerInput {
   /// For more information, see ALPN policies in the Network Load Balancers
   /// Guide .
   pub alpn_policy: List[Str]? = None
-  /// [HTTPS listeners] The mutual authentication configuration information.
+  /// [HTTPS and TLS listeners] The mutual authentication configuration
+  /// information.
   pub mutual_authentication: MutualAuthenticationAttributes? = None
 }
 
@@ -1726,8 +1779,10 @@ pub struct ModifyTrustStoreOutput {
 
 /// Information about the mutual authentication attributes of a listener.
 pub struct MutualAuthenticationAttributes {
-  /// The client certificate handling method. Options are off , passthrough or
-  /// verify . The default value is off .
+  /// The client certificate handling method. The default value is off .
+  /// [Application Load Balancers] The possible values are off , passthrough ,
+  /// and verify . [Network Load Balancers] The possible values are off and
+  /// verify .
   pub mode: Str? = None
   /// The Amazon Resource Name (ARN) of the trust store.
   pub trust_store_arn: Str? = None
@@ -1737,6 +1792,13 @@ pub struct MutualAuthenticationAttributes {
   pub trust_store_association_status: TrustStoreAssociationStatusEnum? = None
   /// Indicates whether trust store CA certificate names are advertised.
   pub advertise_trust_store_ca_names: AdvertiseTrustStoreCaNamesEnum? = None
+  /// [Network Load Balancers] The client certificate identity filters. The
+  /// load balancer admits a connection only if the client certificate matches
+  /// at least one filter. If you don't specify any filters, the load balancer
+  /// admits every client certificate that passes trust store validation and
+  /// revocation checks. You can specify filters only when the mode is verify
+  /// . You can specify up to 100 filters per listener.
+  pub client_certificate_identity_filters: List[ClientCertificateIdentityFilter]? = None
 }
 
 /// This operation is not allowed.
@@ -2422,26 +2484,38 @@ pub struct TargetGroupAttribute {
   /// during which requests from a client should be routed to the same target.
   /// After this time period expires, the load balancer-generated cookie is
   /// considered stale. The range is 1 second to 1 week (604800 seconds). The
-  /// default value is 1 day (86400 seconds). The following attribute is
-  /// supported only if the load balancer is an Application Load Balancer and
-  /// the target is a Lambda function: lambda.multi_value_headers.enabled -
-  /// Indicates whether the request and response headers that are exchanged
-  /// between the load balancer and the Lambda function include arrays of
-  /// values or strings. The value is true or false . The default is false .
-  /// If the value is false and the request contains a duplicate header field
-  /// name or query parameter key, the load balancer uses the last value sent
-  /// by the client. The following attributes are supported only by Network
-  /// Load Balancers: deregistration_delay.connection_termination.enabled -
-  /// Indicates whether the load balancer terminates connections at the end of
-  /// the deregistration timeout. The value is true or false . For new
-  /// UDP/TCP_UDP target groups the default is true . Otherwise, the default
-  /// is false . preserve_client_ip.enabled - Indicates whether client IP
-  /// preservation is enabled. The value is true or false . The default is
-  /// disabled if the target group type is IP address and the target group
-  /// protocol is TCP or TLS. Otherwise, the default is enabled. Client IP
-  /// preservation can't be disabled for UDP and TCP_UDP target groups.
-  /// proxy_protocol_v2.enabled - Indicates whether Proxy Protocol version 2
-  /// is enabled. The value is true or false . The default is false .
+  /// default value is 1 day (86400 seconds).
+  /// waf.http2.traffic_inspection_behavior – Specifies when Amazon Web
+  /// Services WAF inspects HTTP/2 requests. This attribute applies only to
+  /// target groups that use the HTTP2 protocol version. The possible values
+  /// are: inspect_immediately – Inspects each request as soon as data is
+  /// available. This is the default. inspect_after_sufficient_data –
+  /// Accumulates HTTP/2 data frames before inspection.
+  /// routing.http2.rst_stream_error_forwarding.enabled – Specifies whether
+  /// the load balancer forwards an HTTP/2 or gRPC target's RST_STREAM error
+  /// code to the client, instead of returning an HTTP 502 (Bad Gateway)
+  /// response. This attribute applies only to target groups that use the
+  /// HTTP2 or GRPC protocol version. The value is true or false . The default
+  /// is false . The following attribute is supported only if the load
+  /// balancer is an Application Load Balancer and the target is a Lambda
+  /// function: lambda.multi_value_headers.enabled - Indicates whether the
+  /// request and response headers that are exchanged between the load
+  /// balancer and the Lambda function include arrays of values or strings.
+  /// The value is true or false . The default is false . If the value is
+  /// false and the request contains a duplicate header field name or query
+  /// parameter key, the load balancer uses the last value sent by the client.
+  /// The following attributes are supported only by Network Load Balancers:
+  /// deregistration_delay.connection_termination.enabled - Indicates whether
+  /// the load balancer terminates connections at the end of the
+  /// deregistration timeout. The value is true or false . For new UDP/TCP_UDP
+  /// target groups the default is true . Otherwise, the default is false .
+  /// preserve_client_ip.enabled - Indicates whether client IP preservation is
+  /// enabled. The value is true or false . The default is disabled if the
+  /// target group type is IP address and the target group protocol is TCP or
+  /// TLS. Otherwise, the default is enabled. Client IP preservation can't be
+  /// disabled for UDP and TCP_UDP target groups. proxy_protocol_v2.enabled -
+  /// Indicates whether Proxy Protocol version 2 is enabled. The value is true
+  /// or false . The default is false .
   /// target_health_state.unhealthy.connection_termination.enabled - Indicates
   /// whether the load balancer terminates connections to unhealthy targets.
   /// The value is true or false . The default is true . This attribute can't

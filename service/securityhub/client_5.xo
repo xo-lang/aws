@@ -8,6 +8,137 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Returns aggregated statistical data about findings. You can use the
+/// Scopes parameter to define the data boundary for the query. Currently,
+/// Scopes supports AwsOrganizations , which lets you aggregate findings
+/// from your entire organization or from specific organizational units.
+/// Only the delegated administrator account can use Scopes .
+/// GetFindingStatisticsV2 uses securityhub:GetAdhocInsightResults in the
+/// Action element of an IAM policy statement. You must have permission to
+/// perform the securityhub:GetAdhocInsightResults action.
+pub fn (c: Client) get_finding_statistics_v2(input: GetFindingStatisticsV2Request) -> GetFindingStatisticsV2Response ! GetFindingStatisticsV2Err uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_finding_statistics_v2(c.params, input)) ?? e => return Err(GetFindingStatisticsV2Err.InvalidInput(e))
+  var req = serialize_get_finding_statistics_v2(ep, input, "") ?? e => return Err(GetFindingStatisticsV2Err.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetFindingStatisticsV2Err.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_finding_statistics_v2_error(resp))
+  }
+  deserialize_get_finding_statistics_v2(resp) ?? e => Err(GetFindingStatisticsV2Err.Deserialize(e))
+}
+
+pub fn endpoint_params_get_findings(base: EndpointParameters, input: GetFindingsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetFindings.
+pub fn serialize_get_findings(ep: rest.Endpoint, input: GetFindingsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.filters {
+    fs.push(("Filters", json_of_aws_security_finding_filters(x)))
+  }
+  if let Some(x) = input.sort_criteria {
+    fs.push(("SortCriteria", json_of_sort_criteria(x)))
+  }
+  if let Some(x) = input.next_token {
+    fs.push(("NextToken", json.Value.Str(x)))
+  }
+  if let Some(x) = input.max_results {
+    fs.push(("MaxResults", json.Value.Int(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/findings"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_findings(resp: http.Response) -> GetFindingsResponse ! Str {
+  var out = GetFindingsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Findings" => out.findings = from_json_aws_security_finding_list(fv)?
+      "NextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetFindings.
+pub enum GetFindingsErr {
+  InternalException(e: InternalException)
+  InvalidAccessException(e: InvalidAccessException)
+  InvalidInputException(e: InvalidInputException)
+  LimitExceededException(e: LimitExceededException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetFindingsErr) display() -> Str {
+  match e {
+    InternalException(x) => "InternalException: ${x:?}"
+    InvalidAccessException(x) => "InvalidAccessException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
+    LimitExceededException(x) => "LimitExceededException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_findings_error(resp: http.Response) -> GetFindingsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalException" => match read_error_internal_exception(resp, body) {
+      Ok(x) => return GetFindingsErr.InternalException(x)
+      Err(msg) => return GetFindingsErr.Deserialize(msg)
+    }
+    "InvalidAccessException" => match read_error_invalid_access_exception(resp, body) {
+      Ok(x) => return GetFindingsErr.InvalidAccessException(x)
+      Err(msg) => return GetFindingsErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetFindingsErr.InvalidInputException(x)
+      Err(msg) => return GetFindingsErr.Deserialize(msg)
+    }
+    "LimitExceededException" => match read_error_limit_exceeded_exception(resp, body) {
+      Ok(x) => return GetFindingsErr.LimitExceededException(x)
+      Err(msg) => return GetFindingsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetFindingsErr.Api(restjson.api_error(resp, body))
+}
+
 /// Returns a list of findings that match the specified criteria. If
 /// cross-Region aggregation is enabled, then when you call GetFindings from
 /// the home Region, the results include all of the matching findings from
@@ -1924,11 +2055,13 @@ pub fn deserialize_get_software_resources_v2_error(resp: http.Response) -> GetSo
 /// You identify the package with PackageName and PackageType . To narrow
 /// the results to one version of the package, include PackageVersion . You
 /// can use the Scopes parameter to define the data boundary for the query.
-/// Currently, Scopes supports AwsOrganizations , which lets you retrieve
-/// resources from your entire organization or from specific organizational
-/// units. Only the delegated administrator account can use Scopes . You can
-/// use the Filters parameter to further refine results based on resource
-/// attributes, such as ResourceType or Region .
+/// Currently, Scopes supports AwsOrganizations . With AwsOrganizations ,
+/// you can retrieve resources from your entire organization or from
+/// specific organizational units. Only the delegated administrator account
+/// can use Scopes . You can use the Filters parameter to further refine
+/// results based on resource attributes, such as ResourceType or Region .
+/// This operation returns paginated results. To retrieve additional
+/// results, use the NextToken value from the previous response.
 pub fn (c: Client) get_software_resources_v2(input: GetSoftwareResourcesV2Request) -> GetSoftwareResourcesV2Response ! GetSoftwareResourcesV2Err uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_software_resources_v2(c.params, input)) ?? e => return Err(GetSoftwareResourcesV2Err.InvalidInput(e))
   var req = serialize_get_software_resources_v2(ep, input, "") ?? e => return Err(GetSoftwareResourcesV2Err.InvalidInput(e))
@@ -2082,11 +2215,11 @@ pub fn deserialize_get_software_statistics_v2_error(resp: http.Response) -> GetS
 /// pairs that match the grouping value. A package installed on three
 /// resources contributes three to the count. You can use the Scopes
 /// parameter to define the data boundary for the query. Currently, Scopes
-/// supports AwsOrganizations , which lets you aggregate software from your
-/// entire organization or from specific organizational units. Only the
-/// delegated administrator account can use Scopes . This operation doesn't
-/// paginate. Use MaxStatisticResults to control how many grouping values
-/// are returned.
+/// supports AwsOrganizations . With AwsOrganizations , you can aggregate
+/// software from your entire organization or from specific organizational
+/// units. Only the delegated administrator account can use Scopes . This
+/// operation doesn't paginate. Use MaxStatisticResults to control how many
+/// grouping values are returned.
 pub fn (c: Client) get_software_statistics_v2(input: GetSoftwareStatisticsV2Request) -> GetSoftwareStatisticsV2Response ! GetSoftwareStatisticsV2Err uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_software_statistics_v2(c.params, input)) ?? e => return Err(GetSoftwareStatisticsV2Err.InvalidInput(e))
   var req = serialize_get_software_statistics_v2(ep, input, "") ?? e => return Err(GetSoftwareStatisticsV2Err.InvalidInput(e))
@@ -2241,15 +2374,18 @@ pub fn deserialize_get_software_v2_error(resp: http.Response) -> GetSoftwareV2Er
 /// result identifies a package by name, version, and type, and includes the
 /// number of resources that contain that package. You can use the Scopes
 /// parameter to define the data boundary for the query. Currently, Scopes
-/// supports AwsOrganizations , which lets you retrieve software from your
-/// entire organization or from specific organizational units. Only the
-/// delegated administrator account can use Scopes . You can use the Filters
-/// parameter to refine results based on package and resource attributes.
-/// You can use Scopes and Filters independently or together. When both are
-/// provided, Scopes narrows the data set first, and then Filters refines
-/// results within that scoped data set. To list the resources that contain
-/// a specific package, use GetSoftwareResourcesV2 . To get counts of
-/// software grouped by a field, use GetSoftwareStatisticsV2 .
+/// supports AwsOrganizations . With AwsOrganizations , you can retrieve
+/// software from your entire organization or from specific organizational
+/// units. Only the delegated administrator account can use Scopes . You can
+/// use the Filters parameter to refine results based on package and
+/// resource attributes. You can use Scopes and Filters independently or
+/// together. When both are provided, Scopes narrows the data set first, and
+/// then Filters refines results within that scoped data set. To list the
+/// resources that contain a specific package, use GetSoftwareResourcesV2 .
+/// To get counts of software grouped by a field, use
+/// GetSoftwareStatisticsV2 . This operation returns paginated results. To
+/// retrieve additional results, use the NextToken value from the previous
+/// response.
 pub fn (c: Client) get_software_v2(input: GetSoftwareV2Request) -> GetSoftwareV2Response ! GetSoftwareV2Err uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_software_v2(c.params, input)) ?? e => return Err(GetSoftwareV2Err.InvalidInput(e))
   var req = serialize_get_software_v2(ep, input, "") ?? e => return Err(GetSoftwareV2Err.InvalidInput(e))

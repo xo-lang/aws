@@ -8,6 +8,106 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_get_user_journey(base: EndpointParameters, input: GetUserJourneyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetUserJourney.
+pub fn serialize_get_user_journey(ep: rest.Endpoint, input: GetUserJourneyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  if let Some(v) = input.system_arn {
+    qs.push(("systemArn", v))
+  }
+  if let Some(v) = input.user_journey_id {
+    qs.push(("userJourneyId", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v2/get-user-journey"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_user_journey(resp: http.Response) -> GetUserJourneyResponse ! Str {
+  var out = GetUserJourneyResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "userJourney" => out.user_journey = from_json_user_journey(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetUserJourney.
+pub enum GetUserJourneyErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetUserJourneyErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_user_journey_error(resp: http.Response) -> GetUserJourneyErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetUserJourneyErr.AccessDeniedException(x)
+      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetUserJourneyErr.InternalServerException(x)
+      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetUserJourneyErr.ResourceNotFoundException(x)
+      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetUserJourneyErr.ValidationException(x)
+      Err(msg) => return GetUserJourneyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetUserJourneyErr.Api(restjson.api_error(resp, body))
+}
+
 /// Retrieves a user journey.
 pub fn (c: Client) get_user_journey(input: GetUserJourneyRequest) -> GetUserJourneyResponse ! GetUserJourneyErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_user_journey(c.params, input)) ?? e => return Err(GetUserJourneyErr.InvalidInput(e))
@@ -3203,6 +3303,12 @@ pub fn serialize_list_test_templates(ep: rest.Endpoint, input: ListTestTemplates
   let _ = (idempotency_token, min_compress)
   var headers: List[(Str, Str)] = []
   var qs: List[(Str, Str)] = []
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
   var body = b""
   if !body.is_empty() {
     headers.push(("Content-Length", "${body.len()}"))
@@ -3228,6 +3334,7 @@ pub fn deserialize_list_test_templates(resp: http.Response) -> ListTestTemplates
     }
     match k {
       "testTemplates" => out.test_templates = from_json_test_template_summary_list(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -3238,6 +3345,7 @@ pub fn deserialize_list_test_templates(resp: http.Response) -> ListTestTemplates
 pub enum ListTestTemplatesErr {
   AccessDeniedException(e: AccessDeniedException)
   InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
   ValidationException(e: ValidationException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
@@ -3253,6 +3361,7 @@ pub fn (e: ListTestTemplatesErr) display() -> Str {
   match e {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
     ValidationException(x) => "ValidationException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
@@ -3270,6 +3379,10 @@ pub fn deserialize_list_test_templates_error(resp: http.Response) -> ListTestTem
     }
     "InternalServerException" => match read_error_internal_server_exception(resp, body) {
       Ok(x) => return ListTestTemplatesErr.InternalServerException(x)
+      Err(msg) => return ListTestTemplatesErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListTestTemplatesErr.ThrottlingException(x)
       Err(msg) => return ListTestTemplatesErr.Deserialize(msg)
     }
     "ValidationException" => match read_error_validation_exception(resp, body) {

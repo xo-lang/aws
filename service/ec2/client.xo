@@ -578,6 +578,9 @@ fn xml_write_accept_vpc_endpoint_connections_request(var w: xmlv.Writer, v: Acce
   if let Some(x) = v.vpc_endpoint_ids {
     xml_write_vpc_endpoint_id_list(w, x, "VpcEndpointId", [])
   }
+  if let Some(x) = v.transit_gateway_attachment_ids {
+    xml_write_transit_gateway_attachment_id_list(w, x, "TransitGatewayAttachmentId", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -588,6 +591,7 @@ fn xml_read_accept_vpc_endpoint_connections_request(e: xml.Element) -> AcceptVpc
       "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
       "ServiceId" => out.service_id = c.text()
       "VpcEndpointId" => out.vpc_endpoint_ids = xml_read_vpc_endpoint_id_list(c)?
+      "TransitGatewayAttachmentId" => out.transit_gateway_attachment_ids = xml_read_transit_gateway_attachment_id_list(c)?
       _ => {}
     }
   }
@@ -955,6 +959,12 @@ fn xml_write_account_vpc_encryption_control_exclusions(var w: xmlv.Writer, v: Ac
   if let Some(x) = v.elastic_file_system {
     xmlv.elem(w, "elasticFileSystem", x.value(), [])
   }
+  if let Some(x) = v.global_accelerator {
+    xmlv.elem(w, "globalAccelerator", x.value(), [])
+  }
+  if let Some(x) = v.api_gateway_v2 {
+    xmlv.elem(w, "apiGatewayV2", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -970,8 +980,27 @@ fn xml_read_account_vpc_encryption_control_exclusions(e: xml.Element) -> Account
       "lambda" => out.lambda = VpcEncryptionControlExclusionState.from(c.text())
       "vpcLattice" => out.vpc_lattice = VpcEncryptionControlExclusionState.from(c.text())
       "elasticFileSystem" => out.elastic_file_system = VpcEncryptionControlExclusionState.from(c.text())
+      "globalAccelerator" => out.global_accelerator = VpcEncryptionControlExclusionState.from(c.text())
+      "apiGatewayV2" => out.api_gateway_v2 = VpcEncryptionControlExclusionState.from(c.text())
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_active_additional_key_exchanges_list(var w: xmlv.Writer, v: List[ActiveVpnTunnelAdditionalKeyExchange], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_active_vpn_tunnel_additional_key_exchange(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_active_additional_key_exchanges_list(e: xml.Element) -> List[ActiveVpnTunnelAdditionalKeyExchange] ! Str {
+  var out: List[ActiveVpnTunnelAdditionalKeyExchange] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_active_vpn_tunnel_additional_key_exchange(c)?)
   }
   Ok(out)
 }
@@ -1025,6 +1054,30 @@ fn xml_read_active_instance_set(e: xml.Element) -> List[ActiveInstance] ! Str {
   Ok(out)
 }
 
+fn xml_write_active_vpn_tunnel_additional_key_exchange(var w: xmlv.Writer, v: ActiveVpnTunnelAdditionalKeyExchange, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.additional_key_exchange_round {
+    xmlv.elem(w, "additionalKeyExchangeRound", "${x}", [])
+  }
+  if let Some(x) = v.key_exchange_method {
+    xmlv.elem(w, "keyExchangeMethod", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_active_vpn_tunnel_additional_key_exchange(e: xml.Element) -> ActiveVpnTunnelAdditionalKeyExchange ! Str {
+  var out = ActiveVpnTunnelAdditionalKeyExchange{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "additionalKeyExchangeRound" => out.additional_key_exchange_round = xmlv.read_int(c.text())?
+      "keyExchangeMethod" => out.key_exchange_method = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_active_vpn_tunnel_status(var w: xmlv.Writer, v: ActiveVpnTunnelStatus, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -1055,6 +1108,12 @@ fn xml_write_active_vpn_tunnel_status(var w: xmlv.Writer, v: ActiveVpnTunnelStat
   if let Some(x) = v.provisioning_status_reason {
     xmlv.elem(w, "provisioningStatusReason", x, [])
   }
+  if let Some(x) = v.phase1_additional_key_exchanges {
+    xml_write_active_additional_key_exchanges_list(w, x, "phase1AdditionalKeyExchangeSet", [])
+  }
+  if let Some(x) = v.phase2_additional_key_exchanges {
+    xml_write_active_additional_key_exchanges_list(w, x, "phase2AdditionalKeyExchangeSet", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1071,6 +1130,8 @@ fn xml_read_active_vpn_tunnel_status(e: xml.Element) -> ActiveVpnTunnelStatus ! 
       "ikeVersion" => out.ike_version = c.text()
       "provisioningStatus" => out.provisioning_status = VpnTunnelProvisioningStatus.from(c.text())
       "provisioningStatusReason" => out.provisioning_status_reason = c.text()
+      "phase1AdditionalKeyExchangeSet" => out.phase1_additional_key_exchanges = xml_read_active_additional_key_exchanges_list(c)?
+      "phase2AdditionalKeyExchangeSet" => out.phase2_additional_key_exchanges = xml_read_active_additional_key_exchanges_list(c)?
       _ => {}
     }
   }
@@ -1207,6 +1268,9 @@ fn xml_write_added_principal(var w: xmlv.Writer, v: AddedPrincipal, name: Str, n
   if let Some(x) = v.service_id {
     xmlv.elem(w, "serviceId", x, [])
   }
+  if let Some(x) = v.permission_type {
+    xmlv.elem(w, "permissionType", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1218,6 +1282,7 @@ fn xml_read_added_principal(e: xml.Element) -> AddedPrincipal ! Str {
       "principal" => out.principal = c.text()
       "servicePermissionId" => out.service_permission_id = c.text()
       "serviceId" => out.service_id = c.text()
+      "permissionType" => out.permission_type = PermissionType.from(c.text())
       _ => {}
     }
   }
@@ -1302,6 +1367,114 @@ fn xml_read_additional_detail_list(e: xml.Element) -> List[AdditionalDetail] ! S
   var out: List[AdditionalDetail] = []
   for c in xmlv.elements(e) {
     out.push(xml_read_additional_detail(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_additional_key_exchange_methods_list(var w: xmlv.Writer, v: List[AdditionalKeyExchangeMethodsListValue], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_additional_key_exchange_methods_list_value(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_additional_key_exchange_methods_list(e: xml.Element) -> List[AdditionalKeyExchangeMethodsListValue] ! Str {
+  var out: List[AdditionalKeyExchangeMethodsListValue] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_additional_key_exchange_methods_list_value(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_additional_key_exchange_methods_list_value(var w: xmlv.Writer, v: AdditionalKeyExchangeMethodsListValue, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.value {
+    xmlv.elem(w, "value", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_additional_key_exchange_methods_list_value(e: xml.Element) -> AdditionalKeyExchangeMethodsListValue ! Str {
+  var out = AdditionalKeyExchangeMethodsListValue{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "value" => out.value = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_additional_key_exchange_methods_request_list(var w: xmlv.Writer, v: List[AdditionalKeyExchangeMethodsRequestListValue], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_additional_key_exchange_methods_request_list_value(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_additional_key_exchange_methods_request_list(e: xml.Element) -> List[AdditionalKeyExchangeMethodsRequestListValue] ! Str {
+  var out: List[AdditionalKeyExchangeMethodsRequestListValue] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_additional_key_exchange_methods_request_list_value(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_additional_key_exchange_methods_request_list_value(var w: xmlv.Writer, v: AdditionalKeyExchangeMethodsRequestListValue, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.value {
+    xmlv.elem(w, "Value", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_additional_key_exchange_methods_request_list_value(e: xml.Element) -> AdditionalKeyExchangeMethodsRequestListValue ! Str {
+  var out = AdditionalKeyExchangeMethodsRequestListValue{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Value" => out.value = xmlv.read_int(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_additional_key_exchanges_list(var w: xmlv.Writer, v: List[VpnAdditionalKeyExchange], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_vpn_additional_key_exchange(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_additional_key_exchanges_list(e: xml.Element) -> List[VpnAdditionalKeyExchange] ! Str {
+  var out: List[VpnAdditionalKeyExchange] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_vpn_additional_key_exchange(c)?)
+  }
+  Ok(out)
+}
+
+fn xml_write_additional_key_exchanges_request_specification(var w: xmlv.Writer, v: List[VpnAdditionalKeyExchangeRequest], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_vpn_additional_key_exchange_request(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_additional_key_exchanges_request_specification(e: xml.Element) -> List[VpnAdditionalKeyExchangeRequest] ! Str {
+  var out: List[VpnAdditionalKeyExchangeRequest] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_vpn_additional_key_exchange_request(c)?)
   }
   Ok(out)
 }
@@ -1890,6 +2063,9 @@ fn xml_write_allowed_principal(var w: xmlv.Writer, v: AllowedPrincipal, name: St
   if let Some(x) = v.service_id {
     xmlv.elem(w, "serviceId", x, [])
   }
+  if let Some(x) = v.permission_type {
+    xmlv.elem(w, "permissionType", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1902,6 +2078,7 @@ fn xml_read_allowed_principal(e: xml.Element) -> AllowedPrincipal ! Str {
       "servicePermissionId" => out.service_permission_id = c.text()
       "tagSet" => out.tags = xml_read_tag_list(c)?
       "serviceId" => out.service_id = c.text()
+      "permissionType" => out.permission_type = PermissionType.from(c.text())
       _ => {}
     }
   }
@@ -3623,6 +3800,54 @@ fn xml_read_associate_ipam_resource_discovery_result(e: xml.Element) -> Associat
   Ok(out)
 }
 
+fn xml_write_associate_kms_key_id_request(var w: xmlv.Writer, v: AssociateKmsKeyIdRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.snapshot_id {
+    xmlv.elem(w, "SnapshotId", x, [])
+  }
+  if let Some(x) = v.kms_key_id {
+    xmlv.elem(w, "KmsKeyId", x, [])
+  }
+  if let Some(x) = v.dry_run {
+    xmlv.elem(w, "DryRun", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_associate_kms_key_id_request(e: xml.Element) -> AssociateKmsKeyIdRequest ! Str {
+  var out = AssociateKmsKeyIdRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "SnapshotId" => out.snapshot_id = c.text()
+      "KmsKeyId" => out.kms_key_id = c.text()
+      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_associate_kms_key_id_result(var w: xmlv.Writer, v: AssociateKmsKeyIdResult, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.return_value {
+    xmlv.elem(w, "return", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_associate_kms_key_id_result(e: xml.Element) -> AssociateKmsKeyIdResult ! Str {
+  var out = AssociateKmsKeyIdResult{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "return" => out.return_value = xmlv.read_bool(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn xml_write_associate_nat_gateway_address_request(var w: xmlv.Writer, v: AssociateNatGatewayAddressRequest, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -3681,6 +3906,66 @@ fn xml_read_associate_nat_gateway_address_result(e: xml.Element) -> AssociateNat
     match c.name.local {
       "natGatewayId" => out.nat_gateway_id = c.text()
       "natGatewayAddressSet" => out.nat_gateway_addresses = xml_read_nat_gateway_address_list(c)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_associate_networking_flex_cost_allocation_policy_request(var w: xmlv.Writer, v: AssociateNetworkingFlexCostAllocationPolicyRequest, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.fca_policy_id {
+    xmlv.elem(w, "FcaPolicyId", x, [])
+  }
+  if let Some(x) = v.network_resource_ids {
+    xml_write_flex_cost_allocation_network_resource_id_list(w, x, "NetworkResourceIds", [])
+  }
+  if let Some(x) = v.network_resource_scope {
+    xml_write_flex_cost_allocation_network_resource_scope(w, x, "NetworkResourceScope", [])
+  }
+  if let Some(x) = v.client_token {
+    xmlv.elem(w, "ClientToken", x, [])
+  }
+  if let Some(x) = v.dry_run {
+    xmlv.elem(w, "DryRun", "${x}", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_associate_networking_flex_cost_allocation_policy_request(e: xml.Element) -> AssociateNetworkingFlexCostAllocationPolicyRequest ! Str {
+  var out = AssociateNetworkingFlexCostAllocationPolicyRequest{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "FcaPolicyId" => out.fca_policy_id = c.text()
+      "NetworkResourceIds" => out.network_resource_ids = xml_read_flex_cost_allocation_network_resource_id_list(c)?
+      "NetworkResourceScope" => out.network_resource_scope = xml_read_flex_cost_allocation_network_resource_scope(c)?
+      "ClientToken" => out.client_token = c.text()
+      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_associate_networking_flex_cost_allocation_policy_result(var w: xmlv.Writer, v: AssociateNetworkingFlexCostAllocationPolicyResult, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.fca_policy_associations {
+    xml_write_flex_cost_allocation_policy_association_set(w, x, "fcaPolicyAssociations", [])
+  }
+  if let Some(x) = v.fca_policy_association_failures {
+    xml_write_flex_cost_allocation_operation_failure_list(w, x, "fcaPolicyAssociationFailures", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_associate_networking_flex_cost_allocation_policy_result(e: xml.Element) -> AssociateNetworkingFlexCostAllocationPolicyResult ! Str {
+  var out = AssociateNetworkingFlexCostAllocationPolicyResult{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "fcaPolicyAssociations" => out.fca_policy_associations = xml_read_flex_cost_allocation_policy_association_set(c)?
+      "fcaPolicyAssociationFailures" => out.fca_policy_association_failures = xml_read_flex_cost_allocation_operation_failure_list(c)?
       _ => {}
     }
   }
@@ -4191,6 +4476,43 @@ fn xml_read_associate_vpc_cidr_block_result(e: xml.Element) -> AssociateVpcCidrB
       "vpcId" => out.vpc_id = c.text()
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_associated_kms_key(var w: xmlv.Writer, v: AssociatedKmsKey, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.kms_key_id {
+    xmlv.elem(w, "kmsKeyId", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_associated_kms_key(e: xml.Element) -> AssociatedKmsKey ! Str {
+  var out = AssociatedKmsKey{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "kmsKeyId" => out.kms_key_id = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_associated_kms_key_set(var w: xmlv.Writer, v: List[AssociatedKmsKey], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_associated_kms_key(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_associated_kms_key_set(e: xml.Element) -> List[AssociatedKmsKey] ! Str {
+  var out: List[AssociatedKmsKey] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_associated_kms_key(c)?)
   }
   Ok(out)
 }
@@ -7122,6 +7444,43 @@ fn xml_read_capacity_block_ids(e: xml.Element) -> List[Str] ! Str {
   Ok(out)
 }
 
+fn xml_write_capacity_block_instance_type_preference(var w: xmlv.Writer, v: CapacityBlockInstanceTypePreference, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.instance_type {
+    xmlv.elem(w, "InstanceType", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_capacity_block_instance_type_preference(e: xml.Element) -> CapacityBlockInstanceTypePreference ! Str {
+  var out = CapacityBlockInstanceTypePreference{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "InstanceType" => out.instance_type = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_capacity_block_instance_type_preference_set(var w: xmlv.Writer, v: List[CapacityBlockInstanceTypePreference], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_capacity_block_instance_type_preference(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_capacity_block_instance_type_preference_set(e: xml.Element) -> List[CapacityBlockInstanceTypePreference] ! Str {
+  var out: List[CapacityBlockInstanceTypePreference] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_capacity_block_instance_type_preference(c)?)
+  }
+  Ok(out)
+}
+
 fn xml_write_capacity_block_offering(var w: xmlv.Writer, v: CapacityBlockOffering, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -7167,6 +7526,9 @@ fn xml_write_capacity_block_offering(var w: xmlv.Writer, v: CapacityBlockOfferin
   if let Some(x) = v.zone_type {
     xmlv.elem(w, "zoneType", x, [])
   }
+  if let Some(x) = v.capacity_block_offering_segments {
+    xml_write_capacity_block_offering_segment_set(w, x, "capacityBlockOfferingSegmentSet", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -7188,8 +7550,86 @@ fn xml_read_capacity_block_offering(e: xml.Element) -> CapacityBlockOffering ! S
       "ultraserverCount" => out.ultraserver_count = xmlv.read_int(c.text())?
       "capacityBlockDurationMinutes" => out.capacity_block_duration_minutes = xmlv.read_int(c.text())?
       "zoneType" => out.zone_type = c.text()
+      "capacityBlockOfferingSegmentSet" => out.capacity_block_offering_segments = xml_read_capacity_block_offering_segment_set(c)?
       _ => {}
     }
+  }
+  Ok(out)
+}
+
+fn xml_write_capacity_block_offering_segment(var w: xmlv.Writer, v: CapacityBlockOfferingSegment, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.instance_type {
+    xmlv.elem(w, "instanceType", x, [])
+  }
+  if let Some(x) = v.availability_zone {
+    xmlv.elem(w, "availabilityZone", x, [])
+  }
+  if let Some(x) = v.availability_zone_id {
+    xmlv.elem(w, "availabilityZoneId", x, [])
+  }
+  if let Some(x) = v.instance_count {
+    xmlv.elem(w, "instanceCount", "${x}", [])
+  }
+  if let Some(x) = v.start_date {
+    xmlv.elem(w, "startDate", rest.date_time(x), [])
+  }
+  if let Some(x) = v.end_date {
+    xmlv.elem(w, "endDate", rest.date_time(x), [])
+  }
+  if let Some(x) = v.capacity_block_duration_hours {
+    xmlv.elem(w, "capacityBlockDurationHours", "${x}", [])
+  }
+  if let Some(x) = v.capacity_block_duration_minutes {
+    xmlv.elem(w, "capacityBlockDurationMinutes", "${x}", [])
+  }
+  if let Some(x) = v.upfront_fee {
+    xmlv.elem(w, "upfrontFee", x, [])
+  }
+  if let Some(x) = v.currency_code {
+    xmlv.elem(w, "currencyCode", x, [])
+  }
+  if let Some(x) = v.zone_type {
+    xmlv.elem(w, "zoneType", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_capacity_block_offering_segment(e: xml.Element) -> CapacityBlockOfferingSegment ! Str {
+  var out = CapacityBlockOfferingSegment{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "instanceType" => out.instance_type = c.text()
+      "availabilityZone" => out.availability_zone = c.text()
+      "availabilityZoneId" => out.availability_zone_id = c.text()
+      "instanceCount" => out.instance_count = xmlv.read_int(c.text())?
+      "startDate" => out.start_date = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
+      "endDate" => out.end_date = (rest.parse_date_time(c.text().trim()) ?? return Err("bad timestamp"))
+      "capacityBlockDurationHours" => out.capacity_block_duration_hours = xmlv.read_int(c.text())?
+      "capacityBlockDurationMinutes" => out.capacity_block_duration_minutes = xmlv.read_int(c.text())?
+      "upfrontFee" => out.upfront_fee = c.text()
+      "currencyCode" => out.currency_code = c.text()
+      "zoneType" => out.zone_type = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_capacity_block_offering_segment_set(var w: xmlv.Writer, v: List[CapacityBlockOfferingSegment], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_capacity_block_offering_segment(w, item, "item", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_capacity_block_offering_segment_set(e: xml.Element) -> List[CapacityBlockOfferingSegment] ! Str {
+  var out: List[CapacityBlockOfferingSegment] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_capacity_block_offering_segment(c)?)
   }
   Ok(out)
 }
@@ -13229,468 +13669,6 @@ fn xml_write_create_ipam_pool_result(var w: xmlv.Writer, v: CreateIpamPoolResult
   xmlv.start(w, name, attrs)
   if let Some(x) = v.ipam_pool {
     xml_write_ipam_pool(w, x, "ipamPool", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_pool_result(e: xml.Element) -> CreateIpamPoolResult ! Str {
-  var out = CreateIpamPoolResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipamPool" => out.ipam_pool = xml_read_ipam_pool(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_prefix_list_resolver_request(var w: xmlv.Writer, v: CreateIpamPrefixListResolverRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.ipam_id {
-    xmlv.elem(w, "IpamId", x, [])
-  }
-  if let Some(x) = v.description {
-    xmlv.elem(w, "Description", x, [])
-  }
-  if let Some(x) = v.address_family {
-    xmlv.elem(w, "AddressFamily", x.value(), [])
-  }
-  if let Some(x) = v.rules {
-    xml_write_ipam_prefix_list_resolver_rule_request_set(w, x, "Rule", [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_prefix_list_resolver_request(e: xml.Element) -> CreateIpamPrefixListResolverRequest ! Str {
-  var out = CreateIpamPrefixListResolverRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      "IpamId" => out.ipam_id = c.text()
-      "Description" => out.description = c.text()
-      "AddressFamily" => out.address_family = AddressFamily.from(c.text())
-      "Rule" => out.rules = xml_read_ipam_prefix_list_resolver_rule_request_set(c)?
-      "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      "ClientToken" => out.client_token = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_prefix_list_resolver_result(var w: xmlv.Writer, v: CreateIpamPrefixListResolverResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.ipam_prefix_list_resolver {
-    xml_write_ipam_prefix_list_resolver(w, x, "ipamPrefixListResolver", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_prefix_list_resolver_result(e: xml.Element) -> CreateIpamPrefixListResolverResult ! Str {
-  var out = CreateIpamPrefixListResolverResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipamPrefixListResolver" => out.ipam_prefix_list_resolver = xml_read_ipam_prefix_list_resolver(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_prefix_list_resolver_target_request(var w: xmlv.Writer, v: CreateIpamPrefixListResolverTargetRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.ipam_prefix_list_resolver_id {
-    xmlv.elem(w, "IpamPrefixListResolverId", x, [])
-  }
-  if let Some(x) = v.prefix_list_id {
-    xmlv.elem(w, "PrefixListId", x, [])
-  }
-  if let Some(x) = v.prefix_list_region {
-    xmlv.elem(w, "PrefixListRegion", x, [])
-  }
-  if let Some(x) = v.desired_version {
-    xmlv.elem(w, "DesiredVersion", "${x}", [])
-  }
-  if let Some(x) = v.track_latest_version {
-    xmlv.elem(w, "TrackLatestVersion", "${x}", [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_prefix_list_resolver_target_request(e: xml.Element) -> CreateIpamPrefixListResolverTargetRequest ! Str {
-  var out = CreateIpamPrefixListResolverTargetRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      "IpamPrefixListResolverId" => out.ipam_prefix_list_resolver_id = c.text()
-      "PrefixListId" => out.prefix_list_id = c.text()
-      "PrefixListRegion" => out.prefix_list_region = c.text()
-      "DesiredVersion" => out.desired_version = xmlv.read_int(c.text())?
-      "TrackLatestVersion" => out.track_latest_version = xmlv.read_bool(c.text())?
-      "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      "ClientToken" => out.client_token = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_prefix_list_resolver_target_result(var w: xmlv.Writer, v: CreateIpamPrefixListResolverTargetResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.ipam_prefix_list_resolver_target {
-    xml_write_ipam_prefix_list_resolver_target(w, x, "ipamPrefixListResolverTarget", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_prefix_list_resolver_target_result(e: xml.Element) -> CreateIpamPrefixListResolverTargetResult ! Str {
-  var out = CreateIpamPrefixListResolverTargetResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipamPrefixListResolverTarget" => out.ipam_prefix_list_resolver_target = xml_read_ipam_prefix_list_resolver_target(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_request(var w: xmlv.Writer, v: CreateIpamRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.description {
-    xmlv.elem(w, "Description", x, [])
-  }
-  if let Some(x) = v.operating_regions {
-    xml_write_add_ipam_operating_region_set(w, x, "OperatingRegion", [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  if let Some(x) = v.tier {
-    xmlv.elem(w, "Tier", x.value(), [])
-  }
-  if let Some(x) = v.enable_private_gua {
-    xmlv.elem(w, "EnablePrivateGua", "${x}", [])
-  }
-  if let Some(x) = v.metered_account {
-    xmlv.elem(w, "MeteredAccount", x.value(), [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_request(e: xml.Element) -> CreateIpamRequest ! Str {
-  var out = CreateIpamRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      "Description" => out.description = c.text()
-      "OperatingRegion" => out.operating_regions = xml_read_add_ipam_operating_region_set(c)?
-      "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      "ClientToken" => out.client_token = c.text()
-      "Tier" => out.tier = IpamTier.from(c.text())
-      "EnablePrivateGua" => out.enable_private_gua = xmlv.read_bool(c.text())?
-      "MeteredAccount" => out.metered_account = IpamMeteredAccount.from(c.text())
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_resource_discovery_request(var w: xmlv.Writer, v: CreateIpamResourceDiscoveryRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.description {
-    xmlv.elem(w, "Description", x, [])
-  }
-  if let Some(x) = v.operating_regions {
-    xml_write_add_ipam_operating_region_set(w, x, "OperatingRegion", [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_resource_discovery_request(e: xml.Element) -> CreateIpamResourceDiscoveryRequest ! Str {
-  var out = CreateIpamResourceDiscoveryRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      "Description" => out.description = c.text()
-      "OperatingRegion" => out.operating_regions = xml_read_add_ipam_operating_region_set(c)?
-      "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      "ClientToken" => out.client_token = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_resource_discovery_result(var w: xmlv.Writer, v: CreateIpamResourceDiscoveryResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.ipam_resource_discovery {
-    xml_write_ipam_resource_discovery(w, x, "ipamResourceDiscovery", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_resource_discovery_result(e: xml.Element) -> CreateIpamResourceDiscoveryResult ! Str {
-  var out = CreateIpamResourceDiscoveryResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipamResourceDiscovery" => out.ipam_resource_discovery = xml_read_ipam_resource_discovery(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_result(var w: xmlv.Writer, v: CreateIpamResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.ipam {
-    xml_write_ipam(w, x, "ipam", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_result(e: xml.Element) -> CreateIpamResult ! Str {
-  var out = CreateIpamResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipam" => out.ipam = xml_read_ipam(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_routing_policy_registration_request(var w: xmlv.Writer, v: CreateIpamRoutingPolicyRegistrationRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.ipam_internet_registry_association_id {
-    xmlv.elem(w, "IpamInternetRegistryAssociationId", x, [])
-  }
-  if let Some(x) = v.cidr {
-    xmlv.elem(w, "Cidr", x, [])
-  }
-  if let Some(x) = v.asns {
-    xml_write_asn_list(w, x, "Asn", [])
-  }
-  if let Some(x) = v.permit_more_specific_announcements {
-    xmlv.elem(w, "PermitMoreSpecificAnnouncements", "${x}", [])
-  }
-  if let Some(x) = v.max_length {
-    xmlv.elem(w, "MaxLength", "${x}", [])
-  }
-  if let Some(x) = v.description {
-    xmlv.elem(w, "Description", x, [])
-  }
-  if let Some(x) = v.force {
-    xmlv.elem(w, "Force", "${x}", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_routing_policy_registration_request(e: xml.Element) -> CreateIpamRoutingPolicyRegistrationRequest ! Str {
-  var out = CreateIpamRoutingPolicyRegistrationRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      "IpamInternetRegistryAssociationId" => out.ipam_internet_registry_association_id = c.text()
-      "Cidr" => out.cidr = c.text()
-      "Asn" => out.asns = xml_read_asn_list(c)?
-      "PermitMoreSpecificAnnouncements" => out.permit_more_specific_announcements = xmlv.read_bool(c.text())?
-      "MaxLength" => out.max_length = xmlv.read_int(c.text())?
-      "Description" => out.description = c.text()
-      "Force" => out.force = xmlv.read_bool(c.text())?
-      "ClientToken" => out.client_token = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_routing_policy_registration_result(var w: xmlv.Writer, v: CreateIpamRoutingPolicyRegistrationResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.ipam_routing_policy_registration_delta {
-    xml_write_ipam_routing_policy_registration_delta(w, x, "ipamRoutingPolicyRegistrationDelta", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_routing_policy_registration_result(e: xml.Element) -> CreateIpamRoutingPolicyRegistrationResult ! Str {
-  var out = CreateIpamRoutingPolicyRegistrationResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipamRoutingPolicyRegistrationDelta" => out.ipam_routing_policy_registration_delta = xml_read_ipam_routing_policy_registration_delta(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_scope_request(var w: xmlv.Writer, v: CreateIpamScopeRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.ipam_id {
-    xmlv.elem(w, "IpamId", x, [])
-  }
-  if let Some(x) = v.description {
-    xmlv.elem(w, "Description", x, [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  if let Some(x) = v.external_authority_configuration {
-    xml_write_external_authority_configuration(w, x, "ExternalAuthorityConfiguration", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_scope_request(e: xml.Element) -> CreateIpamScopeRequest ! Str {
-  var out = CreateIpamScopeRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "DryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      "IpamId" => out.ipam_id = c.text()
-      "Description" => out.description = c.text()
-      "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      "ClientToken" => out.client_token = c.text()
-      "ExternalAuthorityConfiguration" => out.external_authority_configuration = xml_read_external_authority_configuration(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_ipam_scope_result(var w: xmlv.Writer, v: CreateIpamScopeResult, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.ipam_scope {
-    xml_write_ipam_scope(w, x, "ipamScope", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_ipam_scope_result(e: xml.Element) -> CreateIpamScopeResult ! Str {
-  var out = CreateIpamScopeResult{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "ipamScope" => out.ipam_scope = xml_read_ipam_scope(c)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_key_pair_request(var w: xmlv.Writer, v: CreateKeyPairRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.key_name {
-    xmlv.elem(w, "KeyName", x, [])
-  }
-  if let Some(x) = v.key_type {
-    xmlv.elem(w, "KeyType", x.value(), [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
-  }
-  if let Some(x) = v.key_format {
-    xmlv.elem(w, "KeyFormat", x.value(), [])
-  }
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "dryRun", "${x}", [])
-  }
-  xmlv.end(w, name)
-}
-
-fn xml_read_create_key_pair_request(e: xml.Element) -> CreateKeyPairRequest ! Str {
-  var out = CreateKeyPairRequest{}
-  for c in xmlv.elements(e) {
-    match c.name.local {
-      "KeyName" => out.key_name = c.text()
-      "KeyType" => out.key_type = KeyType.from(c.text())
-      "TagSpecification" => out.tag_specifications = xml_read_tag_specification_list(c)?
-      "KeyFormat" => out.key_format = KeyFormat.from(c.text())
-      "dryRun" => out.dry_run = xmlv.read_bool(c.text())?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn xml_write_create_launch_template_request(var w: xmlv.Writer, v: CreateLaunchTemplateRequest, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.dry_run {
-    xmlv.elem(w, "DryRun", "${x}", [])
-  }
-  if let Some(x) = v.client_token {
-    xmlv.elem(w, "ClientToken", x, [])
-  }
-  if let Some(x) = v.launch_template_name {
-    xmlv.elem(w, "LaunchTemplateName", x, [])
-  }
-  if let Some(x) = v.version_description {
-    xmlv.elem(w, "VersionDescription", x, [])
-  }
-  if let Some(x) = v.launch_template_data {
-    xml_write_request_launch_template_data(w, x, "LaunchTemplateData", [])
-  }
-  if let Some(x) = v.operator {
-    xml_write_operator_request(w, x, "Operator", [])
-  }
-  if let Some(x) = v.tag_specifications {
-    xml_write_tag_specification_list(w, x, "TagSpecification", [])
   }
   xmlv.end(w, name)
 }

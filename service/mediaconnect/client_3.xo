@@ -8,6 +8,593 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn endpoint_params_start_router_input(base: EndpointParameters, input: StartRouterInputRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartRouterInput.
+pub fn serialize_start_router_input(ep: rest.Endpoint, input: StartRouterInputRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_arn = match input.arn {
+    Some(v) => v
+    None => return Err("input member Arn is required")
+  }
+  if label_arn == "" {
+    return Err("input member Arn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/routerInput/start/${rest.escape(label_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_router_input(resp: http.Response) -> StartRouterInputResponse ! Str {
+  var out = StartRouterInputResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "state" => out.state = RouterInputState.from(jsonv.read_str(fv)?)
+      "maintenanceScheduleType" => out.maintenance_schedule_type = MaintenanceScheduleType.from(jsonv.read_str(fv)?)
+      "maintenanceSchedule" => out.maintenance_schedule = from_json_maintenance_schedule(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartRouterInput.
+pub enum StartRouterInputErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartRouterInputErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_router_input_error(resp: http.Response) -> StartRouterInputErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.BadRequestException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.ConflictException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.ForbiddenException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.InternalServerErrorException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.NotFoundException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.ServiceUnavailableException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StartRouterInputErr.TooManyRequestsException(x)
+      Err(msg) => return StartRouterInputErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartRouterInputErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts a router input in AWS Elemental MediaConnect.
+pub fn (c: Client) start_router_input(input: StartRouterInputRequest) -> StartRouterInputResponse ! StartRouterInputErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_router_input(c.params, input)) ?? e => return Err(StartRouterInputErr.InvalidInput(e))
+  var req = serialize_start_router_input(ep, input, "") ?? e => return Err(StartRouterInputErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartRouterInputErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_router_input_error(resp))
+  }
+  deserialize_start_router_input(resp) ?? e => Err(StartRouterInputErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_router_output(base: EndpointParameters, input: StartRouterOutputRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartRouterOutput.
+pub fn serialize_start_router_output(ep: rest.Endpoint, input: StartRouterOutputRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_arn = match input.arn {
+    Some(v) => v
+    None => return Err("input member Arn is required")
+  }
+  if label_arn == "" {
+    return Err("input member Arn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/routerOutput/start/${rest.escape(label_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_router_output(resp: http.Response) -> StartRouterOutputResponse ! Str {
+  var out = StartRouterOutputResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "state" => out.state = RouterOutputState.from(jsonv.read_str(fv)?)
+      "maintenanceScheduleType" => out.maintenance_schedule_type = MaintenanceScheduleType.from(jsonv.read_str(fv)?)
+      "maintenanceSchedule" => out.maintenance_schedule = from_json_maintenance_schedule(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartRouterOutput.
+pub enum StartRouterOutputErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartRouterOutputErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_router_output_error(resp: http.Response) -> StartRouterOutputErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.BadRequestException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.ConflictException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.ForbiddenException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.InternalServerErrorException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.NotFoundException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.ServiceUnavailableException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StartRouterOutputErr.TooManyRequestsException(x)
+      Err(msg) => return StartRouterOutputErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartRouterOutputErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts a router output in AWS Elemental MediaConnect.
+pub fn (c: Client) start_router_output(input: StartRouterOutputRequest) -> StartRouterOutputResponse ! StartRouterOutputErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_router_output(c.params, input)) ?? e => return Err(StartRouterOutputErr.InvalidInput(e))
+  var req = serialize_start_router_output(ep, input, "") ?? e => return Err(StartRouterOutputErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartRouterOutputErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_router_output_error(resp))
+  }
+  deserialize_start_router_output(resp) ?? e => Err(StartRouterOutputErr.Deserialize(e))
+}
+
+pub fn endpoint_params_stop_flow(base: EndpointParameters, input: StopFlowRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StopFlow.
+pub fn serialize_stop_flow(ep: rest.Endpoint, input: StopFlowRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_flow_arn = match input.flow_arn {
+    Some(v) => v
+    None => return Err("input member FlowArn is required")
+  }
+  if label_flow_arn == "" {
+    return Err("input member FlowArn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/flows/stop/${rest.escape(label_flow_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_stop_flow(resp: http.Response) -> StopFlowResponse ! Str {
+  var out = StopFlowResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "flowArn" => out.flow_arn = jsonv.read_str(fv)?
+      "status" => out.status = Status.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StopFlow.
+pub enum StopFlowErr {
+  BadRequestException(e: BadRequestException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StopFlowErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_stop_flow_error(resp: http.Response) -> StopFlowErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StopFlowErr.BadRequestException(x)
+      Err(msg) => return StopFlowErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StopFlowErr.ForbiddenException(x)
+      Err(msg) => return StopFlowErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StopFlowErr.InternalServerErrorException(x)
+      Err(msg) => return StopFlowErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StopFlowErr.NotFoundException(x)
+      Err(msg) => return StopFlowErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return StopFlowErr.ServiceUnavailableException(x)
+      Err(msg) => return StopFlowErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StopFlowErr.TooManyRequestsException(x)
+      Err(msg) => return StopFlowErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StopFlowErr.Api(restjson.api_error(resp, body))
+}
+
+/// Stops a flow.
+pub fn (c: Client) stop_flow(input: StopFlowRequest) -> StopFlowResponse ! StopFlowErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_stop_flow(c.params, input)) ?? e => return Err(StopFlowErr.InvalidInput(e))
+  var req = serialize_stop_flow(ep, input, "") ?? e => return Err(StopFlowErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StopFlowErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_stop_flow_error(resp))
+  }
+  deserialize_stop_flow(resp) ?? e => Err(StopFlowErr.Deserialize(e))
+}
+
+pub fn endpoint_params_stop_router_input(base: EndpointParameters, input: StopRouterInputRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StopRouterInput.
+pub fn serialize_stop_router_input(ep: rest.Endpoint, input: StopRouterInputRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_arn = match input.arn {
+    Some(v) => v
+    None => return Err("input member Arn is required")
+  }
+  if label_arn == "" {
+    return Err("input member Arn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/routerInput/stop/${rest.escape(label_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_stop_router_input(resp: http.Response) -> StopRouterInputResponse ! Str {
+  var out = StopRouterInputResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "state" => out.state = RouterInputState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StopRouterInput.
+pub enum StopRouterInputErr {
+  BadRequestException(e: BadRequestException)
+  ConflictException(e: ConflictException)
+  ForbiddenException(e: ForbiddenException)
+  InternalServerErrorException(e: InternalServerErrorException)
+  NotFoundException(e: NotFoundException)
+  ServiceUnavailableException(e: ServiceUnavailableException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StopRouterInputErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    ServiceUnavailableException(x) => "ServiceUnavailableException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_stop_router_input_error(resp: http.Response) -> StopRouterInputErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.BadRequestException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.ConflictException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.ForbiddenException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.InternalServerErrorException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.NotFoundException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    "ServiceUnavailableException" => match read_error_service_unavailable_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.ServiceUnavailableException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StopRouterInputErr.TooManyRequestsException(x)
+      Err(msg) => return StopRouterInputErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StopRouterInputErr.Api(restjson.api_error(resp, body))
+}
+
+/// Stops a router input in AWS Elemental MediaConnect.
+pub fn (c: Client) stop_router_input(input: StopRouterInputRequest) -> StopRouterInputResponse ! StopRouterInputErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_stop_router_input(c.params, input)) ?? e => return Err(StopRouterInputErr.InvalidInput(e))
+  var req = serialize_stop_router_input(ep, input, "") ?? e => return Err(StopRouterInputErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StopRouterInputErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_stop_router_input_error(resp))
+  }
+  deserialize_stop_router_input(resp) ?? e => Err(StopRouterInputErr.Deserialize(e))
+}
+
+pub fn endpoint_params_stop_router_output(base: EndpointParameters, input: StopRouterOutputRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StopRouterOutput.
+pub fn serialize_stop_router_output(ep: rest.Endpoint, input: StopRouterOutputRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_arn = match input.arn {
+    Some(v) => v
+    None => return Err("input member Arn is required")
+  }
+  if label_arn == "" {
+    return Err("input member Arn must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/v1/routerOutput/stop/${rest.escape(label_arn, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_stop_router_output(resp: http.Response) -> StopRouterOutputResponse ! Str {
+  var out = StopRouterOutputResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "arn" => out.arn = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "state" => out.state = RouterOutputState.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 /// The errors of StopRouterOutput.
 pub enum StopRouterOutputErr {
   BadRequestException(e: BadRequestException)
@@ -1942,6 +2529,9 @@ pub fn serialize_update_flow_output(ep: rest.Endpoint, input: UpdateFlowOutputRe
   if let Some(x) = input.ndi_audio_reference_level {
     fs.push(("ndiAudioReferenceLevel", json.Value.Int(x)))
   }
+  if let Some(x) = input.rtmp_push_settings {
+    fs.push(("rtmpPushSettings", json_of_rtmp_push_output_settings(x)))
+  }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
   if !body.is_empty() {
@@ -2142,6 +2732,9 @@ pub fn serialize_update_flow_source(ep: rest.Endpoint, input: UpdateFlowSourceRe
   }
   if let Some(x) = input.router_integration_transit_decryption {
     fs.push(("routerIntegrationTransitDecryption", json_of_flow_transit_encryption(x)))
+  }
+  if let Some(x) = input.rtmp_push_settings {
+    fs.push(("rtmpPushSettings", json_of_set_rtmp_push_source_settings(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))
@@ -2741,6 +3334,9 @@ pub fn serialize_update_router_output(ep: rest.Endpoint, input: UpdateRouterOutp
   }
   if let Some(x) = input.fabric_configuration {
     fs.push(("fabricConfiguration", json_of_fabric_configuration(x)))
+  }
+  if let Some(x) = input.processors {
+    fs.push(("processors", json_of_router_output_processors(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))

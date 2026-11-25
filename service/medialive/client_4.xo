@@ -8,6 +8,84 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn (e: StartInputDeviceErr) display() -> Str {
+  match e {
+    BadGatewayException(x) => "BadGatewayException: ${x:?}"
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    ForbiddenException(x) => "ForbiddenException: ${x:?}"
+    GatewayTimeoutException(x) => "GatewayTimeoutException: ${x:?}"
+    InternalServerErrorException(x) => "InternalServerErrorException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnprocessableEntityException(x) => "UnprocessableEntityException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_input_device_error(resp: http.Response) -> StartInputDeviceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadGatewayException" => match read_error_bad_gateway_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.BadGatewayException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.BadRequestException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "ForbiddenException" => match read_error_forbidden_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.ForbiddenException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "GatewayTimeoutException" => match read_error_gateway_timeout_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.GatewayTimeoutException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "InternalServerErrorException" => match read_error_internal_server_error_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.InternalServerErrorException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.NotFoundException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.TooManyRequestsException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    "UnprocessableEntityException" => match read_error_unprocessable_entity_exception(resp, body) {
+      Ok(x) => return StartInputDeviceErr.UnprocessableEntityException(x)
+      Err(msg) => return StartInputDeviceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartInputDeviceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Start an input device that is attached to a MediaConnect flow. (There is
+/// no need to start a device that is attached to a MediaLive input;
+/// MediaLive starts the device when the channel starts.)
+pub fn (c: Client) start_input_device(input: StartInputDeviceRequest) -> StartInputDeviceResponse ! StartInputDeviceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_input_device(c.params, input)) ?? e => return Err(StartInputDeviceErr.InvalidInput(e))
+  var req = serialize_start_input_device(ep, input, "") ?? e => return Err(StartInputDeviceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartInputDeviceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_input_device_error(resp))
+  }
+  deserialize_start_input_device(resp) ?? e => Err(StartInputDeviceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_input_device_maintenance_window(base: EndpointParameters, input: StartInputDeviceMaintenanceWindowRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
 /// The HTTP request of StartInputDeviceMaintenanceWindow.
 pub fn serialize_start_input_device_maintenance_window(ep: rest.Endpoint, input: StartInputDeviceMaintenanceWindowRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
   let _ = (idempotency_token, min_compress)
@@ -670,6 +748,7 @@ pub fn deserialize_stop_channel(resp: http.Response) -> StopChannelResponse ! St
       "linkedChannelSettings" => out.linked_channel_settings = from_json_describe_linked_channel_settings(fv)?
       "channelSecurityGroups" => out.channel_security_groups = from_json_list_of_string(fv)?
       "inferenceSettings" => out.inference_settings = from_json_describe_inference_settings(fv)?
+      "jpegXsInputSpecification" => out.jpeg_xs_input_specification = from_json_jpeg_xs_input_specification(fv)?
       _ => {}
     }
   }
@@ -1393,6 +1472,9 @@ pub fn serialize_update_channel(ep: rest.Endpoint, input: UpdateChannelRequest, 
   }
   if let Some(x) = input.special_router_settings {
     fs.push(("specialRouterSettings", json_of_special_router_settings(x)))
+  }
+  if let Some(x) = input.jpeg_xs_input_specification {
+    fs.push(("jpegXsInputSpecification", json_of_jpeg_xs_input_specification(x)))
   }
   body = json.Value.Object(fs).encode().bytes()
   headers.push(("Content-Type", "application/json"))

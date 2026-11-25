@@ -8,6 +8,205 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+pub fn deserialize_get_account(resp: http.Response) -> Account ! Str {
+  var out = Account{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "cloudwatchRoleArn" => out.cloudwatch_role_arn = jsonv.read_str(fv)?
+      "throttleSettings" => out.throttle_settings = from_json_throttle_settings(fv)?
+      "features" => out.features = from_json_list_of_string(fv)?
+      "apiKeyVersion" => out.api_key_version = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetAccount.
+pub enum GetAccountErr {
+  BadRequestException(e: BadRequestException)
+  NotFoundException(e: NotFoundException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetAccountErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_account_error(resp: http.Response) -> GetAccountErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return GetAccountErr.BadRequestException(x)
+      Err(msg) => return GetAccountErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetAccountErr.NotFoundException(x)
+      Err(msg) => return GetAccountErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return GetAccountErr.TooManyRequestsException(x)
+      Err(msg) => return GetAccountErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return GetAccountErr.UnauthorizedException(x)
+      Err(msg) => return GetAccountErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetAccountErr.Api(restjson.api_error(resp, body))
+}
+
+/// Gets information about the current Account resource.
+pub fn (c: Client) get_account(input: GetAccountRequest) -> Account ! GetAccountErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_account(c.params, input)) ?? e => return Err(GetAccountErr.InvalidInput(e))
+  var req = serialize_get_account(ep, input, "") ?? e => return Err(GetAccountErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetAccountErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_account_error(resp))
+  }
+  deserialize_get_account(resp) ?? e => Err(GetAccountErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_api_key(base: EndpointParameters, input: GetApiKeyRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetApiKey.
+pub fn serialize_get_api_key(ep: rest.Endpoint, input: GetApiKeyRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  headers.push(("Accept", "application/json"))
+  var qs: List[(Str, Str)] = []
+  let label_api_key = match input.api_key {
+    Some(v) => v
+    None => return Err("input member apiKey is required")
+  }
+  if label_api_key == "" {
+    return Err("input member apiKey must not be empty")
+  }
+  if let Some(v) = input.include_value {
+    qs.push(("includeValue", "${v}"))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/apikeys/${rest.escape(label_api_key, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_api_key(resp: http.Response) -> ApiKey ! Str {
+  var out = ApiKey{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "id" => out.id = jsonv.read_str(fv)?
+      "value" => out.value = jsonv.read_str(fv)?
+      "name" => out.name = jsonv.read_str(fv)?
+      "customerId" => out.customer_id = jsonv.read_str(fv)?
+      "description" => out.description = jsonv.read_str(fv)?
+      "enabled" => out.enabled = jsonv.read_bool(fv)?
+      "createdDate" => out.created_date = jsonv.read_time(fv, "epoch-seconds")?
+      "lastUpdatedDate" => out.last_updated_date = jsonv.read_time(fv, "epoch-seconds")?
+      "stageKeys" => out.stage_keys = from_json_list_of_string(fv)?
+      "tags" => out.tags = from_json_map_of_string_to_string(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetApiKey.
+pub enum GetApiKeyErr {
+  BadRequestException(e: BadRequestException)
+  NotFoundException(e: NotFoundException)
+  TooManyRequestsException(e: TooManyRequestsException)
+  UnauthorizedException(e: UnauthorizedException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetApiKeyErr) display() -> Str {
+  match e {
+    BadRequestException(x) => "BadRequestException: ${x:?}"
+    NotFoundException(x) => "NotFoundException: ${x:?}"
+    TooManyRequestsException(x) => "TooManyRequestsException: ${x:?}"
+    UnauthorizedException(x) => "UnauthorizedException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_api_key_error(resp: http.Response) -> GetApiKeyErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "BadRequestException" => match read_error_bad_request_exception(resp, body) {
+      Ok(x) => return GetApiKeyErr.BadRequestException(x)
+      Err(msg) => return GetApiKeyErr.Deserialize(msg)
+    }
+    "NotFoundException" => match read_error_not_found_exception(resp, body) {
+      Ok(x) => return GetApiKeyErr.NotFoundException(x)
+      Err(msg) => return GetApiKeyErr.Deserialize(msg)
+    }
+    "TooManyRequestsException" => match read_error_too_many_requests_exception(resp, body) {
+      Ok(x) => return GetApiKeyErr.TooManyRequestsException(x)
+      Err(msg) => return GetApiKeyErr.Deserialize(msg)
+    }
+    "UnauthorizedException" => match read_error_unauthorized_exception(resp, body) {
+      Ok(x) => return GetApiKeyErr.UnauthorizedException(x)
+      Err(msg) => return GetApiKeyErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetApiKeyErr.Api(restjson.api_error(resp, body))
+}
+
 /// Gets information about the current ApiKey resource.
 pub fn (c: Client) get_api_key(input: GetApiKeyRequest) -> ApiKey ! GetApiKeyErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_get_api_key(c.params, input)) ?? e => return Err(GetApiKeyErr.InvalidInput(e))
@@ -207,6 +406,7 @@ pub fn deserialize_get_authorizer(resp: http.Response) -> Authorizer ! Str {
       "identitySource" => out.identity_source = jsonv.read_str(fv)?
       "identityValidationExpression" => out.identity_validation_expression = jsonv.read_str(fv)?
       "authorizerResultTtlInSeconds" => out.authorizer_result_ttl_in_seconds = jsonv.read_int(fv)?
+      "jwtConfiguration" => out.jwt_configuration = from_json_jwt_configuration(fv)?
       _ => {}
     }
   }
@@ -7349,9 +7549,10 @@ pub fn deserialize_reject_domain_name_access_association_error(resp: http.Respon
 
 /// Rejects a domain name access association with a private custom domain
 /// name. To reject a domain name access association with an access
-/// association source in another AWS account, use this operation. To remove
-/// a domain name access association with an access association source in
-/// your own account, use the DeleteDomainNameAccessAssociation operation.
+/// association source in another Amazon Web Services account, use this
+/// operation. To remove a domain name access association with an access
+/// association source in your own account, use the
+/// DeleteDomainNameAccessAssociation operation.
 pub fn (c: Client) reject_domain_name_access_association(input: RejectDomainNameAccessAssociationRequest) -> () ! RejectDomainNameAccessAssociationErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_reject_domain_name_access_association(c.params, input)) ?? e => return Err(RejectDomainNameAccessAssociationErr.InvalidInput(e))
   var req = serialize_reject_domain_name_access_association(ep, input, "") ?? e => return Err(RejectDomainNameAccessAssociationErr.InvalidInput(e))
@@ -8258,6 +8459,7 @@ pub fn deserialize_update_authorizer(resp: http.Response) -> Authorizer ! Str {
       "identitySource" => out.identity_source = jsonv.read_str(fv)?
       "identityValidationExpression" => out.identity_validation_expression = jsonv.read_str(fv)?
       "authorizerResultTtlInSeconds" => out.authorizer_result_ttl_in_seconds = jsonv.read_int(fv)?
+      "jwtConfiguration" => out.jwt_configuration = from_json_jwt_configuration(fv)?
       _ => {}
     }
   }
@@ -8329,7 +8531,12 @@ pub fn deserialize_update_authorizer_error(resp: http.Response) -> UpdateAuthori
   UpdateAuthorizerErr.Api(restjson.api_error(resp, body))
 }
 
-/// Updates an existing Authorizer resource.
+/// Updates an existing Authorizer resource. For a JWT authorizer, the only
+/// JWT patch operation is replace on the path /jwtConfiguration . Its value
+/// is the complete configuration as a JSON string in the
+/// JwtConfigurationInput shape. This replaces the entire configuration;
+/// nothing from the previous configuration is retained. A replace operation
+/// on the path /type is supported in both directions.
 pub fn (c: Client) update_authorizer(input: UpdateAuthorizerRequest) -> Authorizer ! UpdateAuthorizerErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_update_authorizer(c.params, input)) ?? e => return Err(UpdateAuthorizerErr.InvalidInput(e))
   var req = serialize_update_authorizer(ep, input, "") ?? e => return Err(UpdateAuthorizerErr.InvalidInput(e))
@@ -11149,18 +11356,4 @@ pub fn deserialize_update_vpc_link_error(resp: http.Response) -> UpdateVpcLinkEr
     _ => {}
   }
   UpdateVpcLinkErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates an existing VpcLink of a specified identifier.
-pub fn (c: Client) update_vpc_link(input: UpdateVpcLinkRequest) -> VpcLink ! UpdateVpcLinkErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_vpc_link(c.params, input)) ?? e => return Err(UpdateVpcLinkErr.InvalidInput(e))
-  var req = serialize_update_vpc_link(ep, input, "") ?? e => return Err(UpdateVpcLinkErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateVpcLinkErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_vpc_link_error(resp))
-  }
-  deserialize_update_vpc_link(resp) ?? e => Err(UpdateVpcLinkErr.Deserialize(e))
 }

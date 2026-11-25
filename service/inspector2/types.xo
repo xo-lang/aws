@@ -23,7 +23,10 @@ pub struct Account {
 pub struct AccountAggregation {
   /// The type of finding.
   pub finding_type: Str? = None
-  /// The type of resource.
+  /// The type of resource. For Google Cloud Platform (GCP) resources, the
+  /// resource type is compute.googleapis.com/Instance ,
+  /// cloudfunctions.googleapis.com/Function , or
+  /// artifactregistry.googleapis.com/DockerImage .
   pub resource_type: Str? = None
   /// The sort order (ascending or descending).
   pub sort_order: Str? = None
@@ -120,6 +123,7 @@ pub struct AmiAggregationResponse {
   /// The cloud service provider associated with this Amazon Machine Image
   /// (AMI) aggregation. Valid values: AWS – Findings from Amazon Web
   /// Services resources. AZURE – Findings from Microsoft Azure resources.
+  /// GCP – Findings from Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud infrastructure partition associated with this AMI aggregation.
   /// Valid values: aws – Amazon Web Services commercial Regions. aws-cn –
@@ -128,7 +132,9 @@ pub struct AmiAggregationResponse {
   pub cloud_partition: Str? = None
   /// The cloud Region associated with this AMI aggregation. The value format
   /// depends on the cloud provider: An Amazon Web Services Region, such as
-  /// us-east-1 . An Azure region, such as eastus .
+  /// us-east-1 . An Azure region, such as eastus . A Google Cloud Platform
+  /// (GCP) location, such as the region us-central1 or the zone us-central1-a
+  /// .
   pub cloud_region: Str? = None
   /// The cloud organization ID for the AMI aggregation.
   pub cloud_org_id: Str? = None
@@ -1192,6 +1198,26 @@ pub struct CodeSecurityIntegrationSummary {
   pub last_update_on: Time? = None
 }
 
+/// The VPC configuration that Amazon Inspector uses to connect to a source
+/// code repository provider that is hosted in a private network.
+pub struct CodeSecurityIntegrationVpcConfiguration {
+  /// The ID of the VPC that Amazon Inspector connects through to reach the
+  /// repository provider.
+  pub vpc_id: Str? = None
+  /// The ID of the VPC endpoint used for the connection.
+  pub vpc_endpoint_id: Str? = None
+  /// The Amazon Resource Name (ARN) of the AWS CodeConnections host used for
+  /// the connection.
+  pub code_connections_host_arn: Str? = None
+  /// The IDs of the subnets used for the connection.
+  pub subnet_ids: List[Str]? = None
+  /// The IDs of the security groups used for the connection.
+  pub security_groups: List[Str]? = None
+  /// The TLS certificate used to establish a trusted connection to the
+  /// repository provider.
+  pub tls_certificate: Str? = None
+}
+
 /// Identifies a specific resource in a code repository that will be
 /// scanned.
 pub enum CodeSecurityResource {
@@ -1359,6 +1385,10 @@ pub struct Connector {
   /// Specifies whether the VM scanner is automatically installed on connected
   /// resources.
   pub auto_install_vm_scanner: Bool? = None
+  /// The Google Cloud Platform (GCP) locations configured for the connector.
+  pub gcp_regions: List[Str]? = None
+  /// The Google Cloud Platform (GCP) scope configuration for the connector.
+  pub gcp_scope_configuration: GcpScopeConfiguration? = None
 }
 
 pub enum ConnectorArnComparison: Str {
@@ -1376,6 +1406,7 @@ pub struct ConnectorArnFilter {
 
 pub enum ConnectorCloudProvider: Str {
   Azure = "AZURE"
+  Gcp = "GCP"
   Unknown(value: Str)
 }
 
@@ -1490,7 +1521,8 @@ pub struct ContainerImageAggregation {
   pub image_tags: List[StringFilter]? = None
   /// The cloud providers to aggregate findings for. Valid values: AWS –
   /// Findings from Amazon Web Services resources. AZURE – Findings from
-  /// Microsoft Azure resources.
+  /// Microsoft Azure resources. GCP – Findings from Google Cloud Platform
+  /// (GCP) resources.
   pub cloud_providers: List[StringFilter]? = None
   /// The cloud partitions to aggregate findings for. Valid values: aws –
   /// Amazon Web Services commercial Regions. aws-cn – Amazon Web Services
@@ -1499,7 +1531,8 @@ pub struct ContainerImageAggregation {
   pub cloud_partitions: List[StringFilter]? = None
   /// The cloud regions to aggregate findings for. The value format depends on
   /// the cloud provider: An Amazon Web Services Region, such as us-east-1 .
-  /// An Azure region, such as eastus .
+  /// An Azure region, such as eastus . A Google Cloud Platform (GCP)
+  /// location, such as the region us-central1 or the zone us-central1-a .
   pub cloud_regions: List[StringFilter]? = None
   /// The cloud organization IDs to aggregate findings for.
   pub cloud_org_ids: List[StringFilter]? = None
@@ -1522,7 +1555,8 @@ pub struct ContainerImageAggregationResponse {
   pub resource_id: Str? = None
   /// The cloud service provider associated with this container image
   /// aggregation. Valid values: AWS – Findings from Amazon Web Services
-  /// resources. AZURE – Findings from Microsoft Azure resources.
+  /// resources. AZURE – Findings from Microsoft Azure resources. GCP –
+  /// Findings from Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud account ID for the container image aggregation.
   pub cloud_account_id: Str? = None
@@ -1534,7 +1568,9 @@ pub struct ContainerImageAggregationResponse {
   pub cloud_partition: Str? = None
   /// The cloud Region associated with this container image aggregation. The
   /// value format depends on the cloud provider: An Amazon Web Services
-  /// Region, such as us-east-1 . An Azure region, such as eastus .
+  /// Region, such as us-east-1 . An Azure region, such as eastus . A Google
+  /// Cloud Platform (GCP) location, such as the region us-central1 or the
+  /// zone us-central1-a .
   pub cloud_region: Str? = None
   /// The cloud organization ID for the container image aggregation.
   pub cloud_org_id: Str? = None
@@ -1639,9 +1675,18 @@ pub struct CoverageFilterCriteria {
   /// An array of Amazon Web Services resource IDs to return coverage
   /// statistics for.
   pub resource_id: List[CoverageStringFilter]? = None
-  /// An array of Amazon Web Services resource types to return coverage
-  /// statistics for. The values can be AWS_EC2_INSTANCE , AWS_LAMBDA_FUNCTION
-  /// , AWS_ECR_CONTAINER_IMAGE , AWS_ECR_REPOSITORY or AWS_ACCOUNT .
+  /// An array of resource types to return coverage statistics for. Valid
+  /// values: Amazon Web Services – AWS_EC2_INSTANCE , AWS_LAMBDA_FUNCTION ,
+  /// AWS_ECR_CONTAINER_IMAGE , AWS_ECR_REPOSITORY , MACHINE_IMAGE ,
+  /// CODE_REPOSITORY , or AWS_ACCOUNT . Microsoft Azure –
+  /// Microsoft.Compute/virtualMachines ,
+  /// Microsoft.ContainerRegistry/registries ,
+  /// Microsoft.ContainerRegistry/registry/containerRepository ,
+  /// Microsoft.ContainerRegistry/registry/containerImage , or
+  /// Microsoft.Web/sites . Google Cloud Platform (GCP) –
+  /// compute.googleapis.com/Instance , cloudfunctions.googleapis.com/Function
+  /// , artifactregistry.googleapis.com/Repository , or
+  /// artifactregistry.googleapis.com/DockerImage .
   pub resource_type: List[CoverageStringFilter]? = None
   /// An array of Amazon Inspector scan types to return coverage statistics
   /// for.
@@ -1687,11 +1732,20 @@ pub struct CoverageFilterCriteria {
   /// Filter criteria for code repositories based on the ID of the last
   /// scanned commit.
   pub last_scanned_commit_id: List[CoverageStringFilter]? = None
-  /// The cloud provider to filter coverage results by.
+  /// The cloud provider to filter coverage results by. Valid values: AWS –
+  /// Amazon Web Services resources. AZURE – Microsoft Azure resources. GCP
+  /// – Google Cloud Platform (GCP) resources.
   pub cloud_provider: List[CoverageStringFilter]? = None
-  /// The cloud provider account ID to filter coverage results by.
+  /// The cloud provider account ID to filter coverage results by. The value
+  /// format depends on the cloud provider: An Amazon Web Services account ID.
+  /// An Azure subscription ID. A Google Cloud Platform (GCP) project ID, such
+  /// as my-project .
   pub cloud_provider_account_id: List[CoverageStringFilter]? = None
-  /// The cloud provider region to filter coverage results by.
+  /// The cloud provider region to filter coverage results by. The value
+  /// format depends on the cloud provider: An Amazon Web Services Region,
+  /// such as us-east-1 . An Azure region, such as eastus . A Google Cloud
+  /// Platform (GCP) location, such as the region us-central1 or the zone
+  /// us-central1-a .
   pub cloud_provider_region: List[CoverageStringFilter]? = None
   /// The cloud VM instance tags to filter coverage results by.
   pub cloud_vm_instance_tags: List[CoverageMapFilter]? = None
@@ -1707,7 +1761,10 @@ pub struct CoverageFilterCriteria {
   pub cloud_serverless_function_runtime: List[CoverageStringFilter]? = None
   /// The cloud serverless function tags to filter coverage results by.
   pub cloud_serverless_function_tags: List[CoverageMapFilter]? = None
-  /// The cloud provider organization ID to filter coverage results by.
+  /// The cloud provider organization ID to filter coverage results by. The
+  /// value format depends on the cloud provider: An Amazon Web Services
+  /// Organizations organization ID. An Azure tenant ID. A numeric Google
+  /// Cloud Platform (GCP) organization ID.
   pub cloud_provider_org_id: List[CoverageStringFilter]? = None
 }
 
@@ -1740,7 +1797,17 @@ pub struct CoverageStringFilter {
 /// An object that contains details about a resource covered by Amazon
 /// Inspector.
 pub struct CoveredResource {
-  /// The type of the covered resource.
+  /// The type of the covered resource. Valid values: Amazon Web Services –
+  /// AWS_EC2_INSTANCE , AWS_LAMBDA_FUNCTION , AWS_ECR_CONTAINER_IMAGE ,
+  /// AWS_ECR_REPOSITORY , MACHINE_IMAGE , CODE_REPOSITORY , or AWS_ACCOUNT .
+  /// Microsoft Azure – Microsoft.Compute/virtualMachines ,
+  /// Microsoft.ContainerRegistry/registries ,
+  /// Microsoft.ContainerRegistry/registry/containerRepository ,
+  /// Microsoft.ContainerRegistry/registry/containerImage , or
+  /// Microsoft.Web/sites . Google Cloud Platform (GCP) –
+  /// compute.googleapis.com/Instance , cloudfunctions.googleapis.com/Function
+  /// , artifactregistry.googleapis.com/Repository , or
+  /// artifactregistry.googleapis.com/DockerImage .
   pub resource_type: Str? = None
   /// The ID of the covered resource.
   pub resource_id: Str? = None
@@ -1756,13 +1823,25 @@ pub struct CoveredResource {
   pub last_scanned_at: Time? = None
   /// The scan method that is applied to the instance.
   pub scan_mode: Str? = None
-  /// The cloud provider of the covered resource.
+  /// The cloud provider of the covered resource. Valid values: AWS – Amazon
+  /// Web Services resources. AZURE – Microsoft Azure resources. GCP –
+  /// Google Cloud Platform (GCP) resources.
   pub provider: Str? = None
-  /// The cloud provider account ID of the covered resource.
+  /// The cloud provider account ID of the covered resource. The value format
+  /// depends on the cloud provider: An Amazon Web Services account ID. An
+  /// Azure subscription ID. A Google Cloud Platform (GCP) project ID, such as
+  /// my-project .
   pub provider_account_id: Str? = None
-  /// The cloud provider organization ID of the covered resource.
+  /// The cloud provider organization ID of the covered resource. The value
+  /// format depends on the cloud provider: An Amazon Web Services
+  /// Organizations organization ID. An Azure tenant ID. A numeric Google
+  /// Cloud Platform (GCP) organization ID.
   pub provider_org_id: Str? = None
-  /// The cloud provider region of the covered resource.
+  /// The cloud provider region of the covered resource. The value format
+  /// depends on the cloud provider: An Amazon Web Services Region, such as
+  /// us-east-1 . An Azure region, such as eastus . A Google Cloud Platform
+  /// (GCP) location, such as the region us-central1 or the zone us-central1-a
+  /// .
   pub provider_region: Str? = None
   /// The cloud provider partition of the covered resource.
   pub provider_partition: Str? = None
@@ -1899,6 +1978,17 @@ pub struct CreateFindingsReportResponse {
   pub report_id: Str? = None
 }
 
+/// Contains the details required to create an integration with a GitHub
+/// Enterprise Server instance.
+pub struct CreateGitHubEnterpriseIntegrationDetail {
+  /// The URL of the GitHub Enterprise Server instance.
+  pub instance_url: Str? = None
+  /// The VPC configuration used to connect to the GitHub Enterprise Server
+  /// instance in a private network. For publicly accessible instances, omit
+  /// this field.
+  pub vpc_configuration: CodeSecurityIntegrationVpcConfiguration? = None
+}
+
 /// Contains details required to create an integration with a self-managed
 /// GitLab instance.
 pub struct CreateGitLabSelfManagedIntegrationDetail {
@@ -1907,12 +1997,17 @@ pub struct CreateGitLabSelfManagedIntegrationDetail {
   /// The personal access token used to authenticate with the self-managed
   /// GitLab instance.
   pub access_token: Str? = None
+  /// The VPC configuration used to connect to the self-managed GitLab
+  /// instance in a private network. For publicly accessible instances, omit
+  /// this field.
+  pub vpc_configuration: CodeSecurityIntegrationVpcConfiguration? = None
 }
 
 /// Contains details required to create a code security integration with a
 /// specific repository provider.
 pub enum CreateIntegrationDetail {
   GitlabSelfManaged(value: CreateGitLabSelfManagedIntegrationDetail)
+  GithubEnterprise(value: CreateGitHubEnterpriseIntegrationDetail)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -2487,7 +2582,10 @@ pub struct FilterCriteria {
   pub title: List[StringFilter]? = None
   /// The Amazon Inspector score to filter on.
   pub inspector_score: List[NumberFilter]? = None
-  /// Details on the resource types used to filter findings.
+  /// Details on the resource types used to filter findings. For Google Cloud
+  /// Platform (GCP) resources, the resource type is
+  /// compute.googleapis.com/Instance , cloudfunctions.googleapis.com/Function
+  /// , or artifactregistry.googleapis.com/DockerImage .
   pub resource_type: List[StringFilter]? = None
   /// Details on the resource IDs used to filter findings.
   pub resource_id: List[StringFilter]? = None
@@ -2730,7 +2828,10 @@ pub struct FindingDetailsError {
 pub struct FindingTypeAggregation {
   /// The finding type to aggregate.
   pub finding_type: Str? = None
-  /// The resource type to aggregate.
+  /// The resource type to aggregate. For Google Cloud Platform (GCP)
+  /// resources, the resource type is compute.googleapis.com/Instance ,
+  /// cloudfunctions.googleapis.com/Function , or
+  /// artifactregistry.googleapis.com/DockerImage .
   pub resource_type: Str? = None
   /// The order to sort results by.
   pub sort_order: Str? = None
@@ -2750,7 +2851,8 @@ pub struct FindingTypeAggregationResponse {
   pub fix_available_count: Int? = None
   /// The cloud service provider associated with this finding type
   /// aggregation. Valid values: AWS – Findings from Amazon Web Services
-  /// resources. AZURE – Findings from Microsoft Azure resources.
+  /// resources. AZURE – Findings from Microsoft Azure resources. GCP –
+  /// Findings from Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud account ID for the finding type aggregation.
   pub cloud_account_id: Str? = None
@@ -2758,7 +2860,9 @@ pub struct FindingTypeAggregationResponse {
   pub cloud_org_id: Str? = None
   /// The cloud Region associated with this finding type aggregation. The
   /// value format depends on the cloud provider: An Amazon Web Services
-  /// Region, such as us-east-1 . An Azure region, such as eastus .
+  /// Region, such as us-east-1 . An Azure region, such as eastus . A Google
+  /// Cloud Platform (GCP) location, such as the region us-central1 or the
+  /// zone us-central1-a .
   pub cloud_region: Str? = None
   /// The cloud infrastructure partition associated with this finding type
   /// aggregation. Valid values: aws – Amazon Web Services commercial
@@ -2790,7 +2894,9 @@ pub struct FreeTrialInfo {
   pub end: Time? = None
   /// The order to sort results by.
   pub status: Str? = None
-  /// The cloud provider associated with the free trial information.
+  /// The cloud provider associated with the free trial information. Valid
+  /// values: AWS – Amazon Web Services resources. AZURE – Microsoft Azure
+  /// resources. GCP – Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
 }
 
@@ -2803,6 +2909,91 @@ pub struct FreeTrialInfoError {
   pub code: Str? = None
   /// The error message returned.
   pub message: Str? = None
+}
+
+/// The scope of Google Cloud Platform (GCP) resources that Amazon Inspector
+/// scans for a single scanning type, including the scope level, the
+/// targeted resources, and the current state.
+pub struct GcpCapabilityScope {
+  /// The type of scope: ORGANIZATION , which scans all projects in the GCP
+  /// organization, or PROJECT , which scans only the specified GCP projects.
+  pub scope_type: ScopeType? = None
+  /// The GCP project IDs to scan when scopeType is PROJECT . Not used when
+  /// scopeType is ORGANIZATION . Amazon Inspector scans the organization of
+  /// the Amazon Web Services Config connector.
+  pub scope_values: List[Str]? = None
+  /// The current state of the scope configuration.
+  pub state: ScopeState? = None
+  /// The reason for the current state of the scope configuration.
+  pub state_reason: Str? = None
+}
+
+/// The scope of Google Cloud Platform (GCP) resources to scan for a single
+/// scanning type. Provide this as part of a GcpScopeConfigurationInput when
+/// you create or update a connector.
+pub struct GcpCapabilityScopeInput {
+  /// The type of scope: ORGANIZATION , which scans all projects in the GCP
+  /// organization, or PROJECT , which scans only the specified GCP projects.
+  pub scope_type: ScopeType? = None
+  /// The GCP project IDs to scan. Required when scopeType is PROJECT . Don't
+  /// specify scope values when scopeType is ORGANIZATION . Amazon Inspector
+  /// scans the organization of the Amazon Web Services Config connector.
+  pub scope_values: List[Str]? = None
+}
+
+/// The configuration details specific to Google Cloud Platform (GCP) for
+/// creating a connector, including the Amazon Web Services Config connector
+/// association, scan scope, and locations to scan.
+pub struct GcpProviderDetailCreate {
+  /// The ARN of the Amazon Web Services Config connector to associate with
+  /// this connector.
+  pub aws_config_connector_arn: Str? = None
+  /// The scope configuration that defines which GCP resources to scan.
+  pub scope_configuration: GcpScopeConfigurationInput? = None
+  /// The GCP locations to scan, such as regions, zones, multi-regions, or
+  /// dual-regions. Specify ALL to scan all locations.
+  pub gcp_regions: List[Str]? = None
+  /// Specifies whether to automatically install the VM scanner on connected
+  /// GCP resources. Defaults to true .
+  pub auto_install_vm_scanner: Bool? = None
+}
+
+/// The configuration details specific to Google Cloud Platform (GCP) for
+/// updating a connector, including the scan scope and locations to scan.
+pub struct GcpProviderDetailUpdate {
+  /// The updated GCP locations to scan, such as regions, zones,
+  /// multi-regions, or dual-regions. Specify ALL to scan all locations.
+  pub gcp_regions: List[Str]? = None
+  /// The updated scope configuration that defines which GCP resources to
+  /// scan.
+  pub scope_configuration: GcpScopeConfigurationInput? = None
+  /// Specifies whether to automatically install the VM scanner on connected
+  /// GCP resources.
+  pub auto_install_vm_scanner: Bool? = None
+}
+
+/// The scope of Google Cloud Platform (GCP) resources that Amazon Inspector
+/// scans, defined separately for VM, container image, and serverless
+/// scanning. Returned as part of a connector's configuration.
+pub struct GcpScopeConfiguration {
+  /// The scope configuration for VM scanning.
+  pub vm_scanning: GcpCapabilityScope? = None
+  /// The scope configuration for container image scanning.
+  pub container_image_scanning: GcpCapabilityScope? = None
+  /// The scope configuration for serverless scanning.
+  pub serverless_scanning: GcpCapabilityScope? = None
+}
+
+/// The scope of Google Cloud Platform (GCP) resources to scan, defined
+/// separately for VM, container image, and serverless scanning. Provide
+/// this when you create or update a GCP connector.
+pub struct GcpScopeConfigurationInput {
+  /// The scope configuration input for VM scanning.
+  pub vm_scanning: GcpCapabilityScopeInput? = None
+  /// The scope configuration input for container image scanning.
+  pub container_image_scanning: GcpCapabilityScopeInput? = None
+  /// The scope configuration input for serverless scanning.
+  pub serverless_scanning: GcpCapabilityScopeInput? = None
 }
 
 pub struct GetCisScanReportRequest {
@@ -2898,6 +3089,12 @@ pub struct GetCodeSecurityIntegrationResponse {
   /// This is only returned if reauthorization is required to fix a connection
   /// issue. Otherwise, it is null.
   pub authorization_url: Str? = None
+  /// The VPC configuration associated with the integration, if it connects to
+  /// a repository provider in a private network.
+  pub vpc_configuration: CodeSecurityIntegrationVpcConfiguration? = None
+  /// The URL of the self-managed GitLab or GitHub Enterprise Server instance
+  /// associated with the integration.
+  pub instance_url: Str? = None
   /// The tags associated with the code security integration.
   pub tags: Map[Str, Str]? = None
 }
@@ -3095,6 +3292,14 @@ pub struct GetSbomExportResponse {
   pub filter_criteria: ResourceFilterCriteria? = None
 }
 
+/// Contains the details required to register the GitHub App on the GitHub
+/// Enterprise Server instance.
+pub struct GitHubEnterpriseServerAppRegistrationDetail {
+  /// The manifest code used to register the GitHub App on the GitHub
+  /// Enterprise Server instance.
+  pub manifest_code: Str? = None
+}
+
 /// Contains details about a container image involved in a finding.
 pub struct Image {
   /// The name of the repository the container image resides in.
@@ -3129,7 +3334,8 @@ pub struct ImageLayerAggregation {
   pub layer_hashes: List[StringFilter]? = None
   /// The cloud providers to aggregate findings for. Valid values: AWS –
   /// Findings from Amazon Web Services resources. AZURE – Findings from
-  /// Microsoft Azure resources.
+  /// Microsoft Azure resources. GCP – Findings from Google Cloud Platform
+  /// (GCP) resources.
   pub cloud_providers: List[StringFilter]? = None
   /// The cloud account IDs to aggregate findings for.
   pub cloud_account_ids: List[StringFilter]? = None
@@ -3137,7 +3343,8 @@ pub struct ImageLayerAggregation {
   pub cloud_org_ids: List[StringFilter]? = None
   /// The cloud regions to aggregate findings for. The value format depends on
   /// the cloud provider: An Amazon Web Services Region, such as us-east-1 .
-  /// An Azure region, such as eastus .
+  /// An Azure region, such as eastus . A Google Cloud Platform (GCP)
+  /// location, such as the region us-central1 or the zone us-central1-a .
   pub cloud_regions: List[StringFilter]? = None
   /// The cloud partitions to aggregate findings for. Valid values: aws –
   /// Amazon Web Services commercial Regions. aws-cn – Amazon Web Services
@@ -3164,7 +3371,8 @@ pub struct ImageLayerAggregationResponse {
   pub account_id: Str? = None
   /// The cloud service provider associated with this image layer aggregation.
   /// Valid values: AWS – Findings from Amazon Web Services resources. AZURE
-  /// – Findings from Microsoft Azure resources.
+  /// – Findings from Microsoft Azure resources. GCP – Findings from
+  /// Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud account ID for the image layer aggregation.
   pub cloud_account_id: Str? = None
@@ -3172,7 +3380,9 @@ pub struct ImageLayerAggregationResponse {
   pub cloud_org_id: Str? = None
   /// The cloud Region associated with this image layer aggregation. The value
   /// format depends on the cloud provider: An Amazon Web Services Region,
-  /// such as us-east-1 . An Azure region, such as eastus .
+  /// such as us-east-1 . An Azure region, such as eastus . A Google Cloud
+  /// Platform (GCP) location, such as the region us-central1 or the zone
+  /// us-central1-a .
   pub cloud_region: Str? = None
   /// The cloud infrastructure partition associated with this image layer
   /// aggregation. Valid values: aws – Amazon Web Services commercial
@@ -3196,12 +3406,19 @@ pub enum IntegrationStatus: Str {
   Active = "ACTIVE"
   Inactive = "INACTIVE"
   Disabling = "DISABLING"
+  EstablishingConnectionInProgress = "ESTABLISHING_CONNECTION_IN_PROGRESS"
+  EstablishingConnectionCompleted = "ESTABLISHING_CONNECTION_COMPLETED"
+  EstablishingConnectionFailed = "ESTABLISHING_CONNECTION_FAILED"
+  PendingManifestCode = "PENDING_MANIFEST_CODE"
+  DeleteInProgress = "DELETE_IN_PROGRESS"
+  DeleteFailed = "DELETE_FAILED"
   Unknown(value: Str)
 }
 
 pub enum IntegrationType: Str {
   GitlabSelfManaged = "GITLAB_SELF_MANAGED"
   Github = "GITHUB"
+  GithubEnterpriseServer = "GITHUB_ENTERPRISE_SERVER"
   Unknown(value: Str)
 }
 
@@ -3630,7 +3847,10 @@ pub struct ListCoverageStatisticsRequest {
   /// An object that contains details on the filters to apply to the coverage
   /// data for your environment.
   pub filter_criteria: CoverageFilterCriteria? = None
-  /// The value to group the results by.
+  /// The value to group the results by. For multi-cloud resources, use
+  /// PROVIDER , PROVIDER_ACCOUNT_ID (Azure subscription ID or Google Cloud
+  /// Platform (GCP) project ID), PROVIDER_ORG_ID (Azure tenant ID or Google
+  /// Cloud Platform (GCP) organization ID), or PROVIDER_REGION .
   pub group_by: Str? = None
   /// A token to use for paginating results that are returned in the response.
   /// Set the value of this parameter to null for the first request to a list
@@ -3852,29 +4072,34 @@ pub struct ListUsageTotalsResponse {
   pub totals: List[UsageTotal]? = None
 }
 
-/// Details about a machine image resource scanned directly by Inspector.
+/// Contains details about an Amazon Machine Image (AMI) that Amazon
+/// Inspector scanned directly.
 pub struct MachineImageDetails {
-  /// The machine image ID (e.g., ami-0abcdef1234567890)
+  /// The ID of the machine image, for example ami-0abcdef1234567890 .
   pub machine_image_id: Str? = None
-  /// Human-readable image name
+  /// The name of the machine image.
   pub name: Str? = None
-  /// Account ID that owns the image
+  /// The ID of the account that owns the machine image.
   pub owner_account_id: Str? = None
-  /// OS platform (Linux/Windows)
+  /// The operating system platform of the machine image.
   pub platform: Str? = None
-  /// CPU architecture (x86_64/arm64)
+  /// The CPU architecture of the machine image, for example x86_64 or arm64 .
   pub architecture: Str? = None
-  /// When the image was created
+  /// The date and time that the machine image was created.
   pub creation_date: Time? = None
-  /// Image state (available/pending/deregistered)
+  /// The state of the machine image, for example available , pending , or
+  /// deregistered .
   pub state: Str? = None
-  /// Whether the image is publicly shared
+  /// Indicates whether the machine image is shared publicly.
   pub is_public: Bool? = None
-  /// Root device type (ebs/instance-store) — AWS-specific
+  /// The root device type of the machine image, either ebs or instance-store
+  /// .
   pub root_device_type: Str? = None
-  /// Virtualization type (hvm/paravirtual) — AWS-specific
+  /// The virtualization type of the machine image, either hvm or paravirtual
+  /// .
   pub virtualization_type: Str? = None
-  /// Source resource the image was created from (nullable)
+  /// The ID of the Amazon EC2 instance that the machine image was created
+  /// from, if available.
   pub source_resource_id: Str? = None
 }
 
@@ -4055,6 +4280,17 @@ pub struct PackageFilter {
   pub source_lambda_layer_arn: StringFilter? = None
   /// An object that contains details on the package file path to filter on.
   pub file_path: StringFilter? = None
+  /// An object that contains details on the runtime reachability status of
+  /// the package to filter on. For more information, see Understanding
+  /// runtime reachability in the Amazon Inspector user guide.
+  pub runtime_reachability: RuntimeReachabilityFilter? = None
+  /// An object that contains details on the runtime reachability reason of
+  /// the package to filter on. For more information, see Understanding
+  /// runtime reachability in the Amazon Inspector user guide.
+  pub runtime_reachability_reason: RuntimeReachabilityReasonFilter? = None
+  /// An object that contains details on the package URL (purl) qualifier to
+  /// filter on.
+  pub purl_qualifier: PurlQualifierFilter? = None
 }
 
 /// Information about a package vulnerability finding.
@@ -4172,6 +4408,7 @@ pub enum ProviderComparison: Str {
 /// The provider-specific configuration details for creating a connector.
 pub enum ProviderDetailCreate {
   Azure(value: AzureProviderDetailCreate)
+  Gcp(value: GcpProviderDetailCreate)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -4179,6 +4416,7 @@ pub enum ProviderDetailCreate {
 /// The provider-specific configuration details for updating a connector.
 pub enum ProviderDetailUpdate {
   Azure(value: AzureProviderDetailUpdate)
+  Gcp(value: GcpProviderDetailUpdate)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -4189,6 +4427,17 @@ pub struct ProviderFilter {
   pub comparison: ProviderComparison? = None
   /// The cloud provider value to filter by.
   pub value: ConnectorCloudProvider? = None
+}
+
+/// An object that describes the details of a package URL (purl) qualifier
+/// filter.
+pub struct PurlQualifierFilter {
+  /// The operator to use when comparing values in the filter.
+  pub comparison: Str? = None
+  /// The package URL (purl) qualifier key to filter on.
+  pub key: Str? = None
+  /// The package URL (purl) qualifier value to filter on.
+  pub value: Str? = None
 }
 
 /// Details about the recommended course of action to remediate the finding.
@@ -4225,7 +4474,8 @@ pub struct RepositoryAggregationResponse {
   pub account_id: Str? = None
   /// The cloud service provider associated with this repository aggregation.
   /// Valid values: AWS – Findings from Amazon Web Services resources. AZURE
-  /// – Findings from Microsoft Azure resources.
+  /// – Findings from Microsoft Azure resources. GCP – Findings from
+  /// Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud infrastructure partition associated with this repository
   /// aggregation. Valid values: aws – Amazon Web Services commercial
@@ -4235,7 +4485,9 @@ pub struct RepositoryAggregationResponse {
   pub cloud_partition: Str? = None
   /// The cloud Region associated with this repository aggregation. The value
   /// format depends on the cloud provider: An Amazon Web Services Region,
-  /// such as us-east-1 . An Azure region, such as eastus .
+  /// such as us-east-1 . An Azure region, such as eastus . A Google Cloud
+  /// Platform (GCP) location, such as the region us-central1 or the zone
+  /// us-central1-a .
   pub cloud_region: Str? = None
   /// The cloud organization ID for the repository aggregation.
   pub cloud_org_id: Str? = None
@@ -4272,11 +4524,19 @@ pub struct Resource {
   /// An object that contains details about the resource involved in a
   /// finding.
   pub details: ResourceDetails? = None
-  /// The cloud provider of the resource.
+  /// The cloud provider of the resource. Valid values: AWS – Amazon Web
+  /// Services resources. AZURE – Microsoft Azure resources. GCP – Google
+  /// Cloud Platform (GCP) resources.
   pub provider: Str? = None
-  /// The cloud provider account ID of the resource.
+  /// The cloud provider account ID of the resource. The value format depends
+  /// on the cloud provider: An Amazon Web Services account ID. An Azure
+  /// subscription ID. A Google Cloud Platform (GCP) project ID, such as
+  /// my-project .
   pub provider_account_id: Str? = None
-  /// The cloud provider organization ID of the resource.
+  /// The cloud provider organization ID of the resource. The value format
+  /// depends on the cloud provider: An Amazon Web Services Organizations
+  /// organization ID. An Azure tenant ID. A numeric Google Cloud Platform
+  /// (GCP) organization ID.
   pub provider_org_id: Str? = None
 }
 
@@ -4294,6 +4554,8 @@ pub struct ResourceDetails {
   /// Contains details about a code repository resource associated with a
   /// finding.
   pub code_repository: CodeRepositoryDetails? = None
+  /// An object that contains details about the Amazon Machine Image (AMI)
+  /// involved in the finding.
   pub machine_image: MachineImageDetails? = None
   /// An object that contains details about a VM instance involved in the
   /// finding.
@@ -4313,7 +4575,14 @@ pub struct ResourceFilterCriteria {
   pub account_id: List[ResourceStringFilter]? = None
   /// The resource IDs used as resource filter criteria.
   pub resource_id: List[ResourceStringFilter]? = None
-  /// The resource types used as resource filter criteria.
+  /// The resource types used as resource filter criteria. Valid values:
+  /// Amazon Web Services – AWS_EC2_INSTANCE , AWS_ECR_CONTAINER_IMAGE ,
+  /// AWS_LAMBDA_FUNCTION , or MACHINE_IMAGE . Microsoft Azure –
+  /// Microsoft.Compute/virtualMachines ,
+  /// Microsoft.ContainerRegistry/registry/containerImage , or
+  /// Microsoft.Web/sites . Google Cloud Platform (GCP) –
+  /// compute.googleapis.com/Instance , cloudfunctions.googleapis.com/Function
+  /// , or artifactregistry.googleapis.com/DockerImage .
   pub resource_type: List[ResourceStringFilter]? = None
   /// The ECR repository names used as resource filter criteria.
   pub ecr_repository_name: List[ResourceStringFilter]? = None
@@ -4327,13 +4596,25 @@ pub struct ResourceFilterCriteria {
   /// The Amazon Web Services Lambda function tags used as resource filter
   /// criteria.
   pub lambda_function_tags: List[ResourceMapFilter]? = None
-  /// The cloud providers used as resource filter criteria.
+  /// The cloud providers used as resource filter criteria. Valid values: AWS
+  /// – Amazon Web Services resources. AZURE – Microsoft Azure resources.
+  /// GCP – Google Cloud Platform (GCP) resources.
   pub cloud_provider: List[ResourceStringFilter]? = None
-  /// The cloud provider account IDs used as resource filter criteria.
+  /// The cloud provider account IDs used as resource filter criteria. The
+  /// value format depends on the cloud provider: An Amazon Web Services
+  /// account ID. An Azure subscription ID. A Google Cloud Platform (GCP)
+  /// project ID.
   pub cloud_provider_account_id: List[ResourceStringFilter]? = None
   /// The cloud provider organization IDs used as resource filter criteria.
+  /// The value format depends on the cloud provider: An Amazon Web Services
+  /// Organizations organization ID. An Azure tenant ID. A Google Cloud
+  /// Platform (GCP) organization ID.
   pub cloud_provider_org_id: List[ResourceStringFilter]? = None
-  /// The cloud provider regions used as resource filter criteria.
+  /// The cloud provider regions used as resource filter criteria. The value
+  /// format depends on the cloud provider: An Amazon Web Services Region,
+  /// such as us-east-1 . An Azure region, such as eastus . A Google Cloud
+  /// Platform (GCP) location, such as the region us-central1 or the zone
+  /// us-central1-a .
   pub cloud_provider_region: List[ResourceStringFilter]? = None
   /// The cloud VM instance tags used as resource filter criteria.
   pub cloud_vm_instance_tags: List[ResourceMapFilter]? = None
@@ -4450,6 +4731,23 @@ pub enum RuleSetCategory: Str {
   Unknown(value: Str)
 }
 
+/// An object that describes the details of a runtime reachability filter.
+pub struct RuntimeReachabilityFilter {
+  /// The operator to use when comparing values in the filter.
+  pub comparison: Str? = None
+  /// The runtime reachability status to filter on.
+  pub value: Str? = None
+}
+
+/// An object that describes the details of a runtime reachability reason
+/// filter.
+pub struct RuntimeReachabilityReasonFilter {
+  /// The operator to use when comparing values in the filter.
+  pub comparison: Str? = None
+  /// The runtime reachability reason to filter on.
+  pub value: Str? = None
+}
+
 /// The status of the scan.
 pub struct ScanStatus {
   /// The status code of the scan.
@@ -4564,9 +4862,9 @@ pub struct ScopeConfiguration {
 /// as part of an AzureScopeConfigurationInput when you create or update a
 /// connector.
 pub struct ScopeConfigurationInput {
-  /// The type of scope. Valid values are TENANT , which scans all resources
-  /// in the Azure tenant, and SUBSCRIPTION , which scans only the resources
-  /// in the specified Azure subscriptions.
+  /// The type of scope: TENANT , which scans all resources in the Azure
+  /// tenant, or SUBSCRIPTION , which scans only the resources in the
+  /// specified Azure subscriptions.
   pub scope_type: ScopeType? = None
   /// The list of scope values. For subscription-level scope, these are Azure
   /// subscription IDs.
@@ -4592,6 +4890,8 @@ pub enum ScopeState: Str {
 pub enum ScopeType: Str {
   Tenant = "TENANT"
   Subscription = "SUBSCRIPTION"
+  Organization = "ORGANIZATION"
+  Project = "PROJECT"
   Unknown(value: Str)
 }
 
@@ -4682,7 +4982,8 @@ pub struct ServerlessFunctionAggregation {
   pub function_tags: List[MapFilter]? = None
   /// The cloud providers to aggregate findings for. Valid values: AWS –
   /// Findings from Amazon Web Services resources. AZURE – Findings from
-  /// Microsoft Azure resources.
+  /// Microsoft Azure resources. GCP – Findings from Google Cloud Platform
+  /// (GCP) resources.
   pub cloud_providers: List[StringFilter]? = None
   /// The cloud partitions to aggregate findings for. Valid values: aws –
   /// Amazon Web Services commercial Regions. aws-cn – Amazon Web Services
@@ -4691,7 +4992,8 @@ pub struct ServerlessFunctionAggregation {
   pub cloud_partitions: List[StringFilter]? = None
   /// The cloud regions to aggregate findings for. The value format depends on
   /// the cloud provider: An Amazon Web Services Region, such as us-east-1 .
-  /// An Azure region, such as eastus .
+  /// An Azure region, such as eastus . A Google Cloud Platform (GCP)
+  /// location, such as the region us-central1 or the zone us-central1-a .
   pub cloud_regions: List[StringFilter]? = None
   /// The cloud organization IDs to aggregate findings for.
   pub cloud_org_ids: List[StringFilter]? = None
@@ -4711,7 +5013,8 @@ pub struct ServerlessFunctionAggregationResponse {
   pub resource_id: Str? = None
   /// The cloud service provider associated with this serverless function
   /// aggregation. Valid values: AWS – Findings from Amazon Web Services
-  /// resources. AZURE – Findings from Microsoft Azure resources.
+  /// resources. AZURE – Findings from Microsoft Azure resources. GCP –
+  /// Findings from Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud account ID for the serverless function aggregation.
   pub cloud_account_id: Str? = None
@@ -4723,7 +5026,9 @@ pub struct ServerlessFunctionAggregationResponse {
   pub cloud_partition: Str? = None
   /// The cloud Region associated with this serverless function aggregation.
   /// The value format depends on the cloud provider: An Amazon Web Services
-  /// Region, such as us-east-1 . An Azure region, such as eastus .
+  /// Region, such as us-east-1 . An Azure region, such as eastus . A Google
+  /// Cloud Platform (GCP) location, such as the region us-central1 or the
+  /// zone us-central1-a .
   pub cloud_region: Str? = None
   /// The cloud organization ID for the serverless function aggregation.
   pub cloud_org_id: Str? = None
@@ -4999,7 +5304,10 @@ pub struct TitleAggregation {
   pub titles: List[StringFilter]? = None
   /// The vulnerability IDs of the findings.
   pub vulnerability_ids: List[StringFilter]? = None
-  /// The resource type to aggregate on.
+  /// The resource type to aggregate on. For Google Cloud Platform (GCP)
+  /// resources, the resource type is compute.googleapis.com/Instance ,
+  /// cloudfunctions.googleapis.com/Function , or
+  /// artifactregistry.googleapis.com/DockerImage .
   pub resource_type: Str? = None
   /// The type of finding to aggregate on.
   pub finding_type: Str? = None
@@ -5219,12 +5527,35 @@ pub struct UpdateFilterResponse {
   pub arn: Str? = None
 }
 
+/// Contains the details required to complete the GitHub App installation
+/// for a GitHub Enterprise Server integration.
+pub struct UpdateGitHubEnterpriseServerAppInstallationDetail {
+  /// The authorization code received from GitHub Enterprise Server.
+  pub code: Str? = None
+  /// The installation ID of the GitHub App associated with the integration.
+  pub installation_id: Str? = None
+  /// The PKCE state token used to validate the authorization request.
+  pub state_token: Str? = None
+}
+
+/// Contains the details required to update an integration with a GitHub
+/// Enterprise Server instance. Provide one of the following, depending on
+/// the step of the setup flow.
+pub enum UpdateGitHubEnterpriseServerIntegrationDetail {
+  AppInstallation(value: UpdateGitHubEnterpriseServerAppInstallationDetail)
+  AppRegistration(value: GitHubEnterpriseServerAppRegistrationDetail)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
 /// Contains details required to update an integration with GitHub.
 pub struct UpdateGitHubIntegrationDetail {
   /// The authorization code received from GitHub to update the integration.
   pub code: Str? = None
   /// The installation ID of the GitHub App associated with the integration.
   pub installation_id: Str? = None
+  /// The PKCE state token used to validate the authorization request.
+  pub state_token: Str? = None
 }
 
 /// Contains details required to update an integration with a self-managed
@@ -5233,6 +5564,8 @@ pub struct UpdateGitLabSelfManagedIntegrationDetail {
   /// The authorization code received from the self-managed GitLab instance to
   /// update the integration.
   pub auth_code: Str? = None
+  /// The PKCE state token used to validate the authorization request.
+  pub state_token: Str? = None
 }
 
 /// Contains details required to update a code security integration with a
@@ -5240,6 +5573,7 @@ pub struct UpdateGitLabSelfManagedIntegrationDetail {
 pub enum UpdateIntegrationDetails {
   GitlabSelfManaged(value: UpdateGitLabSelfManagedIntegrationDetail)
   Github(value: UpdateGitHubIntegrationDetail)
+  GithubEnterpriseServer(value: UpdateGitHubEnterpriseServerIntegrationDetail)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -5267,7 +5601,17 @@ pub struct UpdateOrganizationConfigurationResponse {
 
 /// Contains usage information about the cost of Amazon Inspector operation.
 pub struct Usage {
-  /// The type scan.
+  /// The type of scan. Valid values: Amazon Web Services –
+  /// EC2_INSTANCE_HOURS , EC2_AGENTLESS_INSTANCE_HOURS , EC2_AMI_HOURS ,
+  /// EC2_AMI_ONE_SHOT_SCAN , ECR_INITIAL_SCAN , ECR_RESCAN ,
+  /// LAMBDA_FUNCTION_HOURS , LAMBDA_FUNCTION_CODE_HOURS ,
+  /// CODE_REPOSITORY_SAST , CODE_REPOSITORY_IAC , or CODE_REPOSITORY_SCA .
+  /// Microsoft Azure – AZURE_VM_AGENT_BASED_INSTANCE_HOURS ,
+  /// AZURE_CONTAINER_IMAGE_INITIAL_SCAN , AZURE_CONTAINER_IMAGE_RESCAN , or
+  /// AZURE_SERVERLESS_FUNCTION_HOURS . Google Cloud Platform (GCP) –
+  /// GCP_VM_AGENT_BASED_INSTANCE_HOURS , GCP_CONTAINER_IMAGE_INITIAL_SCAN ,
+  /// GCP_CONTAINER_IMAGE_RESCAN , or GCP_CLOUD_RUN_HOURS (Cloud Run
+  /// functions).
   pub type_value: Str? = None
   /// The total of usage.
   pub total: Float? = None
@@ -5275,7 +5619,9 @@ pub struct Usage {
   pub estimated_monthly_cost: Float? = None
   /// The currency type used when calculating usage data.
   pub currency: Str? = None
-  /// The cloud provider associated with the usage information.
+  /// The cloud provider associated with the usage information. Valid values:
+  /// AWS – Amazon Web Services resources. AZURE – Microsoft Azure
+  /// resources. GCP – Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
 }
 
@@ -5355,7 +5701,8 @@ pub struct VmInstanceAggregation {
   pub vm_image_references: List[StringFilter]? = None
   /// The cloud providers to aggregate findings for. Valid values: AWS –
   /// Findings from Amazon Web Services resources. AZURE – Findings from
-  /// Microsoft Azure resources.
+  /// Microsoft Azure resources. GCP – Findings from Google Cloud Platform
+  /// (GCP) resources.
   pub cloud_providers: List[StringFilter]? = None
   /// The cloud partitions to aggregate findings for. Valid values: aws –
   /// Amazon Web Services commercial Regions. aws-cn – Amazon Web Services
@@ -5364,7 +5711,8 @@ pub struct VmInstanceAggregation {
   pub cloud_partitions: List[StringFilter]? = None
   /// The cloud regions to aggregate findings for. The value format depends on
   /// the cloud provider: An Amazon Web Services Region, such as us-east-1 .
-  /// An Azure region, such as eastus .
+  /// An Azure region, such as eastus . A Google Cloud Platform (GCP)
+  /// location, such as the region us-central1 or the zone us-central1-a .
   pub cloud_regions: List[StringFilter]? = None
   /// The cloud organization IDs to aggregate findings for.
   pub cloud_org_ids: List[StringFilter]? = None
@@ -5383,7 +5731,8 @@ pub struct VmInstanceAggregationResponse {
   pub resource_id: Str? = None
   /// The cloud service provider associated with this VM instance aggregation.
   /// Valid values: AWS – Findings from Amazon Web Services resources. AZURE
-  /// – Findings from Microsoft Azure resources.
+  /// – Findings from Microsoft Azure resources. GCP – Findings from
+  /// Google Cloud Platform (GCP) resources.
   pub cloud_provider: Str? = None
   /// The cloud account ID for the VM instance aggregation.
   pub cloud_account_id: Str? = None
@@ -5395,7 +5744,9 @@ pub struct VmInstanceAggregationResponse {
   pub cloud_partition: Str? = None
   /// The cloud Region associated with this VM instance aggregation. The value
   /// format depends on the cloud provider: An Amazon Web Services Region,
-  /// such as us-east-1 . An Azure region, such as eastus .
+  /// such as us-east-1 . An Azure region, such as eastus . A Google Cloud
+  /// Platform (GCP) location, such as the region us-central1 or the zone
+  /// us-central1-a .
   pub cloud_region: Str? = None
   /// The cloud organization ID for the VM instance aggregation.
   pub cloud_org_id: Str? = None
@@ -5505,6 +5856,16 @@ pub struct VulnerablePackage {
   /// The Amazon Resource Number (ARN) of the Amazon Web Services Lambda
   /// function affected by a finding.
   pub source_lambda_layer_arn: Str? = None
+  /// The runtime reachability status of the vulnerable package. For more
+  /// information, see Understanding runtime reachability in the Amazon
+  /// Inspector user guide.
+  pub runtime_reachability: Str? = None
+  /// The reason for the runtime reachability status of the vulnerable
+  /// package. For more information, see Understanding runtime reachability in
+  /// the Amazon Inspector user guide.
+  pub runtime_reachability_reason: Str? = None
+  /// The package URL (purl) of the vulnerable package.
+  pub purl: Str? = None
 }
 
 /// A weekly schedule.

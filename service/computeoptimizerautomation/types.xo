@@ -16,6 +16,9 @@ pub struct AccountInfo {
   /// Specifies whether the management account can create Automation rules
   /// that implement optimization actions for this account.
   pub organization_rule_mode: OrganizationRuleMode? = None
+  /// Information about the source of the account's effective organization
+  /// rule mode.
+  pub organization_rule_mode_source: OrganizationRuleModeSource? = None
   /// The reason for the current Automation enrollment status.
   pub status_reason: Str? = None
   /// The timestamp when the account's Automation enrollment status was last
@@ -27,8 +30,8 @@ pub struct AssociateAccountsRequest {
   /// The IDs of the member accounts to associate. You can specify up to 50
   /// account IDs.
   pub account_ids: List[Str]? = None
-  /// A unique identifier to ensure idempotency of the request. Valid for 24
-  /// hours after creation.
+  /// A unique identifier to ensure idempotency of the request. Valid for 30
+  /// minutes after creation.
   pub client_token: Str? = None
 }
 
@@ -37,6 +40,12 @@ pub struct AssociateAccountsResponse {
   pub account_ids: List[Str]? = None
   /// Any errors that occurred during the association process.
   pub errors: List[Str]? = None
+}
+
+pub enum AutoEnrollMemberAccounts: Str {
+  All = "All"
+  None = "None"
+  Unknown(value: Str)
 }
 
 /// Contains information about an automation event.
@@ -79,7 +88,14 @@ pub struct AutomationEvent {
 pub struct AutomationEventFilter {
   /// The name of the filter to apply.
   pub name: Str? = None
-  /// The values to use for the specified filter.
+  /// The values to use for the specified filter. For the ResourceType ,
+  /// EventType , and EventStatus filters, the value that you specify must
+  /// exactly match the corresponding field of the automation event, including
+  /// case. For example, specify Complete , not complete . Wildcards aren't
+  /// supported. An asterisk ( * ) or a question mark ( ? ) in a value matches
+  /// only that literal character. Valid values for the EventStatus filter are
+  /// Ready , InProgress , Complete , Failed , Cancelled , RollbackReady ,
+  /// RollbackInProgress , RollbackComplete , and RollbackFailed .
   pub values: List[Str]? = None
 }
 
@@ -183,6 +199,12 @@ pub enum ComparisonOperator: Str {
   Unknown(value: Str)
 }
 
+/// The request conflicts with a concurrent change to the same resource.
+/// Retry the request.
+pub struct ConflictException {
+  pub message: Str? = None
+}
+
 pub struct CreateAutomationRuleRequest {
   /// The name of the automation rule.
   pub name: Str? = None
@@ -284,7 +306,10 @@ pub struct Criteria {
   /// utilization.
   pub look_back_period_in_days: List[IntegerCriteriaCondition]? = None
   /// Filter criteria indicating whether the recommended action requires a
-  /// resource restart.
+  /// resource restart. Valid values are true and false . Values are
+  /// case-sensitive unless you use an IgnoreCase comparison operator. For
+  /// example, StringEquals with the value False matches no recommended
+  /// actions.
   pub restart_needed: List[StringCriteriaCondition]? = None
 }
 
@@ -298,6 +323,20 @@ pub struct DeleteAutomationRuleRequest {
 }
 
 pub struct DeleteAutomationRuleResponse {
+}
+
+pub struct DeleteOrganizationEnrollmentConfigurationRequest {
+  /// The account, organizational unit (OU), or organization root whose
+  /// organization enrollment configuration you want to delete.
+  pub target_value: OrganizationTarget? = None
+  /// The organization enrollment configuration types to delete from the
+  /// target.
+  pub configuration_types: List[OrganizationEnrollmentConfigurationType]? = None
+  /// A unique identifier to ensure idempotency of the request.
+  pub client_token: Str? = None
+}
+
+pub struct DeleteOrganizationEnrollmentConfigurationResponse {
 }
 
 pub struct DisassociateAccountsRequest {
@@ -318,7 +357,8 @@ pub struct DisassociateAccountsResponse {
 /// values with comparison operators.
 pub struct DoubleCriteriaCondition {
   /// The comparison operator used to evaluate the attribute against the
-  /// specified values.
+  /// specified values. Only operators that begin with Numeric are valid. Any
+  /// other operator returns an InvalidParameterValueException .
   pub comparison: ComparisonOperator? = None
   /// The list of double values to compare against using the specified
   /// comparison operator.
@@ -492,6 +532,14 @@ pub struct GetEnrollmentConfigurationResponse {
   pub organization_rule_mode: OrganizationRuleMode? = None
   /// The timestamp of the last update to the enrollment configuration.
   pub last_updated_timestamp: Time? = None
+  /// Specifies whether an organization enrollment configuration on your
+  /// account, or inherited from a parent OU or the organization root, enables
+  /// Automation for your member account. Associations made using
+  /// AssociateAccounts don't affect this status. This field is returned for
+  /// organization member accounts, including delegated administrators. It's
+  /// omitted for management accounts and accounts that aren't in an
+  /// organization.
+  pub organization_enrollment_configuration_status: OrganizationEnrollmentConfigurationStatus? = None
 }
 
 /// The specified client token is already in use.
@@ -509,7 +557,8 @@ pub struct IdempotentParameterMismatchException {
 /// comparison operators.
 pub struct IntegerCriteriaCondition {
   /// The comparison operator used to evaluate the attribute against the
-  /// specified values.
+  /// specified values. Only operators that begin with Numeric are valid. Any
+  /// other operator returns an InvalidParameterValueException .
   pub comparison: ComparisonOperator? = None
   /// The list of integer values to compare against using the specified
   /// comparison operator.
@@ -544,7 +593,7 @@ pub struct ListAutomationEventStepsRequest {
   /// The ID of the automation event.
   pub event_id: Str? = None
   /// The maximum number of automation event steps to return in a single
-  /// response. Valid range is 1-1000.
+  /// response. If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -562,6 +611,11 @@ pub struct ListAutomationEventStepsResponse {
 pub struct ListAutomationEventSummariesRequest {
   /// The filters to apply to the list of automation event summaries.
   pub filters: List[AutomationEventFilter]? = None
+  /// The organizational unit (OU) or organization root IDs to use to filter
+  /// the results. The response includes event summaries for accounts in the
+  /// specified OUs and their child OUs. Only the management account or a
+  /// delegated administrator can specify this parameter.
+  pub organizational_unit_ids: List[Str]? = None
   /// The start date for filtering automation event summaries, inclusive.
   /// Events created on or after this date will be included.
   pub start_date_inclusive: Str? = None
@@ -569,7 +623,7 @@ pub struct ListAutomationEventSummariesRequest {
   /// created before this date will be included.
   pub end_date_exclusive: Str? = None
   /// The maximum number of automation event summaries to return in a single
-  /// response. Valid range is 1-1000.
+  /// response. If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -588,11 +642,17 @@ pub struct ListAutomationEventSummariesResponse {
 pub struct ListAutomationEventsRequest {
   /// The filters to apply to the list of automation events.
   pub filters: List[AutomationEventFilter]? = None
+  /// The organizational unit (OU) or organization root IDs to use to filter
+  /// the results. The response includes events for accounts in the specified
+  /// OUs and their child OUs. Only the management account or a delegated
+  /// administrator can specify this parameter.
+  pub organizational_unit_ids: List[Str]? = None
   /// The start of the time range to query for events.
   pub start_time_inclusive: Time? = None
   /// The end of the time range to query for events.
   pub end_time_exclusive: Time? = None
-  /// The maximum number of results to return in a single call.
+  /// The maximum number of automation events to return in a single response.
+  /// If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// The token for the next page of results.
   pub next_token: Str? = None
@@ -609,7 +669,9 @@ pub struct ListAutomationRulePreviewRequest {
   /// The type of rule. Only the management account or a delegated
   /// administrator can set the ruleType to be OrganizationRule.
   pub rule_type: RuleType? = None
-  /// The organizational scope for the rule preview.
+  /// The organizational scope for the rule preview. This parameter is
+  /// required when ruleType is OrganizationRule . Don't specify it when
+  /// ruleType is AccountRule .
   pub organization_scope: OrganizationScope? = None
   /// The types of recommended actions to include in the preview.
   pub recommended_action_types: List[RecommendedActionType]? = None
@@ -619,7 +681,7 @@ pub struct ListAutomationRulePreviewRequest {
   /// run time.
   pub criteria: Criteria? = None
   /// The maximum number of automation rule preview results to return in a
-  /// single response. Valid range is 1-1000.
+  /// single response. If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -637,13 +699,15 @@ pub struct ListAutomationRulePreviewResponse {
 pub struct ListAutomationRulePreviewSummariesRequest {
   /// The type of rule.
   pub rule_type: RuleType? = None
-  /// The organizational scope for the rule preview.
+  /// The organizational scope for the rule preview. This parameter is
+  /// required when ruleType is OrganizationRule . Don't specify it when
+  /// ruleType is AccountRule .
   pub organization_scope: OrganizationScope? = None
   /// The types of recommended actions to include in the preview.
   pub recommended_action_types: List[RecommendedActionType]? = None
   pub criteria: Criteria? = None
   /// The maximum number of automation rule preview summaries to return in a
-  /// single response. Valid range is 1-1000.
+  /// single response. If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -663,7 +727,7 @@ pub struct ListAutomationRulesRequest {
   /// The filters to apply to the list of automation rules.
   pub filters: List[Filter]? = None
   /// The maximum number of automation rules to return in a single response.
-  /// Valid range is 1-1000.
+  /// If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -678,13 +742,60 @@ pub struct ListAutomationRulesResponse {
   pub next_token: Str? = None
 }
 
+pub struct ListOrganizationEnrollmentConfigurationsRequest {
+  /// The target type to use to filter the results. If you specify
+  /// OrganizationalUnit , the results also include configurations stored on
+  /// the organization root. If you don't specify a target type, the operation
+  /// returns configurations for every target type.
+  pub target_type: OrganizationTargetType? = None
+  /// The maximum number of organization enrollment configurations to return
+  /// in a single response. If you don't specify a value, the default is
+  /// 1,000.
+  pub max_results: Int? = None
+  /// The token to use to retrieve the next page of results.
+  pub next_token: Str? = None
+}
+
+pub struct ListOrganizationEnrollmentConfigurationsResponse {
+  /// The organization enrollment configurations stored on each target in this
+  /// page of results.
+  pub organization_enrollment_configurations: List[OrganizationEnrollmentConfiguration]? = None
+  /// The token to use to retrieve the next page of results.
+  pub next_token: Str? = None
+}
+
+pub struct ListOrganizationalUnitsRequest {
+  /// The organizational unit (OU) or organization root IDs to return. If you
+  /// don't specify this parameter, the operation returns the organization
+  /// root and every OU.
+  pub organizational_unit_ids: List[Str]? = None
+  /// The maximum number of organizational units to return in a single
+  /// response. If you don't specify a value, the default is 1,000.
+  pub max_results: Int? = None
+  /// The token to use to retrieve the next page of results.
+  pub next_token: Str? = None
+}
+
+pub struct ListOrganizationalUnitsResponse {
+  /// The organizational units and organization root returned in this page of
+  /// results, including the organization rule mode that applies to each.
+  pub organizational_units: List[OrganizationalUnitInfo]? = None
+  /// The token to use to retrieve the next page of results.
+  pub next_token: Str? = None
+}
+
 pub struct ListRecommendedActionSummariesRequest {
   /// A list of filters to apply when retrieving recommended action summaries.
   /// Filters can be based on resource type, action type, account ID, and
   /// other criteria.
   pub filters: List[RecommendedActionFilter]? = None
+  /// The organizational unit (OU) or organization root IDs to use to filter
+  /// the results. The response includes recommended action summaries for
+  /// accounts in the specified OUs and their child OUs. Only the management
+  /// account or a delegated administrator can specify this parameter.
+  pub organizational_unit_ids: List[Str]? = None
   /// The maximum number of recommended action summaries to return in a single
-  /// response. Valid range is 1-1000.
+  /// response. If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -702,8 +813,13 @@ pub struct ListRecommendedActionSummariesResponse {
 pub struct ListRecommendedActionsRequest {
   /// The filters to apply to the list of recommended actions.
   pub filters: List[RecommendedActionFilter]? = None
+  /// The organizational unit (OU) or organization root IDs to use to filter
+  /// the results. The response includes recommended actions for accounts in
+  /// the specified OUs and their child OUs. Only the management account or a
+  /// delegated administrator can specify this parameter.
+  pub organizational_unit_ids: List[Str]? = None
   /// The maximum number of recommended actions to return in a single
-  /// response. Valid range is 1-1000.
+  /// response. If you don't specify a value, the default is 100.
   pub max_results: Int? = None
   /// A token used for pagination to retrieve the next set of results when the
   /// response is truncated.
@@ -728,7 +844,8 @@ pub struct ListTagsForResourceResponse {
   pub tags: List[Tag]? = None
 }
 
-/// The operation can only be performed by a management account.
+/// The operation can only be performed by an organization's management
+/// account or a delegated administrator.
 pub struct NotManagementAccountException {
   pub message: Str? = None
 }
@@ -739,19 +856,89 @@ pub struct OptInRequiredException {
   pub message: Str? = None
 }
 
-/// Configuration settings for organization-wide automation rules.
+/// Configuration settings that define the scope of an organization-wide
+/// automation rule. Each organizational unit (OU) list can contain up to
+/// 150 OUs or organization roots, and each account list can contain up to
+/// 50 accounts. Each included OU or organization root must have an
+/// effective organization rule mode of AnyAllowed . Exclusions take
+/// precedence over inclusions. An account that is in an included OU and is
+/// also excluded is excluded. The rule doesn't apply to the management
+/// account when the account is reached through an OU or the organization
+/// root.
 pub struct OrganizationConfiguration {
   /// Specifies when organization rules should be applied relative to account
   /// rules.
   pub rule_apply_order: RuleApplyOrder? = None
-  /// List of specific Amazon Web Services account IDs where the organization
-  /// rule should be applied.
+  /// The specific Amazon Web Services account IDs where the organization rule
+  /// should be applied. You can specify up to 50 account IDs.
   pub account_ids: List[Str]? = None
+  /// The organizational unit (OU) or organization root IDs to include in the
+  /// organization rule scope. The rule applies to accounts in the specified
+  /// OUs and their child OUs. You can specify up to 150 IDs.
+  pub organizational_unit_ids: List[Str]? = None
+  /// The organizational unit (OU) or organization root IDs to exclude from
+  /// the organization rule scope. The rule doesn't apply to accounts in the
+  /// specified OUs or their child OUs. You can specify up to 150 IDs.
+  pub excluded_organizational_unit_ids: List[Str]? = None
+  /// The Amazon Web Services account IDs to exclude from the organization
+  /// rule scope. You can specify up to 50 account IDs. An excluded account
+  /// remains excluded even if it is in an included OU.
+  pub excluded_account_ids: List[Str]? = None
+}
+
+/// An organization enrollment configuration sets the organization rule mode
+/// on an account, organizational unit (OU), or the organization root and
+/// enables Automation for affected member accounts that have opted in to
+/// Compute Optimizer.
+pub struct OrganizationEnrollmentConfiguration {
+  /// The ID of the account, organizational unit (OU), or organization root on
+  /// which the configuration is stored.
+  pub target_id: Str? = None
+  /// The type of target on which the configuration is stored.
+  pub target_type: OrganizationTargetType? = None
+  /// The organization rule mode set on the target by the organization
+  /// enrollment configuration.
+  pub organization_rule_mode: OrganizationRuleMode? = None
+}
+
+pub enum OrganizationEnrollmentConfigurationStatus: Str {
+  Active = "Active"
+  Inactive = "Inactive"
+  Unknown(value: Str)
+}
+
+pub enum OrganizationEnrollmentConfigurationType: Str {
+  OrganizationRuleMode = "OrganizationRuleMode"
+  Unknown(value: Str)
 }
 
 pub enum OrganizationRuleMode: Str {
   AnyAllowed = "AnyAllowed"
   NoneAllowed = "NoneAllowed"
+  Unknown(value: Str)
+}
+
+/// Information about the source of an effective organization rule mode.
+pub struct OrganizationRuleModeSource {
+  /// How the effective organization rule mode is supplied. Applied - An
+  /// organization enrollment configuration is on this organizational unit or
+  /// account. Inherited - The organization enrollment configuration is on the
+  /// parent organizational unit or root. Direct - The organization rule mode
+  /// is set on the account itself, with no organization enrollment
+  /// configuration applied. Default - No organization enrollment
+  /// configuration applies, so the organization rule mode is None allowed.
+  pub source_type: OrganizationRuleModeSourceType? = None
+  /// The ID of the account, organizational unit (OU), or organization root
+  /// that has the organization enrollment configuration. This field is
+  /// omitted when sourceType is Direct or Default .
+  pub source_target_id: Str? = None
+}
+
+pub enum OrganizationRuleModeSourceType: Str {
+  Applied = "Applied"
+  Inherited = "Inherited"
+  Direct = "Direct"
+  Default = "Default"
   Unknown(value: Str)
 }
 
@@ -761,6 +948,55 @@ pub struct OrganizationScope {
   /// List of Amazon Web Services account IDs to include in the organization
   /// scope.
   pub account_ids: List[Str]? = None
+  /// The organizational unit (OU) or organization root IDs to include in the
+  /// preview scope. The preview includes accounts in the specified OUs and
+  /// their child OUs.
+  pub organizational_unit_ids: List[Str]? = None
+  /// The organizational unit (OU) or organization root IDs to exclude from
+  /// the preview scope. The preview doesn't include accounts in the specified
+  /// OUs or their child OUs.
+  pub excluded_organizational_unit_ids: List[Str]? = None
+  /// The Amazon Web Services account IDs to exclude from the preview scope.
+  pub excluded_account_ids: List[Str]? = None
+}
+
+/// An account, organizational unit (OU), or organization root to which an
+/// organization enrollment configuration applies. The management account
+/// can't be specified as an account target.
+pub enum OrganizationTarget {
+  AccountId(value: Str)
+  OrganizationalUnitId(value: Str)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+pub enum OrganizationTargetType: Str {
+  Account = "Account"
+  OrganizationalUnit = "OrganizationalUnit"
+  Unknown(value: Str)
+}
+
+/// Information about an organizational unit (OU) or the organization root,
+/// including whether an applicable organization enrollment configuration
+/// enables Automation for member accounts and the effective organization
+/// rule mode.
+pub struct OrganizationalUnitInfo {
+  /// The ID of the organizational unit (OU) or organization root.
+  pub organizational_unit_id: Str? = None
+  /// Whether an applicable organization enrollment configuration enables
+  /// Automation for eligible member accounts beneath the organizational unit
+  /// (OU) or organization root. All - An organization enrollment
+  /// configuration applies and enables Automation for affected member
+  /// accounts, including accounts that join later. This value applies to
+  /// configurations with either AnyAllowed or NoneAllowed . None - No
+  /// organization enrollment configuration applies, so Automation isn't
+  /// enabled by an organization enrollment configuration.
+  pub auto_enroll_member_accounts: AutoEnrollMemberAccounts? = None
+  /// The effective organization rule mode for the organizational unit or
+  /// organization root.
+  pub organization_rule_mode: OrganizationRuleMode? = None
+  /// Information about the source of the effective organization rule mode.
+  pub organization_rule_mode_source: OrganizationRuleModeSource? = None
 }
 
 /// Contains the results of previewing an automation rule against available
@@ -804,6 +1040,23 @@ pub struct PreviewResultSummary {
   pub total: RulePreviewTotal? = None
 }
 
+pub struct PutOrganizationEnrollmentConfigurationRequest {
+  /// The account, organizational unit (OU), or organization root on which to
+  /// create or update the organization enrollment configuration. You can't
+  /// specify the management account.
+  pub target_value: OrganizationTarget? = None
+  /// The organization rule mode to set on the target. An organization
+  /// enrollment configuration with either AnyAllowed or NoneAllowed enables
+  /// Automation for affected member accounts. AnyAllowed permits organization
+  /// rules to apply to those accounts, while NoneAllowed doesn't.
+  pub organization_rule_mode: OrganizationRuleMode? = None
+  /// A unique identifier to ensure idempotency of the request.
+  pub client_token: Str? = None
+}
+
+pub struct PutOrganizationEnrollmentConfigurationResponse {
+}
+
 /// Contains information about a recommended action that can be applied to
 /// optimize an Amazon Web Services resource.
 pub struct RecommendedAction {
@@ -840,12 +1093,36 @@ pub struct RecommendedAction {
 }
 
 /// A filter used to narrow down recommended action results based on
-/// specific criteria.
+/// specific criteria. If a filter has more than one value, a recommended
+/// action matches the filter when it matches any of the values. If you
+/// specify more than one filter, a recommended action must match all of the
+/// filters.
 pub struct RecommendedActionFilter {
   /// The name of the filter field to apply.
   pub name: Str? = None
-  /// List of filter values to match against the specified filter name. Used
-  /// to narrow down recommended actions based on specific criteria.
+  /// The list of values to filter by for the specified filter name. Wildcards
+  /// aren't supported. An asterisk ( * ) or a question mark ( ? ) in a value
+  /// matches only that literal character. How a value is matched depends on
+  /// the filter name: ResourceType, RecommendedActionType, ResourceId, and
+  /// AccountId The value that you specify must exactly match the
+  /// corresponding field of the recommended action, including case. For
+  /// example, specify EbsVolume , not ebsvolume .
+  /// CurrentResourceDetailsEbsVolumeType Matches when the value appears
+  /// anywhere in the current resource details of the recommended action,
+  /// which include the volume type, size, IOPS, and throughput. Matching is
+  /// case sensitive, and a partial value also matches. For example, gp
+  /// matches both gp2 and gp3 volumes, and 100 matches any volume whose size,
+  /// IOPS, or throughput contains 100. To filter by volume type, specify the
+  /// complete volume type, such as gp3 or io2 . ResourceTagsKey and
+  /// ResourceTagsValue Matches when the value appears anywhere in the tags of
+  /// the resource. Both filter names search every tag key and tag value.
+  /// Matching is case sensitive, and a partial value also matches. For
+  /// example, a ResourceTagsKey value of test matches a resource that has a
+  /// tag value of test . LookBackPeriodInDays Matches when the lookback
+  /// period of the recommended action equals the value. Specify a number of
+  /// days, such as 14 . RestartNeeded Matches recommended actions based on
+  /// whether implementing them requires a resource restart. Specify true or
+  /// false .
   pub values: List[Str]? = None
 }
 
@@ -892,7 +1169,8 @@ pub struct ResourceNotFoundException {
 /// including comparison operators and values.
 pub struct ResourceTagsCriteriaCondition {
   /// The comparison operator used to evaluate the attribute against the
-  /// specified values.
+  /// specified values. Only operators that begin with String are valid. Any
+  /// other operator returns an InvalidParameterValueException .
   pub comparison: ComparisonOperator? = None
   /// The tag key to use for comparison when filtering resources.
   pub key: Str? = None
@@ -1019,7 +1297,8 @@ pub enum StepType: Str {
 /// comparison operators and target values.
 pub struct StringCriteriaCondition {
   /// The comparison operator used to evaluate the attribute against the
-  /// specified values.
+  /// specified values. Only operators that begin with String are valid. Any
+  /// other operator returns an InvalidParameterValueException .
   pub comparison: ComparisonOperator? = None
   /// List of string values to compare against when applying the criteria
   /// condition.
@@ -1172,12 +1451,15 @@ pub struct UpdateEnrollmentConfigurationRequest {
   /// account and stops all of your automation rules. If you opt in again
   /// later, all rules will be inactive, and you must enable the rules you
   /// want to run. You must wait at least 24 hours after opting out to opt in
-  /// again. The Pending and Failed options cannot be used to update the
+  /// again. The Pending and Failed options can't be used to update the
   /// enrollment status of an account. They are returned in the response of a
   /// request to update the enrollment status of an account. If you are a
-  /// member account, your account must be disassociated from your
-  /// organization’s management account before you can disable Automation.
-  /// Contact your administrator to make this change.
+  /// member account, you can't disable Automation while an organization
+  /// enrollment configuration applies. If no organization enrollment
+  /// configuration applies, you also can't disable Automation while your
+  /// organization rule mode is AnyAllowed . Ask your administrator to delete
+  /// the organization enrollment configuration or disassociate your account,
+  /// as applicable.
   pub status: EnrollmentStatus? = None
   /// A unique, case-sensitive identifier that you provide to ensure the
   /// idempotency of the request. Must be 1-64 characters long and contain

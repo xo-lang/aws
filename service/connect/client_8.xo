@@ -8,6 +8,445 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
+/// Releases a phone number previously claimed to an Connect Customer
+/// instance or traffic distribution group. You can call this API only in
+/// the Amazon Web Services Region where the number was claimed. To release
+/// phone numbers from a traffic distribution group, use the
+/// ReleasePhoneNumber API, not the Connect Customer admin website. After
+/// releasing a phone number, the phone number enters into a cooldown period
+/// for up to 180 days. It cannot be searched for or claimed again until the
+/// period has ended. If you accidentally release a phone number, contact
+/// Amazon Web Services Support. If you plan to claim and release numbers
+/// frequently, contact us for a service quota exception. Otherwise, it is
+/// possible you will be blocked from claiming and releasing any more
+/// numbers until up to 180 days past the oldest number released has
+/// expired. By default you can claim and release up to 200% of your maximum
+/// number of active phone numbers. If you claim and release phone numbers
+/// using the UI or API during a rolling 180 day cycle that exceeds 200% of
+/// your phone number service level quota, you will be blocked from claiming
+/// any more numbers until 180 days past the oldest number released has
+/// expired. For example, if you already have 99 claimed numbers and a
+/// service level quota of 99 phone numbers, and in any 180 day period you
+/// release 99, claim 99, and then release 99, you will have exceeded the
+/// 200% limit. At that point you are blocked from claiming any more numbers
+/// until you open an Amazon Web Services support ticket.
+pub fn (c: Client) release_phone_number(input: ReleasePhoneNumberRequest) -> () ! ReleasePhoneNumberErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_release_phone_number(c.params, input)) ?? e => return Err(ReleasePhoneNumberErr.InvalidInput(e))
+  var req = serialize_release_phone_number(ep, input, rest.uuid(c.rand)) ?? e => return Err(ReleasePhoneNumberErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ReleasePhoneNumberErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_release_phone_number_error(resp))
+  }
+  deserialize_release_phone_number(resp) ?? e => Err(ReleasePhoneNumberErr.Deserialize(e))
+}
+
+pub fn endpoint_params_replicate_instance(base: EndpointParameters, input: ReplicateInstanceRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ReplicateInstance.
+pub fn serialize_replicate_instance(ep: rest.Endpoint, input: ReplicateInstanceRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_instance_id = match input.instance_id {
+    Some(v) => v
+    None => return Err("input member InstanceId is required")
+  }
+  if label_instance_id == "" {
+    return Err("input member InstanceId must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.replica_region {
+    fs.push(("ReplicaRegion", json.Value.Str(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("ClientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("ClientToken", json.Value.Str(idempotency_token)))
+  }
+  if let Some(x) = input.replica_alias {
+    fs.push(("ReplicaAlias", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/instance/${rest.escape(label_instance_id, false)}/replicate"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_replicate_instance(resp: http.Response) -> ReplicateInstanceResponse ! Str {
+  var out = ReplicateInstanceResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "Id" => out.id = jsonv.read_str(fv)?
+      "Arn" => out.arn = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ReplicateInstance.
+pub enum ReplicateInstanceErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceConflictException(e: ResourceConflictException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ResourceNotReadyException(e: ResourceNotReadyException)
+  ServiceQuotaExceededException(e: ServiceQuotaExceededException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ReplicateInstanceErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceConflictException(x) => "ResourceConflictException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ResourceNotReadyException(x) => "ResourceNotReadyException: ${x:?}"
+    ServiceQuotaExceededException(x) => "ServiceQuotaExceededException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_replicate_instance_error(resp: http.Response) -> ReplicateInstanceErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.AccessDeniedException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.InternalServiceException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.InvalidRequestException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "ResourceConflictException" => match read_error_resource_conflict_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.ResourceConflictException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.ResourceNotFoundException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "ResourceNotReadyException" => match read_error_resource_not_ready_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.ResourceNotReadyException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "ServiceQuotaExceededException" => match read_error_service_quota_exceeded_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.ServiceQuotaExceededException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ReplicateInstanceErr.ThrottlingException(x)
+      Err(msg) => return ReplicateInstanceErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ReplicateInstanceErr.Api(restjson.api_error(resp, body))
+}
+
+/// Replicates an Connect Customer instance in the specified Amazon Web
+/// Services Region and copies configuration information for Connect
+/// Customer resources across Amazon Web Services Regions. For more
+/// information about replicating an Connect Customer instance, see Create a
+/// replica of your existing Connect Customer instance in the Connect
+/// Customer Administrator Guide .
+pub fn (c: Client) replicate_instance(input: ReplicateInstanceRequest) -> ReplicateInstanceResponse ! ReplicateInstanceErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_replicate_instance(c.params, input)) ?? e => return Err(ReplicateInstanceErr.InvalidInput(e))
+  var req = serialize_replicate_instance(ep, input, rest.uuid(c.rand)) ?? e => return Err(ReplicateInstanceErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ReplicateInstanceErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_replicate_instance_error(resp))
+  }
+  deserialize_replicate_instance(resp) ?? e => Err(ReplicateInstanceErr.Deserialize(e))
+}
+
+pub fn endpoint_params_resume_contact(base: EndpointParameters, input: ResumeContactRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ResumeContact.
+pub fn serialize_resume_contact(ep: rest.Endpoint, input: ResumeContactRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.contact_id {
+    fs.push(("ContactId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.instance_id {
+    fs.push(("InstanceId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.contact_flow_id {
+    fs.push(("ContactFlowId", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/contact/resume"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_resume_contact(resp: http.Response) -> ResumeContactResponse ! Str {
+  var out = ResumeContactResponse{}
+  Ok(out)
+}
+
+/// The errors of ResumeContact.
+pub enum ResumeContactErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidParameterException(e: InvalidParameterException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ResumeContactErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_resume_contact_error(resp: http.Response) -> ResumeContactErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.AccessDeniedException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.ConflictException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.InternalServiceException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.InvalidParameterException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.InvalidRequestException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.ResourceNotFoundException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ResumeContactErr.ThrottlingException(x)
+      Err(msg) => return ResumeContactErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ResumeContactErr.Api(restjson.api_error(resp, body))
+}
+
+/// Resumes a task or email contact in a paused state.
+pub fn (c: Client) resume_contact(input: ResumeContactRequest) -> ResumeContactResponse ! ResumeContactErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_resume_contact(c.params, input)) ?? e => return Err(ResumeContactErr.InvalidInput(e))
+  var req = serialize_resume_contact(ep, input, "") ?? e => return Err(ResumeContactErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResumeContactErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_resume_contact_error(resp))
+  }
+  deserialize_resume_contact(resp) ?? e => Err(ResumeContactErr.Deserialize(e))
+}
+
+pub fn endpoint_params_resume_contact_recording(base: EndpointParameters, input: ResumeContactRecordingRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ResumeContactRecording.
+pub fn serialize_resume_contact_recording(ep: rest.Endpoint, input: ResumeContactRecordingRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.instance_id {
+    fs.push(("InstanceId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.contact_id {
+    fs.push(("ContactId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.initial_contact_id {
+    fs.push(("InitialContactId", json.Value.Str(x)))
+  }
+  if let Some(x) = input.contact_recording_type {
+    fs.push(("ContactRecordingType", json.Value.Str(x.value())))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/contact/resume-recording"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_resume_contact_recording(resp: http.Response) -> ResumeContactRecordingResponse ! Str {
+  var out = ResumeContactRecordingResponse{}
+  Ok(out)
+}
+
+/// The errors of ResumeContactRecording.
+pub enum ResumeContactRecordingErr {
+  InternalServiceException(e: InternalServiceException)
+  InvalidActiveRegionException(e: InvalidActiveRegionException)
+  InvalidRequestException(e: InvalidRequestException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ResumeContactRecordingErr) display() -> Str {
+  match e {
+    InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidActiveRegionException(x) => "InvalidActiveRegionException: ${x:?}"
+    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_resume_contact_recording_error(resp: http.Response) -> ResumeContactRecordingErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
+      Ok(x) => return ResumeContactRecordingErr.InternalServiceException(x)
+      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
+    }
+    "InvalidActiveRegionException" => match read_error_invalid_active_region_exception(resp, body) {
+      Ok(x) => return ResumeContactRecordingErr.InvalidActiveRegionException(x)
+      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
+    }
+    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
+      Ok(x) => return ResumeContactRecordingErr.InvalidRequestException(x)
+      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return ResumeContactRecordingErr.ResourceNotFoundException(x)
+      Err(msg) => return ResumeContactRecordingErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ResumeContactRecordingErr.Api(restjson.api_error(resp, body))
+}
+
+/// When a contact is being recorded, and the recording has been suspended
+/// using SuspendContactRecording, this API resumes recording whatever
+/// recording is selected in the flow configuration: call, screen, or both.
+/// If only call recording or only screen recording is enabled, then it
+/// would resume. Voice and screen recordings are supported.
+pub fn (c: Client) resume_contact_recording(input: ResumeContactRecordingRequest) -> ResumeContactRecordingResponse ! ResumeContactRecordingErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_resume_contact_recording(c.params, input)) ?? e => return Err(ResumeContactRecordingErr.InvalidInput(e))
+  var req = serialize_resume_contact_recording(ep, input, "") ?? e => return Err(ResumeContactRecordingErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ResumeContactRecordingErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_resume_contact_recording_error(resp))
+  }
+  deserialize_resume_contact_recording(resp) ?? e => Err(ResumeContactRecordingErr.Deserialize(e))
+}
+
 pub fn endpoint_params_search_agent_statuses(base: EndpointParameters, input: SearchAgentStatusesRequest) -> EndpointParameters {
   let _ = input
   base
@@ -10064,439 +10503,4 @@ pub fn serialize_update_contact_flow_module_content(ep: rest.Endpoint, input: Up
 pub fn deserialize_update_contact_flow_module_content(resp: http.Response) -> UpdateContactFlowModuleContentResponse ! Str {
   var out = UpdateContactFlowModuleContentResponse{}
   Ok(out)
-}
-
-/// The errors of UpdateContactFlowModuleContent.
-pub enum UpdateContactFlowModuleContentErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidContactFlowModuleException(e: InvalidContactFlowModuleException)
-  InvalidRequestException(e: InvalidRequestException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateContactFlowModuleContentErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidContactFlowModuleException(x) => "InvalidContactFlowModuleException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_contact_flow_module_content_error(resp: http.Response) -> UpdateContactFlowModuleContentErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleContentErr.AccessDeniedException(x)
-      Err(msg) => return UpdateContactFlowModuleContentErr.Deserialize(msg)
-    }
-    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleContentErr.InternalServiceException(x)
-      Err(msg) => return UpdateContactFlowModuleContentErr.Deserialize(msg)
-    }
-    "InvalidContactFlowModuleException" => match read_error_invalid_contact_flow_module_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleContentErr.InvalidContactFlowModuleException(x)
-      Err(msg) => return UpdateContactFlowModuleContentErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleContentErr.InvalidRequestException(x)
-      Err(msg) => return UpdateContactFlowModuleContentErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleContentErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateContactFlowModuleContentErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleContentErr.ThrottlingException(x)
-      Err(msg) => return UpdateContactFlowModuleContentErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateContactFlowModuleContentErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates specified flow module for the specified Connect Customer
-/// instance. Use the $SAVED alias in the request to describe the SAVED
-/// content of a Flow. For example, arn:aws:.../contact-flow/{id}:$SAVED .
-/// After a flow is published, $SAVED needs to be supplied to view saved
-/// content that has not been published.
-pub fn (c: Client) update_contact_flow_module_content(input: UpdateContactFlowModuleContentRequest) -> UpdateContactFlowModuleContentResponse ! UpdateContactFlowModuleContentErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_contact_flow_module_content(c.params, input)) ?? e => return Err(UpdateContactFlowModuleContentErr.InvalidInput(e))
-  var req = serialize_update_contact_flow_module_content(ep, input, "") ?? e => return Err(UpdateContactFlowModuleContentErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateContactFlowModuleContentErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_contact_flow_module_content_error(resp))
-  }
-  deserialize_update_contact_flow_module_content(resp) ?? e => Err(UpdateContactFlowModuleContentErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_contact_flow_module_metadata(base: EndpointParameters, input: UpdateContactFlowModuleMetadataRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateContactFlowModuleMetadata.
-pub fn serialize_update_contact_flow_module_metadata(ep: rest.Endpoint, input: UpdateContactFlowModuleMetadataRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_instance_id = match input.instance_id {
-    Some(v) => v
-    None => return Err("input member InstanceId is required")
-  }
-  if label_instance_id == "" {
-    return Err("input member InstanceId must not be empty")
-  }
-  let label_contact_flow_module_id = match input.contact_flow_module_id {
-    Some(v) => v
-    None => return Err("input member ContactFlowModuleId is required")
-  }
-  if label_contact_flow_module_id == "" {
-    return Err("input member ContactFlowModuleId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  if let Some(x) = input.state {
-    fs.push(("State", json.Value.Str(x.value())))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/contact-flow-modules/${rest.escape(label_instance_id, false)}/${rest.escape(label_contact_flow_module_id, false)}/metadata"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_contact_flow_module_metadata(resp: http.Response) -> UpdateContactFlowModuleMetadataResponse ! Str {
-  var out = UpdateContactFlowModuleMetadataResponse{}
-  Ok(out)
-}
-
-/// The errors of UpdateContactFlowModuleMetadata.
-pub enum UpdateContactFlowModuleMetadataErr {
-  AccessDeniedException(e: AccessDeniedException)
-  DuplicateResourceException(e: DuplicateResourceException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidParameterException(e: InvalidParameterException)
-  InvalidRequestException(e: InvalidRequestException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateContactFlowModuleMetadataErr) display() -> Str {
-  match e {
-    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
-    DuplicateResourceException(x) => "DuplicateResourceException: ${x:?}"
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_contact_flow_module_metadata_error(resp: http.Response) -> UpdateContactFlowModuleMetadataErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.AccessDeniedException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    "DuplicateResourceException" => match read_error_duplicate_resource_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.DuplicateResourceException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.InternalServiceException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.InvalidParameterException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.InvalidRequestException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowModuleMetadataErr.ThrottlingException(x)
-      Err(msg) => return UpdateContactFlowModuleMetadataErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateContactFlowModuleMetadataErr.Api(restjson.api_error(resp, body))
-}
-
-/// Updates metadata about specified flow module.
-pub fn (c: Client) update_contact_flow_module_metadata(input: UpdateContactFlowModuleMetadataRequest) -> UpdateContactFlowModuleMetadataResponse ! UpdateContactFlowModuleMetadataErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_contact_flow_module_metadata(c.params, input)) ?? e => return Err(UpdateContactFlowModuleMetadataErr.InvalidInput(e))
-  var req = serialize_update_contact_flow_module_metadata(ep, input, "") ?? e => return Err(UpdateContactFlowModuleMetadataErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateContactFlowModuleMetadataErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_contact_flow_module_metadata_error(resp))
-  }
-  deserialize_update_contact_flow_module_metadata(resp) ?? e => Err(UpdateContactFlowModuleMetadataErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_contact_flow_name(base: EndpointParameters, input: UpdateContactFlowNameRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateContactFlowName.
-pub fn serialize_update_contact_flow_name(ep: rest.Endpoint, input: UpdateContactFlowNameRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_instance_id = match input.instance_id {
-    Some(v) => v
-    None => return Err("input member InstanceId is required")
-  }
-  if label_instance_id == "" {
-    return Err("input member InstanceId must not be empty")
-  }
-  let label_contact_flow_id = match input.contact_flow_id {
-    Some(v) => v
-    None => return Err("input member ContactFlowId is required")
-  }
-  if label_contact_flow_id == "" {
-    return Err("input member ContactFlowId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.name {
-    fs.push(("Name", json.Value.Str(x)))
-  }
-  if let Some(x) = input.description {
-    fs.push(("Description", json.Value.Str(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/contact-flows/${rest.escape(label_instance_id, false)}/${rest.escape(label_contact_flow_id, false)}/name"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_contact_flow_name(resp: http.Response) -> UpdateContactFlowNameResponse ! Str {
-  var out = UpdateContactFlowNameResponse{}
-  Ok(out)
-}
-
-/// The errors of UpdateContactFlowName.
-pub enum UpdateContactFlowNameErr {
-  DuplicateResourceException(e: DuplicateResourceException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidParameterException(e: InvalidParameterException)
-  InvalidRequestException(e: InvalidRequestException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: UpdateContactFlowNameErr) display() -> Str {
-  match e {
-    DuplicateResourceException(x) => "DuplicateResourceException: ${x:?}"
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidParameterException(x) => "InvalidParameterException: ${x:?}"
-    InvalidRequestException(x) => "InvalidRequestException: ${x:?}"
-    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
-    ThrottlingException(x) => "ThrottlingException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_update_contact_flow_name_error(resp: http.Response) -> UpdateContactFlowNameErr {
-  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
-  match restjson.error_code(resp, body) {
-    "DuplicateResourceException" => match read_error_duplicate_resource_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowNameErr.DuplicateResourceException(x)
-      Err(msg) => return UpdateContactFlowNameErr.Deserialize(msg)
-    }
-    "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowNameErr.InternalServiceException(x)
-      Err(msg) => return UpdateContactFlowNameErr.Deserialize(msg)
-    }
-    "InvalidParameterException" => match read_error_invalid_parameter_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowNameErr.InvalidParameterException(x)
-      Err(msg) => return UpdateContactFlowNameErr.Deserialize(msg)
-    }
-    "InvalidRequestException" => match read_error_invalid_request_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowNameErr.InvalidRequestException(x)
-      Err(msg) => return UpdateContactFlowNameErr.Deserialize(msg)
-    }
-    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowNameErr.ResourceNotFoundException(x)
-      Err(msg) => return UpdateContactFlowNameErr.Deserialize(msg)
-    }
-    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
-      Ok(x) => return UpdateContactFlowNameErr.ThrottlingException(x)
-      Err(msg) => return UpdateContactFlowNameErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-  UpdateContactFlowNameErr.Api(restjson.api_error(resp, body))
-}
-
-/// The name of the flow. You can also create and update flows using the
-/// Connect Customer Flow language .
-pub fn (c: Client) update_contact_flow_name(input: UpdateContactFlowNameRequest) -> UpdateContactFlowNameResponse ! UpdateContactFlowNameErr uses (net.dial, clock, rand) {
-  let (ep, signing, extra) = c.route(endpoint_params_update_contact_flow_name(c.params, input)) ?? e => return Err(UpdateContactFlowNameErr.InvalidInput(e))
-  var req = serialize_update_contact_flow_name(ep, input, "") ?? e => return Err(UpdateContactFlowNameErr.InvalidInput(e))
-  for h in extra {
-    req.headers.push(h)
-  }
-  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(UpdateContactFlowNameErr.Send(e))
-  if resp.status >= 300 {
-    return Err(deserialize_update_contact_flow_name_error(resp))
-  }
-  deserialize_update_contact_flow_name(resp) ?? e => Err(UpdateContactFlowNameErr.Deserialize(e))
-}
-
-pub fn endpoint_params_update_contact_routing_data(base: EndpointParameters, input: UpdateContactRoutingDataRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of UpdateContactRoutingData.
-pub fn serialize_update_contact_routing_data(ep: rest.Endpoint, input: UpdateContactRoutingDataRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  let label_instance_id = match input.instance_id {
-    Some(v) => v
-    None => return Err("input member InstanceId is required")
-  }
-  if label_instance_id == "" {
-    return Err("input member InstanceId must not be empty")
-  }
-  let label_contact_id = match input.contact_id {
-    Some(v) => v
-    None => return Err("input member ContactId is required")
-  }
-  if label_contact_id == "" {
-    return Err("input member ContactId must not be empty")
-  }
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.queue_time_adjustment_seconds {
-    fs.push(("QueueTimeAdjustmentSeconds", json.Value.Int(x)))
-  }
-  if let Some(x) = input.queue_priority {
-    fs.push(("QueuePriority", json.Value.Int(x)))
-  }
-  if let Some(x) = input.routing_criteria {
-    fs.push(("RoutingCriteria", json_of_routing_criteria_input(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/json"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.join_path(ep.path, "/contacts/${rest.escape(label_instance_id, false)}/${rest.escape(label_contact_id, false)}/routing-data"),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_update_contact_routing_data(resp: http.Response) -> UpdateContactRoutingDataResponse ! Str {
-  var out = UpdateContactRoutingDataResponse{}
-  Ok(out)
-}
-
-/// The errors of UpdateContactRoutingData.
-pub enum UpdateContactRoutingDataErr {
-  AccessDeniedException(e: AccessDeniedException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidActiveRegionException(e: InvalidActiveRegionException)
-  InvalidParameterException(e: InvalidParameterException)
-  ResourceConflictException(e: ResourceConflictException)
-  ResourceNotFoundException(e: ResourceNotFoundException)
-  ThrottlingException(e: ThrottlingException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
 }

@@ -13,10 +13,63 @@ pub struct ConflictException {
   pub resource_id: Str? = None
 }
 
+/// Contains the deployment configuration settings for the Data as a Service
+/// delivery option, including the fulfillment URL that AWS Marketplace
+/// redirects buyers to after they subscribe.
+pub struct DataAsAServiceConfigurationDetail {
+  /// The HTTPS URL that AWS Marketplace redirects buyers to after they
+  /// subscribe to the product. The value must be a valid URI that uses the
+  /// HTTPS scheme. Maximum length: 2,048 characters.
+  pub fulfillment_url: Str? = None
+}
+
+/// The delivery option type of a deployment configuration.
+pub enum DeliveryOptionType: Str {
+  DataAsAService = "data-as-a-service"
+  Unknown(value: Str)
+}
+
+/// The deployment configuration. Exactly one member must be set, and it
+/// must match the delivery option type.
+pub enum DeploymentConfigurationDetail {
+  DataAsAService(value: DataAsAServiceConfigurationDetail)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// The error code that describes why a deployment configuration job failed.
+pub enum DeploymentConfigurationJobErrorCode: Str {
+  FulfillmentUrlUnreachable = "FULFILLMENT_URL_UNREACHABLE"
+  InternalError = "INTERNAL_ERROR"
+  EndpointInvalid = "ENDPOINT_INVALID"
+  Unknown(value: Str)
+}
+
+/// The status of a deployment configuration job.
+pub enum DeploymentConfigurationJobStatus: Str {
+  InProgress = "IN_PROGRESS"
+  Succeeded = "SUCCEEDED"
+  Failed = "FAILED"
+  Unknown(value: Str)
+}
+
+/// Contains summary information about a deployment configuration job,
+/// including its identifier, status, configuration, and creation time.
+pub struct DeploymentConfigurationJobSummary {
+  /// The unique identifier of the deployment configuration job.
+  pub job_id: Str? = None
+  /// The status of the deployment configuration job.
+  pub status: DeploymentConfigurationJobStatus? = None
+  /// The deployment configuration submitted with the job.
+  pub configuration: DeploymentConfigurationDetail? = None
+  /// The date and time when the job was created.
+  pub created_at: Time? = None
+}
+
 /// The shape containing the requested deployment parameter name and
 /// secretString. To support AWS CloudFormation dynamic references to this
 /// resource using Quick Launch, this value must match a parameter defined
-/// in the CloudFormation templated provided to buyers.
+/// in the CloudFormation template provided to buyers.
 pub struct DeploymentParameterInput {
   /// The desired name of the deployment parameter. This is the identifier on
   /// which deployment parameters are keyed for a given buyer and product. If
@@ -27,14 +80,84 @@ pub struct DeploymentParameterInput {
   pub secret_string: Str? = None
 }
 
+pub struct GetDeploymentConfigurationJobRequest {
+  /// The catalog related to the request. Fixed value: AWSMarketplace
+  pub catalog: Str? = None
+  /// The ID of the AWS Marketplace product, for example prod-1234567890abc .
+  pub product_id: Str? = None
+  /// The delivery option type of the deployment configuration.
+  pub delivery_option_type: DeliveryOptionType? = None
+  /// The unique identifier of the deployment configuration job.
+  pub job_id: Str? = None
+}
+
+pub struct GetDeploymentConfigurationJobResponse {
+  /// The unique identifier of the deployment configuration job.
+  pub job_id: Str? = None
+  /// The deployment configuration submitted with the job.
+  pub configuration: DeploymentConfigurationDetail? = None
+  /// The status of the deployment configuration job.
+  pub status: DeploymentConfigurationJobStatus? = None
+  /// The date and time when the job was created.
+  pub created_at: Time? = None
+  /// The Amazon Resource Name (ARN) of the deployment configuration. This
+  /// field is present only when the job status is SUCCEEDED .
+  pub configuration_arn: Str? = None
+  /// The date and time when the job reached the SUCCEEDED or FAILED status.
+  pub ended_at: Time? = None
+  /// The error code that describes why the job failed. This field is present
+  /// only when the job status is FAILED .
+  pub error_code: DeploymentConfigurationJobErrorCode? = None
+  /// A message that describes why the job failed. This field is present only
+  /// when the job status is FAILED .
+  pub message: Str? = None
+}
+
+pub struct GetDeploymentConfigurationRequest {
+  /// The catalog related to the request. Fixed value: AWSMarketplace
+  pub catalog: Str? = None
+  /// The ID of the AWS Marketplace product, for example prod-1234567890abc .
+  pub product_id: Str? = None
+  /// The delivery option type of the deployment configuration.
+  pub delivery_option_type: DeliveryOptionType? = None
+}
+
+pub struct GetDeploymentConfigurationResponse {
+  /// The active deployment configuration.
+  pub configuration: DeploymentConfigurationDetail? = None
+}
+
 /// There was an internal service exception.
 pub struct InternalServerException {
   pub message: Str? = None
 }
 
+pub struct ListDeploymentConfigurationJobsRequest {
+  /// The catalog related to the request. Fixed value: AWSMarketplace
+  pub catalog: Str? = None
+  /// The ID of the AWS Marketplace product, for example prod-1234567890abc .
+  pub product_id: Str? = None
+  /// The delivery option type of the deployment configuration.
+  pub delivery_option_type: DeliveryOptionType? = None
+  /// The maximum number of jobs to return in a single page. Valid values are
+  /// 1 through 100. The default is 20.
+  pub max_results: Int? = None
+  /// The token for the next page of results. Use the value returned in the
+  /// previous response.
+  pub next_token: Str? = None
+}
+
+pub struct ListDeploymentConfigurationJobsResponse {
+  /// A list of deployment configuration job summaries, ordered from newest to
+  /// oldest.
+  pub jobs: List[DeploymentConfigurationJobSummary]? = None
+  /// The token for the next page of results. This value is absent when there
+  /// are no more results.
+  pub next_token: Str? = None
+}
+
 pub struct ListTagsForResourceRequest {
-  /// The Amazon Resource Name (ARN) associated with the deployment parameter
-  /// resource you want to list tags on.
+  /// The Amazon Resource Name (ARN) of the resource you want to list tags on.
   pub resource_arn: Str? = None
 }
 
@@ -53,7 +176,7 @@ pub struct PutDeploymentParameterRequest {
   /// The unique identifier of the agreement.
   pub agreement_id: Str? = None
   /// The deployment parameter targeted to the acceptor of an agreement for
-  /// which to create the AWS Secret Manager resource.
+  /// which to create the AWS Secrets Manager resource.
   pub deployment_parameter: DeploymentParameterInput? = None
   /// A map of key-value pairs, where each pair represents a tag saved to the
   /// resource. Tags will only be applied for create operations, and they'll
@@ -90,6 +213,44 @@ pub struct ResourceNotFoundException {
 /// The maximum number of requests per account has been exceeded.
 pub struct ServiceQuotaExceededException {
   pub message: Str? = None
+}
+
+pub struct StartDeploymentConfigurationJobRequest {
+  /// The catalog related to the request. Fixed value: AWSMarketplace
+  pub catalog: Str? = None
+  /// The ID of the AWS Marketplace product, for example prod-1234567890abc .
+  pub product_id: Str? = None
+  /// The delivery option type of the deployment configuration.
+  pub delivery_option_type: DeliveryOptionType? = None
+  /// The deployment configuration to publish.
+  pub configuration: DeploymentConfigurationDetail? = None
+  /// A map of key-value pairs, where each pair represents a tag to apply to
+  /// the deployment configuration. Only the request that creates the
+  /// deployment configuration can apply tags. If the deployment configuration
+  /// already exists, a request that includes one or more tags fails with a
+  /// ValidationException . To change tags on an existing deployment
+  /// configuration, use TagResource and UntagResource .
+  pub tags: Map[Str, Str]? = None
+  /// A unique, case-sensitive identifier that you provide to ensure that the
+  /// operation completes no more than one time. If you retry a request with
+  /// the same token and the same input, the service returns the original job
+  /// instead of starting a new one. If you reuse a token with different
+  /// input, the request fails with a ConflictException . This field is not
+  /// required if you're calling using an AWS SDK. Otherwise, a clientToken
+  /// must be provided with the request.
+  pub client_token: Str? = None
+}
+
+pub struct StartDeploymentConfigurationJobResponse {
+  /// The unique identifier of the deployment configuration job.
+  pub job_id: Str? = None
+  /// The deployment configuration submitted with the job.
+  pub configuration: DeploymentConfigurationDetail? = None
+  /// The status of the deployment configuration job. The value is IN_PROGRESS
+  /// .
+  pub status: DeploymentConfigurationJobStatus? = None
+  /// The date and time when the job was created.
+  pub created_at: Time? = None
 }
 
 pub struct TagResourceRequest {

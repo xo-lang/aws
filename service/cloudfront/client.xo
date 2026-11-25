@@ -1702,6 +1702,9 @@ fn xml_write_connection_group(var w: xmlv.Writer, v: ConnectionGroup, name: Str,
   if let Some(x) = v.is_default {
     xmlv.elem(w, "IsDefault", "${x}", [])
   }
+  if let Some(x) = v.viewer_fallback {
+    xml_write_viewer_fallback(w, x, "ViewerFallback", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1721,6 +1724,7 @@ fn xml_read_connection_group(e: xml.Element) -> ConnectionGroup ! Str {
       "Status" => out.status = c.text()
       "Enabled" => out.enabled = xmlv.read_bool(c.text())?
       "IsDefault" => out.is_default = xmlv.read_bool(c.text())?
+      "ViewerFallback" => out.viewer_fallback = xml_read_viewer_fallback(c)?
       _ => {}
     }
   }
@@ -1783,6 +1787,9 @@ fn xml_write_connection_group_summary(var w: xmlv.Writer, v: ConnectionGroupSumm
   if let Some(x) = v.is_default {
     xmlv.elem(w, "IsDefault", "${x}", [])
   }
+  if let Some(x) = v.viewer_fallback {
+    xml_write_viewer_fallback(w, x, "ViewerFallback", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -1801,6 +1808,7 @@ fn xml_read_connection_group_summary(e: xml.Element) -> ConnectionGroupSummary !
       "Enabled" => out.enabled = xmlv.read_bool(c.text())?
       "Status" => out.status = c.text()
       "IsDefault" => out.is_default = xmlv.read_bool(c.text())?
+      "ViewerFallback" => out.viewer_fallback = xml_read_viewer_fallback(c)?
       _ => {}
     }
   }
@@ -2493,6 +2501,9 @@ fn xml_write_create_connection_group_request(var w: xmlv.Writer, v: CreateConnec
   if let Some(x) = v.enabled {
     xmlv.elem(w, "Enabled", "${x}", [])
   }
+  if let Some(x) = v.viewer_fallback {
+    xml_write_viewer_fallback(w, x, "ViewerFallback", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -2505,6 +2516,7 @@ fn xml_read_create_connection_group_request(e: xml.Element) -> CreateConnectionG
       "Tags" => out.tags = xml_read_tags(c)?
       "AnycastIpListId" => out.anycast_ip_list_id = c.text()
       "Enabled" => out.enabled = xmlv.read_bool(c.text())?
+      "ViewerFallback" => out.viewer_fallback = xml_read_viewer_fallback(c)?
       _ => {}
     }
   }
@@ -2661,6 +2673,9 @@ fn xml_write_create_distribution_tenant_request(var w: xmlv.Writer, v: CreateDis
   if let Some(x) = v.enabled {
     xmlv.elem(w, "Enabled", "${x}", [])
   }
+  if let Some(x) = v.on_domain_takeover {
+    xmlv.elem(w, "OnDomainTakeover", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -2677,6 +2692,7 @@ fn xml_read_create_distribution_tenant_request(e: xml.Element) -> CreateDistribu
       "ConnectionGroupId" => out.connection_group_id = c.text()
       "ManagedCertificateRequest" => out.managed_certificate_request = xml_read_managed_certificate_request(c)?
       "Enabled" => out.enabled = xmlv.read_bool(c.text())?
+      "OnDomainTakeover" => out.on_domain_takeover = OnDomainTakeover.from(c.text())
       _ => {}
     }
   }
@@ -3731,6 +3747,9 @@ fn xml_write_custom_origin_config(var w: xmlv.Writer, v: CustomOriginConfig, nam
   if let Some(x) = v.origin_mtls_config {
     xml_write_origin_mtls_config(w, x, "OriginMtlsConfig", [])
   }
+  if let Some(x) = v.origin_http_version {
+    xmlv.elem(w, "OriginHttpVersion", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -3746,6 +3765,7 @@ fn xml_read_custom_origin_config(e: xml.Element) -> CustomOriginConfig ! Str {
       "OriginKeepaliveTimeout" => out.origin_keepalive_timeout = xmlv.read_int(c.text())?
       "IpAddressType" => out.ip_address_type = IpAddressType.from(c.text())
       "OriginMtlsConfig" => out.origin_mtls_config = xml_read_origin_mtls_config(c)?
+      "OriginHttpVersion" => out.origin_http_version = OriginHttpVersion.from(c.text())
       _ => {}
     }
   }
@@ -5537,6 +5557,9 @@ fn xml_write_domain_item(var w: xmlv.Writer, v: DomainItem, name: Str, ns: List[
   if let Some(x) = v.domain {
     xmlv.elem(w, "Domain", x, [])
   }
+  if let Some(x) = v.serve_on {
+    xmlv.elem(w, "ServeOn", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -5545,6 +5568,7 @@ fn xml_read_domain_item(e: xml.Element) -> DomainItem ! Str {
   for c in xmlv.elements(e) {
     match c.name.local {
       "Domain" => out.domain = c.text()
+      "ServeOn" => out.serve_on = ServeOn.from(c.text())
       _ => {}
     }
   }
@@ -5577,6 +5601,9 @@ fn xml_write_domain_result(var w: xmlv.Writer, v: DomainResult, name: Str, ns: L
   if let Some(x) = v.status {
     xmlv.elem(w, "Status", x.value(), [])
   }
+  if let Some(x) = v.serve_on {
+    xmlv.elem(w, "ServeOn", x.value(), [])
+  }
   xmlv.end(w, name)
 }
 
@@ -5586,6 +5613,7 @@ fn xml_read_domain_result(e: xml.Element) -> DomainResult ! Str {
     match c.name.local {
       "Domain" => out.domain = c.text()
       "Status" => out.status = DomainStatus.from(c.text())
+      "ServeOn" => out.serve_on = ServeOn.from(c.text())
       _ => {}
     }
   }
@@ -14993,43 +15021,4 @@ fn xml_read_streaming_distribution_not_disabled(e: xml.Element) -> StreamingDist
     }
   }
   Ok(out)
-}
-
-fn xml_write_streaming_distribution_summary(var w: xmlv.Writer, v: StreamingDistributionSummary, name: Str, ns: List[(Str, Str)]) {
-  var attrs = ns
-  xmlv.start(w, name, attrs)
-  if let Some(x) = v.id {
-    xmlv.elem(w, "Id", x, [])
-  }
-  if let Some(x) = v.arn {
-    xmlv.elem(w, "ARN", x, [])
-  }
-  if let Some(x) = v.status {
-    xmlv.elem(w, "Status", x, [])
-  }
-  if let Some(x) = v.last_modified_time {
-    xmlv.elem(w, "LastModifiedTime", rest.date_time(x), [])
-  }
-  if let Some(x) = v.domain_name {
-    xmlv.elem(w, "DomainName", x, [])
-  }
-  if let Some(x) = v.s3_origin {
-    xml_write_s3_origin(w, x, "S3Origin", [])
-  }
-  if let Some(x) = v.aliases {
-    xml_write_aliases(w, x, "Aliases", [])
-  }
-  if let Some(x) = v.trusted_signers {
-    xml_write_trusted_signers(w, x, "TrustedSigners", [])
-  }
-  if let Some(x) = v.comment {
-    xmlv.elem(w, "Comment", x, [])
-  }
-  if let Some(x) = v.price_class {
-    xmlv.elem(w, "PriceClass", x.value(), [])
-  }
-  if let Some(x) = v.enabled {
-    xmlv.elem(w, "Enabled", "${x}", [])
-  }
-  xmlv.end(w, name)
 }

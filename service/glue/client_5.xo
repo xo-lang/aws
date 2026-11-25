@@ -8,82 +8,6 @@ use github.com/xo-lang/aws/protocol/rest
 use github.com/xo-lang/aws/protocol/restjson
 use github.com/xo-lang/aws/transport
 
-pub fn endpoint_params_delete_partition(base: EndpointParameters, input: DeletePartitionRequest) -> EndpointParameters {
-  let _ = input
-  base
-}
-
-/// The HTTP request of DeletePartition.
-pub fn serialize_delete_partition(ep: rest.Endpoint, input: DeletePartitionRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
-  let _ = (idempotency_token, min_compress)
-  var headers: List[(Str, Str)] = []
-  var qs: List[(Str, Str)] = []
-  var body = b""
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = input.catalog_id {
-    fs.push(("CatalogId", json.Value.Str(x)))
-  }
-  if let Some(x) = input.database_name {
-    fs.push(("DatabaseName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.table_name {
-    fs.push(("TableName", json.Value.Str(x)))
-  }
-  if let Some(x) = input.partition_values {
-    fs.push(("PartitionValues", json_of_value_string_list(x)))
-  }
-  body = json.Value.Object(fs).encode().bytes()
-  headers.push(("Content-Type", "application/x-amz-json-1.1"))
-  headers.push(("X-Amz-Target", "AWSGlue.DeletePartition"))
-  if !body.is_empty() {
-    headers.push(("Content-Length", "${body.len()}"))
-  }
-  Ok(transport.Request{
-    method: "POST",
-    scheme: ep.scheme,
-    host: ep.host,
-    port: ep.port,
-    path: rest.rpc_path(ep.path),
-    query: rest.query(qs),
-    headers: headers,
-    body: body,
-  })
-}
-
-pub fn deserialize_delete_partition(resp: http.Response) -> DeletePartitionResponse ! Str {
-  var out = DeletePartitionResponse{}
-  Ok(out)
-}
-
-/// The errors of DeletePartition.
-pub enum DeletePartitionErr {
-  EntityNotFoundException(e: EntityNotFoundException)
-  InternalServiceException(e: InternalServiceException)
-  InvalidInputException(e: InvalidInputException)
-  OperationTimeoutException(e: OperationTimeoutException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DeletePartitionErr) display() -> Str {
-  match e {
-    EntityNotFoundException(x) => "EntityNotFoundException: ${x:?}"
-    InternalServiceException(x) => "InternalServiceException: ${x:?}"
-    InvalidInputException(x) => "InvalidInputException: ${x:?}"
-    OperationTimeoutException(x) => "OperationTimeoutException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
 pub fn deserialize_delete_partition_error(resp: http.Response) -> DeletePartitionErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
@@ -2430,10 +2354,10 @@ pub fn deserialize_disassociate_glossary_terms(resp: http.Response) -> Disassoci
       continue
     }
     match k {
-      "AssetIdentifier" => out.asset_identifier = jsonv.read_str(fv)?
+      "AssetId" => out.asset_id = jsonv.read_str(fv)?
       "IterableFormName" => out.iterable_form_name = jsonv.read_str(fv)?
-      "ItemIdentifier" => out.item_identifier = jsonv.read_str(fv)?
-      "GlossaryTerms" => out.glossary_terms = from_json_glossary_term_id_list(fv)?
+      "ItemId" => out.item_id = jsonv.read_str(fv)?
+      "GlossaryTerms" => out.glossary_terms = from_json_glossary_term_id_output_list(fv)?
       _ => {}
     }
   }
@@ -2567,7 +2491,7 @@ pub fn deserialize_get_asset(resp: http.Response) -> GetAssetOutput ! Str {
       "CreatedAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "UpdatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
       "AssetTypeId" => out.asset_type_id = jsonv.read_str(fv)?
-      "GlossaryTerms" => out.glossary_terms = from_json_glossary_term_id_list(fv)?
+      "GlossaryTerms" => out.glossary_terms = from_json_glossary_term_id_output_list(fv)?
       "Forms" => out.forms = from_json_asset_form_map(fv)?
       "Attachments" => out.attachments = from_json_asset_form_map(fv)?
       "IterableForms" => out.iterable_forms = from_json_iterable_form_map(fv)?
@@ -2694,7 +2618,7 @@ pub fn deserialize_get_asset_type(resp: http.Response) -> GetAssetTypeResponse !
     match k {
       "Id" => out.id = jsonv.read_str(fv)?
       "Name" => out.name = jsonv.read_str(fv)?
-      "Forms" => out.forms = from_json_asset_type_forms_map(fv)?
+      "Forms" => out.forms = from_json_asset_type_form_output_map(fv)?
       _ => {}
     }
   }
@@ -5294,12 +5218,10 @@ pub fn deserialize_get_data_catalog_export_configuration(resp: http.Response) ->
       continue
     }
     match k {
-      "ExportSetting" => out.export_setting = ExportSetting.from(jsonv.read_str(fv)?)
-      "Status" => out.status = ExportStatus.from(jsonv.read_str(fv)?)
-      "EncryptionConfiguration" => out.encryption_configuration = from_json_export_encryption_configuration(fv)?
-      "S3TableBucketArn" => out.s3_table_bucket_arn = jsonv.read_str(fv)?
       "CreatedAt" => out.created_at = jsonv.read_time(fv, "epoch-seconds")?
       "UpdatedAt" => out.updated_at = jsonv.read_time(fv, "epoch-seconds")?
+      "S3TablesConfiguration" => out.s3_tables_configuration = from_json_s3_tables_configuration_result(fv)?
+      "Assets" => out.assets = from_json_assets_export_result(fv)?
       _ => {}
     }
   }
@@ -5308,6 +5230,7 @@ pub fn deserialize_get_data_catalog_export_configuration(resp: http.Response) ->
 
 /// The errors of GetDataCatalogExportConfiguration.
 pub enum GetDataCatalogExportConfigurationErr {
+  AccessDeniedException(e: AccessDeniedException)
   EntityNotFoundException(e: EntityNotFoundException)
   InternalServiceException(e: InternalServiceException)
   InvalidInputException(e: InvalidInputException)
@@ -5324,6 +5247,7 @@ pub enum GetDataCatalogExportConfigurationErr {
 
 pub fn (e: GetDataCatalogExportConfigurationErr) display() -> Str {
   match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     EntityNotFoundException(x) => "EntityNotFoundException: ${x:?}"
     InternalServiceException(x) => "InternalServiceException: ${x:?}"
     InvalidInputException(x) => "InvalidInputException: ${x:?}"
@@ -5338,6 +5262,10 @@ pub fn (e: GetDataCatalogExportConfigurationErr) display() -> Str {
 pub fn deserialize_get_data_catalog_export_configuration_error(resp: http.Response) -> GetDataCatalogExportConfigurationErr {
   let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
   match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetDataCatalogExportConfigurationErr.AccessDeniedException(x)
+      Err(msg) => return GetDataCatalogExportConfigurationErr.Deserialize(msg)
+    }
     "EntityNotFoundException" => match read_error_entity_not_found_exception(resp, body) {
       Ok(x) => return GetDataCatalogExportConfigurationErr.EntityNotFoundException(x)
       Err(msg) => return GetDataCatalogExportConfigurationErr.Deserialize(msg)
@@ -7379,6 +7307,7 @@ pub enum GetGlossaryErr {
   AccessDeniedException(e: AccessDeniedException)
   EntityNotFoundException(e: EntityNotFoundException)
   InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
   ThrottlingException(e: ThrottlingException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
@@ -7395,6 +7324,7 @@ pub fn (e: GetGlossaryErr) display() -> Str {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     EntityNotFoundException(x) => "EntityNotFoundException: ${x:?}"
     InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
@@ -7416,6 +7346,10 @@ pub fn deserialize_get_glossary_error(resp: http.Response) -> GetGlossaryErr {
     }
     "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
       Ok(x) => return GetGlossaryErr.InternalServiceException(x)
+      Err(msg) => return GetGlossaryErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetGlossaryErr.InvalidInputException(x)
       Err(msg) => return GetGlossaryErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -7498,6 +7432,7 @@ pub enum GetGlossaryTermErr {
   AccessDeniedException(e: AccessDeniedException)
   EntityNotFoundException(e: EntityNotFoundException)
   InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
   ThrottlingException(e: ThrottlingException)
   /// A service error the model does not list for this operation.
   Api(e: aws.ApiError)
@@ -7514,6 +7449,7 @@ pub fn (e: GetGlossaryTermErr) display() -> Str {
     AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
     EntityNotFoundException(x) => "EntityNotFoundException: ${x:?}"
     InternalServiceException(x) => "InternalServiceException: ${x:?}"
+    InvalidInputException(x) => "InvalidInputException: ${x:?}"
     ThrottlingException(x) => "ThrottlingException: ${x:?}"
     Api(x) => x.display()
     Send(x) => x.display()
@@ -7535,6 +7471,10 @@ pub fn deserialize_get_glossary_term_error(resp: http.Response) -> GetGlossaryTe
     }
     "InternalServiceException" => match read_error_internal_service_exception(resp, body) {
       Ok(x) => return GetGlossaryTermErr.InternalServiceException(x)
+      Err(msg) => return GetGlossaryTermErr.Deserialize(msg)
+    }
+    "InvalidInputException" => match read_error_invalid_input_exception(resp, body) {
+      Ok(x) => return GetGlossaryTermErr.InvalidInputException(x)
       Err(msg) => return GetGlossaryTermErr.Deserialize(msg)
     }
     "ThrottlingException" => match read_error_throttling_exception(resp, body) {
@@ -10923,4 +10863,68 @@ pub fn (c: Client) get_schema_versions_diff(input: GetSchemaVersionsDiffInput) -
     return Err(deserialize_get_schema_versions_diff_error(resp))
   }
   deserialize_get_schema_versions_diff(resp) ?? e => Err(GetSchemaVersionsDiffErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_security_configuration(base: EndpointParameters, input: GetSecurityConfigurationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetSecurityConfiguration.
+pub fn serialize_get_security_configuration(ep: rest.Endpoint, input: GetSecurityConfigurationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.name {
+    fs.push(("Name", json.Value.Str(x)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/x-amz-json-1.1"))
+  headers.push(("X-Amz-Target", "AWSGlue.GetSecurityConfiguration"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.rpc_path(ep.path),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_security_configuration(resp: http.Response) -> GetSecurityConfigurationResponse ! Str {
+  var out = GetSecurityConfigurationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "SecurityConfiguration" => out.security_configuration = from_json_security_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetSecurityConfiguration.
+pub enum GetSecurityConfigurationErr {
+  EntityNotFoundException(e: EntityNotFoundException)
+  InternalServiceException(e: InternalServiceException)
+  InvalidInputException(e: InvalidInputException)
+  OperationTimeoutException(e: OperationTimeoutException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
 }

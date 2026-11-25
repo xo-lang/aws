@@ -838,6 +838,55 @@ fn xml_read_ciphers(e: xml.Element) -> List[Cipher] ! Str {
   Ok(out)
 }
 
+fn xml_write_client_certificate_identity_filter(var w: xmlv.Writer, v: ClientCertificateIdentityFilter, name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  if let Some(x) = v.field {
+    xmlv.elem(w, "Field", x.value(), [])
+  }
+  if let Some(x) = v.action {
+    xmlv.elem(w, "Action", x.value(), [])
+  }
+  if let Some(x) = v.match_type {
+    xmlv.elem(w, "MatchType", x.value(), [])
+  }
+  if let Some(x) = v.value {
+    xmlv.elem(w, "Value", x, [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_client_certificate_identity_filter(e: xml.Element) -> ClientCertificateIdentityFilter ! Str {
+  var out = ClientCertificateIdentityFilter{}
+  for c in xmlv.elements(e) {
+    match c.name.local {
+      "Field" => out.field = ClientCertificateIdentityFilterField.from(c.text())
+      "Action" => out.action = ClientCertificateIdentityFilterAction.from(c.text())
+      "MatchType" => out.match_type = ClientCertificateIdentityFilterMatchType.from(c.text())
+      "Value" => out.value = c.text()
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn xml_write_client_certificate_identity_filters(var w: xmlv.Writer, v: List[ClientCertificateIdentityFilter], name: Str, ns: List[(Str, Str)]) {
+  var attrs = ns
+  xmlv.start(w, name, attrs)
+  for item in v {
+    xml_write_client_certificate_identity_filter(w, item, "member", [])
+  }
+  xmlv.end(w, name)
+}
+
+fn xml_read_client_certificate_identity_filters(e: xml.Element) -> List[ClientCertificateIdentityFilter] ! Str {
+  var out: List[ClientCertificateIdentityFilter] = []
+  for c in xmlv.elements(e) {
+    out.push(xml_read_client_certificate_identity_filter(c)?)
+  }
+  Ok(out)
+}
+
 fn xml_write_create_listener_input(var w: xmlv.Writer, v: CreateListenerInput, name: Str, ns: List[(Str, Str)]) {
   var attrs = ns
   xmlv.start(w, name, attrs)
@@ -4069,6 +4118,9 @@ fn xml_write_mutual_authentication_attributes(var w: xmlv.Writer, v: MutualAuthe
   if let Some(x) = v.advertise_trust_store_ca_names {
     xmlv.elem(w, "AdvertiseTrustStoreCaNames", x.value(), [])
   }
+  if let Some(x) = v.client_certificate_identity_filters {
+    xml_write_client_certificate_identity_filters(w, x, "ClientCertificateIdentityFilters", [])
+  }
   xmlv.end(w, name)
 }
 
@@ -4081,6 +4133,7 @@ fn xml_read_mutual_authentication_attributes(e: xml.Element) -> MutualAuthentica
       "IgnoreClientCertificateExpiry" => out.ignore_client_certificate_expiry = xmlv.read_bool(c.text())?
       "TrustStoreAssociationStatus" => out.trust_store_association_status = TrustStoreAssociationStatusEnum.from(c.text())
       "AdvertiseTrustStoreCaNames" => out.advertise_trust_store_ca_names = AdvertiseTrustStoreCaNamesEnum.from(c.text())
+      "ClientCertificateIdentityFilters" => out.client_certificate_identity_filters = xml_read_client_certificate_identity_filters(c)?
       _ => {}
     }
   }
@@ -6767,6 +6820,32 @@ fn query_put_ciphers(var f: query.Form, prefix: Str, v: List[Cipher], flat: Bool
   }
 }
 
+fn query_put_client_certificate_identity_filter(var f: query.Form, prefix: Str, v: ClientCertificateIdentityFilter) {
+  if let Some(x) = v.field {
+    query.add(f, query.key(prefix, "Field"), x.value())
+  }
+  if let Some(x) = v.action {
+    query.add(f, query.key(prefix, "Action"), x.value())
+  }
+  if let Some(x) = v.match_type {
+    query.add(f, query.key(prefix, "MatchType"), x.value())
+  }
+  if let Some(x) = v.value {
+    query.add(f, query.key(prefix, "Value"), x)
+  }
+}
+
+fn query_put_client_certificate_identity_filters(var f: query.Form, prefix: Str, v: List[ClientCertificateIdentityFilter], flat: Bool) {
+  if v.is_empty() {
+    query.add(f, prefix, "")
+    return
+  }
+  for (i, x) in v.indexed() {
+    let k = if flat { "${prefix}.${i + 1}" } else { "${prefix}.member.${i + 1}" }
+    query_put_client_certificate_identity_filter(f, k, x)
+  }
+}
+
 fn query_put_create_listener_input(var f: query.Form, prefix: Str, v: CreateListenerInput) {
   if let Some(x) = v.load_balancer_arn {
     query.add(f, query.key(prefix, "LoadBalancerArn"), x)
@@ -8128,6 +8207,9 @@ fn query_put_mutual_authentication_attributes(var f: query.Form, prefix: Str, v:
   }
   if let Some(x) = v.advertise_trust_store_ca_names {
     query.add(f, query.key(prefix, "AdvertiseTrustStoreCaNames"), x.value())
+  }
+  if let Some(x) = v.client_certificate_identity_filters {
+    query_put_client_certificate_identity_filters(f, query.key(prefix, "ClientCertificateIdentityFilters"), x, false)
   }
 }
 
@@ -11162,7 +11244,7 @@ pub fn deserialize_create_trust_store_error(resp: http.Response) -> CreateTrustS
 }
 
 /// Creates a trust store. For more information, see Mutual TLS for
-/// Application Load Balancers .
+/// Application Load Balancers or Mutual TLS for Network Load Balancers .
 pub fn (c: Client) create_trust_store(input: CreateTrustStoreInput) -> CreateTrustStoreOutput ! CreateTrustStoreErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_create_trust_store(c.params, input)) ?? e => return Err(CreateTrustStoreErr.InvalidInput(e))
   var req = serialize_create_trust_store(ep, input, "") ?? e => return Err(CreateTrustStoreErr.InvalidInput(e))
@@ -13384,59 +13466,4 @@ pub fn serialize_describe_trust_store_revocations(ep: rest.Endpoint, input: Desc
     headers: headers,
     body: body,
   })
-}
-
-pub fn deserialize_describe_trust_store_revocations(resp: http.Response) -> DescribeTrustStoreRevocationsOutput ! Str {
-  var out = DescribeTrustStoreRevocationsOutput{}
-  let body = query.result_of(resp.body, "DescribeTrustStoreRevocations")?
-  for c in xmlv.elements(body) {
-    match c.name.local {
-      "TrustStoreRevocations" => out.trust_store_revocations = xml_read_describe_trust_store_revocation_response(c)?
-      "NextMarker" => out.next_marker = c.text()
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-/// The errors of DescribeTrustStoreRevocations.
-pub enum DescribeTrustStoreRevocationsErr {
-  RevocationIdNotFoundException(e: RevocationIdNotFoundException)
-  TrustStoreNotFoundException(e: TrustStoreNotFoundException)
-  /// A service error the model does not list for this operation.
-  Api(e: aws.ApiError)
-  /// The request was not sent or no response came (after retries).
-  Send(e: transport.SendErr)
-  /// The input cannot be serialized (a required label is missing).
-  InvalidInput(msg: Str)
-  /// The response is not what the protocol says.
-  Deserialize(msg: Str)
-}
-
-pub fn (e: DescribeTrustStoreRevocationsErr) display() -> Str {
-  match e {
-    RevocationIdNotFoundException(x) => "RevocationIdNotFoundException: ${x:?}"
-    TrustStoreNotFoundException(x) => "TrustStoreNotFoundException: ${x:?}"
-    Api(x) => x.display()
-    Send(x) => x.display()
-    InvalidInput(msg) => "invalid input: ${msg}"
-    Deserialize(msg) => "cannot read the response: ${msg}"
-  }
-}
-
-pub fn deserialize_describe_trust_store_revocations_error(resp: http.Response) -> DescribeTrustStoreRevocationsErr {
-  let body = restxml.error_element(resp.body) ?? xmlv.empty()
-  match restxml.error_code(resp) {
-    "RevocationIdNotFound" => match read_error_revocation_id_not_found_exception(resp, body) {
-      Ok(x) => return DescribeTrustStoreRevocationsErr.RevocationIdNotFoundException(x)
-      Err(msg) => return DescribeTrustStoreRevocationsErr.Deserialize(msg)
-    }
-    "TrustStoreNotFound" => match read_error_trust_store_not_found_exception(resp, body) {
-      Ok(x) => return DescribeTrustStoreRevocationsErr.TrustStoreNotFoundException(x)
-      Err(msg) => return DescribeTrustStoreRevocationsErr.Deserialize(msg)
-    }
-    _ => {}
-  }
-
-  DescribeTrustStoreRevocationsErr.Api(restxml.api_error(resp))
 }

@@ -786,6 +786,9 @@ fn json_of_add_output_request(v: AddOutputRequest) -> json.Value {
   if let Some(x) = v.ndi_audio_reference_level {
     fs.push(("ndiAudioReferenceLevel", json.Value.Int(x)))
   }
+  if let Some(x) = v.rtmp_push_settings {
+    fs.push(("rtmpPushSettings", json_of_rtmp_push_output_settings(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -819,6 +822,7 @@ fn from_json_add_output_request(v: json.Value) -> AddOutputRequest ! Str {
       "routerIntegrationTransitEncryption" => out.router_integration_transit_encryption = from_json_flow_transit_encryption(fv)?
       "ndiOutputTimecodeSource" => out.ndi_output_timecode_source = NdiOutputTimecodeSource.from(jsonv.read_str(fv)?)
       "ndiAudioReferenceLevel" => out.ndi_audio_reference_level = jsonv.read_int(fv)?
+      "rtmpPushSettings" => out.rtmp_push_settings = from_json_rtmp_push_output_settings(fv)?
       _ => {}
     }
   }
@@ -847,6 +851,32 @@ fn from_json_audio_monitoring_setting(v: json.Value) -> AudioMonitoringSetting !
   Ok(out)
 }
 
+fn json_of_auto_pid_map_configuration(v: AutoPidMapConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.start_pid {
+    fs.push(("startPid", json.Value.Int(x)))
+  }
+  if let Some(x) = v.pids_per_program {
+    fs.push(("pidsPerProgram", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_auto_pid_map_configuration(v: json.Value) -> AutoPidMapConfiguration ! Str {
+  var out = AutoPidMapConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "startPid" => out.start_pid = jsonv.read_int(fv)?
+      "pidsPerProgram" => out.pids_per_program = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_automatic_encryption_key_configuration(v: AutomaticEncryptionKeyConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   json.Value.Object(fs)
@@ -865,6 +895,17 @@ fn json_of_automatic_endpoint_encryption_configuration(v: AutomaticEndpointEncry
 
 fn from_json_automatic_endpoint_encryption_configuration(v: json.Value) -> AutomaticEndpointEncryptionConfiguration ! Str {
   var out = AutomaticEndpointEncryptionConfiguration{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_automatic_rtmp_push_naming_configuration(v: AutomaticRtmpPushNamingConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_automatic_rtmp_push_naming_configuration(v: json.Value) -> AutomaticRtmpPushNamingConfiguration ! Str {
+  var out = AutomaticRtmpPushNamingConfiguration{}
   let _ = jsonv.fields(v)?
   Ok(out)
 }
@@ -2304,6 +2345,9 @@ fn json_of_create_router_output_request(v: CreateRouterOutputRequest) -> json.Va
   if let Some(x) = v.client_token {
     fs.push(("clientToken", json.Value.Str(x)))
   }
+  if let Some(x) = v.processors {
+    fs.push(("processors", json_of_router_output_processors(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2325,6 +2369,7 @@ fn from_json_create_router_output_request(v: json.Value) -> CreateRouterOutputRe
       "tags" => out.tags = from_json_map_of_string(fv)?
       "fabricConfiguration" => out.fabric_configuration = from_json_fabric_configuration(fv)?
       "clientToken" => out.client_token = jsonv.read_str(fv)?
+      "processors" => out.processors = from_json_router_output_processors(fv)?
       _ => {}
     }
   }
@@ -2935,6 +2980,9 @@ fn json_of_describe_flow_source_metadata_response(v: DescribeFlowSourceMetadataR
   if let Some(x) = v.ndi_info {
     fs.push(("ndiInfo", json_of_ndi_source_metadata_info(x)))
   }
+  if let Some(x) = v.rtmp_info {
+    fs.push(("rtmpInfo", json_of_rtmp_source_metadata_info(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -2950,6 +2998,7 @@ fn from_json_describe_flow_source_metadata_response(v: json.Value) -> DescribeFl
       "timestamp" => out.timestamp = jsonv.read_time(fv, "date-time")?
       "transportMediaInfo" => out.transport_media_info = from_json_transport_media_info(fv)?
       "ndiInfo" => out.ndi_info = from_json_ndi_source_metadata_info(fv)?
+      "rtmpInfo" => out.rtmp_info = from_json_rtmp_source_metadata_info(fv)?
       _ => {}
     }
   }
@@ -3922,6 +3971,12 @@ fn json_of_fabric_configuration(v: FabricConfiguration) -> json.Value {
   if let Some(x) = v.recovery_latency_mode {
     fs.push(("recoveryLatencyMode", json.Value.Str(x.value())))
   }
+  if let Some(x) = v.switching_mode {
+    fs.push(("switchingMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.switching_configuration {
+    fs.push(("switchingConfiguration", json_of_fabric_switching_configuration(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -3933,10 +3988,34 @@ fn from_json_fabric_configuration(v: json.Value) -> FabricConfiguration ! Str {
     }
     match k {
       "recoveryLatencyMode" => out.recovery_latency_mode = FabricLatencyMode.from(jsonv.read_str(fv)?)
+      "switchingMode" => out.switching_mode = FabricSwitchingMode.from(jsonv.read_str(fv)?)
+      "switchingConfiguration" => out.switching_configuration = from_json_fabric_switching_configuration(fv)?
       _ => {}
     }
   }
   Ok(out)
+}
+
+fn json_of_fabric_switching_configuration(v: FabricSwitchingConfiguration) -> json.Value {
+  match v {
+    Immediate(x) => json.Value.Object([("immediate", json_of_immediate_fabric_switching_configuration(x))])
+    KeyFrame(x) => json.Value.Object([("keyFrame", json_of_key_frame_fabric_switching_configuration(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_fabric_switching_configuration(v: json.Value) -> FabricSwitchingConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "immediate" => Ok(FabricSwitchingConfiguration.Immediate(from_json_immediate_fabric_switching_configuration(fv)?))
+      "keyFrame" => Ok(FabricSwitchingConfiguration.KeyFrame(from_json_key_frame_fabric_switching_configuration(fv)?))
+      _ => Ok(FabricSwitchingConfiguration.Unknown(k))
+    }
+  }
+  Err("FabricSwitchingConfiguration: no member set")
 }
 
 fn json_of_failover_config(v: FailoverConfig) -> json.Value {
@@ -4015,6 +4094,9 @@ fn json_of_failover_router_input_indexed_stream_details(v: FailoverRouterInputIn
   if let Some(x) = v.source_ip_address {
     fs.push(("sourceIpAddress", json.Value.Str(x)))
   }
+  if let Some(x) = v.rtmp_push {
+    fs.push(("rtmpPush", json_of_rtmp_push_stream_details(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -4027,6 +4109,7 @@ fn from_json_failover_router_input_indexed_stream_details(v: json.Value) -> Fail
     match k {
       "sourceIndex" => out.source_index = jsonv.read_int(fv)?
       "sourceIpAddress" => out.source_ip_address = jsonv.read_str(fv)?
+      "rtmpPush" => out.rtmp_push = from_json_rtmp_push_stream_details(fv)?
       _ => {}
     }
   }
@@ -4037,6 +4120,7 @@ fn json_of_failover_router_input_protocol_configuration(v: FailoverRouterInputPr
   match v {
     Rist(x) => json.Value.Object([("rist", json_of_rist_router_input_configuration(x))])
     SrtListener(x) => json.Value.Object([("srtListener", json_of_srt_listener_router_input_configuration(x))])
+    RtmpPush(x) => json.Value.Object([("rtmpPush", json_of_rtmp_push_router_input_configuration(x))])
     SrtCaller(x) => json.Value.Object([("srtCaller", json_of_srt_caller_router_input_configuration(x))])
     Rtp(x) => json.Value.Object([("rtp", json_of_rtp_router_input_configuration(x))])
     Unknown(_) => json.Value.Object([])
@@ -4051,6 +4135,7 @@ fn from_json_failover_router_input_protocol_configuration(v: json.Value) -> Fail
     return match k {
       "rist" => Ok(FailoverRouterInputProtocolConfiguration.Rist(from_json_rist_router_input_configuration(fv)?))
       "srtListener" => Ok(FailoverRouterInputProtocolConfiguration.SrtListener(from_json_srt_listener_router_input_configuration(fv)?))
+      "rtmpPush" => Ok(FailoverRouterInputProtocolConfiguration.RtmpPush(from_json_rtmp_push_router_input_configuration(fv)?))
       "srtCaller" => Ok(FailoverRouterInputProtocolConfiguration.SrtCaller(from_json_srt_caller_router_input_configuration(fv)?))
       "rtp" => Ok(FailoverRouterInputProtocolConfiguration.Rtp(from_json_rtp_router_input_configuration(fv)?))
       _ => Ok(FailoverRouterInputProtocolConfiguration.Unknown(k))
@@ -5019,6 +5104,17 @@ fn from_json_grant_flow_entitlements_response(v: json.Value) -> GrantFlowEntitle
   Ok(out)
 }
 
+fn json_of_immediate_fabric_switching_configuration(v: ImmediateFabricSwitchingConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_immediate_fabric_switching_configuration(v: json.Value) -> ImmediateFabricSwitchingConfiguration ! Str {
+  var out = ImmediateFabricSwitchingConfiguration{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
 fn json_of_ingress_gateway_bridge(v: IngressGatewayBridge) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.instance_id {
@@ -5165,6 +5261,28 @@ fn from_json_internal_server_error_exception(v: json.Value) -> InternalServerErr
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_key_frame_fabric_switching_configuration(v: KeyFrameFabricSwitchingConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.key_frame_wait_milliseconds {
+    fs.push(("keyFrameWaitMilliseconds", json.Value.Int(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_key_frame_fabric_switching_configuration(v: json.Value) -> KeyFrameFabricSwitchingConfiguration ! Str {
+  var out = KeyFrameFabricSwitchingConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "keyFrameWaitMilliseconds" => out.key_frame_wait_milliseconds = jsonv.read_int(fv)?
       _ => {}
     }
   }
@@ -6651,6 +6769,32 @@ fn from_json_maintenance_schedule(v: json.Value) -> MaintenanceSchedule ! Str {
   Err("MaintenanceSchedule: no member set")
 }
 
+fn json_of_manual_rtmp_push_naming_configuration(v: ManualRtmpPushNamingConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.application_name {
+    fs.push(("applicationName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.stream_name {
+    fs.push(("streamName", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_manual_rtmp_push_naming_configuration(v: json.Value) -> ManualRtmpPushNamingConfiguration ! Str {
+  var out = ManualRtmpPushNamingConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "applicationName" => out.application_name = jsonv.read_str(fv)?
+      "streamName" => out.stream_name = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_media_connect_flow_router_input_configuration(v: MediaConnectFlowRouterInputConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.flow_arn {
@@ -7157,6 +7301,8 @@ fn json_of_merge_router_input_protocol_configuration(v: MergeRouterInputProtocol
   match v {
     Rtp(x) => json.Value.Object([("rtp", json_of_rtp_router_input_configuration(x))])
     Rist(x) => json.Value.Object([("rist", json_of_rist_router_input_configuration(x))])
+    SrtListener(x) => json.Value.Object([("srtListener", json_of_srt_listener_router_input_configuration(x))])
+    SrtCaller(x) => json.Value.Object([("srtCaller", json_of_srt_caller_router_input_configuration(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -7169,6 +7315,8 @@ fn from_json_merge_router_input_protocol_configuration(v: json.Value) -> MergeRo
     return match k {
       "rtp" => Ok(MergeRouterInputProtocolConfiguration.Rtp(from_json_rtp_router_input_configuration(fv)?))
       "rist" => Ok(MergeRouterInputProtocolConfiguration.Rist(from_json_rist_router_input_configuration(fv)?))
+      "srtListener" => Ok(MergeRouterInputProtocolConfiguration.SrtListener(from_json_srt_listener_router_input_configuration(fv)?))
+      "srtCaller" => Ok(MergeRouterInputProtocolConfiguration.SrtCaller(from_json_srt_caller_router_input_configuration(fv)?))
       _ => Ok(MergeRouterInputProtocolConfiguration.Unknown(k))
     }
   }
@@ -7751,6 +7899,59 @@ fn from_json_owned_resource_share_details(v: json.Value) -> OwnedResourceShareDe
   Ok(out)
 }
 
+fn json_of_passthrough(v: Passthrough) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  json.Value.Object(fs)
+}
+
+fn from_json_passthrough(v: json.Value) -> Passthrough ! Str {
+  var out = Passthrough{}
+  let _ = jsonv.fields(v)?
+  Ok(out)
+}
+
+fn json_of_pid_map_rule(v: PidMapRule) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.match_expression {
+    fs.push(("matchExpression", json.Value.Str(x)))
+  }
+  if let Some(x) = v.action {
+    fs.push(("action", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_pid_map_rule(v: json.Value) -> PidMapRule ! Str {
+  var out = PidMapRule{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "matchExpression" => out.match_expression = jsonv.read_str(fv)?
+      "action" => out.action = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_pid_map_rules(v: List[PidMapRule]) -> json.Value {
+  json.Value.List(v.map(fn(x: PidMapRule) -> json.Value { json_of_pid_map_rule(x) }))
+}
+
+fn from_json_pid_map_rules(v: json.Value) -> List[PidMapRule] ! Str {
+  var out: List[PidMapRule] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_pid_map_rule(fv)?)
+  }
+  Ok(out)
+}
+
 fn json_of_preferred_day_time_maintenance_configuration(v: PreferredDayTimeMaintenanceConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.day {
@@ -7775,6 +7976,72 @@ fn from_json_preferred_day_time_maintenance_configuration(v: json.Value) -> Pref
     }
   }
   Ok(out)
+}
+
+fn json_of_program_clock_reference_pid_configuration(v: ProgramClockReferencePidConfiguration) -> json.Value {
+  match v {
+    Passthrough(x) => json.Value.Object([("passthrough", json_of_passthrough(x))])
+    Set(x) => json.Value.Object([("set", json.Value.Int(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_program_clock_reference_pid_configuration(v: json.Value) -> ProgramClockReferencePidConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "passthrough" => Ok(ProgramClockReferencePidConfiguration.Passthrough(from_json_passthrough(fv)?))
+      "set" => Ok(ProgramClockReferencePidConfiguration.Set(jsonv.read_int(fv)?))
+      _ => Ok(ProgramClockReferencePidConfiguration.Unknown(k))
+    }
+  }
+  Err("ProgramClockReferencePidConfiguration: no member set")
+}
+
+fn json_of_program_map_table_pid_configuration(v: ProgramMapTablePidConfiguration) -> json.Value {
+  match v {
+    Passthrough(x) => json.Value.Object([("passthrough", json_of_passthrough(x))])
+    Set(x) => json.Value.Object([("set", json.Value.Int(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_program_map_table_pid_configuration(v: json.Value) -> ProgramMapTablePidConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "passthrough" => Ok(ProgramMapTablePidConfiguration.Passthrough(from_json_passthrough(fv)?))
+      "set" => Ok(ProgramMapTablePidConfiguration.Set(jsonv.read_int(fv)?))
+      _ => Ok(ProgramMapTablePidConfiguration.Unknown(k))
+    }
+  }
+  Err("ProgramMapTablePidConfiguration: no member set")
+}
+
+fn json_of_program_number_configuration(v: ProgramNumberConfiguration) -> json.Value {
+  match v {
+    Passthrough(x) => json.Value.Object([("passthrough", json_of_passthrough(x))])
+    Set(x) => json.Value.Object([("set", json.Value.Int(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_program_number_configuration(v: json.Value) -> ProgramNumberConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "passthrough" => Ok(ProgramNumberConfiguration.Passthrough(from_json_passthrough(fv)?))
+      "set" => Ok(ProgramNumberConfiguration.Set(jsonv.read_int(fv)?))
+      _ => Ok(ProgramNumberConfiguration.Unknown(k))
+    }
+  }
+  Err("ProgramNumberConfiguration: no member set")
 }
 
 fn json_of_public_destination_endpoint_networking_configuration(v: PublicDestinationEndpointNetworkingConfiguration) -> json.Value {
@@ -9201,6 +9468,7 @@ fn from_json_router_input_messages(v: json.Value) -> List[RouterInputMessage] ! 
 fn json_of_router_input_metadata(v: RouterInputMetadata) -> json.Value {
   match v {
     TransportStreamMediaInfo(x) => json.Value.Object([("transportStreamMediaInfo", json_of_transport_media_info(x))])
+    RtmpInfo(x) => json.Value.Object([("rtmpInfo", json_of_rtmp_source_metadata_info(x))])
     Unknown(_) => json.Value.Object([])
   }
 }
@@ -9212,6 +9480,7 @@ fn from_json_router_input_metadata(v: json.Value) -> RouterInputMetadata ! Str {
     }
     return match k {
       "transportStreamMediaInfo" => Ok(RouterInputMetadata.TransportStreamMediaInfo(from_json_transport_media_info(fv)?))
+      "rtmpInfo" => Ok(RouterInputMetadata.RtmpInfo(from_json_rtmp_source_metadata_info(fv)?))
       _ => Ok(RouterInputMetadata.Unknown(k))
     }
   }
@@ -9222,6 +9491,7 @@ fn json_of_router_input_protocol_configuration(v: RouterInputProtocolConfigurati
   match v {
     Rist(x) => json.Value.Object([("rist", json_of_rist_router_input_configuration(x))])
     SrtListener(x) => json.Value.Object([("srtListener", json_of_srt_listener_router_input_configuration(x))])
+    RtmpPush(x) => json.Value.Object([("rtmpPush", json_of_rtmp_push_router_input_configuration(x))])
     SrtCaller(x) => json.Value.Object([("srtCaller", json_of_srt_caller_router_input_configuration(x))])
     Rtp(x) => json.Value.Object([("rtp", json_of_rtp_router_input_configuration(x))])
     Unknown(_) => json.Value.Object([])
@@ -9236,6 +9506,7 @@ fn from_json_router_input_protocol_configuration(v: json.Value) -> RouterInputPr
     return match k {
       "rist" => Ok(RouterInputProtocolConfiguration.Rist(from_json_rist_router_input_configuration(fv)?))
       "srtListener" => Ok(RouterInputProtocolConfiguration.SrtListener(from_json_srt_listener_router_input_configuration(fv)?))
+      "rtmpPush" => Ok(RouterInputProtocolConfiguration.RtmpPush(from_json_rtmp_push_router_input_configuration(fv)?))
       "srtCaller" => Ok(RouterInputProtocolConfiguration.SrtCaller(from_json_srt_caller_router_input_configuration(fv)?))
       "rtp" => Ok(RouterInputProtocolConfiguration.Rtp(from_json_rtp_router_input_configuration(fv)?))
       _ => Ok(RouterInputProtocolConfiguration.Unknown(k))
@@ -9696,6 +9967,9 @@ fn json_of_router_output(v: RouterOutput) -> json.Value {
   if let Some(x) = v.fabric_configuration {
     fs.push(("fabricConfiguration", json_of_fabric_configuration(x)))
   }
+  if let Some(x) = v.processors {
+    fs.push(("processors", json_of_router_output_processors(x)))
+  }
   if let Some(x) = v.associated_source_endpoint_arns {
     fs.push(("associatedSourceEndpointArns", json_of_source_endpoint_arn_list(x)))
   }
@@ -9733,6 +10007,7 @@ fn from_json_router_output(v: json.Value) -> RouterOutput ! Str {
       "maintenanceScheduleType" => out.maintenance_schedule_type = MaintenanceScheduleType.from(jsonv.read_str(fv)?)
       "maintenanceSchedule" => out.maintenance_schedule = from_json_maintenance_schedule(fv)?
       "fabricConfiguration" => out.fabric_configuration = from_json_fabric_configuration(fv)?
+      "processors" => out.processors = from_json_router_output_processors(fv)?
       "associatedSourceEndpointArns" => out.associated_source_endpoint_arns = from_json_source_endpoint_arn_list(fv)?
       _ => {}
     }
@@ -9882,6 +10157,28 @@ fn from_json_router_output_messages(v: json.Value) -> List[RouterOutputMessage] 
       continue
     }
     out.push(from_json_router_output_message(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_router_output_processors(v: RouterOutputProcessors) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.single_program_transport_stream_pid_map {
+    fs.push(("singleProgramTransportStreamPidMap", json_of_single_program_transport_stream_pid_map_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_router_output_processors(v: json.Value) -> RouterOutputProcessors ! Str {
+  var out = RouterOutputProcessors{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "singleProgramTransportStreamPidMap" => out.single_program_transport_stream_pid_map = from_json_single_program_transport_stream_pid_map_configuration(fv)?
+      _ => {}
+    }
   }
   Ok(out)
 }
@@ -10080,6 +10377,188 @@ fn from_json_routing_scope_list(v: json.Value) -> List[RoutingScope] ! Str {
   Ok(out)
 }
 
+fn json_of_rtmp_media_info(v: RtmpMediaInfo) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.streams {
+    fs.push(("streams", json_of_rtmp_media_stream_info_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_media_info(v: json.Value) -> RtmpMediaInfo ! Str {
+  var out = RtmpMediaInfo{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "streams" => out.streams = from_json_rtmp_media_stream_info_list(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_media_stream_info(v: RtmpMediaStreamInfo) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.stream_id {
+    fs.push(("streamId", json.Value.Int(x)))
+  }
+  if let Some(x) = v.stream_type {
+    fs.push(("streamType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.codec {
+    fs.push(("codec", json.Value.Str(x)))
+  }
+  if let Some(x) = v.frame_rate {
+    fs.push(("frameRate", json.Value.Str(x)))
+  }
+  if let Some(x) = v.frame_resolution {
+    fs.push(("frameResolution", json_of_frame_resolution(x)))
+  }
+  if let Some(x) = v.scan_mode {
+    fs.push(("scanMode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.color {
+    fs.push(("color", json_of_color_information(x)))
+  }
+  if let Some(x) = v.channels {
+    fs.push(("channels", json.Value.Int(x)))
+  }
+  if let Some(x) = v.sample_rate {
+    fs.push(("sampleRate", json.Value.Int(x)))
+  }
+  if let Some(x) = v.sample_size {
+    fs.push(("sampleSize", json.Value.Int(x)))
+  }
+  if let Some(x) = v.language {
+    fs.push(("language", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_media_stream_info(v: json.Value) -> RtmpMediaStreamInfo ! Str {
+  var out = RtmpMediaStreamInfo{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "streamId" => out.stream_id = jsonv.read_int(fv)?
+      "streamType" => out.stream_type = SourceMediaStreamType.from(jsonv.read_str(fv)?)
+      "codec" => out.codec = jsonv.read_str(fv)?
+      "frameRate" => out.frame_rate = jsonv.read_str(fv)?
+      "frameResolution" => out.frame_resolution = from_json_frame_resolution(fv)?
+      "scanMode" => out.scan_mode = ScanMode.from(jsonv.read_str(fv)?)
+      "color" => out.color = from_json_color_information(fv)?
+      "channels" => out.channels = jsonv.read_int(fv)?
+      "sampleRate" => out.sample_rate = jsonv.read_int(fv)?
+      "sampleSize" => out.sample_size = jsonv.read_int(fv)?
+      "language" => out.language = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_media_stream_info_list(v: List[RtmpMediaStreamInfo]) -> json.Value {
+  json.Value.List(v.map(fn(x: RtmpMediaStreamInfo) -> json.Value { json_of_rtmp_media_stream_info(x) }))
+}
+
+fn from_json_rtmp_media_stream_info_list(v: json.Value) -> List[RtmpMediaStreamInfo] ! Str {
+  var out: List[RtmpMediaStreamInfo] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_rtmp_media_stream_info(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_push_naming_configuration(v: RtmpPushNamingConfiguration) -> json.Value {
+  match v {
+    Manual(x) => json.Value.Object([("manual", json_of_manual_rtmp_push_naming_configuration(x))])
+    Automatic(x) => json.Value.Object([("automatic", json_of_automatic_rtmp_push_naming_configuration(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_rtmp_push_naming_configuration(v: json.Value) -> RtmpPushNamingConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "manual" => Ok(RtmpPushNamingConfiguration.Manual(from_json_manual_rtmp_push_naming_configuration(fv)?))
+      "automatic" => Ok(RtmpPushNamingConfiguration.Automatic(from_json_automatic_rtmp_push_naming_configuration(fv)?))
+      _ => Ok(RtmpPushNamingConfiguration.Unknown(k))
+    }
+  }
+  Err("RtmpPushNamingConfiguration: no member set")
+}
+
+fn json_of_rtmp_push_output_settings(v: RtmpPushOutputSettings) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.application_name {
+    fs.push(("applicationName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.stream_name {
+    fs.push(("streamName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.tls_encryption {
+    fs.push(("tlsEncryption", json_of_tls_encryption(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_push_output_settings(v: json.Value) -> RtmpPushOutputSettings ! Str {
+  var out = RtmpPushOutputSettings{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "applicationName" => out.application_name = jsonv.read_str(fv)?
+      "streamName" => out.stream_name = jsonv.read_str(fv)?
+      "tlsEncryption" => out.tls_encryption = from_json_tls_encryption(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_push_router_input_configuration(v: RtmpPushRouterInputConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.port {
+    fs.push(("port", json.Value.Int(x)))
+  }
+  if let Some(x) = v.naming_type {
+    fs.push(("namingType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.naming_configuration {
+    fs.push(("namingConfiguration", json_of_rtmp_push_naming_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_push_router_input_configuration(v: json.Value) -> RtmpPushRouterInputConfiguration ! Str {
+  var out = RtmpPushRouterInputConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "port" => out.port = jsonv.read_int(fv)?
+      "namingType" => out.naming_type = RtmpPushNamingType.from(jsonv.read_str(fv)?)
+      "namingConfiguration" => out.naming_configuration = from_json_rtmp_push_naming_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_rtmp_push_router_output_configuration(v: RtmpPushRouterOutputConfiguration) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.destination_address {
@@ -10112,6 +10591,92 @@ fn from_json_rtmp_push_router_output_configuration(v: json.Value) -> RtmpPushRou
       "applicationName" => out.application_name = jsonv.read_str(fv)?
       "streamName" => out.stream_name = jsonv.read_str(fv)?
       "tlsEncryption" => out.tls_encryption = from_json_tls_encryption(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_push_source_settings(v: RtmpPushSourceSettings) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.application_name {
+    fs.push(("applicationName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.stream_name {
+    fs.push(("streamName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.naming_type {
+    fs.push(("namingType", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_push_source_settings(v: json.Value) -> RtmpPushSourceSettings ! Str {
+  var out = RtmpPushSourceSettings{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "applicationName" => out.application_name = jsonv.read_str(fv)?
+      "streamName" => out.stream_name = jsonv.read_str(fv)?
+      "namingType" => out.naming_type = RtmpPushNamingType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_push_stream_details(v: RtmpPushStreamDetails) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.application_name {
+    fs.push(("applicationName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.stream_name {
+    fs.push(("streamName", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_push_stream_details(v: json.Value) -> RtmpPushStreamDetails ! Str {
+  var out = RtmpPushStreamDetails{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "applicationName" => out.application_name = jsonv.read_str(fv)?
+      "streamName" => out.stream_name = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_rtmp_source_metadata_info(v: RtmpSourceMetadataInfo) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.application_name {
+    fs.push(("applicationName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.stream_name {
+    fs.push(("streamName", json.Value.Str(x)))
+  }
+  if let Some(x) = v.media_info {
+    fs.push(("mediaInfo", json_of_rtmp_media_info(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_rtmp_source_metadata_info(v: json.Value) -> RtmpSourceMetadataInfo ! Str {
+  var out = RtmpSourceMetadataInfo{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "applicationName" => out.application_name = jsonv.read_str(fv)?
+      "streamName" => out.stream_name = jsonv.read_str(fv)?
+      "mediaInfo" => out.media_info = from_json_rtmp_media_info(fv)?
       _ => {}
     }
   }
@@ -10346,6 +10911,28 @@ fn from_json_set_gateway_bridge_source_request(v: json.Value) -> SetGatewayBridg
   Ok(out)
 }
 
+fn json_of_set_rtmp_push_source_settings(v: SetRtmpPushSourceSettings) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.naming_configuration {
+    fs.push(("namingConfiguration", json_of_rtmp_push_naming_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_set_rtmp_push_source_settings(v: json.Value) -> SetRtmpPushSourceSettings ! Str {
+  var out = SetRtmpPushSourceSettings{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "namingConfiguration" => out.naming_configuration = from_json_rtmp_push_naming_configuration(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_set_source_request(v: SetSourceRequest) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.decryption {
@@ -10417,6 +11004,9 @@ fn json_of_set_source_request(v: SetSourceRequest) -> json.Value {
   if let Some(x) = v.router_integration_transit_decryption {
     fs.push(("routerIntegrationTransitDecryption", json_of_flow_transit_encryption(x)))
   }
+  if let Some(x) = v.rtmp_push_settings {
+    fs.push(("rtmpPushSettings", json_of_set_rtmp_push_source_settings(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -10450,6 +11040,7 @@ fn from_json_set_source_request(v: json.Value) -> SetSourceRequest ! Str {
       "sourceTags" => out.source_tags = from_json_map_of_string(fv)?
       "routerIntegrationState" => out.router_integration_state = State.from(jsonv.read_str(fv)?)
       "routerIntegrationTransitDecryption" => out.router_integration_transit_decryption = from_json_flow_transit_encryption(fv)?
+      "rtmpPushSettings" => out.rtmp_push_settings = from_json_set_rtmp_push_source_settings(fv)?
       _ => {}
     }
   }
@@ -10502,6 +11093,52 @@ fn from_json_silent_audio_configuration(v: json.Value) -> SilentAudioConfigurati
     match k {
       "state" => out.state = ContentQualityAnalysisState.from(jsonv.read_str(fv)?)
       "thresholdSeconds" => out.threshold_seconds = jsonv.read_int(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_single_program_transport_stream_pid_map_configuration(v: SingleProgramTransportStreamPidMapConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.rules {
+    fs.push(("rules", json_of_pid_map_rules(x)))
+  }
+  if let Some(x) = v.default_action {
+    fs.push(("defaultAction", json.Value.Str(x)))
+  }
+  if let Some(x) = v.transport_stream_id {
+    fs.push(("transportStreamId", json_of_transport_stream_id_configuration(x)))
+  }
+  if let Some(x) = v.program_number {
+    fs.push(("programNumber", json_of_program_number_configuration(x)))
+  }
+  if let Some(x) = v.program_map_table_pid {
+    fs.push(("programMapTablePid", json_of_program_map_table_pid_configuration(x)))
+  }
+  if let Some(x) = v.program_clock_reference_pid {
+    fs.push(("programClockReferencePid", json_of_program_clock_reference_pid_configuration(x)))
+  }
+  if let Some(x) = v.auto {
+    fs.push(("auto", json_of_auto_pid_map_configuration(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_single_program_transport_stream_pid_map_configuration(v: json.Value) -> SingleProgramTransportStreamPidMapConfiguration ! Str {
+  var out = SingleProgramTransportStreamPidMapConfiguration{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "rules" => out.rules = from_json_pid_map_rules(fv)?
+      "defaultAction" => out.default_action = jsonv.read_str(fv)?
+      "transportStreamId" => out.transport_stream_id = from_json_transport_stream_id_configuration(fv)?
+      "programNumber" => out.program_number = from_json_program_number_configuration(fv)?
+      "programMapTablePid" => out.program_map_table_pid = from_json_program_map_table_pid_configuration(fv)?
+      "programClockReferencePid" => out.program_clock_reference_pid = from_json_program_clock_reference_pid_configuration(fv)?
+      "auto" => out.auto = from_json_auto_pid_map_configuration(fv)?
       _ => {}
     }
   }
@@ -11479,6 +12116,9 @@ fn json_of_standard_router_input_stream_details(v: StandardRouterInputStreamDeta
   if let Some(x) = v.source_ip_address {
     fs.push(("sourceIpAddress", json.Value.Str(x)))
   }
+  if let Some(x) = v.rtmp_push {
+    fs.push(("rtmpPush", json_of_rtmp_push_stream_details(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -11490,6 +12130,7 @@ fn from_json_standard_router_input_stream_details(v: json.Value) -> StandardRout
     }
     match k {
       "sourceIpAddress" => out.source_ip_address = jsonv.read_str(fv)?
+      "rtmpPush" => out.rtmp_push = from_json_rtmp_push_stream_details(fv)?
       _ => {}
     }
   }
@@ -12297,6 +12938,12 @@ fn json_of_transport(v: Transport) -> json.Value {
   if let Some(x) = v.ndi_audio_reference_level {
     fs.push(("ndiAudioReferenceLevel", json.Value.Int(x)))
   }
+  if let Some(x) = v.rtmp_push_source_settings {
+    fs.push(("rtmpPushSourceSettings", json_of_rtmp_push_source_settings(x)))
+  }
+  if let Some(x) = v.rtmp_push_output_settings {
+    fs.push(("rtmpPushOutputSettings", json_of_rtmp_push_output_settings(x)))
+  }
   json.Value.Object(fs)
 }
 
@@ -12325,6 +12972,8 @@ fn from_json_transport(v: json.Value) -> Transport ! Str {
       "ndiSourceSettings" => out.ndi_source_settings = from_json_ndi_source_settings(fv)?
       "ndiOutputTimecodeSource" => out.ndi_output_timecode_source = NdiOutputTimecodeSource.from(jsonv.read_str(fv)?)
       "ndiAudioReferenceLevel" => out.ndi_audio_reference_level = jsonv.read_int(fv)?
+      "rtmpPushSourceSettings" => out.rtmp_push_source_settings = from_json_rtmp_push_source_settings(fv)?
+      "rtmpPushOutputSettings" => out.rtmp_push_output_settings = from_json_rtmp_push_output_settings(fv)?
       _ => {}
     }
   }
@@ -12383,8 +13032,14 @@ fn json_of_transport_stream(v: TransportStream) -> json.Value {
   if let Some(x) = v.sample_size {
     fs.push(("sampleSize", json.Value.Int(x)))
   }
+  if let Some(x) = v.scan_mode {
+    fs.push(("scanMode", json.Value.Str(x.value())))
+  }
   if let Some(x) = v.stream_type {
     fs.push(("streamType", json.Value.Str(x)))
+  }
+  if let Some(x) = v.language {
+    fs.push(("language", json.Value.Str(x)))
   }
   json.Value.Object(fs)
 }
@@ -12404,11 +13059,35 @@ fn from_json_transport_stream(v: json.Value) -> TransportStream ! Str {
       "pid" => out.pid = jsonv.read_int(fv)?
       "sampleRate" => out.sample_rate = jsonv.read_int(fv)?
       "sampleSize" => out.sample_size = jsonv.read_int(fv)?
+      "scanMode" => out.scan_mode = ScanMode.from(jsonv.read_str(fv)?)
       "streamType" => out.stream_type = jsonv.read_str(fv)?
+      "language" => out.language = jsonv.read_str(fv)?
       _ => {}
     }
   }
   Ok(out)
+}
+
+fn json_of_transport_stream_id_configuration(v: TransportStreamIdConfiguration) -> json.Value {
+  match v {
+    Passthrough(x) => json.Value.Object([("passthrough", json_of_passthrough(x))])
+    Set(x) => json.Value.Object([("set", json.Value.Int(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_transport_stream_id_configuration(v: json.Value) -> TransportStreamIdConfiguration ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "passthrough" => Ok(TransportStreamIdConfiguration.Passthrough(from_json_passthrough(fv)?))
+      "set" => Ok(TransportStreamIdConfiguration.Set(jsonv.read_int(fv)?))
+      _ => Ok(TransportStreamIdConfiguration.Unknown(k))
+    }
+  }
+  Err("TransportStreamIdConfiguration: no member set")
 }
 
 fn json_of_transport_stream_program(v: TransportStreamProgram) -> json.Value {
@@ -13203,669 +13882,8 @@ fn json_of_update_flow_output_request(v: UpdateFlowOutputRequest) -> json.Value 
   if let Some(x) = v.ndi_audio_reference_level {
     fs.push(("ndiAudioReferenceLevel", json.Value.Int(x)))
   }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_flow_output_request(v: json.Value) -> UpdateFlowOutputRequest ! Str {
-  var out = UpdateFlowOutputRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "cidrAllowList" => out.cidr_allow_list = from_json_list_of_string(fv)?
-      "description" => out.description = jsonv.read_str(fv)?
-      "destination" => out.destination = jsonv.read_str(fv)?
-      "encryption" => out.encryption = from_json_update_encryption(fv)?
-      "FlowArn" => out.flow_arn = jsonv.read_str(fv)?
-      "maxLatency" => out.max_latency = jsonv.read_int(fv)?
-      "mediaStreamOutputConfigurations" => out.media_stream_output_configurations = from_json_list_of_media_stream_output_configuration_request(fv)?
-      "minLatency" => out.min_latency = jsonv.read_int(fv)?
-      "OutputArn" => out.output_arn = jsonv.read_str(fv)?
-      "port" => out.port = jsonv.read_int(fv)?
-      "protocol" => out.protocol = Protocol.from(jsonv.read_str(fv)?)
-      "remoteId" => out.remote_id = jsonv.read_str(fv)?
-      "senderControlPort" => out.sender_control_port = jsonv.read_int(fv)?
-      "senderIpAddress" => out.sender_ip_address = jsonv.read_str(fv)?
-      "smoothingLatency" => out.smoothing_latency = jsonv.read_int(fv)?
-      "streamId" => out.stream_id = jsonv.read_str(fv)?
-      "vpcInterfaceAttachment" => out.vpc_interface_attachment = from_json_vpc_interface_attachment(fv)?
-      "outputStatus" => out.output_status = OutputStatus.from(jsonv.read_str(fv)?)
-      "ndiProgramName" => out.ndi_program_name = jsonv.read_str(fv)?
-      "ndiSpeedHqQuality" => out.ndi_speed_hq_quality = jsonv.read_int(fv)?
-      "routerIntegrationState" => out.router_integration_state = State.from(jsonv.read_str(fv)?)
-      "routerIntegrationTransitEncryption" => out.router_integration_transit_encryption = from_json_flow_transit_encryption(fv)?
-      "ndiOutputTimecodeSource" => out.ndi_output_timecode_source = NdiOutputTimecodeSource.from(jsonv.read_str(fv)?)
-      "ndiAudioReferenceLevel" => out.ndi_audio_reference_level = jsonv.read_int(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_flow_output_response(v: UpdateFlowOutputResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.flow_arn {
-    fs.push(("flowArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.output {
-    fs.push(("output", json_of_output(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_flow_output_response(v: json.Value) -> UpdateFlowOutputResponse ! Str {
-  var out = UpdateFlowOutputResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "flowArn" => out.flow_arn = jsonv.read_str(fv)?
-      "output" => out.output = from_json_output(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_flow_request(v: UpdateFlowRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.flow_arn {
-    fs.push(("FlowArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source_failover_config {
-    fs.push(("sourceFailoverConfig", json_of_update_failover_config(x)))
-  }
-  if let Some(x) = v.maintenance {
-    fs.push(("maintenance", json_of_update_maintenance(x)))
-  }
-  if let Some(x) = v.source_monitoring_config {
-    fs.push(("sourceMonitoringConfig", json_of_monitoring_config(x)))
-  }
-  if let Some(x) = v.ndi_config {
-    fs.push(("ndiConfig", json_of_ndi_config(x)))
-  }
-  if let Some(x) = v.flow_size {
-    fs.push(("flowSize", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.encoding_config {
-    fs.push(("encodingConfig", json_of_encoding_config(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_flow_request(v: json.Value) -> UpdateFlowRequest ! Str {
-  var out = UpdateFlowRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "FlowArn" => out.flow_arn = jsonv.read_str(fv)?
-      "sourceFailoverConfig" => out.source_failover_config = from_json_update_failover_config(fv)?
-      "maintenance" => out.maintenance = from_json_update_maintenance(fv)?
-      "sourceMonitoringConfig" => out.source_monitoring_config = from_json_monitoring_config(fv)?
-      "ndiConfig" => out.ndi_config = from_json_ndi_config(fv)?
-      "flowSize" => out.flow_size = FlowSize.from(jsonv.read_str(fv)?)
-      "encodingConfig" => out.encoding_config = from_json_encoding_config(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_flow_response(v: UpdateFlowResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.flow {
-    fs.push(("flow", json_of_flow(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_flow_response(v: json.Value) -> UpdateFlowResponse ! Str {
-  var out = UpdateFlowResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "flow" => out.flow = from_json_flow(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_flow_source_request(v: UpdateFlowSourceRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.decryption {
-    fs.push(("decryption", json_of_update_encryption(x)))
-  }
-  if let Some(x) = v.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = v.entitlement_arn {
-    fs.push(("entitlementArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.flow_arn {
-    fs.push(("FlowArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.ingest_port {
-    fs.push(("ingestPort", json.Value.Int(x)))
-  }
-  if let Some(x) = v.max_bitrate {
-    fs.push(("maxBitrate", json.Value.Int(x)))
-  }
-  if let Some(x) = v.max_latency {
-    fs.push(("maxLatency", json.Value.Int(x)))
-  }
-  if let Some(x) = v.max_sync_buffer {
-    fs.push(("maxSyncBuffer", json.Value.Int(x)))
-  }
-  if let Some(x) = v.media_stream_source_configurations {
-    fs.push(("mediaStreamSourceConfigurations", json_of_list_of_media_stream_source_configuration_request(x)))
-  }
-  if let Some(x) = v.min_latency {
-    fs.push(("minLatency", json.Value.Int(x)))
-  }
-  if let Some(x) = v.protocol {
-    fs.push(("protocol", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.sender_control_port {
-    fs.push(("senderControlPort", json.Value.Int(x)))
-  }
-  if let Some(x) = v.sender_ip_address {
-    fs.push(("senderIpAddress", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source_arn {
-    fs.push(("SourceArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source_listener_address {
-    fs.push(("sourceListenerAddress", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source_listener_port {
-    fs.push(("sourceListenerPort", json.Value.Int(x)))
-  }
-  if let Some(x) = v.stream_id {
-    fs.push(("streamId", json.Value.Str(x)))
-  }
-  if let Some(x) = v.vpc_interface_name {
-    fs.push(("vpcInterfaceName", json.Value.Str(x)))
-  }
-  if let Some(x) = v.whitelist_cidr {
-    fs.push(("whitelistCidr", json.Value.Str(x)))
-  }
-  if let Some(x) = v.gateway_bridge_source {
-    fs.push(("gatewayBridgeSource", json_of_update_gateway_bridge_source_request(x)))
-  }
-  if let Some(x) = v.ndi_source_settings {
-    fs.push(("ndiSourceSettings", json_of_ndi_source_settings(x)))
-  }
-  if let Some(x) = v.router_integration_state {
-    fs.push(("routerIntegrationState", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.router_integration_transit_decryption {
-    fs.push(("routerIntegrationTransitDecryption", json_of_flow_transit_encryption(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_flow_source_request(v: json.Value) -> UpdateFlowSourceRequest ! Str {
-  var out = UpdateFlowSourceRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "decryption" => out.decryption = from_json_update_encryption(fv)?
-      "description" => out.description = jsonv.read_str(fv)?
-      "entitlementArn" => out.entitlement_arn = jsonv.read_str(fv)?
-      "FlowArn" => out.flow_arn = jsonv.read_str(fv)?
-      "ingestPort" => out.ingest_port = jsonv.read_int(fv)?
-      "maxBitrate" => out.max_bitrate = jsonv.read_int(fv)?
-      "maxLatency" => out.max_latency = jsonv.read_int(fv)?
-      "maxSyncBuffer" => out.max_sync_buffer = jsonv.read_int(fv)?
-      "mediaStreamSourceConfigurations" => out.media_stream_source_configurations = from_json_list_of_media_stream_source_configuration_request(fv)?
-      "minLatency" => out.min_latency = jsonv.read_int(fv)?
-      "protocol" => out.protocol = Protocol.from(jsonv.read_str(fv)?)
-      "senderControlPort" => out.sender_control_port = jsonv.read_int(fv)?
-      "senderIpAddress" => out.sender_ip_address = jsonv.read_str(fv)?
-      "SourceArn" => out.source_arn = jsonv.read_str(fv)?
-      "sourceListenerAddress" => out.source_listener_address = jsonv.read_str(fv)?
-      "sourceListenerPort" => out.source_listener_port = jsonv.read_int(fv)?
-      "streamId" => out.stream_id = jsonv.read_str(fv)?
-      "vpcInterfaceName" => out.vpc_interface_name = jsonv.read_str(fv)?
-      "whitelistCidr" => out.whitelist_cidr = jsonv.read_str(fv)?
-      "gatewayBridgeSource" => out.gateway_bridge_source = from_json_update_gateway_bridge_source_request(fv)?
-      "ndiSourceSettings" => out.ndi_source_settings = from_json_ndi_source_settings(fv)?
-      "routerIntegrationState" => out.router_integration_state = State.from(jsonv.read_str(fv)?)
-      "routerIntegrationTransitDecryption" => out.router_integration_transit_decryption = from_json_flow_transit_encryption(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_flow_source_response(v: UpdateFlowSourceResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.flow_arn {
-    fs.push(("flowArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.source {
-    fs.push(("source", json_of_source(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_flow_source_response(v: json.Value) -> UpdateFlowSourceResponse ! Str {
-  var out = UpdateFlowSourceResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "flowArn" => out.flow_arn = jsonv.read_str(fv)?
-      "source" => out.source = from_json_source(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_gateway_bridge_source_request(v: UpdateGatewayBridgeSourceRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.bridge_arn {
-    fs.push(("bridgeArn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.vpc_interface_attachment {
-    fs.push(("vpcInterfaceAttachment", json_of_vpc_interface_attachment(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_gateway_bridge_source_request(v: json.Value) -> UpdateGatewayBridgeSourceRequest ! Str {
-  var out = UpdateGatewayBridgeSourceRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "bridgeArn" => out.bridge_arn = jsonv.read_str(fv)?
-      "vpcInterfaceAttachment" => out.vpc_interface_attachment = from_json_vpc_interface_attachment(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_gateway_instance_request(v: UpdateGatewayInstanceRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.bridge_placement {
-    fs.push(("bridgePlacement", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.gateway_instance_arn {
-    fs.push(("GatewayInstanceArn", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_gateway_instance_request(v: json.Value) -> UpdateGatewayInstanceRequest ! Str {
-  var out = UpdateGatewayInstanceRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "bridgePlacement" => out.bridge_placement = BridgePlacement.from(jsonv.read_str(fv)?)
-      "GatewayInstanceArn" => out.gateway_instance_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_gateway_instance_response(v: UpdateGatewayInstanceResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.bridge_placement {
-    fs.push(("bridgePlacement", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.gateway_instance_arn {
-    fs.push(("gatewayInstanceArn", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_gateway_instance_response(v: json.Value) -> UpdateGatewayInstanceResponse ! Str {
-  var out = UpdateGatewayInstanceResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "bridgePlacement" => out.bridge_placement = BridgePlacement.from(jsonv.read_str(fv)?)
-      "gatewayInstanceArn" => out.gateway_instance_arn = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_ingress_gateway_bridge_request(v: UpdateIngressGatewayBridgeRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.max_bitrate {
-    fs.push(("maxBitrate", json.Value.Int(x)))
-  }
-  if let Some(x) = v.max_outputs {
-    fs.push(("maxOutputs", json.Value.Int(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_ingress_gateway_bridge_request(v: json.Value) -> UpdateIngressGatewayBridgeRequest ! Str {
-  var out = UpdateIngressGatewayBridgeRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "maxBitrate" => out.max_bitrate = jsonv.read_int(fv)?
-      "maxOutputs" => out.max_outputs = jsonv.read_int(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_maintenance(v: UpdateMaintenance) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.maintenance_day {
-    fs.push(("maintenanceDay", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.maintenance_scheduled_date {
-    fs.push(("maintenanceScheduledDate", json.Value.Str(x)))
-  }
-  if let Some(x) = v.maintenance_start_hour {
-    fs.push(("maintenanceStartHour", json.Value.Str(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_maintenance(v: json.Value) -> UpdateMaintenance ! Str {
-  var out = UpdateMaintenance{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "maintenanceDay" => out.maintenance_day = MaintenanceDay.from(jsonv.read_str(fv)?)
-      "maintenanceScheduledDate" => out.maintenance_scheduled_date = jsonv.read_str(fv)?
-      "maintenanceStartHour" => out.maintenance_start_hour = jsonv.read_str(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_router_input_request(v: UpdateRouterInputRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.configuration {
-    fs.push(("configuration", json_of_router_input_configuration(x)))
-  }
-  if let Some(x) = v.maximum_bitrate {
-    fs.push(("maximumBitrate", json.Value.Int(x)))
-  }
-  if let Some(x) = v.routing_scope {
-    fs.push(("routingScope", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.tier {
-    fs.push(("tier", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.transit_encryption {
-    fs.push(("transitEncryption", json_of_router_input_transit_encryption(x)))
-  }
-  if let Some(x) = v.maintenance_configuration {
-    fs.push(("maintenanceConfiguration", json_of_maintenance_configuration(x)))
-  }
-  if let Some(x) = v.content_quality_analysis_configuration {
-    fs.push(("contentQualityAnalysisConfiguration", json_of_router_content_quality_analysis_configuration(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_router_input_request(v: json.Value) -> UpdateRouterInputRequest ! Str {
-  var out = UpdateRouterInputRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "configuration" => out.configuration = from_json_router_input_configuration(fv)?
-      "maximumBitrate" => out.maximum_bitrate = jsonv.read_int(fv)?
-      "routingScope" => out.routing_scope = RoutingScope.from(jsonv.read_str(fv)?)
-      "tier" => out.tier = RouterInputTier.from(jsonv.read_str(fv)?)
-      "transitEncryption" => out.transit_encryption = from_json_router_input_transit_encryption(fv)?
-      "maintenanceConfiguration" => out.maintenance_configuration = from_json_maintenance_configuration(fv)?
-      "contentQualityAnalysisConfiguration" => out.content_quality_analysis_configuration = from_json_router_content_quality_analysis_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_router_input_response(v: UpdateRouterInputResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.router_input {
-    fs.push(("routerInput", json_of_router_input(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_router_input_response(v: json.Value) -> UpdateRouterInputResponse ! Str {
-  var out = UpdateRouterInputResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "routerInput" => out.router_input = from_json_router_input(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_router_network_interface_request(v: UpdateRouterNetworkInterfaceRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.configuration {
-    fs.push(("configuration", json_of_router_network_interface_configuration(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_router_network_interface_request(v: json.Value) -> UpdateRouterNetworkInterfaceRequest ! Str {
-  var out = UpdateRouterNetworkInterfaceRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "configuration" => out.configuration = from_json_router_network_interface_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_router_network_interface_response(v: UpdateRouterNetworkInterfaceResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.router_network_interface {
-    fs.push(("routerNetworkInterface", json_of_router_network_interface(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_router_network_interface_response(v: json.Value) -> UpdateRouterNetworkInterfaceResponse ! Str {
-  var out = UpdateRouterNetworkInterfaceResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "routerNetworkInterface" => out.router_network_interface = from_json_router_network_interface(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_router_output_request(v: UpdateRouterOutputRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.name {
-    fs.push(("name", json.Value.Str(x)))
-  }
-  if let Some(x) = v.configuration {
-    fs.push(("configuration", json_of_router_output_configuration(x)))
-  }
-  if let Some(x) = v.maximum_bitrate {
-    fs.push(("maximumBitrate", json.Value.Int(x)))
-  }
-  if let Some(x) = v.routing_scope {
-    fs.push(("routingScope", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.tier {
-    fs.push(("tier", json.Value.Str(x.value())))
-  }
-  if let Some(x) = v.maintenance_configuration {
-    fs.push(("maintenanceConfiguration", json_of_maintenance_configuration(x)))
-  }
-  if let Some(x) = v.fabric_configuration {
-    fs.push(("fabricConfiguration", json_of_fabric_configuration(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_router_output_request(v: json.Value) -> UpdateRouterOutputRequest ! Str {
-  var out = UpdateRouterOutputRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      "name" => out.name = jsonv.read_str(fv)?
-      "configuration" => out.configuration = from_json_router_output_configuration(fv)?
-      "maximumBitrate" => out.maximum_bitrate = jsonv.read_int(fv)?
-      "routingScope" => out.routing_scope = RoutingScope.from(jsonv.read_str(fv)?)
-      "tier" => out.tier = RouterOutputTier.from(jsonv.read_str(fv)?)
-      "maintenanceConfiguration" => out.maintenance_configuration = from_json_maintenance_configuration(fv)?
-      "fabricConfiguration" => out.fabric_configuration = from_json_fabric_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_router_output_response(v: UpdateRouterOutputResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.router_output {
-    fs.push(("routerOutput", json_of_router_output(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_router_output_response(v: json.Value) -> UpdateRouterOutputResponse ! Str {
-  var out = UpdateRouterOutputResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "routerOutput" => out.router_output = from_json_router_output(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_source_endpoint_request(v: UpdateSourceEndpointRequest) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.arn {
-    fs.push(("Arn", json.Value.Str(x)))
-  }
-  if let Some(x) = v.description {
-    fs.push(("description", json.Value.Str(x)))
-  }
-  if let Some(x) = v.configuration {
-    fs.push(("configuration", json_of_source_endpoint_configuration(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_source_endpoint_request(v: json.Value) -> UpdateSourceEndpointRequest ! Str {
-  var out = UpdateSourceEndpointRequest{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "Arn" => out.arn = jsonv.read_str(fv)?
-      "description" => out.description = jsonv.read_str(fv)?
-      "configuration" => out.configuration = from_json_source_endpoint_configuration(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_update_source_endpoint_response(v: UpdateSourceEndpointResponse) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.source_endpoint {
-    fs.push(("sourceEndpoint", json_of_source_endpoint(x)))
-  }
-  json.Value.Object(fs)
-}
-
-fn from_json_update_source_endpoint_response(v: json.Value) -> UpdateSourceEndpointResponse ! Str {
-  var out = UpdateSourceEndpointResponse{}
-  for (k, fv) in jsonv.fields(v)? {
-    if fv == json.Value.Null {
-      continue
-    }
-    match k {
-      "sourceEndpoint" => out.source_endpoint = from_json_source_endpoint(fv)?
-      _ => {}
-    }
-  }
-  Ok(out)
-}
-
-fn json_of_video_monitoring_setting(v: VideoMonitoringSetting) -> json.Value {
-  var fs: List[(Str, json.Value)] = []
-  if let Some(x) = v.black_frames {
-    fs.push(("blackFrames", json_of_black_frames(x)))
-  }
-  if let Some(x) = v.frozen_frames {
-    fs.push(("frozenFrames", json_of_frozen_frames(x)))
+  if let Some(x) = v.rtmp_push_settings {
+    fs.push(("rtmpPushSettings", json_of_rtmp_push_output_settings(x)))
   }
   json.Value.Object(fs)
 }

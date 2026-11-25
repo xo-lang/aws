@@ -21,6 +21,26 @@ pub struct AccessDeniedException {
   pub message: Str? = None
 }
 
+/// An additional resource for a listing, with its type, display text, and
+/// URL.
+pub struct AdditionalResource {
+  /// The type of the resource. Currently, the only value that the service
+  /// returns is Link .
+  pub type_value: Str? = None
+  /// The text to display for the resource.
+  pub text: Str? = None
+  /// The URL of the resource.
+  pub url: Str? = None
+}
+
+/// A proposed set of additional resources for a listing.
+pub struct AdditionalResourcesAlternative {
+  /// The proposed additional resources.
+  pub value: List[AdditionalResource]? = None
+  /// Why this alternative is recommended.
+  pub rationale: Str? = None
+}
+
 /// Object that allows filtering on entity id of an AMI product.
 pub struct AmiProductEntityIdFilter {
   /// A string array of unique entity id values to be filtered on.
@@ -146,6 +166,11 @@ pub struct AssessmentTargetFilter {
   /// The unique ID of the change set that triggered the assessments you want
   /// to list.
   pub change_set_id: Str? = None
+  /// A list of up to 50 entity IDs whose assessments you want to list. The
+  /// response includes only the latest published assessment of each entity.
+  /// You must also specify FrameworkId in the request, and you can't combine
+  /// EntityIds with EntityId or ChangeSetId .
+  pub entity_ids: List[Str]? = None
 }
 
 /// Identifies the entity or change set that was assessed.
@@ -191,6 +216,14 @@ pub struct CancelChangeSetResponse {
   pub change_set_id: Str? = None
   /// The ARN associated with the change set referenced in this request.
   pub change_set_arn: Str? = None
+}
+
+/// A proposed set of case studies for a solution.
+pub struct CaseStudiesAlternative {
+  /// The proposed case studies.
+  pub value: List[ListingCaseStudy]? = None
+  /// Why this set of case studies fits the solution.
+  pub rationale: Str? = None
 }
 
 /// An object that contains the ChangeType , Details , and Entity .
@@ -383,14 +416,59 @@ pub struct ContainerSecuritySummary {
   pub delivery_option_id: Str? = None
 }
 
+/// The proposed values for a listing field. Exactly one member is set,
+/// depending on the field. The list in that member is empty if the status
+/// of the recommendation is INSUFFICIENT_CONTEXT .
+pub enum ContentAlternatives {
+  Text(value: List[TextAlternative])
+  TextList(value: List[TextListAlternative])
+  AdditionalResources(value: List[AdditionalResourcesAlternative])
+  UseCases(value: List[UseCasesAlternative])
+  CaseStudies(value: List[CaseStudiesAlternative])
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// A recommendation for a listing field.
+pub struct ContentRecommendation {
+  /// The status of the recommendation. Valid values are: GENERATED - The
+  /// service proposed values for the field. INSUFFICIENT_CONTEXT - The
+  /// service couldn't propose a value. The follow-up questions say what is
+  /// missing.
+  pub status: ContentRecommendationStatus? = None
+  /// The proposed values for the field, in ranked order.
+  pub alternatives: ContentAlternatives? = None
+  /// Questions that you can answer to get a better recommendation. The list
+  /// is empty if there are none.
+  pub follow_up_questions: List[FollowUpQuestion]? = None
+  /// The checklist of criteria for the field, in ranked order. It includes
+  /// the criteria that the field passes and the criteria that it fails. The
+  /// list is empty if there are none.
+  pub findings: List[ListingFinding]? = None
+}
+
+pub enum ContentRecommendationStatus: Str {
+  Generated = "GENERATED"
+  InsufficientContext = "INSUFFICIENT_CONTEXT"
+  Unknown(value: Str)
+}
+
 /// The result of evaluating a single control as part of an assessment.
 pub struct ControlAssessment {
   /// The unique ID of the control that was evaluated.
   pub control_id: Str? = None
   /// The result of the control evaluation.
   pub control_assessment_result: ControlAssessmentResult? = None
+  /// Where the result of the control came from. This value doesn't say
+  /// whether the control passed. A control that you attested to can still
+  /// have a result of PASS . Valid values are: AWS_VERIFIED - AWS evaluated
+  /// the control. SELF_ATTESTED - You attested to the result of the control.
+  pub verification_source: VerificationSource? = None
   /// An array of ControlError objects associated with the control evaluation.
   pub errors: List[ControlError]? = None
+  /// A summary of what the control produced, such as recommendations for the
+  /// listing.
+  pub control_summary: ControlSummary? = None
 }
 
 pub enum ControlAssessmentResult: Str {
@@ -410,6 +488,23 @@ pub struct ControlError {
   /// The list of name-value pairs that identify the resource or attribute
   /// that the error applies to.
   pub scope: List[ErrorScope]? = None
+}
+
+/// A control to run as part of an assessment, and the input to run it with.
+pub struct ControlInput {
+  /// The unique identifier of the control to run.
+  pub control_id: Str? = None
+  /// Optional. The input for the control, as a JSON document. The fields that
+  /// a control accepts depend on the control.
+  pub input: json.Value? = None
+}
+
+/// A summary of what a control produced. Exactly one member is set,
+/// corresponding to the kind of control.
+pub enum ControlSummary {
+  ListingRecommendations(value: ListingRecommendations)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
 }
 
 /// Object that allows filtering on entity id of a data product.
@@ -828,6 +923,30 @@ pub enum FailureCode: Str {
   Unknown(value: Str)
 }
 
+/// A recommended AWS Marketplace feature for a listing.
+pub struct FeatureRecommendation {
+  /// The feature that is recommended. Valid values are REQUEST_PRIVATE_OFFER
+  /// , REQUEST_A_DEMO , PROMOTIONAL_MEDIA , FREE_TRIAL , and QUICK_LAUNCH .
+  pub feature_id: RecommendedFeatureId? = None
+  /// What you should do. It might contain a link to the console.
+  pub action: Str? = None
+  /// Why the feature is recommended.
+  pub rationale: Str? = None
+  /// How much the recommendation blocks the listing. Valid values are
+  /// BLOCKING and ADVISORY .
+  pub severity: RecommendationSeverity? = None
+  /// Whether the listing has the feature. Valid values are: PASS - The
+  /// listing already has the feature. FAIL - The feature is one to turn on.
+  pub status: RecommendedFeatureStatus? = None
+}
+
+/// The feature recommendations for a listing, for a product or a solution.
+pub struct FeatureRecommendations {
+  /// The recommended features, in ranked order. The list has at most one
+  /// entry for each feature and up to 5 entries.
+  pub recommendations: List[FeatureRecommendation]? = None
+}
+
 /// A filter object, used to optionally filter results from calls to the
 /// ListEntities and ListChangeSets actions.
 pub struct Filter {
@@ -850,6 +969,15 @@ pub struct Filter {
   pub value_list: List[Str]? = None
 }
 
+/// A question that you can answer to get a better recommendation, and the
+/// reason that it's asked.
+pub struct FollowUpQuestion {
+  /// The question to answer.
+  pub question: Str? = None
+  /// Why the question is asked.
+  pub justification: Str? = None
+}
+
 /// Framework-specific filters used to scope ListAssessments results. Set
 /// exactly one member, corresponding to the framework you want to filter
 /// by.
@@ -865,6 +993,8 @@ pub enum FrameworkFilters {
 pub enum FrameworkSummary {
   AmiSecuritySummary(value: AMISecuritySummary)
   ContainerSecuritySummary(value: ContainerSecuritySummary)
+  ListingQualitySummary(value: ListingQualitySummary)
+  ListingRecommendationsSummary(value: ListingRecommendationsSummary)
   /// A member this client does not know (a newer service's).
   Unknown(tag: Str)
 }
@@ -896,7 +1026,7 @@ pub struct ListAssessmentsRequest {
   pub catalog: Str? = None
   /// The unique identifier of a framework. When specified, only assessments
   /// performed against this framework are returned. For example, AMISecurity
-  /// .
+  /// . Required when you use EntityIds in AssessmentTargetFilter .
   pub framework_id: Str? = None
   /// Filters the list of assessments to those performed against a specific
   /// entity or change set.
@@ -1001,6 +1131,107 @@ pub struct ListTagsForResourceResponse {
   /// Required. A list of objects specifying each key name and value. Number
   /// of objects allowed: 1-50.
   pub tags: List[Tag]? = None
+}
+
+/// A recommended case study.
+pub struct ListingCaseStudy {
+  /// The ID of the case study entity. Identify a case study by this ID and
+  /// not by Title , which you can edit.
+  pub id: Str? = None
+  /// The title of the case study.
+  pub title: Str? = None
+  /// Why this case study was selected.
+  pub rationale: Str? = None
+}
+
+/// One row of the checklist of criteria for a listing field. A row is
+/// either a criterion that the field already meets or advice for a
+/// criterion that it doesn't.
+pub struct ListingFinding {
+  /// What you should do to meet the criterion.
+  pub action: Str? = None
+  /// What the criterion asks for. The text is the same for every listing. The
+  /// reasoning for a specific listing is in the rationale of the
+  /// alternatives.
+  pub description: Str? = None
+  /// How much the criterion blocks the listing. It is set on every row. For a
+  /// row with a status of PASS , it is the weight of a criterion that is
+  /// already met. Valid values are BLOCKING and ADVISORY .
+  pub severity: RecommendationSeverity? = None
+  /// The result for the criterion. Valid values are: PASS - The criterion is
+  /// met and no action is needed. FAIL - The criterion isn't met or wasn't
+  /// scored. This value is different from the status of the content
+  /// recommendation.
+  pub status: ListingFindingStatus? = None
+}
+
+pub enum ListingFindingStatus: Str {
+  Pass = "PASS"
+  Fail = "FAIL"
+  Unknown(value: Str)
+}
+
+/// The details of the resource assessed under the Listing Quality
+/// framework.
+pub struct ListingQualitySummary {
+  /// The quality tier of the listing. Valid values are NEEDS_IMPROVEMENT ,
+  /// BASIC , STRONG , and EXCELLENT .
+  pub tier: ListingQualityTier? = None
+  /// The revision of the entity that the tier was evaluated against. To check
+  /// whether the tier is out of date, compare this value with the current
+  /// revision of the entity.
+  pub entity_revision: Str? = None
+}
+
+pub enum ListingQualityTier: Str {
+  NeedsImprovement = "NEEDS_IMPROVEMENT"
+  Basic = "BASIC"
+  Strong = "STRONG"
+  Excellent = "EXCELLENT"
+  Unknown(value: Str)
+}
+
+/// The recommendations that a listing recommendations control produced.
+/// Exactly one member is set, corresponding to the control: content
+/// recommendations for a product, content recommendations for a solution,
+/// or feature recommendations.
+pub enum ListingRecommendations {
+  ProductContentRecommendations(value: ProductContentRecommendations)
+  SolutionContentRecommendations(value: SolutionContentRecommendations)
+  FeatureRecommendations(value: FeatureRecommendations)
+  /// A member this client does not know (a newer service's).
+  Unknown(tag: Str)
+}
+
+/// The details of the resource assessed under the Listing Recommendations
+/// framework.
+pub struct ListingRecommendationsSummary {
+  /// The quality tier of the listing. Valid values are NEEDS_IMPROVEMENT ,
+  /// BASIC , STRONG , and EXCELLENT .
+  pub tier: ListingQualityTier? = None
+  /// The revision of the entity that the recommendations were generated
+  /// against. To check whether the recommendations are out of date, compare
+  /// this value with the current revision of the entity.
+  pub entity_revision: Str? = None
+}
+
+/// A use case from the AWS Marketplace use case taxonomy.
+pub struct ListingUseCase {
+  /// The unique identifier of the use case.
+  pub id: Str? = None
+  /// The rank of the use case. A rank of 1 is the strongest match. Valid
+  /// values range from 1 to 5.
+  pub rank: Int? = None
+  /// The name of the use case.
+  pub name: Str? = None
+  /// The group of the use case in the taxonomy.
+  pub group: Str? = None
+  /// The subgroup of the use case in the taxonomy.
+  pub subgroup: Str? = None
+  /// How the solution serves the use case.
+  pub use_case_details: Str? = None
+  /// Why this use case is recommended.
+  pub rationale: Str? = None
 }
 
 /// The filter for machine learning product entity IDs.
@@ -1157,6 +1388,10 @@ pub struct OfferFilters {
   /// offers have a ResaleAuthorizationId . The response will only include
   /// offers for which you have permissions.
   pub resale_authorization_id: OfferResaleAuthorizationIdFilter? = None
+  /// A filter that matches offers by the ID of the subsidiary authorization
+  /// that they were created from. Not all offers have a
+  /// SubsidiaryAuthorizationId .
+  pub subsidiary_authorization_id: OfferSubsidiaryAuthorizationIdFilter? = None
   /// Allows filtering on the ReleaseDate of an offer.
   pub release_date: OfferReleaseDateFilter? = None
   /// Allows filtering on the AvailabilityEndDate of an offer.
@@ -1373,6 +1608,7 @@ pub enum OfferSortBy: Str {
   Name = "Name"
   ProductId = "ProductId"
   ResaleAuthorizationId = "ResaleAuthorizationId"
+  SubsidiaryAuthorizationId = "SubsidiaryAuthorizationId"
   ReleaseDate = "ReleaseDate"
   AvailabilityEndDate = "AvailabilityEndDate"
   BuyerAccounts = "BuyerAccounts"
@@ -1398,6 +1634,15 @@ pub enum OfferStateString: Str {
   Unknown(value: Str)
 }
 
+/// A filter that matches offers by the ID of the subsidiary authorization
+/// they were created from. Not all offers have a SubsidiaryAuthorizationId
+/// .
+pub struct OfferSubsidiaryAuthorizationIdFilter {
+  /// A list of subsidiary authorization IDs to filter offers by. You can
+  /// include up to 10 subsidiary authorization IDs in this list.
+  pub value_list: List[Str]? = None
+}
+
 /// Summarized information about an offer.
 pub struct OfferSummary {
   /// The name of the offer.
@@ -1406,6 +1651,9 @@ pub struct OfferSummary {
   pub product_id: Str? = None
   /// The ResaleAuthorizationId of the offer.
   pub resale_authorization_id: Str? = None
+  /// The ID of the subsidiary authorization that the offer was created from.
+  /// The ID begins with subauthz- followed by 13 alphanumeric characters.
+  pub subsidiary_authorization_id: Str? = None
   /// The release date of the offer.
   pub release_date: Str? = None
   /// The availability end date of the offer.
@@ -1464,6 +1712,32 @@ pub enum OwnershipType: Str {
   Unknown(value: Str)
 }
 
+/// The content recommendations for a product listing, with one member for
+/// each listing field. A member is absent if nothing is recommended for
+/// that field.
+pub struct ProductContentRecommendations {
+  /// The recommendation for the product title.
+  pub product_title: ContentRecommendation? = None
+  /// The recommendation for the short description.
+  pub short_description: ContentRecommendation? = None
+  /// The recommendation for the long description.
+  pub long_description: ContentRecommendation? = None
+  /// The recommendation for the support description.
+  pub support_description: ContentRecommendation? = None
+  /// The recommendation for the highlights.
+  pub highlights: ContentRecommendation? = None
+  /// The recommendation for the search keywords.
+  pub search_keywords: ContentRecommendation? = None
+  /// The recommendation for the categories.
+  pub categories: ContentRecommendation? = None
+  /// The recommendation for the additional resources. Each alternative has up
+  /// to 3 resources.
+  pub additional_resources: ContentRecommendation? = None
+  /// The sources that the recommendations are based on. You can have up to 5
+  /// sources. The list is empty if there are none.
+  pub citations: List[RecommendationCitation]? = None
+}
+
 pub struct PutResourcePolicyRequest {
   /// The Amazon Resource Name (ARN) of the entity resource you want to
   /// associate with a resource policy.
@@ -1473,6 +1747,33 @@ pub struct PutResourcePolicyRequest {
 }
 
 pub struct PutResourcePolicyResponse {
+}
+
+/// A source that the recommendations are based on.
+pub struct RecommendationCitation {
+  /// The HTTPS URL of the source.
+  pub url: Str? = None
+}
+
+pub enum RecommendationSeverity: Str {
+  Blocking = "BLOCKING"
+  Advisory = "ADVISORY"
+  Unknown(value: Str)
+}
+
+pub enum RecommendedFeatureId: Str {
+  RequestPrivateOffer = "REQUEST_PRIVATE_OFFER"
+  RequestADemo = "REQUEST_A_DEMO"
+  PromotionalMedia = "PROMOTIONAL_MEDIA"
+  FreeTrial = "FREE_TRIAL"
+  QuickLaunch = "QUICK_LAUNCH"
+  Unknown(value: Str)
+}
+
+pub enum RecommendedFeatureStatus: Str {
+  Pass = "PASS"
+  Fail = "FAIL"
+  Unknown(value: Str)
 }
 
 /// Allows filtering on AvailabilityEndDate of a ResaleAuthorization.
@@ -1861,6 +2162,31 @@ pub struct ServiceQuotaExceededException {
   pub message: Str? = None
 }
 
+/// The content recommendations for a solution listing, with one member for
+/// each listing field. A member is absent if nothing is recommended for
+/// that field.
+pub struct SolutionContentRecommendations {
+  /// The recommendation for the external title of the solution.
+  pub title: ContentRecommendation? = None
+  /// The recommendation for the value proposition of the solution.
+  pub short_description: ContentRecommendation? = None
+  /// The recommendation for the long description of the solution.
+  pub long_description: ContentRecommendation? = None
+  /// The recommendation for the integration details of the solution.
+  pub integration_details: ContentRecommendation? = None
+  /// The recommendation for the additional resources. Each alternative has up
+  /// to 8 resources.
+  pub additional_resources: ContentRecommendation? = None
+  /// The recommendation for the use cases of the solution.
+  pub use_cases: ContentRecommendation? = None
+  /// The recommendation for the case studies of the solution. Each
+  /// alternative has up to 20 case studies.
+  pub case_studies: ContentRecommendation? = None
+  /// The sources that the recommendations are based on. You can have up to 5
+  /// sources. The list is empty if there are none.
+  pub citations: List[RecommendationCitation]? = None
+}
+
 /// An object that contains two attributes, SortBy and SortOrder .
 pub struct Sort {
   /// For ListEntities , supported attributes include LastModifiedDate
@@ -1877,6 +2203,29 @@ pub enum SortOrder: Str {
   Ascending = "ASCENDING"
   Descending = "DESCENDING"
   Unknown(value: Str)
+}
+
+pub struct StartAssessmentRequest {
+  /// The catalog related to the request. Fixed value: AWSMarketplace
+  pub catalog: Str? = None
+  /// A unique token to identify the request to ensure idempotency.
+  pub client_token: Str? = None
+  /// The unique identifier of the framework that defines the controls to run.
+  pub framework_id: Str? = None
+  /// The unique ID of the product entity to assess.
+  pub entity_id: Str? = None
+  /// The controls to provide input for. Every control in the framework is
+  /// included in the assessment, and a control that you don't specify gets no
+  /// input. You can specify 1–100 controls.
+  pub controls: List[ControlInput]? = None
+  /// A map of tags to apply to the assessment when you create it. Each tag is
+  /// a key-value pair. You can specify 1–200 tags.
+  pub tags: Map[Str, Str]? = None
+}
+
+pub struct StartAssessmentResponse {
+  /// The unique ID of the assessment that was started.
+  pub assessment_id: Str? = None
 }
 
 pub struct StartChangeSetRequest {
@@ -2109,6 +2458,23 @@ pub struct TagResourceRequest {
 pub struct TagResourceResponse {
 }
 
+/// A proposed text value for a listing field.
+pub struct TextAlternative {
+  /// The proposed text. The limit of the field itself, such as 255 characters
+  /// for a title, applies.
+  pub value: Str? = None
+  /// Why this alternative is recommended.
+  pub rationale: Str? = None
+}
+
+/// A proposed list of text values for a listing field.
+pub struct TextListAlternative {
+  /// The proposed list of text values. The list has 1–15 items.
+  pub value: List[Str]? = None
+  /// Why this alternative is recommended.
+  pub rationale: Str? = None
+}
+
 /// Too many requests. HTTP status code: 429
 pub struct ThrottlingException {
   pub message: Str? = None
@@ -2124,6 +2490,14 @@ pub struct UntagResourceRequest {
 }
 
 pub struct UntagResourceResponse {
+}
+
+/// A proposed set of use cases for a solution.
+pub struct UseCasesAlternative {
+  /// The proposed use cases, in ranked order.
+  pub value: List[ListingUseCase]? = None
+  /// Why this alternative is recommended.
+  pub rationale: Str? = None
 }
 
 /// An error occurred during validation. HTTP status code: 422
@@ -2162,5 +2536,11 @@ pub enum ValidationExceptionReason: Str {
   CannotParse = "CannotParse"
   FieldValidationFailed = "FieldValidationFailed"
   Other = "Other"
+  Unknown(value: Str)
+}
+
+pub enum VerificationSource: Str {
+  AwsVerified = "AWS_VERIFIED"
+  SelfAttested = "SELF_ATTESTED"
   Unknown(value: Str)
 }

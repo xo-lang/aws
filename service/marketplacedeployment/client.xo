@@ -145,6 +145,98 @@ fn from_json_conflict_exception(v: json.Value) -> ConflictException ! Str {
   Ok(out)
 }
 
+fn json_of_data_as_a_service_configuration_detail(v: DataAsAServiceConfigurationDetail) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.fulfillment_url {
+    fs.push(("fulfillmentUrl", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_data_as_a_service_configuration_detail(v: json.Value) -> DataAsAServiceConfigurationDetail ! Str {
+  var out = DataAsAServiceConfigurationDetail{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "fulfillmentUrl" => out.fulfillment_url = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_deployment_configuration_detail(v: DeploymentConfigurationDetail) -> json.Value {
+  match v {
+    DataAsAService(x) => json.Value.Object([("dataAsAService", json_of_data_as_a_service_configuration_detail(x))])
+    Unknown(_) => json.Value.Object([])
+  }
+}
+
+fn from_json_deployment_configuration_detail(v: json.Value) -> DeploymentConfigurationDetail ! Str {
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null || k == "__type" {
+      continue
+    }
+    return match k {
+      "dataAsAService" => Ok(DeploymentConfigurationDetail.DataAsAService(from_json_data_as_a_service_configuration_detail(fv)?))
+      _ => Ok(DeploymentConfigurationDetail.Unknown(k))
+    }
+  }
+  Err("DeploymentConfigurationDetail: no member set")
+}
+
+fn json_of_deployment_configuration_job_summaries(v: List[DeploymentConfigurationJobSummary]) -> json.Value {
+  json.Value.List(v.map(fn(x: DeploymentConfigurationJobSummary) -> json.Value { json_of_deployment_configuration_job_summary(x) }))
+}
+
+fn from_json_deployment_configuration_job_summaries(v: json.Value) -> List[DeploymentConfigurationJobSummary] ! Str {
+  var out: List[DeploymentConfigurationJobSummary] = []
+  for fv in jsonv.items(v)? {
+    if fv == json.Value.Null {
+      // a dense list skips nulls
+      continue
+    }
+    out.push(from_json_deployment_configuration_job_summary(fv)?)
+  }
+  Ok(out)
+}
+
+fn json_of_deployment_configuration_job_summary(v: DeploymentConfigurationJobSummary) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_deployment_configuration_detail(x)))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_deployment_configuration_job_summary(v: json.Value) -> DeploymentConfigurationJobSummary ! Str {
+  var out = DeploymentConfigurationJobSummary{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "status" => out.status = DeploymentConfigurationJobStatus.from(jsonv.read_str(fv)?)
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_deployment_parameter_input(v: DeploymentParameterInput) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.name {
@@ -171,6 +263,142 @@ fn from_json_deployment_parameter_input(v: json.Value) -> DeploymentParameterInp
   Ok(out)
 }
 
+fn json_of_get_deployment_configuration_job_request(v: GetDeploymentConfigurationJobRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.catalog {
+    fs.push(("catalog", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_id {
+    fs.push(("productId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.delivery_option_type {
+    fs.push(("deliveryOptionType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_deployment_configuration_job_request(v: json.Value) -> GetDeploymentConfigurationJobRequest ! Str {
+  var out = GetDeploymentConfigurationJobRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "catalog" => out.catalog = jsonv.read_str(fv)?
+      "productId" => out.product_id = jsonv.read_str(fv)?
+      "deliveryOptionType" => out.delivery_option_type = DeliveryOptionType.from(jsonv.read_str(fv)?)
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_deployment_configuration_job_response(v: GetDeploymentConfigurationJobResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_deployment_configuration_detail(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.configuration_arn {
+    fs.push(("configurationArn", json.Value.Str(x)))
+  }
+  if let Some(x) = v.ended_at {
+    fs.push(("endedAt", jsonv.time(x, "date-time")))
+  }
+  if let Some(x) = v.error_code {
+    fs.push(("errorCode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.message {
+    fs.push(("message", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_deployment_configuration_job_response(v: json.Value) -> GetDeploymentConfigurationJobResponse ! Str {
+  var out = GetDeploymentConfigurationJobResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      "status" => out.status = DeploymentConfigurationJobStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "configurationArn" => out.configuration_arn = jsonv.read_str(fv)?
+      "endedAt" => out.ended_at = jsonv.read_time(fv, "date-time")?
+      "errorCode" => out.error_code = DeploymentConfigurationJobErrorCode.from(jsonv.read_str(fv)?)
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_deployment_configuration_request(v: GetDeploymentConfigurationRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.catalog {
+    fs.push(("catalog", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_id {
+    fs.push(("productId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.delivery_option_type {
+    fs.push(("deliveryOptionType", json.Value.Str(x.value())))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_deployment_configuration_request(v: json.Value) -> GetDeploymentConfigurationRequest ! Str {
+  var out = GetDeploymentConfigurationRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "catalog" => out.catalog = jsonv.read_str(fv)?
+      "productId" => out.product_id = jsonv.read_str(fv)?
+      "deliveryOptionType" => out.delivery_option_type = DeliveryOptionType.from(jsonv.read_str(fv)?)
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_get_deployment_configuration_response(v: GetDeploymentConfigurationResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_deployment_configuration_detail(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_get_deployment_configuration_response(v: json.Value) -> GetDeploymentConfigurationResponse ! Str {
+  var out = GetDeploymentConfigurationResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
 fn json_of_internal_server_exception(v: InternalServerException) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.message {
@@ -187,6 +415,70 @@ fn from_json_internal_server_exception(v: json.Value) -> InternalServerException
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_deployment_configuration_jobs_request(v: ListDeploymentConfigurationJobsRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.catalog {
+    fs.push(("catalog", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_id {
+    fs.push(("productId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.delivery_option_type {
+    fs.push(("deliveryOptionType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.max_results {
+    fs.push(("maxResults", json.Value.Int(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_deployment_configuration_jobs_request(v: json.Value) -> ListDeploymentConfigurationJobsRequest ! Str {
+  var out = ListDeploymentConfigurationJobsRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "catalog" => out.catalog = jsonv.read_str(fv)?
+      "productId" => out.product_id = jsonv.read_str(fv)?
+      "deliveryOptionType" => out.delivery_option_type = DeliveryOptionType.from(jsonv.read_str(fv)?)
+      "maxResults" => out.max_results = jsonv.read_int(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_list_deployment_configuration_jobs_response(v: ListDeploymentConfigurationJobsResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.jobs {
+    fs.push(("jobs", json_of_deployment_configuration_job_summaries(x)))
+  }
+  if let Some(x) = v.next_token {
+    fs.push(("nextToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_list_deployment_configuration_jobs_response(v: json.Value) -> ListDeploymentConfigurationJobsResponse ! Str {
+  var out = ListDeploymentConfigurationJobsResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobs" => out.jobs = from_json_deployment_configuration_job_summaries(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
       _ => {}
     }
   }
@@ -355,6 +647,82 @@ fn from_json_service_quota_exceeded_exception(v: json.Value) -> ServiceQuotaExce
     }
     match k {
       "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_start_deployment_configuration_job_request(v: StartDeploymentConfigurationJobRequest) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.catalog {
+    fs.push(("catalog", json.Value.Str(x)))
+  }
+  if let Some(x) = v.product_id {
+    fs.push(("productId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.delivery_option_type {
+    fs.push(("deliveryOptionType", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_deployment_configuration_detail(x)))
+  }
+  if let Some(x) = v.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  if let Some(x) = v.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_deployment_configuration_job_request(v: json.Value) -> StartDeploymentConfigurationJobRequest ! Str {
+  var out = StartDeploymentConfigurationJobRequest{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "catalog" => out.catalog = jsonv.read_str(fv)?
+      "productId" => out.product_id = jsonv.read_str(fv)?
+      "deliveryOptionType" => out.delivery_option_type = DeliveryOptionType.from(jsonv.read_str(fv)?)
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      "tags" => out.tags = from_json_tags_map(fv)?
+      "clientToken" => out.client_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+fn json_of_start_deployment_configuration_job_response(v: StartDeploymentConfigurationJobResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.job_id {
+    fs.push(("jobId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.configuration {
+    fs.push(("configuration", json_of_deployment_configuration_detail(x)))
+  }
+  if let Some(x) = v.status {
+    fs.push(("status", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.created_at {
+    fs.push(("createdAt", jsonv.time(x, "date-time")))
+  }
+  json.Value.Object(fs)
+}
+
+fn from_json_start_deployment_configuration_job_response(v: json.Value) -> StartDeploymentConfigurationJobResponse ! Str {
+  var out = StartDeploymentConfigurationJobResponse{}
+  for (k, fv) in jsonv.fields(v)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      "status" => out.status = DeploymentConfigurationJobStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
       _ => {}
     }
   }
@@ -638,6 +1006,438 @@ fn read_error_validation_exception(resp: http.Response, body: json.Value) -> Val
   Ok(out)
 }
 
+pub fn endpoint_params_get_deployment_configuration(base: EndpointParameters, input: GetDeploymentConfigurationRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetDeploymentConfiguration.
+pub fn serialize_get_deployment_configuration(ep: rest.Endpoint, input: GetDeploymentConfigurationRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_catalog = match input.catalog {
+    Some(v) => v
+    None => return Err("input member catalog is required")
+  }
+  if label_catalog == "" {
+    return Err("input member catalog must not be empty")
+  }
+  let label_product_id = match input.product_id {
+    Some(v) => v
+    None => return Err("input member productId is required")
+  }
+  if label_product_id == "" {
+    return Err("input member productId must not be empty")
+  }
+  let label_delivery_option_type = match input.delivery_option_type {
+    Some(v) => v.value()
+    None => return Err("input member deliveryOptionType is required")
+  }
+  if label_delivery_option_type == "" {
+    return Err("input member deliveryOptionType must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/catalogs/${rest.escape(label_catalog, false)}/products/${rest.escape(label_product_id, false)}/delivery-options/${rest.escape(label_delivery_option_type, false)}/deployment-configuration"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_deployment_configuration(resp: http.Response) -> GetDeploymentConfigurationResponse ! Str {
+  var out = GetDeploymentConfigurationResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetDeploymentConfiguration.
+pub enum GetDeploymentConfigurationErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetDeploymentConfigurationErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_deployment_configuration_error(resp: http.Response) -> GetDeploymentConfigurationErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationErr.AccessDeniedException(x)
+      Err(msg) => return GetDeploymentConfigurationErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationErr.InternalServerException(x)
+      Err(msg) => return GetDeploymentConfigurationErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationErr.ResourceNotFoundException(x)
+      Err(msg) => return GetDeploymentConfigurationErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationErr.ThrottlingException(x)
+      Err(msg) => return GetDeploymentConfigurationErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationErr.ValidationException(x)
+      Err(msg) => return GetDeploymentConfigurationErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetDeploymentConfigurationErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the active deployment configuration for a product and delivery
+/// option. The active deployment configuration is the configuration from
+/// the most recent successful deployment configuration job. The seller that
+/// owns the product and buyers entitled to the product can call this
+/// operation. If the product and delivery option have no active deployment
+/// configuration, the operation returns a ResourceNotFoundException .
+pub fn (c: Client) get_deployment_configuration(input: GetDeploymentConfigurationRequest) -> GetDeploymentConfigurationResponse ! GetDeploymentConfigurationErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_deployment_configuration(c.params, input)) ?? e => return Err(GetDeploymentConfigurationErr.InvalidInput(e))
+  var req = serialize_get_deployment_configuration(ep, input, "") ?? e => return Err(GetDeploymentConfigurationErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetDeploymentConfigurationErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_deployment_configuration_error(resp))
+  }
+  deserialize_get_deployment_configuration(resp) ?? e => Err(GetDeploymentConfigurationErr.Deserialize(e))
+}
+
+pub fn endpoint_params_get_deployment_configuration_job(base: EndpointParameters, input: GetDeploymentConfigurationJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of GetDeploymentConfigurationJob.
+pub fn serialize_get_deployment_configuration_job(ep: rest.Endpoint, input: GetDeploymentConfigurationJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_catalog = match input.catalog {
+    Some(v) => v
+    None => return Err("input member catalog is required")
+  }
+  if label_catalog == "" {
+    return Err("input member catalog must not be empty")
+  }
+  let label_product_id = match input.product_id {
+    Some(v) => v
+    None => return Err("input member productId is required")
+  }
+  if label_product_id == "" {
+    return Err("input member productId must not be empty")
+  }
+  let label_delivery_option_type = match input.delivery_option_type {
+    Some(v) => v.value()
+    None => return Err("input member deliveryOptionType is required")
+  }
+  if label_delivery_option_type == "" {
+    return Err("input member deliveryOptionType must not be empty")
+  }
+  let label_job_id = match input.job_id {
+    Some(v) => v
+    None => return Err("input member jobId is required")
+  }
+  if label_job_id == "" {
+    return Err("input member jobId must not be empty")
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/catalogs/${rest.escape(label_catalog, false)}/products/${rest.escape(label_product_id, false)}/delivery-options/${rest.escape(label_delivery_option_type, false)}/deployment-configuration/jobs/${rest.escape(label_job_id, false)}"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_get_deployment_configuration_job(resp: http.Response) -> GetDeploymentConfigurationJobResponse ! Str {
+  var out = GetDeploymentConfigurationJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      "status" => out.status = DeploymentConfigurationJobStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      "configurationArn" => out.configuration_arn = jsonv.read_str(fv)?
+      "endedAt" => out.ended_at = jsonv.read_time(fv, "date-time")?
+      "errorCode" => out.error_code = DeploymentConfigurationJobErrorCode.from(jsonv.read_str(fv)?)
+      "message" => out.message = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of GetDeploymentConfigurationJob.
+pub enum GetDeploymentConfigurationJobErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: GetDeploymentConfigurationJobErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_get_deployment_configuration_job_error(resp: http.Response) -> GetDeploymentConfigurationJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationJobErr.AccessDeniedException(x)
+      Err(msg) => return GetDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationJobErr.InternalServerException(x)
+      Err(msg) => return GetDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationJobErr.ResourceNotFoundException(x)
+      Err(msg) => return GetDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationJobErr.ThrottlingException(x)
+      Err(msg) => return GetDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return GetDeploymentConfigurationJobErr.ValidationException(x)
+      Err(msg) => return GetDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  GetDeploymentConfigurationJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Returns the details of a deployment configuration job. Only the seller
+/// that started the job can call this operation. If the job doesn't belong
+/// to the product and delivery option in the request path, the operation
+/// returns a ResourceNotFoundException .
+pub fn (c: Client) get_deployment_configuration_job(input: GetDeploymentConfigurationJobRequest) -> GetDeploymentConfigurationJobResponse ! GetDeploymentConfigurationJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_get_deployment_configuration_job(c.params, input)) ?? e => return Err(GetDeploymentConfigurationJobErr.InvalidInput(e))
+  var req = serialize_get_deployment_configuration_job(ep, input, "") ?? e => return Err(GetDeploymentConfigurationJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(GetDeploymentConfigurationJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_get_deployment_configuration_job_error(resp))
+  }
+  deserialize_get_deployment_configuration_job(resp) ?? e => Err(GetDeploymentConfigurationJobErr.Deserialize(e))
+}
+
+pub fn endpoint_params_list_deployment_configuration_jobs(base: EndpointParameters, input: ListDeploymentConfigurationJobsRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of ListDeploymentConfigurationJobs.
+pub fn serialize_list_deployment_configuration_jobs(ep: rest.Endpoint, input: ListDeploymentConfigurationJobsRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_catalog = match input.catalog {
+    Some(v) => v
+    None => return Err("input member catalog is required")
+  }
+  if label_catalog == "" {
+    return Err("input member catalog must not be empty")
+  }
+  let label_product_id = match input.product_id {
+    Some(v) => v
+    None => return Err("input member productId is required")
+  }
+  if label_product_id == "" {
+    return Err("input member productId must not be empty")
+  }
+  let label_delivery_option_type = match input.delivery_option_type {
+    Some(v) => v.value()
+    None => return Err("input member deliveryOptionType is required")
+  }
+  if label_delivery_option_type == "" {
+    return Err("input member deliveryOptionType must not be empty")
+  }
+  if let Some(v) = input.max_results {
+    qs.push(("maxResults", "${v}"))
+  }
+  if let Some(v) = input.next_token {
+    qs.push(("nextToken", v))
+  }
+  var body = b""
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "GET",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/catalogs/${rest.escape(label_catalog, false)}/products/${rest.escape(label_product_id, false)}/delivery-options/${rest.escape(label_delivery_option_type, false)}/deployment-configuration/jobs"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_list_deployment_configuration_jobs(resp: http.Response) -> ListDeploymentConfigurationJobsResponse ! Str {
+  var out = ListDeploymentConfigurationJobsResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobs" => out.jobs = from_json_deployment_configuration_job_summaries(fv)?
+      "nextToken" => out.next_token = jsonv.read_str(fv)?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of ListDeploymentConfigurationJobs.
+pub enum ListDeploymentConfigurationJobsErr {
+  AccessDeniedException(e: AccessDeniedException)
+  InternalServerException(e: InternalServerException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: ListDeploymentConfigurationJobsErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_list_deployment_configuration_jobs_error(resp: http.Response) -> ListDeploymentConfigurationJobsErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return ListDeploymentConfigurationJobsErr.AccessDeniedException(x)
+      Err(msg) => return ListDeploymentConfigurationJobsErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return ListDeploymentConfigurationJobsErr.InternalServerException(x)
+      Err(msg) => return ListDeploymentConfigurationJobsErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return ListDeploymentConfigurationJobsErr.ThrottlingException(x)
+      Err(msg) => return ListDeploymentConfigurationJobsErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return ListDeploymentConfigurationJobsErr.ValidationException(x)
+      Err(msg) => return ListDeploymentConfigurationJobsErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  ListDeploymentConfigurationJobsErr.Api(restjson.api_error(resp, body))
+}
+
+/// Lists the deployment configuration jobs that you started for a product
+/// and delivery option, ordered from newest to oldest. Results are
+/// paginated. Use the nextToken parameter to retrieve additional results.
+/// If you haven't started any jobs for the product and delivery option, the
+/// operation returns an empty jobs list.
+pub fn (c: Client) list_deployment_configuration_jobs(input: ListDeploymentConfigurationJobsRequest) -> ListDeploymentConfigurationJobsResponse ! ListDeploymentConfigurationJobsErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_list_deployment_configuration_jobs(c.params, input)) ?? e => return Err(ListDeploymentConfigurationJobsErr.InvalidInput(e))
+  var req = serialize_list_deployment_configuration_jobs(ep, input, "") ?? e => return Err(ListDeploymentConfigurationJobsErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(ListDeploymentConfigurationJobsErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_list_deployment_configuration_jobs_error(resp))
+  }
+  deserialize_list_deployment_configuration_jobs(resp) ?? e => Err(ListDeploymentConfigurationJobsErr.Deserialize(e))
+}
+
 pub fn endpoint_params_list_tags_for_resource(base: EndpointParameters, input: ListTagsForResourceRequest) -> EndpointParameters {
   let _ = input
   base
@@ -745,7 +1545,7 @@ pub fn deserialize_list_tags_for_resource_error(resp: http.Response) -> ListTags
   ListTagsForResourceErr.Api(restjson.api_error(resp, body))
 }
 
-/// Lists all tags that have been added to a deployment parameter resource.
+/// Lists all tags that have been added to a resource.
 pub fn (c: Client) list_tags_for_resource(input: ListTagsForResourceRequest) -> ListTagsForResourceResponse ! ListTagsForResourceErr uses (net.dial, clock, rand) {
   let (ep, signing, extra) = c.route(endpoint_params_list_tags_for_resource(c.params, input)) ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
   var req = serialize_list_tags_for_resource(ep, input, "") ?? e => return Err(ListTagsForResourceErr.InvalidInput(e))
@@ -921,6 +1721,169 @@ pub fn (c: Client) put_deployment_parameter(input: PutDeploymentParameterRequest
     return Err(deserialize_put_deployment_parameter_error(resp))
   }
   deserialize_put_deployment_parameter(resp) ?? e => Err(PutDeploymentParameterErr.Deserialize(e))
+}
+
+pub fn endpoint_params_start_deployment_configuration_job(base: EndpointParameters, input: StartDeploymentConfigurationJobRequest) -> EndpointParameters {
+  let _ = input
+  base
+}
+
+/// The HTTP request of StartDeploymentConfigurationJob.
+pub fn serialize_start_deployment_configuration_job(ep: rest.Endpoint, input: StartDeploymentConfigurationJobRequest, idempotency_token: Str = "", min_compress: Int = 10240) -> transport.Request ! Str {
+  let _ = (idempotency_token, min_compress)
+  var headers: List[(Str, Str)] = []
+  var qs: List[(Str, Str)] = []
+  let label_catalog = match input.catalog {
+    Some(v) => v
+    None => return Err("input member catalog is required")
+  }
+  if label_catalog == "" {
+    return Err("input member catalog must not be empty")
+  }
+  let label_product_id = match input.product_id {
+    Some(v) => v
+    None => return Err("input member productId is required")
+  }
+  if label_product_id == "" {
+    return Err("input member productId must not be empty")
+  }
+  let label_delivery_option_type = match input.delivery_option_type {
+    Some(v) => v.value()
+    None => return Err("input member deliveryOptionType is required")
+  }
+  if label_delivery_option_type == "" {
+    return Err("input member deliveryOptionType must not be empty")
+  }
+  var body = b""
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = input.configuration {
+    fs.push(("configuration", json_of_deployment_configuration_detail(x)))
+  }
+  if let Some(x) = input.tags {
+    fs.push(("tags", json_of_tags_map(x)))
+  }
+  if let Some(x) = input.client_token {
+    fs.push(("clientToken", json.Value.Str(x)))
+  } else if idempotency_token != "" {
+    fs.push(("clientToken", json.Value.Str(idempotency_token)))
+  }
+  body = json.Value.Object(fs).encode().bytes()
+  headers.push(("Content-Type", "application/json"))
+  if !body.is_empty() {
+    headers.push(("Content-Length", "${body.len()}"))
+  }
+  Ok(transport.Request{
+    method: "POST",
+    scheme: ep.scheme,
+    host: ep.host,
+    port: ep.port,
+    path: rest.join_path(ep.path, "/catalogs/${rest.escape(label_catalog, false)}/products/${rest.escape(label_product_id, false)}/delivery-options/${rest.escape(label_delivery_option_type, false)}/deployment-configuration/jobs"),
+    query: rest.query(qs),
+    headers: headers,
+    body: body,
+  })
+}
+
+pub fn deserialize_start_deployment_configuration_job(resp: http.Response) -> StartDeploymentConfigurationJobResponse ! Str {
+  var out = StartDeploymentConfigurationJobResponse{}
+  let body = jsonv.parse_body(resp.body)?
+  for (k, fv) in jsonv.fields(body)? {
+    if fv == json.Value.Null {
+      continue
+    }
+    match k {
+      "jobId" => out.job_id = jsonv.read_str(fv)?
+      "configuration" => out.configuration = from_json_deployment_configuration_detail(fv)?
+      "status" => out.status = DeploymentConfigurationJobStatus.from(jsonv.read_str(fv)?)
+      "createdAt" => out.created_at = jsonv.read_time(fv, "date-time")?
+      _ => {}
+    }
+  }
+  Ok(out)
+}
+
+/// The errors of StartDeploymentConfigurationJob.
+pub enum StartDeploymentConfigurationJobErr {
+  AccessDeniedException(e: AccessDeniedException)
+  ConflictException(e: ConflictException)
+  InternalServerException(e: InternalServerException)
+  ResourceNotFoundException(e: ResourceNotFoundException)
+  ThrottlingException(e: ThrottlingException)
+  ValidationException(e: ValidationException)
+  /// A service error the model does not list for this operation.
+  Api(e: aws.ApiError)
+  /// The request was not sent or no response came (after retries).
+  Send(e: transport.SendErr)
+  /// The input cannot be serialized (a required label is missing).
+  InvalidInput(msg: Str)
+  /// The response is not what the protocol says.
+  Deserialize(msg: Str)
+}
+
+pub fn (e: StartDeploymentConfigurationJobErr) display() -> Str {
+  match e {
+    AccessDeniedException(x) => "AccessDeniedException: ${x:?}"
+    ConflictException(x) => "ConflictException: ${x:?}"
+    InternalServerException(x) => "InternalServerException: ${x:?}"
+    ResourceNotFoundException(x) => "ResourceNotFoundException: ${x:?}"
+    ThrottlingException(x) => "ThrottlingException: ${x:?}"
+    ValidationException(x) => "ValidationException: ${x:?}"
+    Api(x) => x.display()
+    Send(x) => x.display()
+    InvalidInput(msg) => "invalid input: ${msg}"
+    Deserialize(msg) => "cannot read the response: ${msg}"
+  }
+}
+
+pub fn deserialize_start_deployment_configuration_job_error(resp: http.Response) -> StartDeploymentConfigurationJobErr {
+  let body = jsonv.parse_body(resp.body).ok() ?? json.Value.Object([])
+  match restjson.error_code(resp, body) {
+    "AccessDeniedException" => match read_error_access_denied_exception(resp, body) {
+      Ok(x) => return StartDeploymentConfigurationJobErr.AccessDeniedException(x)
+      Err(msg) => return StartDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ConflictException" => match read_error_conflict_exception(resp, body) {
+      Ok(x) => return StartDeploymentConfigurationJobErr.ConflictException(x)
+      Err(msg) => return StartDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "InternalServerException" => match read_error_internal_server_exception(resp, body) {
+      Ok(x) => return StartDeploymentConfigurationJobErr.InternalServerException(x)
+      Err(msg) => return StartDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ResourceNotFoundException" => match read_error_resource_not_found_exception(resp, body) {
+      Ok(x) => return StartDeploymentConfigurationJobErr.ResourceNotFoundException(x)
+      Err(msg) => return StartDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ThrottlingException" => match read_error_throttling_exception(resp, body) {
+      Ok(x) => return StartDeploymentConfigurationJobErr.ThrottlingException(x)
+      Err(msg) => return StartDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    "ValidationException" => match read_error_validation_exception(resp, body) {
+      Ok(x) => return StartDeploymentConfigurationJobErr.ValidationException(x)
+      Err(msg) => return StartDeploymentConfigurationJobErr.Deserialize(msg)
+    }
+    _ => {}
+  }
+  StartDeploymentConfigurationJobErr.Api(restjson.api_error(resp, body))
+}
+
+/// Starts a job that publishes a deployment configuration for a product and
+/// delivery option. The job runs asynchronously. Use
+/// GetDeploymentConfigurationJob to track its status. When the job reaches
+/// the SUCCEEDED status, its configuration becomes the active deployment
+/// configuration for the product and delivery option. The populated member
+/// of configuration must match the deliveryOptionType in the request path.
+pub fn (c: Client) start_deployment_configuration_job(input: StartDeploymentConfigurationJobRequest) -> StartDeploymentConfigurationJobResponse ! StartDeploymentConfigurationJobErr uses (net.dial, clock, rand) {
+  let (ep, signing, extra) = c.route(endpoint_params_start_deployment_configuration_job(c.params, input)) ?? e => return Err(StartDeploymentConfigurationJobErr.InvalidInput(e))
+  var req = serialize_start_deployment_configuration_job(ep, input, rest.uuid(c.rand)) ?? e => return Err(StartDeploymentConfigurationJobErr.InvalidInput(e))
+  for h in extra {
+    req.headers.push(h)
+  }
+  let resp = transport.send(c.transport, req, signing, restjson.classify) ?? e => return Err(StartDeploymentConfigurationJobErr.Send(e))
+  if resp.status >= 300 {
+    return Err(deserialize_start_deployment_configuration_job_error(resp))
+  }
+  deserialize_start_deployment_configuration_job(resp) ?? e => Err(StartDeploymentConfigurationJobErr.Deserialize(e))
 }
 
 pub fn endpoint_params_tag_resource(base: EndpointParameters, input: TagResourceRequest) -> EndpointParameters {

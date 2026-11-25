@@ -5,6 +5,17 @@ use github.com/xo-lang/aws/protocol/jsonv
 use github.com/xo-lang/aws/transport
 use github.com/xo-lang/aws/waiter
 
+/// The names an errorType acceptor can match: the shape name and the
+/// error code.
+fn waiter_error_names_get_health_check_source(e: GetHealthCheckSourceErr) -> List[Str] {
+  match e {
+    InvalidInputError(_) => ["InvalidInput", "InvalidInput"]
+    NoSuchHealthCheckSource(_) => ["NoSuchHealthCheckSource", "NoSuchHealthCheckSource"]
+    Api(x) => [x.code]
+    Send(_) | InvalidInput(_) | Deserialize(_) => []
+  }
+}
+
 fn jmes_of_get_change_response(v: GetChangeResponse) -> json.Value {
   var fs: List[(Str, json.Value)] = []
   if let Some(x) = v.change_info {
@@ -28,6 +39,67 @@ fn jmes_of_change_info(v: ChangeInfo) -> json.Value {
     fs.push(("Comment", json.Value.Str(x)))
   }
   json.Value.Object(fs)
+}
+
+fn jmes_of_get_health_check_source_response(v: GetHealthCheckSourceResponse) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.health_check_source {
+    fs.push(("HealthCheckSource", jmes_of_health_check_source(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_health_check_source(v: HealthCheckSource) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.health_check_source_id {
+    fs.push(("HealthCheckSourceId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.health_check_source_status {
+    fs.push(("HealthCheckSourceStatus", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.health_check_source_config {
+    fs.push(("HealthCheckSourceConfig", jmes_of_health_check_source_config(x)))
+  }
+  if let Some(x) = v.status_reason_code {
+    fs.push(("StatusReasonCode", json.Value.Str(x.value())))
+  }
+  if let Some(x) = v.status_reason {
+    fs.push(("StatusReason", json.Value.Str(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_health_check_source_config(v: HealthCheckSourceConfig) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.vpc_id {
+    fs.push(("VpcId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.subnet_configuration_list {
+    fs.push(("SubnetConfigurationList", jmes_of_subnet_configuration_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_subnet_configuration_list(v: List[SubnetConfiguration]) -> json.Value {
+  json.Value.List(v.map(fn(x: SubnetConfiguration) -> json.Value { jmes_of_subnet_configuration(x) }))
+}
+
+fn jmes_of_subnet_configuration(v: SubnetConfiguration) -> json.Value {
+  var fs: List[(Str, json.Value)] = []
+  if let Some(x) = v.subnet_id {
+    fs.push(("SubnetId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.availability_zone_id {
+    fs.push(("AvailabilityZoneId", json.Value.Str(x)))
+  }
+  if let Some(x) = v.security_group_id_list {
+    fs.push(("SecurityGroupIdList", jmes_of_security_group_id_list(x)))
+  }
+  json.Value.Object(fs)
+}
+
+fn jmes_of_security_group_id_list(v: List[Str]) -> json.Value {
+  json.Value.List(v.map(fn(x: Str) -> json.Value { json.Value.Str(x) }))
 }
 
 /// Calls GetChange until the ResourceRecordSetsChanged acceptors reach success
@@ -57,6 +129,94 @@ pub fn wait_until_resource_record_sets_changed(c: Client, input: GetChangeReques
     }
     if state == "failure" {
       return Err(waiter.WaitErr.Failure("ResourceRecordSetsChanged: an acceptor matched the failure state"))
+    }
+    let left = max_wait - c.transport.clock.since(start)
+    if left <= min_delay {
+      return Err(waiter.WaitErr.TimedOut(attempt))
+    }
+    c.transport.clock.sleep(waiter.delay(attempt + 1, min_delay, max_delay, left, c.transport.rand.float()))
+  }
+  Err(waiter.WaitErr.TimedOut(attempt))
+}
+
+/// Calls GetHealthCheckSource until the HealthCheckSourceCreated acceptors reach success
+/// or failure, or `max_wait` passes. The delay between calls is
+/// Smithy's, from `min_delay` (15s) to `max_delay` (120s).
+pub fn wait_until_health_check_source_created(c: Client, input: GetHealthCheckSourceRequest, max_wait: Duration, min_delay: Duration = 15s, max_delay: Duration = 120s) -> () ! waiter.WaitErr[GetHealthCheckSourceErr] uses (net.dial, clock, rand) {
+  let start = c.transport.clock.now()
+  var attempt = 0
+  while true {
+    attempt += 1
+    var state = ""
+    match (c with {transport: transport.with_feature(c.transport, "B")}).get_health_check_source(input) {
+      Ok(out) => {
+        let o = jmes_of_get_health_check_source_response(out)
+        if state == "" && waiter.path_matches(o, "HealthCheckSource.HealthCheckSourceStatus", "stringEquals", "CREATE_COMPLETED") {
+          state = "success"
+        }
+        if state == "" && waiter.path_matches(o, "HealthCheckSource.HealthCheckSourceStatus", "stringEquals", "CREATE_FAILED") {
+          state = "failure"
+        }
+      }
+      Err(e) => {
+        let names = waiter_error_names_get_health_check_source(e)
+        if state == "" && waiter.error_is(names, "NoSuchHealthCheckSource") {
+          state = "retry"
+        }
+        if state == "" {
+          return Err(waiter.WaitErr.Failed(e))
+        }
+      }
+    }
+    if state == "success" {
+      return Ok(())
+    }
+    if state == "failure" {
+      return Err(waiter.WaitErr.Failure("HealthCheckSourceCreated: an acceptor matched the failure state"))
+    }
+    let left = max_wait - c.transport.clock.since(start)
+    if left <= min_delay {
+      return Err(waiter.WaitErr.TimedOut(attempt))
+    }
+    c.transport.clock.sleep(waiter.delay(attempt + 1, min_delay, max_delay, left, c.transport.rand.float()))
+  }
+  Err(waiter.WaitErr.TimedOut(attempt))
+}
+
+/// Calls GetHealthCheckSource until the HealthCheckSourceDeleted acceptors reach success
+/// or failure, or `max_wait` passes. The delay between calls is
+/// Smithy's, from `min_delay` (15s) to `max_delay` (120s).
+pub fn wait_until_health_check_source_deleted(c: Client, input: GetHealthCheckSourceRequest, max_wait: Duration, min_delay: Duration = 15s, max_delay: Duration = 120s) -> () ! waiter.WaitErr[GetHealthCheckSourceErr] uses (net.dial, clock, rand) {
+  let start = c.transport.clock.now()
+  var attempt = 0
+  while true {
+    attempt += 1
+    var state = ""
+    match (c with {transport: transport.with_feature(c.transport, "B")}).get_health_check_source(input) {
+      Ok(out) => {
+        let o = jmes_of_get_health_check_source_response(out)
+        if state == "" && waiter.path_matches(o, "HealthCheckSource.HealthCheckSourceStatus", "stringEquals", "DELETE_COMPLETED") {
+          state = "success"
+        }
+        if state == "" && waiter.path_matches(o, "HealthCheckSource.HealthCheckSourceStatus", "stringEquals", "DELETE_FAILED") {
+          state = "failure"
+        }
+      }
+      Err(e) => {
+        let names = waiter_error_names_get_health_check_source(e)
+        if state == "" && waiter.error_is(names, "NoSuchHealthCheckSource") {
+          state = "success"
+        }
+        if state == "" {
+          return Err(waiter.WaitErr.Failed(e))
+        }
+      }
+    }
+    if state == "success" {
+      return Ok(())
+    }
+    if state == "failure" {
+      return Err(waiter.WaitErr.Failure("HealthCheckSourceDeleted: an acceptor matched the failure state"))
     }
     let left = max_wait - c.transport.clock.since(start)
     if left <= min_delay {
